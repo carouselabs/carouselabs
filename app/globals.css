@@ -1,26 +1,142 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background:           var(--background);
+  --color-foreground:           var(--foreground);
+  --color-card:                 var(--card);
+  --color-card-foreground:      var(--card-foreground);
+  --color-popover:              var(--popover);
+  --color-popover-foreground:   var(--popover-foreground);
+  --color-primary:              var(--primary);
+  --color-primary-foreground:   var(--primary-foreground);
+  --color-secondary:            var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted:                var(--muted);
+  --color-muted-foreground:     var(--muted-foreground);
+  --color-accent:               var(--accent);
+  --color-accent-foreground:    var(--accent-foreground);
+  --color-accent-light:         var(--accent-light);
+  --color-destructive:          var(--destructive);
+  --color-border:               var(--border);
+  --color-input:                var(--input);
+  --color-ring:                 var(--ring);
+  --color-sidebar:              var(--sidebar);
+  --color-sidebar-foreground:   var(--sidebar-foreground);
+  --color-success:              var(--success);
+  --color-text-primary:         var(--text-primary);
+  --color-text-secondary:       var(--text-secondary);
+  --font-sans:                  var(--font-inter), system-ui, sans-serif;
+  --font-mono:                  var(--font-geist-mono), monospace;
+  --radius-sm:  calc(var(--radius) * 0.6);
+  --radius-md:  calc(var(--radius) * 0.8);
+  --radius-lg:  var(--radius);
+  --radius-xl:  calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ── CarouseLabs design tokens — always dark ────────────────────── */
+:root {
+  --background:          #080810;
+  --foreground:          #F0F0FA;
+  --card:                rgba(255, 255, 255, 0.03);
+  --card-foreground:     #F0F0FA;
+  --popover:             #0D0D1A;
+  --popover-foreground:  #F0F0FA;
+  --primary:             #7C3AED;
+  --primary-foreground:  #F0F0FA;
+  --secondary:           rgba(255, 255, 255, 0.06);
+  --secondary-foreground:#F0F0FA;
+  --muted:               rgba(255, 255, 255, 0.06);
+  --muted-foreground:    rgba(255, 255, 255, 0.5);
+  --accent:              #7C3AED;
+  --accent-foreground:   #F0F0FA;
+  --accent-light:        #A78BFA;
+  --destructive:         #EF4444;
+  --border:              rgba(255, 255, 255, 0.08);
+  --input:               rgba(255, 255, 255, 0.08);
+  --ring:                #7C3AED;
+  --sidebar:             #0D0D1A;
+  --sidebar-foreground:  #F0F0FA;
+  --success:             #10B981;
+  --text-primary:        #F0F0FA;
+  --text-secondary:      rgba(255, 255, 255, 0.5);
+  --radius:              0.75rem;
+}
+
+/* Mirror dark tokens so shadcn's .dark class also matches */
+.dark {
+  --background:          #080810;
+  --foreground:          #F0F0FA;
+  --card:                rgba(255, 255, 255, 0.03);
+  --card-foreground:     #F0F0FA;
+  --popover:             #0D0D1A;
+  --popover-foreground:  #F0F0FA;
+  --primary:             #7C3AED;
+  --primary-foreground:  #F0F0FA;
+  --secondary:           rgba(255, 255, 255, 0.06);
+  --secondary-foreground:#F0F0FA;
+  --muted:               rgba(255, 255, 255, 0.06);
+  --muted-foreground:    rgba(255, 255, 255, 0.5);
+  --accent:              #7C3AED;
+  --accent-foreground:   #F0F0FA;
+  --destructive:         #EF4444;
+  --border:              rgba(255, 255, 255, 0.08);
+  --input:               rgba(255, 255, 255, 0.08);
+  --ring:                #7C3AED;
+  --sidebar:             #0D0D1A;
+  --sidebar-foreground:  #F0F0FA;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    box-sizing: border-box;
   }
+
+  html {
+    @apply font-sans;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: #080810;
+    color: #F0F0FA;
+    min-height: 100svh;
+  }
+
+  /* Dark scrollbar */
+  ::-webkit-scrollbar        { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track  { background: #080810; }
+  ::-webkit-scrollbar-thumb  { background: rgba(255,255,255,0.12); border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  .text-balance   { text-wrap: balance; }
+
+  .gradient-brand {
+    background: linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%);
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, #A78BFA 0%, #7C3AED 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .glass {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+  }
+
+  .glow-accent {
+    box-shadow: 0 0 24px rgba(124, 58, 237, 0.35);
+  }
 }

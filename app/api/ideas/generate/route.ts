@@ -81,7 +81,10 @@ export async function POST(req: Request) {
     )
   }
 
-  // Parse ideas
+  // Log raw Claude output to help debug format variations
+  console.log("[ideas/generate] Raw Claude response:\n", responseText)
+
+  // Parse ideas — returns partial results if only some lines matched
   const parsed = parseIdeasResponse(responseText)
   if (parsed.length === 0) {
     return NextResponse.json(

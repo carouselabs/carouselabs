@@ -1,34 +1,66 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { CaptionEditor } from "@/components/generate/CaptionEditor"
+import { ToneSelector, type Tone } from "@/components/generate/ToneSelector"
+import { HookVariations } from "@/components/generate/HookVariations"
 
 interface CaptionClientProps {
   ideaId: string
   ideaHook: string
 }
 
+const HOOKS_DELIM = "---HOOKS---"
+
+function parseFullResponse(raw: string) {
+  const hooksIdx = raw.indexOf(HOOKS_DELIM)
+
+  // Caption is everything before ---HOOKS--- (hashtags are embedded inside it)
+  const captionText = hooksIdx !== -1
+    ? raw.slice(0, hooksIdx).trim()
+    : raw.trim()
+
+  const hooks: string[] = []
+  if (hooksIdx !== -1) {
+    const hooksRaw = raw.slice(hooksIdx + HOOKS_DELIM.length)
+    hooks.push(
+      ...hooksRaw
+        .split("\n")
+        .map((l) => l.replace(/^\d+\.\s*/, "").trim())
+        .filter((l) => l.length > 8)
+        .slice(0, 3),
+    )
+  }
+
+  return { captionText, hooks }
+}
+
 export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
   const [caption, setCaption] = useState("")
+  const [hooks, setHooks] = useState<string[]>([])
+  const [tone, setTone] = useState<Tone | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const bufferRef = useRef("")
 
   useEffect(() => {
-    generate()
+    generate(null)
   }, [ideaId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function generate() {
+  async function generate(activeTone: Tone | null) {
     setIsGenerating(true)
     setCaption("")
+    setHooks([])
     setError(null)
+    bufferRef.current = ""
 
     try {
       const res = await fetch("/api/generate/caption", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId }),
+        body: JSON.stringify({ ideaId, tone: activeTone ?? undefined }),
       })
 
       if (!res.ok) {
@@ -42,13 +74,39 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        setCaption((prev) => prev + decoder.decode(value, { stream: true }))
+        bufferRef.current += decoder.decode(value, { stream: true })
+
+        // Stream caption tokens into editor, stopping at the hooks delimiter
+        const hooksAt = bufferRef.current.indexOf(HOOKS_DELIM)
+        setCaption(
+          hooksAt === -1
+            ? bufferRef.current
+            : bufferRef.current.slice(0, hooksAt).trim(),
+        )
       }
+
+      // Parse the complete buffered response for hooks
+      const parsed = parseFullResponse(bufferRef.current)
+      setCaption(parsed.captionText)
+      setHooks(parsed.hooks)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
     } finally {
       setIsGenerating(false)
     }
+  }
+
+  function handleToneSelect(newTone: Tone) {
+    setTone(newTone)
+    generate(newTone)
+  }
+
+  function handleHookReplace(hook: string) {
+    setCaption((prev) => {
+      const lines = prev.split("\n")
+      lines[0] = hook
+      return lines.join("\n")
+    })
   }
 
   return (
@@ -72,6 +130,13 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
         </p>
       </div>
 
+      {/* Tone selector — clicking triggers regeneration */}
+      <ToneSelector
+        selected={tone}
+        onSelect={handleToneSelect}
+        disabled={isGenerating}
+      />
+
       {/* Error */}
       {error && (
         <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
@@ -85,8 +150,13 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
         onChange={setCaption}
         isGenerating={isGenerating}
         ideaId={ideaId}
-        onRegenerate={generate}
+        onRegenerate={() => generate(tone)}
       />
+
+      {/* Hook variations — appear after generation completes */}
+      {hooks.length > 0 && !isGenerating && (
+        <HookVariations hooks={hooks} onSelect={handleHookReplace} />
+      )}
     </div>
   )
 }

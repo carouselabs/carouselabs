@@ -11,7 +11,12 @@ function buildCaptionPrompt(
   profileContext: string,
   idea: { hook: string; category: string },
   breakdown: BreakdownOutline,
+  tone?: string,
 ): string {
+  const toneInstruction = tone
+    ? `\nTone override: Rewrite entirely in a ${tone} voice throughout.`
+    : ""
+
   return `${profileContext}
 
 Selected LinkedIn post idea:
@@ -27,6 +32,7 @@ Key Talking Points: ${breakdown.keyTalkingPoints}
 Storytelling Angle: ${breakdown.storytellingAngle}
 Suggested CTA: ${breakdown.suggestedCTA}
 Strong Ending Line: ${breakdown.strongEndingLine}
+${toneInstruction}
 
 Generate a high-performing LinkedIn caption optimized for more views, likes, comments, higher retention, and profile visits.
 
@@ -38,10 +44,21 @@ The caption must:
 - Trigger curiosity, emotion, relatability, or debate
 - Match the user's personal brand and tone
 - End with the suggested CTA
+- At the very end of the caption, after the CTA, add a blank line then include 7-8 relevant niche-specific hashtags directly in the caption text like this: #AITools #LinkedInGrowth #ContentMarketing etc. These hashtags should be relevant to the post topic and the user's niche.
 - Feel human and platform-native
 - Avoid generic AI-style writing or filler phrases
 
-Output the caption text only — no title, no preamble, no explanation.`
+After the caption, output exactly this delimiter on its own line:
+---HOOKS---
+Then write 3 alternative opening hook lines, one per line. Each should be distinctly different in angle or style from the others and from the caption's opening line.
+
+Output format (follow exactly):
+[full caption text ending with hashtags]
+
+---HOOKS---
+[hook variation 1]
+[hook variation 2]
+[hook variation 3]`
 }
 
 function formatProfile(profile: {
@@ -73,10 +90,11 @@ export async function POST(req: Request) {
   const { userId: clerkId } = await auth()
   if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  let ideaId: string
+  let ideaId: string, tone: string | undefined
   try {
     const body = await req.json()
     ideaId = body.ideaId
+    tone = typeof body.tone === "string" && body.tone ? body.tone : undefined
     if (!ideaId) throw new Error("Missing ideaId")
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
@@ -109,7 +127,7 @@ export async function POST(req: Request) {
 
   const breakdown = idea.breakdowns[0].outline as unknown as BreakdownOutline
   const profileContext = formatProfile(user.profile)
-  const prompt = buildCaptionPrompt(profileContext, { hook: idea.hook, category: idea.category }, breakdown)
+  const prompt = buildCaptionPrompt(profileContext, { hook: idea.hook, category: idea.category }, breakdown, tone)
 
   // Stream Claude's response as plain text
   const encoder = new TextEncoder()

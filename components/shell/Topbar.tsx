@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser"
+import { useIdeaSessionStore } from "@/lib/store/ideaSessionStore"
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Generate",
@@ -18,6 +19,7 @@ function getTitle(pathname: string): string {
 export function Topbar() {
   const pathname = usePathname()
   const { user } = useCurrentUser()
+  const reset = useIdeaSessionStore((s) => s.reset)
   const title = getTitle(pathname)
   const isDashboard = pathname === "/dashboard"
 
@@ -38,7 +40,10 @@ export function Topbar() {
           </span>
         )}
         {isDashboard && (
-          <button className="text-[12px] font-medium text-[rgba(255,255,255,0.45)] border border-[rgba(255,255,255,0.08)] px-3 py-[5px] rounded-lg hover:border-[rgba(255,255,255,0.14)] hover:text-[rgba(255,255,255,0.65)] transition-colors">
+          <button
+            onClick={reset}
+            className="text-[12px] font-medium text-[rgba(255,255,255,0.45)] border border-[rgba(255,255,255,0.08)] px-3 py-[5px] rounded-lg hover:border-[rgba(255,255,255,0.14)] hover:text-[rgba(255,255,255,0.65)] transition-colors"
+          >
             New session
           </button>
         )}

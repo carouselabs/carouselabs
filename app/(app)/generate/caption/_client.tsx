@@ -2,10 +2,14 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, History } from "lucide-react"
 import { CaptionEditor } from "@/components/generate/CaptionEditor"
 import { ToneSelector, type Tone } from "@/components/generate/ToneSelector"
 import { HookVariations } from "@/components/generate/HookVariations"
+import { RegenerationLimit } from "@/components/generate/RegenerationLimit"
+import { VersionHistory } from "@/components/generate/VersionHistory"
+import { trackHistory } from "@/lib/hooks/useHistory"
+import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
 
 interface CaptionClientProps {
   ideaId: string
@@ -43,14 +47,68 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
   const [tone, setTone] = useState<Tone | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [restored, setRestored] = useState(false)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [instruction, setInstruction] = useState("")
   const bufferRef = useRef("")
+  const didInit = useRef(false)
 
+  // Regeneration limit + version history (per idea, per session).
+  // Select the stable parent objects and derive per-idea values outside the
+  // hook — selecting `s.versions[ideaId] ?? []` returns a new array each render
+  // and trips Zustand's "getSnapshot should be cached" loop guard.
+  const regenerationCount = useRegenerationStore((s) => s.regenerationCount)
+  const allVersions = useRegenerationStore((s) => s.versions)
+  const increment = useRegenerationStore((s) => s.increment)
+  const decrement = useRegenerationStore((s) => s.decrement)
+  const addVersion = useRegenerationStore((s) => s.addVersion)
+  const regenCount = regenerationCount[ideaId] ?? 0
+  const versions = allVersions[ideaId] ?? []
+  const atLimit = regenCount >= MAX_REGENERATIONS
+
+  // On mount: restore a previously saved caption if one exists, otherwise
+  // auto-generate. Guarded so it runs exactly once (no StrictMode double-run).
   useEffect(() => {
-    generate(null)
-  }, [ideaId]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (didInit.current) return
+    didInit.current = true
+    void init()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function generate(activeTone: Tone | null) {
+  async function init() {
+    try {
+      const res = await fetch(`/api/posts?ideaId=${ideaId}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.post?.caption) {
+          setCaption(data.post.caption)
+          setRestored(true)
+          trackHistory(ideaId, "CAPTION_DONE")
+          return
+        }
+      }
+    } catch {
+      // fall through to generation if the lookup fails
+    }
+    // Initial auto-generation is not a "regeneration" — swallow its rejection.
+    void generate(null, undefined).catch(() => {})
+  }
+
+  // Persist the generated caption so it survives a page revisit.
+  async function saveCaption(text: string) {
+    try {
+      await fetch("/api/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ideaId, caption: text }),
+      })
+    } catch {
+      // best-effort — user can still Save Draft manually
+    }
+  }
+
+  async function generate(activeTone: Tone | null, userInstruction?: string) {
     setIsGenerating(true)
+    setRestored(false)
     setCaption("")
     setHooks([])
     setError(null)
@@ -60,7 +118,7 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
       const res = await fetch("/api/generate/caption", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId, tone: activeTone ?? undefined }),
+        body: JSON.stringify({ ideaId, tone: activeTone ?? undefined, userInstruction }),
       })
 
       if (!res.ok) {
@@ -89,16 +147,50 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
       const parsed = parseFullResponse(bufferRef.current)
       setCaption(parsed.captionText)
       setHooks(parsed.hooks)
+      trackHistory(ideaId, "CAPTION_DONE")
+      saveCaption(parsed.captionText)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
+      throw err // let callers (handleRegenerate) know it failed
     } finally {
       setIsGenerating(false)
     }
   }
 
+  // User-initiated regeneration — enforces the 2-per-session limit and saves
+  // the current caption to version history before regenerating. Reads the
+  // count imperatively (getState) so it can't act on a stale render value,
+  // and increments BEFORE generating so rapid clicks can't slip through.
+  async function handleRegenerate(activeTone: Tone | null) {
+    console.log("[REGEN-BUTTON-CLICKED]", "caption: handleRegenerate")
+    const currentCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
+    if (currentCount >= MAX_REGENERATIONS) {
+      setToastMsg("You've used all regenerations for this session")
+      setTimeout(() => setToastMsg(null), 5000)
+      return
+    }
+    if (caption) addVersion(ideaId, caption)
+    // Capture the instruction, then clear the input as regeneration starts.
+    const userInstruction = instruction.trim() || undefined
+    setInstruction("")
+    // Reserve the slot synchronously BEFORE generating, so a second call can't
+    // read a stale count and slip past the limit.
+    increment(ideaId)
+    try {
+      await generate(activeTone, userInstruction)
+      const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
+      if (newCount >= MAX_REGENERATIONS) {
+        setToastMsg("You've used both regenerations for this session")
+        setTimeout(() => setToastMsg(null), 5000)
+      }
+    } catch {
+      decrement(ideaId) // generation failed — refund the reserved slot
+    }
+  }
+
   function handleToneSelect(newTone: Tone) {
     setTone(newTone)
-    generate(newTone)
+    handleRegenerate(newTone)
   }
 
   function handleHookReplace(hook: string) {
@@ -121,20 +213,26 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
       </Link>
 
       {/* Idea hook */}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         <p className="text-[11px] font-medium text-[rgba(255,255,255,0.28)] uppercase tracking-widest">
           Caption for
         </p>
         <p className="text-[15px] font-medium text-[rgba(255,255,255,0.65)] leading-[1.4]">
           {ideaHook}
         </p>
+        {restored && (
+          <span className="mt-1 self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#A78BFA] bg-[rgba(124,58,237,0.1)] border border-[rgba(124,58,237,0.2)]">
+            <History size={11} strokeWidth={2.2} />
+            Restored from last session
+          </span>
+        )}
       </div>
 
       {/* Tone selector — clicking triggers regeneration */}
       <ToneSelector
         selected={tone}
         onSelect={handleToneSelect}
-        disabled={isGenerating}
+        disabled={isGenerating || atLimit}
       />
 
       {/* Error */}
@@ -144,19 +242,40 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
         </div>
       )}
 
+      {/* Regeneration instruction — applied on the next regenerate */}
+      <textarea
+        value={instruction}
+        onChange={(e) => setInstruction(e.target.value)}
+        disabled={isGenerating || atLimit}
+        rows={2}
+        placeholder="What should change? (e.g. make it shorter, add more stats, make it funnier...)"
+        className="w-full px-3.5 py-2.5 rounded-xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[13px] text-[rgba(255,255,255,0.75)] leading-[1.5] resize-none placeholder:text-[rgba(255,255,255,0.25)] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors disabled:opacity-50"
+      />
+
       {/* Caption editor */}
       <CaptionEditor
         caption={caption}
         onChange={setCaption}
         isGenerating={isGenerating}
         ideaId={ideaId}
-        onRegenerate={() => generate(tone)}
+        onRegenerate={() => handleRegenerate(tone)}
+        regenerateDisabled={atLimit}
       />
+
+      {/* Version history — silent, below the editor */}
+      <VersionHistory versions={versions} onRestore={(content) => setCaption(content)} />
 
       {/* Hook variations — appear after generation completes */}
       {hooks.length > 0 && !isGenerating && (
         <HookVariations hooks={hooks} onSelect={handleHookReplace} />
       )}
+
+      {/* Regeneration limit toast */}
+      <RegenerationLimit
+        open={toastMsg !== null}
+        message={toastMsg ?? ""}
+        onClose={() => setToastMsg(null)}
+      />
     </div>
   )
 }

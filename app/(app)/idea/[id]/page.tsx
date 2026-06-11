@@ -1,12 +1,11 @@
 // app/(app)/idea/[id]/page.tsx
 import { auth } from "@clerk/nextjs/server"
 import { redirect, notFound } from "next/navigation"
-import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
 import { db } from "@/lib/db"
 import { dbEnumsToRawCategory } from "@/lib/ai/parsers/ideas"
 import { BreakdownView } from "@/components/idea/BreakdownView"
 import { FormatPicker } from "@/components/idea/FormatPicker"
+import { TrackVisit } from "@/components/history/TrackVisit"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 import type { RawCategory } from "@/lib/ai/parsers/ideas"
 
@@ -48,14 +47,8 @@ export default async function IdeaPage({
 
   return (
     <div className="max-w-2xl mx-auto flex flex-col gap-8">
-      {/* Back link */}
-      <Link
-        href="/dashboard"
-        className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[rgba(255,255,255,0.32)] hover:text-[rgba(255,255,255,0.6)] transition-colors"
-      >
-        <ArrowLeft size={13} strokeWidth={2.2} />
-        Back to ideas
-      </Link>
+      {/* Record this idea visit in history (BREAKDOWN — never downgrades progress) */}
+      <TrackVisit ideaId={id} status="BREAKDOWN" />
 
       {/* Idea header */}
       <div className="flex flex-col gap-3">

@@ -7,17 +7,35 @@ import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+const CAPTION_GHOSTWRITER_INSTRUCTION = `Act as a top 0.1% LinkedIn ghostwriter for AI founders. Read the deep dive and identify every unique insight, strategic implication, supporting argument, and founder perspective. Rewrite it into a LinkedIn post that preserves all high-value information while removing fluff, repetition, and unnecessary exposition. Optimize for readability, engagement, and authority—not virality or clickbait. The writing should feel human, opinionated, and experience-driven, with natural transitions and varied sentence lengths. The first three lines should create curiosity without hiding the value, and the rest should progressively reveal deeper insights. Prioritize clarity over hype, include practical takeaways, and end with a question that invites thoughtful discussion rather than generic comments. If any important idea from the original is omitted, explicitly add it back so that no meaningful strategic insight is lost. The final post should sound like an experienced founder or investor sharing hard-earned lessons, not an AI summarizing an article.
+
+READABILITY RULES:
+- Write at a 8th grade reading level — simple words, short sentences
+- No jargon, buzzwords, or corporate speak
+- Every sentence must be immediately understandable by a non-expert
+-
+- Use simple words: 'use' not 'utilize', 'help' not 'facilitate', 'show' not 'demonstrate'
+- If a normal person can't understand a sentence in 3 seconds, rewrite it
+- The caption must be so clear that someone who knows nothing about the topic instantly understands what the post is about just from reading the first 3 lines`
+
 function buildCaptionPrompt(
   profileContext: string,
   idea: { hook: string; category: string },
   breakdown: BreakdownOutline,
   tone?: string,
+  userInstruction?: string,
 ): string {
   const toneInstruction = tone
     ? `\nTone override: Rewrite entirely in a ${tone} voice throughout.`
     : ""
 
-  return `${profileContext}
+  const userInstructionBlock = userInstruction
+    ? `\nUser's specific instruction for this regeneration: ${userInstruction}\n`
+    : ""
+
+  return `${CAPTION_GHOSTWRITER_INSTRUCTION}
+
+${profileContext}
 
 Selected LinkedIn post idea:
 Category: ${idea.category}
@@ -33,7 +51,7 @@ Storytelling Angle: ${breakdown.storytellingAngle}
 Suggested CTA: ${breakdown.suggestedCTA}
 Strong Ending Line: ${breakdown.strongEndingLine}
 ${toneInstruction}
-
+${userInstructionBlock}
 Generate a high-performing LinkedIn caption optimized for more views, likes, comments, higher retention, and profile visits.
 
 The caption must:
@@ -90,11 +108,15 @@ export async function POST(req: Request) {
   const { userId: clerkId } = await auth()
   if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  let ideaId: string, tone: string | undefined
+  let ideaId: string, tone: string | undefined, userInstruction: string | undefined
   try {
     const body = await req.json()
     ideaId = body.ideaId
     tone = typeof body.tone === "string" && body.tone ? body.tone : undefined
+    userInstruction =
+      typeof body.userInstruction === "string" && body.userInstruction.trim()
+        ? body.userInstruction.trim()
+        : undefined
     if (!ideaId) throw new Error("Missing ideaId")
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
@@ -127,7 +149,7 @@ export async function POST(req: Request) {
 
   const breakdown = idea.breakdowns[0].outline as unknown as BreakdownOutline
   const profileContext = formatProfile(user.profile)
-  const prompt = buildCaptionPrompt(profileContext, { hook: idea.hook, category: idea.category }, breakdown, tone)
+  const prompt = buildCaptionPrompt(profileContext, { hook: idea.hook, category: idea.category }, breakdown, tone, userInstruction)
 
   // Stream Claude's response as plain text
   const encoder = new TextEncoder()

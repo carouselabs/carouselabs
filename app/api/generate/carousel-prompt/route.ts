@@ -7,6 +7,8 @@ import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+const CAPTION_GHOSTWRITER_INSTRUCTION = `Act as a top 0.1% LinkedIn ghostwriter for AI founders. Read the deep dive and identify every unique insight, strategic implication, supporting argument, and founder perspective. Rewrite it into a LinkedIn post that preserves all high-value information while removing fluff, repetition, and unnecessary exposition. Optimize for readability, engagement, and authority—not virality or clickbait. The writing should feel human, opinionated, and experience-driven, with natural transitions and varied sentence lengths. The first three lines should create curiosity without hiding the value, and the rest should progressively reveal deeper insights. Prioritize clarity over hype, include practical takeaways, and end with a question that invites thoughtful discussion rather than generic comments. If any important idea from the original is omitted, explicitly add it back so that no meaningful strategic insight is lost. The final post should sound like an experienced founder or investor sharing hard-earned lessons, not an AI summarizing an article.`
+
 interface Slide {
   slideNumber: number
   role: "hook" | "body" | "cta"
@@ -112,6 +114,7 @@ export async function POST(req: Request) {
   let size: string
   let referenceImageBase64: string | undefined
   let referenceMediaType: string
+  let userInstruction: string | undefined
 
   try {
     const body = await req.json()
@@ -122,6 +125,10 @@ export async function POST(req: Request) {
       typeof body.referenceImage === "string" ? body.referenceImage : undefined
     referenceMediaType =
       typeof body.referenceMediaType === "string" ? body.referenceMediaType : "image/jpeg"
+    userInstruction =
+      typeof body.userInstruction === "string" && body.userInstruction.trim()
+        ? body.userInstruction.trim()
+        : undefined
     if (!ideaId) throw new Error("Missing ideaId")
     console.log("[carousel-prompt] Reference image received:", !!referenceImageBase64)
   } catch (err) {
@@ -149,7 +156,9 @@ export async function POST(req: Request) {
   }
 
   const breakdown = idea.breakdowns[0].outline as unknown as BreakdownOutline
-  const prompt = buildCarouselPrompt(
+  const prompt = `${CAPTION_GHOSTWRITER_INSTRUCTION}
+
+${buildCarouselPrompt(
     breakdown.refinedHook,
     breakdown.deepDive,
     caption,
@@ -159,7 +168,10 @@ export async function POST(req: Request) {
     breakdown.recommendedStructure,
     breakdown.storytellingAngle,
     breakdown.strongEndingLine,
-  )
+    userInstruction,
+  )}`
+
+  console.log("[carousel-prompt] Full prompt sent to Claude:\n", prompt)
 
   let claudeRaw: string
   try {

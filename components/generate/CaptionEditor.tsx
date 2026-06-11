@@ -13,6 +13,7 @@ interface CaptionEditorProps {
   isGenerating: boolean
   ideaId: string
   onRegenerate: () => void
+  regenerateDisabled?: boolean
 }
 
 export function CaptionEditor({
@@ -21,6 +22,7 @@ export function CaptionEditor({
   isGenerating,
   ideaId,
   onRegenerate,
+  regenerateDisabled = false,
 }: CaptionEditorProps) {
   const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -72,7 +74,7 @@ export function CaptionEditor({
           {/* Regenerate */}
           <button
             onClick={onRegenerate}
-            disabled={isGenerating}
+            disabled={isGenerating || regenerateDisabled}
             title="Regenerate"
             className="flex items-center gap-1.5 h-[30px] px-2.5 rounded-lg border border-[rgba(255,255,255,0.08)] text-[12px] font-medium text-[rgba(255,255,255,0.45)] hover:border-[rgba(255,255,255,0.14)] hover:text-[rgba(255,255,255,0.65)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >

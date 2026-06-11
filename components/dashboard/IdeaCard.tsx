@@ -1,10 +1,19 @@
 "use client"
 
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Bookmark, X } from "lucide-react"
 import type { SessionIdea } from "@/lib/store/ideaSessionStore"
 import type { RawCategory } from "@/lib/ai/parsers/ideas"
 import { cn } from "@/lib/utils"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 const CATEGORY_STYLES: Record<RawCategory, { label: string; color: string; bg: string }> = {
   "Latest News": {
@@ -38,8 +47,14 @@ interface IdeaCardProps {
 export function IdeaCard({ idea, onPin, onDismiss }: IdeaCardProps) {
   const router = useRouter()
   const style = CATEGORY_STYLES[idea.rawCategory]
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   function handleCardClick() {
+    // Selecting an idea locks the session — confirm before committing.
+    setConfirmOpen(true)
+  }
+
+  function handleConfirm() {
     router.push(`/idea/${idea.id}`)
   }
 
@@ -54,6 +69,7 @@ export function IdeaCard({ idea, onPin, onDismiss }: IdeaCardProps) {
   }
 
   return (
+    <>
     <div
       role="button"
       tabIndex={0}
@@ -116,5 +132,36 @@ export function IdeaCard({ idea, onPin, onDismiss }: IdeaCardProps) {
         </button>
       </div>
     </div>
+
+    {/* Confirmation — selecting an idea locks the session */}
+    <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <DialogContent className="bg-[#0D0D1A] border-[rgba(255,255,255,0.08)] text-[#F0F0FA]">
+        <DialogHeader>
+          <DialogTitle className="text-[16px] font-semibold text-[rgba(255,255,255,0.92)]">
+            Ready to work on this idea?
+          </DialogTitle>
+          <DialogDescription className="text-[13px] text-[rgba(255,255,255,0.5)] leading-[1.55]">
+            Once you select an idea, you&apos;ll be locked into it for this
+            session. To pick a different idea, you&apos;ll need to start a new
+            session.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <button
+            onClick={() => setConfirmOpen(false)}
+            className="px-4 py-2 rounded-xl text-[13px] font-medium text-[rgba(255,255,255,0.5)] hover:text-[rgba(255,255,255,0.8)] hover:bg-[rgba(255,255,255,0.05)] transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-all"
+          >
+            Let&apos;s go →
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

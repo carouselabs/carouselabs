@@ -2,9 +2,13 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { ArrowLeft, Sparkles, Copy, Check } from "lucide-react"
+import { ArrowLeft, Sparkles, Copy, Check, History } from "lucide-react"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
 import { CarouselSlideList } from "@/components/generate/CarouselSlideList"
+import { RegenerationLimit } from "@/components/generate/RegenerationLimit"
+import { VersionHistory } from "@/components/generate/VersionHistory"
+import { trackHistory } from "@/lib/hooks/useHistory"
+import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
 
 interface CarouselClientProps {
   ideaId: string
@@ -44,15 +48,74 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
 
   const [error, setError] = useState<string | null>(null)
   const [captionCopied, setCaptionCopied] = useState(false)
+  const [restored, setRestored] = useState(false)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [captionInstruction, setCaptionInstruction] = useState("")
+  const [slidesInstruction, setSlidesInstruction] = useState("")
 
   const abortRef = useRef<AbortController | null>(null)
+  const didInit = useRef(false)
 
+  // Regeneration limit + version history (per idea, per session).
+  // Select the stable parent objects and derive per-idea values outside the
+  // hook — selecting `s.versions[ideaId] ?? []` returns a new array each render
+  // and trips Zustand's "getSnapshot should be cached" loop guard.
+  const regenerationCount = useRegenerationStore((s) => s.regenerationCount)
+  const allVersions = useRegenerationStore((s) => s.versions)
+  const increment = useRegenerationStore((s) => s.increment)
+  const decrement = useRegenerationStore((s) => s.decrement)
+  const addVersion = useRegenerationStore((s) => s.addVersion)
+  const regenCount = regenerationCount[ideaId] ?? 0
+  const versions = allVersions[ideaId] ?? []
+  const atLimit = regenCount >= MAX_REGENERATIONS
+
+  // Run once on mount: restore a previous session before generating anything.
   useEffect(() => {
-    streamCaption()
+    if (didInit.current) return
+    didInit.current = true
+    void init()
     return () => abortRef.current?.abort()
   }, [])
 
-  async function streamCaption() {
+  // Restore a saved caption (from the Post table) and/or saved slides (from
+  // localStorage) instead of regenerating. Only generate what's missing.
+  async function init() {
+    let restoredCaption = false
+    let restoredSlides = false
+
+    try {
+      const res = await fetch(`/api/posts?ideaId=${ideaId}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.post?.caption) {
+          setCaption(data.post.caption)
+          setCaptionReady(true)
+          restoredCaption = true
+        }
+      }
+    } catch {
+      // ignore — will stream a fresh caption below
+    }
+
+    try {
+      const savedSlides = localStorage.getItem(`carouselSlides_${ideaId}`)
+      if (savedSlides) {
+        const parsed = JSON.parse(savedSlides) as Slide[]
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSlides(parsed)
+          restoredSlides = true
+        }
+      }
+    } catch {
+      // corrupt/unavailable — ignore
+    }
+
+    if (restoredSlides) setStep(4) // jump to where they left off
+    if (restoredCaption || restoredSlides) setRestored(true)
+    if (!restoredCaption) streamCaption()
+  }
+
+  async function streamCaption(userInstruction?: string) {
     setIsStreamingCaption(true)
     setCaptionReady(false)
     setCaption("")
@@ -66,7 +129,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       const res = await fetch("/api/generate/caption", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId }),
+        body: JSON.stringify({ ideaId, userInstruction }),
         signal: controller.signal,
       })
 
@@ -98,7 +161,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
     }
   }
 
-  async function generateSlides() {
+  async function generateSlides(userInstruction?: string) {
     setIsGeneratingSlides(true)
     setSlides(null)
     setError(null)
@@ -114,6 +177,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
           size,
           referenceImage: referenceImage ?? undefined,
           referenceMediaType: referenceImage ? referenceMediaType : undefined,
+          userInstruction,
         }),
       })
 
@@ -121,10 +185,97 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       if (!res.ok) throw new Error((data as { error?: string }).error ?? "Generation failed")
 
       setSlides(data.slides)
+      trackHistory(ideaId, "CAROUSEL_DONE")
+      try {
+        localStorage.setItem(`carouselSlides_${ideaId}`, JSON.stringify(data.slides))
+      } catch {
+        // persistence is best-effort
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
+      throw err // let callers (handleRegenerateSlides) know it failed
     } finally {
       setIsGeneratingSlides(false)
+    }
+  }
+
+  // User-initiated regeneration of the carousel — enforces the 2-per-session
+  // limit and snapshots the current slides (as JSON) first. Reads the count
+  // imperatively (getState) so it can't act on a stale render value, and
+  // increments BEFORE generating so rapid clicks can't slip through.
+  async function handleRegenerateSlides() {
+    console.log("[REGEN-BUTTON-CLICKED]", "carousel: handleRegenerateSlides")
+    const currentCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
+    if (currentCount >= MAX_REGENERATIONS) {
+      setToastMsg("You've used all regenerations for this session")
+      setTimeout(() => setToastMsg(null), 5000)
+      return
+    }
+    if (slides) addVersion(ideaId, JSON.stringify(slides))
+    // Capture the instruction, then clear the input as regeneration starts.
+    const userInstruction = slidesInstruction.trim() || undefined
+    setSlidesInstruction("")
+    // Reserve the slot synchronously BEFORE generating, so a second call can't
+    // read a stale count and slip past the limit.
+    increment(ideaId)
+    try {
+      await generateSlides(userInstruction)
+      const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
+      if (newCount >= MAX_REGENERATIONS) {
+        setToastMsg("You've used both regenerations for this session")
+        setTimeout(() => setToastMsg(null), 5000)
+      }
+    } catch {
+      decrement(ideaId) // generation failed — refund the reserved slot
+    }
+  }
+
+  // Step-1 "Regenerate caption" — was calling streamCaption() directly and
+  // bypassing the limit. Now gated through the same 2-per-session budget.
+  async function handleRegenerateCaption() {
+    console.log("[REGEN-BUTTON-CLICKED]", "carousel: handleRegenerateCaption")
+    const currentCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
+    if (currentCount >= MAX_REGENERATIONS) {
+      setToastMsg("You've used all regenerations for this session")
+      setTimeout(() => setToastMsg(null), 5000)
+      return
+    }
+    if (caption) addVersion(ideaId, caption)
+    // Capture the instruction, then clear the input as regeneration starts.
+    const userInstruction = captionInstruction.trim() || undefined
+    setCaptionInstruction("")
+    increment(ideaId)
+    try {
+      await streamCaption(userInstruction)
+      const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
+      if (newCount >= MAX_REGENERATIONS) {
+        setToastMsg("You've used both regenerations for this session")
+        setTimeout(() => setToastMsg(null), 5000)
+      }
+    } catch {
+      decrement(ideaId)
+    }
+  }
+
+  function handleRestoreSlides(content: string) {
+    try {
+      const parsed = JSON.parse(content) as Slide[]
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setSlides(parsed)
+        localStorage.setItem(`carouselSlides_${ideaId}`, content)
+      }
+    } catch {
+      // corrupt snapshot — ignore
+    }
+  }
+
+  // Readable preview for a stored slides snapshot (joined headlines).
+  function slidesPreview(content: string): string {
+    try {
+      const parsed = JSON.parse(content) as Slide[]
+      return parsed.map((s) => s.headline).join(" · ")
+    } catch {
+      return content
     }
   }
 
@@ -145,6 +296,13 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       </Link>
 
       <p className="text-[13px] text-[rgba(255,255,255,0.38)] leading-[1.5] max-w-2xl">{ideaHook}</p>
+
+      {restored && (
+        <span className="self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#A78BFA] bg-[rgba(124,58,237,0.1)] border border-[rgba(124,58,237,0.2)]">
+          <History size={11} strokeWidth={2.2} />
+          Restored from last session
+        </span>
+      )}
 
       {/* ── STEP 1: Caption Generation ── */}
       {step === 1 && (
@@ -176,13 +334,23 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
                   {caption.length} chars
                 </p>
               </div>
-              <button
-                onClick={streamCaption}
-                disabled={isStreamingCaption}
-                className="self-start px-3.5 py-2 rounded-lg bg-[rgba(124,58,237,0.1)] hover:bg-[rgba(124,58,237,0.18)] border border-[rgba(124,58,237,0.2)] text-[12px] font-medium text-[#A78BFA] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Regenerate caption
-              </button>
+              <div className="flex items-end gap-2">
+                <textarea
+                  value={captionInstruction}
+                  onChange={(e) => setCaptionInstruction(e.target.value)}
+                  disabled={isStreamingCaption || atLimit}
+                  rows={2}
+                  placeholder="What should change? (e.g. make it shorter, add more stats, make it funnier...)"
+                  className="flex-1 px-3.5 py-2.5 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[13px] text-[rgba(255,255,255,0.75)] leading-[1.5] resize-none placeholder:text-[rgba(255,255,255,0.25)] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors disabled:opacity-50"
+                />
+                <button
+                  onClick={handleRegenerateCaption}
+                  disabled={isStreamingCaption || atLimit}
+                  className="flex-shrink-0 px-3.5 py-2 rounded-lg bg-[rgba(124,58,237,0.1)] hover:bg-[rgba(124,58,237,0.18)] border border-[rgba(124,58,237,0.2)] text-[12px] font-medium text-[#A78BFA] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Regenerate caption
+                </button>
+              </div>
             </>
           )}
 
@@ -390,7 +558,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
               {/* Generate button — shown before slides exist */}
               {!slides && !isGeneratingSlides && (
                 <button
-                  onClick={generateSlides}
+                  onClick={() => void generateSlides().catch(() => {})}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-all"
                 >
                   <Sparkles size={14} strokeWidth={2} />
@@ -418,18 +586,42 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
               {slides && !isGeneratingSlides && (
                 <div className="flex flex-col gap-4">
                   <CarouselSlideList slides={slides} />
-                  <button
-                    onClick={generateSlides}
-                    className="self-start px-3.5 py-2 rounded-lg bg-[rgba(124,58,237,0.1)] hover:bg-[rgba(124,58,237,0.18)] border border-[rgba(124,58,237,0.2)] text-[12px] font-medium text-[#A78BFA] transition-colors"
-                  >
-                    Regenerate Slides
-                  </button>
+                  <div className="flex items-end gap-2">
+                    <textarea
+                      value={slidesInstruction}
+                      onChange={(e) => setSlidesInstruction(e.target.value)}
+                      disabled={isGeneratingSlides || atLimit}
+                      rows={2}
+                      placeholder="What should change? (e.g. make it shorter, add more stats, make it funnier...)"
+                      className="flex-1 px-3.5 py-2.5 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[13px] text-[rgba(255,255,255,0.75)] leading-[1.5] resize-none placeholder:text-[rgba(255,255,255,0.25)] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors disabled:opacity-50"
+                    />
+                    <button
+                      onClick={handleRegenerateSlides}
+                      disabled={isGeneratingSlides || atLimit}
+                      className="flex-shrink-0 px-3.5 py-2 rounded-lg bg-[rgba(124,58,237,0.1)] hover:bg-[rgba(124,58,237,0.18)] border border-[rgba(124,58,237,0.2)] text-[12px] font-medium text-[#A78BFA] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Regenerate Slides
+                    </button>
+                  </div>
+                  {/* Version history — silent, below the slides */}
+                  <VersionHistory
+                    versions={versions}
+                    onRestore={handleRestoreSlides}
+                    preview={slidesPreview}
+                  />
                 </div>
               )}
             </div>
           </div>
         </div>
       )}
+
+      {/* Regeneration limit toast */}
+      <RegenerationLimit
+        open={toastMsg !== null}
+        message={toastMsg ?? ""}
+        onClose={() => setToastMsg(null)}
+      />
     </div>
   )
 }

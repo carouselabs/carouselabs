@@ -13,7 +13,12 @@ export function buildCarouselPrompt(
   recommendedStructure: unknown,
   storytellingAngle: unknown,
   strongEndingLine: unknown,
+  userInstruction?: string,
 ): string {
+  const userInstructionBlock = userInstruction
+    ? `\nUser's specific instruction for this regeneration: ${userInstruction}\n`
+    : ""
+
   const sizeBlock =
     size === "1:1"
       ? `User selected 1:1 Square format.\nSquare 1:1 ratio (1080x1080px). ALL slides must be optimized for square format.`
@@ -153,6 +158,7 @@ CRITICAL SLIDE PROMPT REQUIREMENTS:
 CRITICAL SIZE REQUIREMENT:
 ${sizeBlock}
 STRICTLY follow this ratio across all slides.
+${userInstructionBlock}
 
 Rules:
 - Caption and visuals must feel connected

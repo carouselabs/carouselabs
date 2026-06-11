@@ -3,7 +3,12 @@ export function buildImagePrompt(
   deepDive: string,
   caption: string,
   size: string,
+  userInstruction?: string,
 ): string {
+  const userInstructionBlock = userInstruction
+    ? `\nUser's specific instruction for this regeneration: ${userInstruction}\n`
+    : ""
+
   const sizeBlock =
     size === "1:1"
       ? `User selected 1:1 Square format.\nSquare 1:1 ratio (1080x1080px). Optimize ALL composition for perfect square. Balance elements symmetrically.`
@@ -61,6 +66,11 @@ The visual prompt must:
 - Feel modern, premium, clean, and attention-grabbing
 - Explain the idea visually in one image
 
+IMPORTANT: This is a SINGLE standalone image post, NOT a carousel slide.
+Do NOT include any 'swipe' text, 'swipe to see', next slide teasers, or any text suggesting there are more slides.
+This image must work as a complete, standalone visual on its own.
+No arrows pointing right, no 'next' indicators, no swipe prompts.
+
 CRITICAL IMAGE PROMPT REQUIREMENTS:
 - Minimum 400 words
 - Include exact hex color codes for EVERY color
@@ -73,6 +83,7 @@ CRITICAL IMAGE PROMPT REQUIREMENTS:
 CRITICAL SIZE REQUIREMENT:
 ${sizeBlock}
 STRICTLY follow this ratio. Non-negotiable.
+${userInstructionBlock}
 
 Return ONLY valid JSON, no markdown:
 {

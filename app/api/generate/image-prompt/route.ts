@@ -9,6 +9,26 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const CAPTION_GHOSTWRITER_INSTRUCTION = `Act as a top 0.1% LinkedIn ghostwriter for AI founders. Read the deep dive and identify every unique insight, strategic implication, supporting argument, and founder perspective. Rewrite it into a LinkedIn post that preserves all high-value information while removing fluff, repetition, and unnecessary exposition. Optimize for readability, engagement, and authority—not virality or clickbait. The writing should feel human, opinionated, and experience-driven, with natural transitions and varied sentence lengths. The first three lines should create curiosity without hiding the value, and the rest should progressively reveal deeper insights. Prioritize clarity over hype, include practical takeaways, and end with a question that invites thoughtful discussion rather than generic comments. If any important idea from the original is omitted, explicitly add it back so that no meaningful strategic insight is lost. The final post should sound like an experienced founder or investor sharing hard-earned lessons, not an AI summarizing an article.`
 
+// Targeted edit mode — apply ONLY the user's instruction to the existing image
+// prompt, changing as little as possible. Returns the same JSON shape the
+// parser expects (caption is unused by the client in this flow).
+function buildImageEditPrompt(currentImagePrompt: string, userInstruction: string): string {
+  return `You are editing an existing AI image prompt for a LinkedIn post. Do NOT rewrite it from scratch.
+
+Apply ONLY this instruction to the current image prompt: ${userInstruction}
+
+Current prompt:
+${currentImagePrompt}
+
+Make MINIMUM changes. Preserve everything else — keep all composition, colors (exact hex codes), typography, lighting, mood, and detail that the instruction does not require changing. Change only what the instruction explicitly asks for.
+
+Return ONLY valid JSON, no markdown:
+{
+  "caption": "",
+  "imagePrompt": string (the minimally-edited image prompt)
+}`
+}
+
 function extractStringValue(raw: string, key: string): string | null {
   // Matches "key": "value" handling escaped quotes and multiline values
   const pattern = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\[\\s\\S])*)"`, "s")
@@ -91,6 +111,7 @@ export async function POST(req: Request) {
   let referenceImage: string | undefined
   let referenceMediaType: string
   let userInstruction: string | undefined
+  let currentImagePrompt: string | undefined
 
   try {
     const body = await req.json()
@@ -103,6 +124,10 @@ export async function POST(req: Request) {
     userInstruction =
       typeof body.userInstruction === "string" && body.userInstruction.trim()
         ? body.userInstruction.trim()
+        : undefined
+    currentImagePrompt =
+      typeof body.currentImagePrompt === "string" && body.currentImagePrompt.trim()
+        ? body.currentImagePrompt
         : undefined
     if (!ideaId) throw new Error("Missing ideaId")
   } catch (err) {
@@ -130,7 +155,12 @@ export async function POST(req: Request) {
   }
 
   const breakdown = idea.breakdowns[0].outline as unknown as BreakdownOutline
-  const prompt = `${CAPTION_GHOSTWRITER_INSTRUCTION}
+  // Targeted edit when the user gave an instruction AND we have the current
+  // prompt to edit; otherwise full regeneration as before.
+  const prompt =
+    userInstruction && currentImagePrompt
+      ? buildImageEditPrompt(currentImagePrompt, userInstruction)
+      : `${CAPTION_GHOSTWRITER_INSTRUCTION}
 
 ${buildImagePrompt(breakdown.refinedHook, breakdown.deepDive, caption, size, userInstruction)}`
 

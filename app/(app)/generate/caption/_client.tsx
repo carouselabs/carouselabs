@@ -106,7 +106,11 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
     }
   }
 
-  async function generate(activeTone: Tone | null, userInstruction?: string) {
+  async function generate(
+    activeTone: Tone | null,
+    userInstruction?: string,
+    currentCaption?: string,
+  ) {
     setIsGenerating(true)
     setRestored(false)
     setCaption("")
@@ -118,7 +122,7 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
       const res = await fetch("/api/generate/caption", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId, tone: activeTone ?? undefined, userInstruction }),
+        body: JSON.stringify({ ideaId, tone: activeTone ?? undefined, userInstruction, currentCaption }),
       })
 
       if (!res.ok) {
@@ -170,14 +174,16 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
       return
     }
     if (caption) addVersion(ideaId, caption)
-    // Capture the instruction, then clear the input as regeneration starts.
+    // Capture the instruction + current caption, then clear the input. Sending
+    // the current caption lets the API do a targeted edit instead of a rewrite.
     const userInstruction = instruction.trim() || undefined
+    const currentCaption = userInstruction ? caption : undefined
     setInstruction("")
     // Reserve the slot synchronously BEFORE generating, so a second call can't
     // read a stale count and slip past the limit.
     increment(ideaId)
     try {
-      await generate(activeTone, userInstruction)
+      await generate(activeTone, userInstruction, currentCaption)
       const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
       if (newCount >= MAX_REGENERATIONS) {
         setToastMsg("You've used both regenerations for this session")

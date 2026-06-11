@@ -115,7 +115,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
     if (!restoredCaption) streamCaption()
   }
 
-  async function streamCaption(userInstruction?: string) {
+  async function streamCaption(userInstruction?: string, currentCaption?: string) {
     setIsStreamingCaption(true)
     setCaptionReady(false)
     setCaption("")
@@ -129,7 +129,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       const res = await fetch("/api/generate/caption", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId, userInstruction }),
+        body: JSON.stringify({ ideaId, userInstruction, currentCaption }),
         signal: controller.signal,
       })
 
@@ -161,7 +161,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
     }
   }
 
-  async function generateSlides(userInstruction?: string) {
+  async function generateSlides(userInstruction?: string, currentSlides?: string) {
     setIsGeneratingSlides(true)
     setSlides(null)
     setError(null)
@@ -178,6 +178,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
           referenceImage: referenceImage ?? undefined,
           referenceMediaType: referenceImage ? referenceMediaType : undefined,
           userInstruction,
+          currentSlides,
         }),
       })
 
@@ -212,14 +213,16 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       return
     }
     if (slides) addVersion(ideaId, JSON.stringify(slides))
-    // Capture the instruction, then clear the input as regeneration starts.
+    // Capture the instruction + current slides, then clear the input. Sending
+    // the current slides lets the API do a targeted edit instead of a rewrite.
     const userInstruction = slidesInstruction.trim() || undefined
+    const currentSlides = userInstruction && slides ? JSON.stringify(slides) : undefined
     setSlidesInstruction("")
     // Reserve the slot synchronously BEFORE generating, so a second call can't
     // read a stale count and slip past the limit.
     increment(ideaId)
     try {
-      await generateSlides(userInstruction)
+      await generateSlides(userInstruction, currentSlides)
       const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
       if (newCount >= MAX_REGENERATIONS) {
         setToastMsg("You've used both regenerations for this session")
@@ -241,12 +244,14 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       return
     }
     if (caption) addVersion(ideaId, caption)
-    // Capture the instruction, then clear the input as regeneration starts.
+    // Capture the instruction + current caption, then clear the input. Sending
+    // the current caption lets the API do a targeted edit instead of a rewrite.
     const userInstruction = captionInstruction.trim() || undefined
+    const currentCaption = userInstruction ? caption : undefined
     setCaptionInstruction("")
     increment(ideaId)
     try {
-      await streamCaption(userInstruction)
+      await streamCaption(userInstruction, currentCaption)
       const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
       if (newCount >= MAX_REGENERATIONS) {
         setToastMsg("You've used both regenerations for this session")

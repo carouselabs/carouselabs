@@ -79,6 +79,28 @@ Output format (follow exactly):
 [hook variation 3]`
 }
 
+// Targeted edit mode — apply ONLY the user's instruction to the existing
+// caption, changing as little as possible. Keeps the same output format so the
+// client's caption + ---HOOKS--- parsing still works.
+function buildCaptionEditPrompt(currentCaption: string, userInstruction: string): string {
+  return `You are editing an existing LinkedIn caption. Do NOT rewrite it from scratch.
+
+Apply ONLY this instruction to the current caption: ${userInstruction}
+
+Current caption:
+${currentCaption}
+
+Make MINIMUM changes. Preserve everything else exactly as is — keep all wording, structure, line breaks, emojis, and hashtags that the instruction does not require changing. Change only what the instruction explicitly asks for.
+
+Output format (follow exactly):
+[full edited caption text ending with hashtags]
+
+---HOOKS---
+[hook variation 1]
+[hook variation 2]
+[hook variation 3]`
+}
+
 function formatProfile(profile: {
   name: string | null
   headline: string | null
@@ -108,7 +130,10 @@ export async function POST(req: Request) {
   const { userId: clerkId } = await auth()
   if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  let ideaId: string, tone: string | undefined, userInstruction: string | undefined
+  let ideaId: string,
+    tone: string | undefined,
+    userInstruction: string | undefined,
+    currentCaption: string | undefined
   try {
     const body = await req.json()
     ideaId = body.ideaId
@@ -116,6 +141,10 @@ export async function POST(req: Request) {
     userInstruction =
       typeof body.userInstruction === "string" && body.userInstruction.trim()
         ? body.userInstruction.trim()
+        : undefined
+    currentCaption =
+      typeof body.currentCaption === "string" && body.currentCaption.trim()
+        ? body.currentCaption
         : undefined
     if (!ideaId) throw new Error("Missing ideaId")
   } catch {
@@ -149,7 +178,12 @@ export async function POST(req: Request) {
 
   const breakdown = idea.breakdowns[0].outline as unknown as BreakdownOutline
   const profileContext = formatProfile(user.profile)
-  const prompt = buildCaptionPrompt(profileContext, { hook: idea.hook, category: idea.category }, breakdown, tone, userInstruction)
+  // Targeted edit when the user gave an instruction AND we have the current
+  // caption to edit; otherwise full regeneration as before.
+  const prompt =
+    userInstruction && currentCaption
+      ? buildCaptionEditPrompt(currentCaption, userInstruction)
+      : buildCaptionPrompt(profileContext, { hook: idea.hook, category: idea.category }, breakdown, tone, userInstruction)
 
   // Stream Claude's response as plain text
   const encoder = new TextEncoder()

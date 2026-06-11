@@ -16,6 +16,33 @@ interface Slide {
   prompt: string
 }
 
+// Targeted edit mode — apply ONLY the user's instruction to the existing slides,
+// touching as few slides as possible. Returns the same JSON shape the parser
+// expects (caption is unused by the client in this flow).
+function buildCarouselEditPrompt(currentSlides: string, userInstruction: string): string {
+  return `You are editing an existing LinkedIn carousel. Do NOT rewrite all the slides from scratch.
+
+Apply ONLY this instruction to the current carousel slides: ${userInstruction}
+
+Current slides:
+${currentSlides}
+
+Make MINIMUM changes to the relevant slides only. Preserve every other slide and field exactly as is — keep slideNumber, role, and all unaffected headlines and prompts identical. Change only the slides the instruction explicitly affects.
+
+Return ONLY valid JSON, no markdown:
+{
+  "caption": "",
+  "slides": [
+    {
+      "slideNumber": number,
+      "role": "hook" | "body" | "cta",
+      "headline": string,
+      "prompt": string
+    }
+  ]
+}`
+}
+
 function extractStringValue(raw: string, key: string): string | null {
   const pattern = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\[\\s\\S])*)"`, "s")
   const match = raw.match(pattern)
@@ -115,6 +142,7 @@ export async function POST(req: Request) {
   let referenceImageBase64: string | undefined
   let referenceMediaType: string
   let userInstruction: string | undefined
+  let currentSlides: string | undefined
 
   try {
     const body = await req.json()
@@ -128,6 +156,10 @@ export async function POST(req: Request) {
     userInstruction =
       typeof body.userInstruction === "string" && body.userInstruction.trim()
         ? body.userInstruction.trim()
+        : undefined
+    currentSlides =
+      typeof body.currentSlides === "string" && body.currentSlides.trim()
+        ? body.currentSlides
         : undefined
     if (!ideaId) throw new Error("Missing ideaId")
     console.log("[carousel-prompt] Reference image received:", !!referenceImageBase64)
@@ -156,7 +188,12 @@ export async function POST(req: Request) {
   }
 
   const breakdown = idea.breakdowns[0].outline as unknown as BreakdownOutline
-  const prompt = `${CAPTION_GHOSTWRITER_INSTRUCTION}
+  // Targeted edit when the user gave an instruction AND we have the current
+  // slides to edit; otherwise full regeneration as before.
+  const prompt =
+    userInstruction && currentSlides
+      ? buildCarouselEditPrompt(currentSlides, userInstruction)
+      : `${CAPTION_GHOSTWRITER_INSTRUCTION}
 
 ${buildCarouselPrompt(
     breakdown.refinedHook,

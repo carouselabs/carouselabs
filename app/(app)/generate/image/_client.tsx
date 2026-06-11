@@ -110,7 +110,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
     if (!restoredCaption) streamCaption()
   }
 
-  async function streamCaption(userInstruction?: string) {
+  async function streamCaption(userInstruction?: string, currentCaption?: string) {
     setIsStreamingCaption(true)
     setCaptionReady(false)
     setCaption("")
@@ -124,7 +124,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
       const res = await fetch("/api/generate/caption", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId, userInstruction }),
+        body: JSON.stringify({ ideaId, userInstruction, currentCaption }),
         signal: controller.signal,
       })
 
@@ -156,7 +156,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
     }
   }
 
-  async function generateImagePrompt(userInstruction?: string) {
+  async function generateImagePrompt(userInstruction?: string, currentImagePrompt?: string) {
     setIsGeneratingPrompt(true)
     setImagePrompt(null)
     setError(null)
@@ -172,6 +172,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
           referenceImage: referenceImage ?? undefined,
           referenceMediaType: referenceImage ? referenceMediaType : undefined,
           userInstruction,
+          currentImagePrompt,
         }),
       })
 
@@ -206,14 +207,16 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
       return
     }
     if (imagePrompt) addVersion(ideaId, imagePrompt)
-    // Capture the instruction, then clear the input as regeneration starts.
+    // Capture the instruction + current prompt, then clear the input. Sending
+    // the current prompt lets the API do a targeted edit instead of a rewrite.
     const userInstruction = promptInstruction.trim() || undefined
+    const currentImagePrompt = userInstruction ? imagePrompt ?? undefined : undefined
     setPromptInstruction("")
     // Reserve the slot synchronously BEFORE generating, so a second call can't
     // read a stale count and slip past the limit.
     increment(ideaId)
     try {
-      await generateImagePrompt(userInstruction)
+      await generateImagePrompt(userInstruction, currentImagePrompt)
       const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
       if (newCount >= MAX_REGENERATIONS) {
         setToastMsg("You've used both regenerations for this session")
@@ -235,12 +238,14 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
       return
     }
     if (caption) addVersion(ideaId, caption)
-    // Capture the instruction, then clear the input as regeneration starts.
+    // Capture the instruction + current caption, then clear the input. Sending
+    // the current caption lets the API do a targeted edit instead of a rewrite.
     const userInstruction = captionInstruction.trim() || undefined
+    const currentCaption = userInstruction ? caption : undefined
     setCaptionInstruction("")
     increment(ideaId)
     try {
-      await streamCaption(userInstruction)
+      await streamCaption(userInstruction, currentCaption)
       const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
       if (newCount >= MAX_REGENERATIONS) {
         setToastMsg("You've used both regenerations for this session")

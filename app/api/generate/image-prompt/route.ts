@@ -1,0 +1,178 @@
+import { auth } from "@clerk/nextjs/server"
+import { NextResponse } from "next/server"
+import Anthropic from "@anthropic-ai/sdk"
+import { db } from "@/lib/db"
+import { buildImagePrompt } from "@/lib/ai/prompts/imagePrompt"
+import type { BreakdownOutline } from "@/lib/types/breakdown"
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+function extractStringValue(raw: string, key: string): string | null {
+  // Matches "key": "value" handling escaped quotes and multiline values
+  const pattern = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\[\\s\\S])*)"`, "s")
+  const match = raw.match(pattern)
+  if (!match) return null
+  // Unescape JSON string escapes
+  try {
+    return JSON.parse(`"${match[1]}"`)
+  } catch {
+    return match[1]
+  }
+}
+
+function parseJsonResponse(raw: string): { caption: string; imagePrompt: string } {
+  // 1. Direct JSON.parse
+  try {
+    const parsed = JSON.parse(raw)
+    if (typeof parsed.caption === "string" && typeof parsed.imagePrompt === "string") {
+      console.log("[generate/image-prompt] Parsed via: direct JSON.parse")
+      return { caption: parsed.caption, imagePrompt: parsed.imagePrompt }
+    }
+  } catch {}
+
+  // 2. Extract outermost { ... } block and parse
+  try {
+    const start = raw.indexOf("{")
+    const end = raw.lastIndexOf("}")
+    if (start !== -1 && end !== -1 && end > start) {
+      const extracted = raw.slice(start, end + 1)
+      const parsed = JSON.parse(extracted)
+      if (typeof parsed.caption === "string" && typeof parsed.imagePrompt === "string") {
+        console.log("[generate/image-prompt] Parsed via: brace extraction")
+        return { caption: parsed.caption, imagePrompt: parsed.imagePrompt }
+      }
+    }
+  } catch {}
+
+  // 3. Extract from ```json ... ``` block
+  try {
+    const match = raw.match(/```json\s*([\s\S]*?)```/)
+    if (match) {
+      const parsed = JSON.parse(match[1].trim())
+      if (typeof parsed.caption === "string" && typeof parsed.imagePrompt === "string") {
+        console.log("[generate/image-prompt] Parsed via: ```json block")
+        return { caption: parsed.caption, imagePrompt: parsed.imagePrompt }
+      }
+    }
+  } catch {}
+
+  // 4. Extract from ``` ... ``` block (no language tag)
+  try {
+    const match = raw.match(/```\s*([\s\S]*?)```/)
+    if (match) {
+      const parsed = JSON.parse(match[1].trim())
+      if (typeof parsed.caption === "string" && typeof parsed.imagePrompt === "string") {
+        console.log("[generate/image-prompt] Parsed via: ``` block")
+        return { caption: parsed.caption, imagePrompt: parsed.imagePrompt }
+      }
+    }
+  } catch {}
+
+  // 5. Manual key extraction as last resort
+  const caption = extractStringValue(raw, "caption")
+  const imagePrompt = extractStringValue(raw, "imagePrompt")
+  if (imagePrompt) {
+    console.log("[generate/image-prompt] Parsed via: manual key extraction")
+    return { caption: caption ?? "", imagePrompt }
+  }
+
+  throw new Error("All parsing strategies exhausted")
+}
+
+export async function POST(req: Request) {
+  const { userId: clerkId } = await auth()
+  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  let ideaId: string
+  let caption: string
+  let size: string
+  let referenceImage: string | undefined
+  let referenceMediaType: string
+
+  try {
+    const body = await req.json()
+    ideaId = body.ideaId
+    caption = typeof body.caption === "string" ? body.caption : ""
+    size = typeof body.size === "string" ? body.size : "4:5"
+    referenceImage = typeof body.referenceImage === "string" ? body.referenceImage : undefined
+    referenceMediaType =
+      typeof body.referenceMediaType === "string" ? body.referenceMediaType : "image/jpeg"
+    if (!ideaId) throw new Error("Missing ideaId")
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Invalid request body" },
+      { status: 400 },
+    )
+  }
+
+  const user = await db.user.findUnique({ where: { clerkId } })
+  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
+
+  const idea = await db.idea.findUnique({
+    where: { id: ideaId },
+    include: { breakdowns: { orderBy: { createdAt: "desc" }, take: 1 } },
+  })
+  if (!idea || idea.userId !== user.id) {
+    return NextResponse.json({ error: "Idea not found" }, { status: 404 })
+  }
+  if (!idea.breakdowns[0]) {
+    return NextResponse.json(
+      { error: "No breakdown found. Generate a breakdown first." },
+      { status: 400 },
+    )
+  }
+
+  const breakdown = idea.breakdowns[0].outline as unknown as BreakdownOutline
+  const prompt = buildImagePrompt(breakdown.refinedHook, breakdown.deepDive, caption, size)
+
+  let claudeRaw: string
+  try {
+    const messageContent: Anthropic.MessageParam["content"] = referenceImage
+      ? [
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: referenceMediaType as
+                | "image/jpeg"
+                | "image/png"
+                | "image/gif"
+                | "image/webp",
+              data: referenceImage,
+            },
+          },
+          { type: "text", text: prompt },
+        ]
+      : prompt
+
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 4096,
+      messages: [{ role: "user", content: messageContent }],
+    })
+
+    claudeRaw = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+  } catch (err) {
+    console.error("[generate/image-prompt] Claude error:", err)
+    return NextResponse.json({ error: "Failed to generate content" }, { status: 502 })
+  }
+
+  console.log("[generate/image-prompt] Raw Claude response:\n", claudeRaw)
+
+  let parsed: { caption: string; imagePrompt: string }
+  try {
+    parsed = parseJsonResponse(claudeRaw)
+  } catch {
+    console.error("[generate/image-prompt] All parse strategies failed. Raw:\n", claudeRaw)
+    return NextResponse.json({ error: "Failed to parse AI response" }, { status: 502 })
+  }
+
+  if (!parsed.imagePrompt) {
+    return NextResponse.json({ error: "Image prompt was empty in AI response" }, { status: 502 })
+  }
+
+  return NextResponse.json({ caption: parsed.caption, imagePrompt: parsed.imagePrompt })
+}

@@ -14,9 +14,14 @@ export function buildCarouselPrompt(
   storytellingAngle: unknown,
   strongEndingLine: unknown,
   userInstruction?: string,
+  niche?: string,
 ): string {
   const userInstructionBlock = userInstruction
     ? `\nUser's specific instruction for this regeneration: ${userInstruction}\n`
+    : ""
+
+  const nicheBlock = niche
+    ? `USER NICHE / INDUSTRY: ${niche}\nGround every slide's content and imagery in this niche.\n\n`
     : ""
 
   const sizeBlock =
@@ -25,28 +30,38 @@ export function buildCarouselPrompt(
       : `User selected 4:5 Portrait format.\nPortrait 4:5 ratio (1080x1350px). ALL slides must be optimized for portrait orientation.`
 
   const referenceLeadBlock = hasReference
-    ? `⚠️ CRITICAL STYLE EXTRACTION INSTRUCTION:
-You have been provided a reference image. Before generating any slide prompts, carefully analyze this image and extract:
+    ? `⚠️ MANDATORY STYLE EXTRACTION — DO THIS FIRST:
+Before writing ANY slide prompts, carefully analyze the reference image and extract EXACTLY:
 
-1. EXACT COLOR PALETTE: List every color with its hex code (e.g., background #F5F3EE, headline text #1A1A1A, accent yellow #FFD93D)
-2. TYPOGRAPHY STYLE: Font weight, size hierarchy, whether serif or sans-serif, how headlines look vs body text
-3. BACKGROUND STYLE: Is it dark or light? Textured or flat? What is the exact background color/treatment?
-4. LAYOUT APPROACH: How is content arranged? Left-aligned? Centered? What margins?
-5. ACCENT ELEMENTS: What decorative elements are used? Lines, shapes, highlights, markers?
-6. OVERALL AESTHETIC: Editorial? Modern? Minimal? Illustrated? Corporate?
-7. HIGHLIGHT TREATMENT: How are key words emphasized? Color blocks? Underlines? Marker strokes?
+1. BACKGROUND: What is the exact background color/texture? (provide hex code)
+2. TYPOGRAPHY: What font style is used? Serif or sans-serif? Bold or light? What size hierarchy?
+3. COLOR PALETTE: List every color visible with exact hex codes
+4. LAYOUT: How is content arranged? Where is text placed? What are the margins?
+5. VISUAL ELEMENTS: What decorative elements exist? Lines, shapes, icons, highlights, markers, strokes?
+6. HIGHLIGHT TREATMENT: How are key words emphasized? Color blocks? Underlines? Marker strokes? What color?
+7. ILLUSTRATION STYLE: Is it photographic? Illustrated? Watercolor? Flat design? Editorial?
+8. MOOD: Dark/light? Minimal/busy? Modern/vintage? Professional/casual?
+9. TEXT OVERLAYS: How does text sit on the image? Boxed? Floating? With background?
+10. OVERALL AESTHETIC: What publication or brand does this feel like?
 
-NOW apply this EXACT extracted style to ALL 7-8 slides. Every slide must:
-- Use the SAME background color/treatment as the reference
-- Use the SAME typography approach as the reference
-- Use the SAME accent colors and highlight treatments as the reference
-- Use the SAME layout and composition approach as the reference
-- Feel like it was made by the SAME designer as the reference image
+NOW apply this EXACT extracted style to ALL slides:
+- Use the SAME background color/texture
+- Use the SAME typography approach and font weight
+- Use the SAME color palette with the SAME hex codes
+- Use the SAME layout and composition approach
+- Use the SAME decorative elements and highlight treatment
+- Use the SAME illustration or visual style
+- Every slide must look like it was made by the SAME designer as the reference
 
-The content of each slide must be about the LinkedIn post topic, but the VISUAL STYLE must be identical to the reference image.
+The CONTENT of each slide is about the LinkedIn post topic.
+The VISUAL STYLE must be IDENTICAL to the reference image.
+
+If there is no reference image, use a clean modern LinkedIn carousel aesthetic.
 
 `
-    : ""
+    : `No reference image was provided. Use a clean, modern LinkedIn carousel aesthetic — consistent background, typography, color palette, and highlight treatment across all slides so they look like one cohesive set.
+
+`
 
   const talkingPointsList = Array.isArray(keyTalkingPoints)
     ? keyTalkingPoints.map((point, i) => `${i + 1}. ${point}`).join("\n")
@@ -55,7 +70,7 @@ The content of each slide must be about the LinkedIn post topic, but the VISUAL 
   const angleStr = toStr(storytellingAngle)
   const endingStr = toStr(strongEndingLine)
 
-  return `${referenceLeadBlock}Here is the LinkedIn heading of my posting:
+  return `${referenceLeadBlock}${nicheBlock}Here is the LinkedIn heading of my posting:
 ${refinedHook}
 
 Here is the full deep dive context:
@@ -108,6 +123,12 @@ Final Slide — THE CTA SLIDE:
 - Must contain a strong, clear CTA encouraging comments, saves, shares, or profile visits
 - Visually distinct from body slides (inverted color block or accent shape)
 - CTA must feel earned by the value delivered in the body slides — not generic
+
+The CTA slide should focus on:
+- A strong call to action (comment, save, share)
+- A saveable one-line takeaway quote
+- An engagement question
+Do NOT include any social media handles, usernames, or @ mentions anywhere in the slide.
 
 Each slide prompt must include:
 - Slide objective/message (tied to the specific content above)

@@ -2,11 +2,20 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { ArrowLeft, Sparkles, Copy, Check, History } from "lucide-react"
+import { ArrowLeft, Sparkles, Copy, Check, History, Loader2 } from "lucide-react"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
 import { CarouselSlideList } from "@/components/generate/CarouselSlideList"
+import { CarouselImageGrid, type SlideImage } from "@/components/generate/CarouselImageGrid"
 import { RegenerationLimit } from "@/components/generate/RegenerationLimit"
 import { VersionHistory } from "@/components/generate/VersionHistory"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { trackHistory } from "@/lib/hooks/useHistory"
 import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
 
@@ -45,6 +54,12 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
   // Step 4
   const [slides, setSlides] = useState<Slide[] | null>(null)
   const [isGeneratingSlides, setIsGeneratingSlides] = useState(false)
+
+  // Step 4b — actual slide images generated from the prompts
+  const [slideImages, setSlideImages] = useState<SlideImage[]>([])
+  const [isGeneratingImages, setIsGeneratingImages] = useState(false)
+  const [regeneratingSlide, setRegeneratingSlide] = useState<number | null>(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
   const [captionCopied, setCaptionCopied] = useState(false)
@@ -205,7 +220,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
   // imperatively (getState) so it can't act on a stale render value, and
   // increments BEFORE generating so rapid clicks can't slip through.
   async function handleRegenerateSlides() {
-    console.log("[REGEN-BUTTON-CLICKED]", "carousel: handleRegenerateSlides")
+    console.log("[REGEN-CHECK] ideaId:", ideaId, "count:", useRegenerationStore.getState().regenerationCount[ideaId] ?? 0)
     const currentCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
     if (currentCount >= MAX_REGENERATIONS) {
       setToastMsg("You've used all regenerations for this session")
@@ -236,7 +251,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
   // Step-1 "Regenerate caption" — was calling streamCaption() directly and
   // bypassing the limit. Now gated through the same 2-per-session budget.
   async function handleRegenerateCaption() {
-    console.log("[REGEN-BUTTON-CLICKED]", "carousel: handleRegenerateCaption")
+    console.log("[REGEN-CHECK] ideaId:", ideaId, "count:", useRegenerationStore.getState().regenerationCount[ideaId] ?? 0)
     const currentCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
     if (currentCount >= MAX_REGENERATIONS) {
       setToastMsg("You've used all regenerations for this session")
@@ -288,6 +303,83 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
     await navigator.clipboard.writeText(caption)
     setCaptionCopied(true)
     setTimeout(() => setCaptionCopied(false), 2000)
+  }
+
+  // Regenerate a single slide's image. Sends persist:false so a regeneration
+  // doesn't create a new Post — it just swaps the image in local state. Throws on
+  // failure so the caller can refund the reserved regeneration slot.
+  async function generateOneSlideImage(slideNumber: number): Promise<void> {
+    const slide = slides?.find((s) => s.slideNumber === slideNumber)
+    if (!slide) return
+
+    setRegeneratingSlide(slideNumber)
+    setError(null)
+    try {
+      const res = await fetch("/api/generate/carousel-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ideaId, size: size ?? "4:5", slides: [slide], persist: false }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Image generation failed")
+
+      const image = data.slides[0] as SlideImage
+      setSlideImages((prev) =>
+        prev.map((img) => (img.slideNumber === slideNumber ? image : img)),
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong")
+      throw err // let regenerateSlideImage refund the reserved slot on failure
+    } finally {
+      setRegeneratingSlide(null)
+    }
+  }
+
+  // Generate every slide image in ONE request. The endpoint loops sequentially
+  // and, on success, persists a single Post with one child Slide per image.
+  async function generateAllSlideImages() {
+    if (!slides) return
+    setIsGeneratingImages(true)
+    setError(null)
+    setSlideImages([])
+
+    try {
+      const res = await fetch("/api/generate/carousel-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ideaId, size: size ?? "4:5", slides }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Image generation failed")
+      setSlideImages(data.slides as SlideImage[])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong")
+    } finally {
+      setIsGeneratingImages(false)
+    }
+  }
+
+  // "Regenerate Slide X" — gated by the same 2-per-idea regeneration budget as
+  // the caption/slide-prompt regenerations.
+  async function regenerateSlideImage(slideNumber: number) {
+    console.log("[REGEN-CHECK] ideaId:", ideaId, "count:", useRegenerationStore.getState().regenerationCount[ideaId] ?? 0)
+    const currentCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
+    if (currentCount >= MAX_REGENERATIONS) {
+      setToastMsg("You've used all regenerations for this session")
+      setTimeout(() => setToastMsg(null), 5000)
+      return
+    }
+    increment(ideaId)
+    try {
+      await generateOneSlideImage(slideNumber)
+      const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
+      if (newCount >= MAX_REGENERATIONS) {
+        setToastMsg("You've used both regenerations for this session")
+        setTimeout(() => setToastMsg(null), 5000)
+      }
+    } catch {
+      decrement(ideaId)
+    }
   }
 
   return (
@@ -614,6 +706,34 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
                     onRestore={handleRestoreSlides}
                     preview={slidesPreview}
                   />
+
+                  {/* ── Generate actual slide images from the prompts ── */}
+                  {slideImages.length === 0 && !isGeneratingImages && (
+                    <button
+                      onClick={() => setConfirmOpen(true)}
+                      className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-all"
+                    >
+                      <Sparkles size={14} strokeWidth={2} />
+                      Generate All Slides as Images
+                    </button>
+                  )}
+
+                  {isGeneratingImages && (
+                    <div className="flex items-center gap-2.5 text-[13px] font-medium text-[#C4B5FD]">
+                      <Loader2 size={15} className="animate-spin" strokeWidth={2.2} />
+                      Generating {slides.length} slide images… this can take 2–3 minutes.
+                    </div>
+                  )}
+
+                  {slideImages.length > 0 && (
+                    <CarouselImageGrid
+                      images={slideImages}
+                      size={size ?? "4:5"}
+                      ideaId={ideaId}
+                      onRegenerate={regenerateSlideImage}
+                      regeneratingSlide={regeneratingSlide}
+                    />
+                  )}
                 </div>
               )}
             </div>
@@ -627,6 +747,36 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
         message={toastMsg ?? ""}
         onClose={() => setToastMsg(null)}
       />
+
+      {/* Confirm before spending image-generation credits on the full carousel */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Generate All Slide Images?</DialogTitle>
+            <DialogDescription>
+              This will generate {slides?.length ?? 0} images using AI. This takes 2-3 minutes
+              and uses your image generation credits.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              onClick={() => setConfirmOpen(false)}
+              className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-[rgba(255,255,255,0.5)] hover:text-[rgba(255,255,255,0.8)] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                setConfirmOpen(false)
+                void generateAllSlideImages()
+              }}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-all"
+            >
+              Yes, generate all →
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -34,9 +34,16 @@ const CATEGORY_TO_PRISMA: Record<
   "Random": { mode: "PERSONAL", category: "OTHER" },
 }
 
+// Matches the separator before the post type — Claude uses either the ASCII
+// "->" or the unicode arrow "→" depending on the run.
+const ARROW = /\s*(?:->|→)\s*/
+
 // Tier 1: strict format — [Category] "Hook" -> Post Type | CTA
 function parseStrict(line: string): ParsedIdea | null {
-  const trimmed = line.trim()
+  // Claude sometimes wraps the category (or the whole line) in markdown bold,
+  // e.g. **[Trending]**. Strip the ** markers so the leading [Category] and the
+  // arrow both parse cleanly.
+  const trimmed = line.replace(/\*\*/g, "").trim()
   if (!trimmed) return null
 
   const catMatch = trimmed.match(/^\[([^\]]+)\]\s*/)
@@ -51,12 +58,17 @@ function parseStrict(line: string): ParsedIdea | null {
   const hookMatch = rest.match(/^"([^"]+)"/)
   const hook = hookMatch
     ? hookMatch[1].trim()
-    : rest.split("->")[0].trim().replace(/^"|"$/g, "")
+    : rest.split(ARROW)[0].trim().replace(/^"|"$/g, "")
 
   if (!hook) return null
 
-  const arrowIdx = rest.indexOf("->")
-  const rhs = arrowIdx !== -1 ? rest.slice(arrowIdx + 2).trim() : ""
+  // Everything after the arrow is "Post Type | CTA". Match either arrow form so
+  // the post type isn't silently dropped (which made everything "Text Post").
+  const arrowMatch = rest.match(ARROW)
+  const rhs =
+    arrowMatch && arrowMatch.index !== undefined
+      ? rest.slice(arrowMatch.index + arrowMatch[0].length).trim()
+      : ""
 
   const pipeParts = rhs.split("|")
   const postType = pipeParts[0]?.trim() || "Text Post"
@@ -69,7 +81,7 @@ function parseStrict(line: string): ParsedIdea | null {
 
 // Tier 2: loose — find a category keyword anywhere in the line and extract what we can
 function parseLoose(line: string): ParsedIdea | null {
-  const trimmed = line.trim()
+  const trimmed = line.replace(/\*\*/g, "").trim()
   if (!trimmed || trimmed.length < 10) return null
 
   let rawCategory: RawCategory | null = null
@@ -104,15 +116,18 @@ function parseLoose(line: string): ParsedIdea | null {
       .replace(/^\d+\.\s*/, "")
       .replace(/\[.*?\]\s*/, "")
       .replace(/^(latest news|latest|news|trending|trend|industry|random)[:\s\-]*/i, "")
-      .split("->")[0]
+      .split(ARROW)[0]
       .trim()
       .replace(/^"|"$/g, "")
   }
 
   if (!hook || hook.length < 5) return null
 
-  const arrowIdx = trimmed.indexOf("->")
-  const rhs = arrowIdx !== -1 ? trimmed.slice(arrowIdx + 2).trim() : ""
+  const arrowMatch = trimmed.match(ARROW)
+  const rhs =
+    arrowMatch && arrowMatch.index !== undefined
+      ? trimmed.slice(arrowMatch.index + arrowMatch[0].length).trim()
+      : ""
   const pipeParts = rhs.split("|")
   const postType = pipeParts[0]?.trim() || "Text Post"
   const ctaRaw = pipeParts[1]?.trim() ?? ""
@@ -130,7 +145,9 @@ const HEADER_ONLY = /^#*\s*(latest\s*news|trending(\s*topics?)?|industry(\s*topi
 // strict/loose parser tiers can try to extract the idea (hooks aren't always
 // quoted, so we must not require quotes or brackets here).
 function isNoiseLine(line: string): boolean {
-  const t = line.trim()
+  // Strip markdown bold first so bold section headers (e.g. **Latest News**)
+  // are still recognized as noise by the header checks below.
+  const t = line.replace(/\*\*/g, "").trim()
   if (!t) return true // empty line
   if (t.length < 15) return true // too short to be a real idea
   if (/^i'?ll search/i.test(t)) return true

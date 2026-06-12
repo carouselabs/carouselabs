@@ -4,9 +4,14 @@ export function buildImagePrompt(
   caption: string,
   size: string,
   userInstruction?: string,
+  niche?: string,
 ): string {
   const userInstructionBlock = userInstruction
     ? `\nUser's specific instruction for this regeneration: ${userInstruction}\n`
+    : ""
+
+  const nicheBlock = niche
+    ? `\nUSER NICHE / INDUSTRY: ${niche}\nGround the visual, subject matter, and any on-image copy in this niche.\n`
     : ""
 
   const sizeBlock =
@@ -47,7 +52,7 @@ ${deepDive}
 Here is the LinkedIn caption:
 ${caption}
 
-Using the selected LinkedIn post idea, detailed post breakdown, user niche, tone, audience, writing style, and any uploaded references, generate content based on the user's selected output type.
+${nicheBlock}Using the selected LinkedIn post idea, detailed post breakdown, user niche, tone, audience, writing style, and any uploaded references, generate content based on the user's selected output type.
 
 Generate:
 1. A high-performing LinkedIn caption optimized for engagement

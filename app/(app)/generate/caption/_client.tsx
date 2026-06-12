@@ -166,7 +166,7 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
   // count imperatively (getState) so it can't act on a stale render value,
   // and increments BEFORE generating so rapid clicks can't slip through.
   async function handleRegenerate(activeTone: Tone | null) {
-    console.log("[REGEN-BUTTON-CLICKED]", "caption: handleRegenerate")
+    console.log("[REGEN-CHECK] ideaId:", ideaId, "count:", useRegenerationStore.getState().regenerationCount[ideaId] ?? 0)
     const currentCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
     if (currentCount >= MAX_REGENERATIONS) {
       setToastMsg("You've used all regenerations for this session")

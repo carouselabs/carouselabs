@@ -137,7 +137,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const user = await db.user.findUnique({ where: { clerkId } })
+  const user = await db.user.findUnique({ where: { clerkId }, include: { profile: true } })
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
 
   const idea = await db.idea.findUnique({
@@ -154,6 +154,9 @@ export async function POST(req: Request) {
     )
   }
 
+  const niche = user.profile?.industry ?? ""
+  console.log(`[image] Profile used: industry=${niche}`)
+
   const breakdown = idea.breakdowns[0].outline as unknown as BreakdownOutline
   // Targeted edit when the user gave an instruction AND we have the current
   // prompt to edit; otherwise full regeneration as before.
@@ -162,7 +165,7 @@ export async function POST(req: Request) {
       ? buildImageEditPrompt(currentImagePrompt, userInstruction)
       : `${CAPTION_GHOSTWRITER_INSTRUCTION}
 
-${buildImagePrompt(breakdown.refinedHook, breakdown.deepDive, caption, size, userInstruction)}`
+${buildImagePrompt(breakdown.refinedHook, breakdown.deepDive, caption, size, userInstruction, niche)}`
 
   console.log("[image-prompt] Full prompt sent to Claude:\n", prompt)
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { ArrowLeft, Sparkles, Copy, Check, History } from "lucide-react"
+import { ArrowLeft, Sparkles, Copy, Check, History, Download, RefreshCw, Loader2 } from "lucide-react"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
 import { ImagePreview } from "@/components/generate/ImagePreview"
 import { ImagePromptViewer } from "@/components/generate/ImagePromptViewer"
@@ -45,6 +45,8 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
 
   const [error, setError] = useState<string | null>(null)
   const [captionCopied, setCaptionCopied] = useState(false)
+  const [promptCopied, setPromptCopied] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const [saved, setSaved] = useState(false)
   const [restored, setRestored] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
@@ -199,7 +201,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
   // count imperatively (getState) so it can't act on a stale render value,
   // and increments BEFORE generating so rapid clicks can't slip through.
   async function handleRegeneratePrompt() {
-    console.log("[REGEN-BUTTON-CLICKED]", "image: handleRegeneratePrompt")
+    console.log("[REGEN-CHECK] ideaId:", ideaId, "count:", useRegenerationStore.getState().regenerationCount[ideaId] ?? 0)
     const currentCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
     if (currentCount >= MAX_REGENERATIONS) {
       setToastMsg("You've used all regenerations for this session")
@@ -230,7 +232,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
   // Step-1 "Regenerate caption" — was calling streamCaption() directly and
   // bypassing the limit. Now gated through the same 2-per-session budget.
   async function handleRegenerateCaption() {
-    console.log("[REGEN-BUTTON-CLICKED]", "image: handleRegenerateCaption")
+    console.log("[REGEN-CHECK] ideaId:", ideaId, "count:", useRegenerationStore.getState().regenerationCount[ideaId] ?? 0)
     const currentCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
     if (currentCount >= MAX_REGENERATIONS) {
       setToastMsg("You've used all regenerations for this session")
@@ -276,7 +278,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
       const res = await fetch("/api/generate/image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId, imagePrompt, caption }),
+        body: JSON.stringify({ ideaId, imagePrompt, caption, size }),
       })
 
       const data = await res.json()
@@ -286,8 +288,35 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
       setPostId(data.postId)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
+      throw err // let handleRegenerateImage refund the reserved slot on failure
     } finally {
       setIsGeneratingImage(false)
+    }
+  }
+
+  // "Regenerate Image" is a real regeneration, so it's gated by the same
+  // 2-per-idea budget as prompt/caption regens. The FIRST image generation goes
+  // through generateImage() directly and does NOT count toward the limit.
+  async function handleRegenerateImage() {
+    console.log("[REGEN-CHECK] ideaId:", ideaId, "count:", useRegenerationStore.getState().regenerationCount[ideaId] ?? 0)
+    const currentCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
+    if (currentCount >= MAX_REGENERATIONS) {
+      setToastMsg("You've used all regenerations for this session")
+      setTimeout(() => setToastMsg(null), 5000)
+      return
+    }
+    // Reserve the slot synchronously BEFORE generating so rapid clicks can't
+    // read a stale count and slip past the limit.
+    increment(ideaId)
+    try {
+      await generateImage()
+      const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
+      if (newCount >= MAX_REGENERATIONS) {
+        setToastMsg("You've used both regenerations for this session")
+        setTimeout(() => setToastMsg(null), 5000)
+      }
+    } catch {
+      decrement(ideaId) // generation failed — refund the reserved slot
     }
   }
 
@@ -295,6 +324,39 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
     await navigator.clipboard.writeText(caption)
     setCaptionCopied(true)
     setTimeout(() => setCaptionCopied(false), 2000)
+  }
+
+  async function handleCopyPrompt() {
+    if (!imagePrompt) return
+    await navigator.clipboard.writeText(imagePrompt)
+    setPromptCopied(true)
+    setTimeout(() => setPromptCopied(false), 2000)
+  }
+
+  // Route through the same-origin proxy so R2's CORS policy can't block the
+  // fetch, then download the bytes as carouselabs-image-[ideaId].png. If the
+  // proxy fetch fails, fall back to opening the original image in a new tab.
+  async function handleDownloadImage() {
+    if (!imageUrl) return
+    setDownloading(true)
+    try {
+      const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`
+      const res = await fetch(proxyUrl)
+      if (!res.ok) throw new Error("fetch failed")
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `carouselabs-image-${ideaId}.png`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      window.open(imageUrl, "_blank") // fallback — open original in new tab to save
+    } finally {
+      setDownloading(false)
+    }
   }
 
   async function handleSaveDraft() {
@@ -592,15 +654,56 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
             <div className="flex flex-col gap-4">
               {/* Generated image sits above the prompt */}
               {imageUrl && !isGeneratingImage && (
-                <ImagePreview src={imageUrl} alt="Generated LinkedIn image" />
+                <div className="flex flex-col gap-3">
+                  <ImagePreview
+                    src={imageUrl}
+                    alt="Generated LinkedIn image"
+                    size={size ?? undefined}
+                  />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={handleDownloadImage}
+                      disabled={downloading}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-colors disabled:opacity-50"
+                    >
+                      {downloading ? (
+                        <Loader2 size={13} className="animate-spin" strokeWidth={2.2} />
+                      ) : (
+                        <Download size={13} strokeWidth={2.2} />
+                      )}
+                      {downloading ? "Downloading…" : "Download HD Image"}
+                    </button>
+                    <button
+                      onClick={handleRegenerateImage}
+                      disabled={atLimit}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[rgba(124,58,237,0.3)] bg-[rgba(124,58,237,0.08)] hover:bg-[rgba(124,58,237,0.14)] text-[12px] font-medium text-[#C4B5FD] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <RefreshCw size={13} strokeWidth={2.2} />
+                      Regenerate Image
+                    </button>
+                    <button
+                      onClick={handleCopyPrompt}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.06)] text-[12px] font-medium text-[rgba(255,255,255,0.52)] transition-colors"
+                    >
+                      {promptCopied ? <Check size={13} strokeWidth={2.5} /> : <Copy size={13} strokeWidth={2} />}
+                      {promptCopied ? "Copied!" : "Copy Prompt"}
+                    </button>
+                  </div>
+                </div>
               )}
               {isGeneratingImage && (
                 <div
                   className={[
-                    "rounded-2xl bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] animate-pulse",
+                    "flex flex-col items-center justify-center gap-4 rounded-2xl bg-[rgba(124,58,237,0.04)] border border-[rgba(124,58,237,0.12)]",
                     size === "1:1" ? "aspect-square" : "aspect-[4/5]",
                   ].join(" ")}
-                />
+                >
+                  <div className="h-10 w-10 rounded-full border-2 border-[rgba(124,58,237,0.25)] border-t-[#7C3AED] animate-spin" />
+                  <p className="text-[13px] font-medium text-[#C4B5FD]">
+                    Generating your image…
+                  </p>
+                  <p className="text-[11px] text-[rgba(255,255,255,0.32)]">(30–60 seconds)</p>
+                </div>
               )}
 
               {/* Generate Image Prompt button — shown before prompt exists */}
@@ -653,14 +756,15 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
                 </div>
               )}
 
-              {/* Generate Image with AI */}
-              {imagePrompt && !isGeneratingPrompt && !isGeneratingImage && (
+              {/* Generate Image with AI — initial generation only; once an image
+                  exists the Regenerate button above takes over. */}
+              {imagePrompt && !isGeneratingPrompt && !isGeneratingImage && !imageUrl && (
                 <button
-                  onClick={generateImage}
-                  className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.08)] hover:bg-[rgba(124,58,237,0.14)] text-[13px] font-semibold text-[#C4B5FD] transition-colors"
+                  onClick={() => void generateImage().catch(() => {})}
+                  className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-all"
                 >
+                  <Sparkles size={14} strokeWidth={2} />
                   Generate Image with AI
-                  <span className="text-[11px] font-normal text-[rgba(196,181,253,0.55)]">(optional)</span>
                 </button>
               )}
             </div>

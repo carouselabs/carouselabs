@@ -117,10 +117,21 @@ function formatProfile(profile: {
   if (profile.writingStyle) {
     try {
       const ws = JSON.parse(profile.writingStyle)
+      if (ws.role) parts.push(`Role: ${ws.role}`)
       if (ws.tones?.length) parts.push(`Tone: ${ws.tones.join(", ")}`)
       if (ws.primaryGoal) parts.push(`Goal: ${ws.primaryGoal}`)
+      if (ws.goals?.length) parts.push(`Goals: ${ws.goals.join(", ")}`)
     } catch {
       parts.push(`Writing Style: ${profile.writingStyle}`)
+    }
+  }
+  if (profile.targetAudience) {
+    try {
+      const ta = JSON.parse(profile.targetAudience)
+      const audience = [ta.role, ta.seniority, ta.industry].filter(Boolean).join(", ")
+      if (audience) parts.push(`Target Audience: ${audience}`)
+    } catch {
+      parts.push(`Target Audience: ${profile.targetAudience}`)
     }
   }
   return parts.join("\n")
@@ -178,6 +189,19 @@ export async function POST(req: Request) {
 
   const breakdown = idea.breakdowns[0].outline as unknown as BreakdownOutline
   const profileContext = formatProfile(user.profile)
+
+  // Confirm the profile is actually feeding the prompt (role/tones live in the
+  // writingStyle JSON).
+  let capRole = ""
+  let capTones = ""
+  try {
+    const ws = JSON.parse(user.profile.writingStyle ?? "{}")
+    capRole = ws.role ?? ""
+    capTones = (ws.tones ?? []).join(", ")
+  } catch {}
+  console.log(
+    `[caption] Profile used: role=${capRole} industry=${user.profile.industry ?? ""} tones=${capTones}`,
+  )
   // Targeted edit when the user gave an instruction AND we have the current
   // caption to edit; otherwise full regeneration as before.
   const prompt =

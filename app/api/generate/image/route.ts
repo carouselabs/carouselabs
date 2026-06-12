@@ -14,12 +14,16 @@ export async function POST(req: Request) {
   let ideaId: string
   let imagePrompt: string
   let caption: string
+  let size: string
 
   try {
     const body = await req.json()
     ideaId = body.ideaId
     imagePrompt = body.imagePrompt
     caption = body.caption ?? ""
+    // Only 4:5 and 1:1 are offered; default to 4:5 (LinkedIn feed) for restored
+    // sessions where the client may not re-send the size.
+    size = body.size === "1:1" ? "1:1" : "4:5"
     if (!ideaId || !imagePrompt) throw new Error("Missing ideaId or imagePrompt")
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
@@ -33,14 +37,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Idea not found" }, { status: 404 })
   }
 
-  // Call OpenAI gpt-image-1
+  // Call OpenAI gpt-image-1. gpt-image-1 returns base64 (b64_json), never a URL,
+  // so the result must be uploaded to R2 below before it can be served.
+  const openaiSize: "1024x1024" | "1024x1280" =
+    size === "4:5" ? "1024x1280" : "1024x1024"
   let imageB64: string
   try {
     const imageResponse = await openai.images.generate({
-      model: "gpt-image-1",
+      model: "gpt-image-2",
       prompt: imagePrompt,
       n: 1,
-      size: "1024x1024",
+      size: openaiSize,
+      quality: "medium",
     })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = (imageResponse as any).data as Array<{ b64_json?: string }> | undefined
@@ -73,7 +81,7 @@ export async function POST(req: Request) {
       status: "READY",
       imageUrls: [imageUrl],
       r2Keys: [filename],
-      metadata: { imagePrompt } as unknown as Prisma.InputJsonValue,
+      metadata: { imagePrompt, size } as unknown as Prisma.InputJsonValue,
       slides: {
         create: {
           role: "COVER",

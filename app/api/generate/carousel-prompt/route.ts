@@ -170,7 +170,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const user = await db.user.findUnique({ where: { clerkId } })
+  const user = await db.user.findUnique({ where: { clerkId }, include: { profile: true } })
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
 
   const idea = await db.idea.findUnique({
@@ -186,6 +186,9 @@ export async function POST(req: Request) {
       { status: 400 },
     )
   }
+
+  const niche = user.profile?.industry ?? ""
+  console.log(`[carousel] Profile used: industry=${niche}`)
 
   const breakdown = idea.breakdowns[0].outline as unknown as BreakdownOutline
   // Targeted edit when the user gave an instruction AND we have the current
@@ -206,6 +209,7 @@ ${buildCarouselPrompt(
     breakdown.storytellingAngle,
     breakdown.strongEndingLine,
     userInstruction,
+    niche,
   )}`
 
   console.log("[carousel-prompt] Full prompt sent to Claude:\n", prompt)

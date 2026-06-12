@@ -136,6 +136,16 @@ export async function POST(req: Request) {
   const userNiche = topic || user.profile.industry || ""
   const realNewsContext = await fetchRealNews(userNiche)
 
+  // Confirm the profile is actually feeding the prompt (role/topics live in the
+  // writingStyle JSON / contentPillars; niche == industry unless a topic is set).
+  let ideasRole = ""
+  try {
+    ideasRole = JSON.parse(user.profile.writingStyle ?? "{}").role ?? ""
+  } catch {}
+  console.log(
+    `[ideas] Profile used: role=${ideasRole} industry=${user.profile.industry ?? ""} niche=${userNiche} topics=${user.profile.contentPillars.join(", ")}`,
+  )
+
   const prompt = realNewsContext
     ? `REAL NEWS FROM TODAY (use these for Latest News ideas):
 ${realNewsContext}

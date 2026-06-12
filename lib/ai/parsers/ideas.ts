@@ -122,8 +122,28 @@ function parseLoose(line: string): ParsedIdea | null {
   return { rawCategory, hook, postType, cta, mode: prisma.mode, category: prisma.category }
 }
 
+// Bare section headers Claude emits when web search is on (with or without ###).
+const HEADER_ONLY = /^#*\s*(latest\s*news|trending(\s*topics?)?|industry(\s*topics?)?|random)\s*:?\s*$/i
+
+// True ONLY for lines that are clearly web-search noise — headers, thinking
+// preamble, empties, and too-short fragments. Everything else is kept so the
+// strict/loose parser tiers can try to extract the idea (hooks aren't always
+// quoted, so we must not require quotes or brackets here).
+function isNoiseLine(line: string): boolean {
+  const t = line.trim()
+  if (!t) return true // empty line
+  if (t.length < 15) return true // too short to be a real idea
+  if (/^i'?ll search/i.test(t)) return true
+  if (/^based on my web search/i.test(t)) return true
+  if (/^now i'?ll generate/i.test(t)) return true
+  if (/^#{1,}/.test(t)) return true // markdown headers (###, ##, #)
+  if (HEADER_ONLY.test(t)) return true // bare "LATEST NEWS", "TRENDING", etc.
+  return false
+}
+
 export function parseIdeasResponse(text: string): ParsedIdea[] {
-  const lines = text.split("\n")
+  // Pre-filter: strip web-search thinking text and headers before parsing.
+  const lines = text.split("\n").filter((line) => !isNoiseLine(line))
   const ideas: ParsedIdea[] = []
 
   // Tier 1: strict pass

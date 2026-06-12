@@ -16,6 +16,76 @@ const ratelimit = new Ratelimit({
   analytics: false,
 })
 
+// Fetch real, recent headlines from NewsAPI.org so the Latest News ideas can be
+// grounded in actual articles instead of relying solely on Claude's web search.
+// Returns a formatted bullet list, or "" if the key is missing, the request
+// fails, or no articles come back — callers then fall back to web search.
+async function fetchRealNews(niche: string): Promise<string> {
+  const newsApiKey = process.env.NEWS_API_KEY
+  if (!newsApiKey) return ""
+
+  try {
+    const newsQuery = encodeURIComponent(niche)
+    const newsUrl = `https://newsapi.org/v2/everything?q=${newsQuery}&sortBy=publishedAt&pageSize=5&language=en&apiKey=${newsApiKey}`
+
+    const newsRes = await fetch(newsUrl)
+    const newsData = await newsRes.json()
+    const articles = newsData.articles ?? []
+
+    return articles
+      .map(
+        (a: any) =>
+          `- ${a.title} (${a.publishedAt?.split("T")[0]}) — ${a.source?.name}`,
+      )
+      .join("\n")
+  } catch (err) {
+    console.warn("[ideas/generate] NewsAPI fetch failed:", err)
+    return ""
+  }
+}
+
+// Generate the raw ideas text from Claude. With web search enabled, Latest News
+// ideas are grounded in real results; without it, Claude generates from its own
+// knowledge. Handles the server-side pause_turn loop and extracts all text.
+async function generateIdeasText(prompt: string, useWebSearch: boolean): Promise<string> {
+  const tools: Anthropic.Tool[] = [
+    { type: "web_search_20260209", name: "web_search" } as unknown as Anthropic.Tool,
+  ]
+
+  async function call(messages: Anthropic.MessageParam[]) {
+    return anthropic.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 4000,
+      ...(useWebSearch ? { tools } : {}),
+      messages,
+    })
+  }
+
+  let message = await call([{ role: "user", content: prompt }])
+
+  // The server-side web_search loop can return stop_reason "pause_turn" when it
+  // hits its internal iteration cap — resume by re-sending until it ends.
+  let guard = 0
+  while (message.stop_reason === "pause_turn" && guard < 5) {
+    message = await call([
+      { role: "user", content: prompt },
+      { role: "assistant", content: message.content },
+    ])
+    guard++
+  }
+
+  // With web search, Claude returns multiple content blocks (server_tool_use,
+  // web_search_tool_result, and text). Join every text block — the 10 ideas
+  // live in the final text block(s); the parser ignores non-idea lines.
+  const text = message.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("\n")
+
+  if (!text.trim()) throw new Error("No text content in Claude response")
+  return text
+}
+
 export async function POST(req: Request) {
   // Auth
   const { userId: clerkId } = await auth()
@@ -55,31 +125,60 @@ export async function POST(req: Request) {
   }
 
   // Build prompt
-  const prompt = topic
+  const basePrompt = topic
     ? buildModeBPrompt(user.profile, topic)
     : buildModeAPrompt(user.profile)
 
-  // Call Claude
-  let responseText: string
-  try {
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
-      max_tokens: 1500,
-      messages: [{ role: "user", content: prompt }],
-    })
+  // Fetch real news up front and inject it at the top of the prompt. When
+  // NewsAPI returns articles, Claude is told to use only these for Latest News;
+  // when it returns nothing (no key, failure, empty), we leave the prompt as-is
+  // and rely on web search as before.
+  const userNiche = topic || user.profile.industry || ""
+  const realNewsContext = await fetchRealNews(userNiche)
 
-    const block = message.content[0]
-    if (block.type !== "text") {
-      throw new Error("Unexpected response type from Claude")
-    }
-    responseText = block.text
+  const prompt = realNewsContext
+    ? `REAL NEWS FROM TODAY (use these for Latest News ideas):
+${realNewsContext}
+
+Use the above real news headlines to generate the 3 Latest News ideas. Only use these — do not make up other news.
+
+${basePrompt}`
+    : basePrompt
+
+  // Try web search first; if the tool isn't available (not enabled on the
+  // account, unsupported, etc.) fall back to plain generation so the app never
+  // breaks.
+  let responseText: string
+  let usedWebSearch = true
+  try {
+    responseText = await generateIdeasText(prompt, true)
   } catch (err) {
-    console.error("[ideas/generate] Claude error:", err)
-    return NextResponse.json(
-      { error: "Failed to generate ideas. Please try again." },
-      { status: 502 },
-    )
+    const msg = (err instanceof Error ? err.message : String(err)).toLowerCase()
+    const isToolError = msg.includes("tool") || msg.includes("web_search")
+
+    if (!isToolError) {
+      console.error("[ideas/generate] Claude error:", err)
+      return NextResponse.json(
+        { error: "Failed to generate ideas. Please try again." },
+        { status: 502 },
+      )
+    }
+
+    // Web search failed — retry the same prompt without the tools array.
+    console.warn("[ideas/generate] web search unavailable, falling back:", err)
+    usedWebSearch = false
+    try {
+      responseText = await generateIdeasText(prompt, false)
+    } catch (fallbackErr) {
+      console.error("[ideas/generate] Claude error (no web search):", fallbackErr)
+      return NextResponse.json(
+        { error: "Failed to generate ideas. Please try again." },
+        { status: 502 },
+      )
+    }
   }
+
+  console.log("[ideas] Using web search:", usedWebSearch)
 
   // Log raw Claude output to help debug format variations
   console.log("[ideas/generate] Raw Claude response:\n", responseText)

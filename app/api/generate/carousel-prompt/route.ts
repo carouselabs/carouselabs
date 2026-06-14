@@ -205,8 +205,6 @@ ${buildCarouselPrompt(
     size,
     !!referenceImageBase64,
     breakdown.keyTalkingPoints,
-    breakdown.recommendedStructure,
-    breakdown.storytellingAngle,
     breakdown.strongEndingLine,
     userInstruction,
     niche,

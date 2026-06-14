@@ -4,10 +4,8 @@ import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { ArrowLeft, Sparkles, Copy, Check, History, Loader2 } from "lucide-react"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
-import { CarouselSlideList } from "@/components/generate/CarouselSlideList"
 import { CarouselImageGrid, type SlideImage } from "@/components/generate/CarouselImageGrid"
 import { RegenerationLimit } from "@/components/generate/RegenerationLimit"
-import { VersionHistory } from "@/components/generate/VersionHistory"
 import {
   Dialog,
   DialogContent,
@@ -55,18 +53,18 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
   const [slides, setSlides] = useState<Slide[] | null>(null)
   const [isGeneratingSlides, setIsGeneratingSlides] = useState(false)
 
-  // Step 4b — actual slide images generated from the prompts
+  // Step 4b — actual slide images generated from the prompts (one at a time)
   const [slideImages, setSlideImages] = useState<SlideImage[]>([])
   const [isGeneratingImages, setIsGeneratingImages] = useState(false)
   const [regeneratingSlide, setRegeneratingSlide] = useState<number | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState("")
 
   const [error, setError] = useState<string | null>(null)
   const [captionCopied, setCaptionCopied] = useState(false)
   const [restored, setRestored] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [captionInstruction, setCaptionInstruction] = useState("")
-  const [slidesInstruction, setSlidesInstruction] = useState("")
 
   const abortRef = useRef<AbortController | null>(null)
   const didInit = useRef(false)
@@ -76,12 +74,10 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
   // hook — selecting `s.versions[ideaId] ?? []` returns a new array each render
   // and trips Zustand's "getSnapshot should be cached" loop guard.
   const regenerationCount = useRegenerationStore((s) => s.regenerationCount)
-  const allVersions = useRegenerationStore((s) => s.versions)
   const increment = useRegenerationStore((s) => s.increment)
   const decrement = useRegenerationStore((s) => s.decrement)
   const addVersion = useRegenerationStore((s) => s.addVersion)
   const regenCount = regenerationCount[ideaId] ?? 0
-  const versions = allVersions[ideaId] ?? []
   const atLimit = regenCount >= MAX_REGENERATIONS
 
   // Run once on mount: restore a previous session before generating anything.
@@ -92,42 +88,69 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
     return () => abortRef.current?.abort()
   }, [])
 
-  // Restore a saved caption (from the Post table) and/or saved slides (from
-  // localStorage) instead of regenerating. Only generate what's missing.
+  // Restore everything saved for this idea from localStorage (caption, slide
+  // prompts, slide images, size) and jump to the right step. NEVER auto-regenerate
+  // when saved data exists — the user must click Regenerate explicitly. Only a
+  // completely fresh idea (nothing saved anywhere) auto-generates the caption.
   async function init() {
-    let restoredCaption = false
-    let restoredSlides = false
+    let savedCaption: string | null = null
+    let savedSlides: Slide[] | null = null
+    let savedImages: SlideImage[] | null = null
+    let savedSize: ImageSize | null = null
 
     try {
-      const res = await fetch(`/api/posts?ideaId=${ideaId}`)
-      if (res.ok) {
-        const data = await res.json()
-        if (data.post?.caption) {
-          setCaption(data.post.caption)
-          setCaptionReady(true)
-          restoredCaption = true
-        }
+      savedCaption = localStorage.getItem(`carouselCaption_${ideaId}`)
+
+      const slidesRaw = localStorage.getItem(`carouselSlides_${ideaId}`)
+      if (slidesRaw) {
+        const parsed = JSON.parse(slidesRaw) as Slide[]
+        if (Array.isArray(parsed) && parsed.length > 0) savedSlides = parsed
       }
+
+      const imagesRaw = localStorage.getItem(`carouselImages_${ideaId}`)
+      if (imagesRaw) {
+        const parsed = JSON.parse(imagesRaw) as SlideImage[]
+        if (Array.isArray(parsed) && parsed.length > 0) savedImages = parsed
+      }
+
+      const s = localStorage.getItem(`carouselSize_${ideaId}`)
+      if (s === "4:5" || s === "1:1") savedSize = s
     } catch {
-      // ignore — will stream a fresh caption below
+      // corrupt/unavailable — fall through
     }
 
-    try {
-      const savedSlides = localStorage.getItem(`carouselSlides_${ideaId}`)
-      if (savedSlides) {
-        const parsed = JSON.parse(savedSlides) as Slide[]
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setSlides(parsed)
-          restoredSlides = true
+    // Legacy fallback: caption may live in the Post table from before this
+    // localStorage scheme existed.
+    if (!savedCaption) {
+      try {
+        const res = await fetch(`/api/posts?ideaId=${ideaId}`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.post?.caption) savedCaption = data.post.caption
         }
+      } catch {
+        // ignore — treated as no saved caption
       }
-    } catch {
-      // corrupt/unavailable — ignore
     }
 
-    if (restoredSlides) setStep(4) // jump to where they left off
-    if (restoredCaption || restoredSlides) setRestored(true)
-    if (!restoredCaption) streamCaption()
+    if (savedSize) setSize(savedSize)
+    if (savedCaption) {
+      setCaption(savedCaption)
+      setCaptionReady(true)
+    }
+    if (savedSlides) setSlides(savedSlides)
+    if (savedImages) setSlideImages(savedImages)
+
+    const hasAnySaved = !!(savedCaption || savedSlides || savedImages || savedSize)
+    if (hasAnySaved) setRestored(true)
+
+    // Jump to the furthest step the saved data supports.
+    if (savedSlides || savedImages) setStep(4)
+    else if (savedCaption) setStep(2)
+    else setStep(1)
+
+    // Auto-generate the caption ONLY for a brand-new idea with nothing saved.
+    if (!hasAnySaved) streamCaption()
   }
 
   async function streamCaption(userInstruction?: string, currentCaption?: string) {
@@ -166,8 +189,10 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       }
 
       const hookIdx = buffer.indexOf("---HOOKS---")
-      setCaption((hookIdx !== -1 ? buffer.slice(0, hookIdx) : buffer).trimEnd())
+      const finalCaption = (hookIdx !== -1 ? buffer.slice(0, hookIdx) : buffer).trimEnd()
+      setCaption(finalCaption)
       setCaptionReady(true)
+      persistCaption(finalCaption)
     } catch (err) {
       if ((err as Error).name === "AbortError") return
       setError(err instanceof Error ? err.message : "Something went wrong")
@@ -176,14 +201,53 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
     }
   }
 
-  async function generateSlides(userInstruction?: string, currentSlides?: string) {
-    setIsGeneratingSlides(true)
-    setSlides(null)
-    setError(null)
-
+  // ── localStorage persistence helpers (keyed per ideaId) ──
+  function persistCaption(value: string) {
     try {
-      console.log("Sending reference image:", !!referenceImage)
-      const res = await fetch("/api/generate/carousel-prompt", {
+      localStorage.setItem(`carouselCaption_${ideaId}`, value)
+    } catch {
+      // best-effort
+    }
+  }
+
+  // Caption edits are persisted too, so navigating back restores the latest text.
+  function handleCaptionChange(value: string) {
+    setCaption(value)
+    persistCaption(value)
+  }
+
+  function persistImages(images: SlideImage[]) {
+    try {
+      localStorage.setItem(`carouselImages_${ideaId}`, JSON.stringify(images))
+    } catch {
+      // best-effort
+    }
+  }
+
+  function selectSize(s: ImageSize) {
+    setSize(s)
+    try {
+      localStorage.setItem(`carouselSize_${ideaId}`, s)
+    } catch {
+      // best-effort
+    }
+  }
+
+  // Single-button flow: silently generate the slide prompts, then generate the
+  // slide images ONE AT A TIME from the client so each appears in the grid the
+  // moment it's ready and progress is shown live. Slides are kept in state +
+  // localStorage so per-slide Regenerate keeps working.
+  async function generateCarouselFlow() {
+    setError(null)
+    setSlideImages([])
+
+    // Step 1 — slide prompts (silent).
+    setIsGeneratingSlides(true)
+    setLoadingMessage("Building your carousel structure...")
+
+    let generatedSlides: Slide[]
+    try {
+      const promptRes = await fetch("/api/generate/carousel-prompt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -192,59 +256,78 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
           size,
           referenceImage: referenceImage ?? undefined,
           referenceMediaType: referenceImage ? referenceMediaType : undefined,
-          userInstruction,
-          currentSlides,
         }),
       })
-
-      const data = await res.json()
-      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Generation failed")
-
-      setSlides(data.slides)
+      const promptData = await promptRes.json()
+      if (!promptRes.ok) {
+        throw new Error((promptData as { error?: string }).error ?? "Generation failed")
+      }
+      generatedSlides = promptData.slides as Slide[]
+      setSlides(generatedSlides)
       trackHistory(ideaId, "CAROUSEL_DONE")
       try {
-        localStorage.setItem(`carouselSlides_${ideaId}`, JSON.stringify(data.slides))
+        localStorage.setItem(`carouselSlides_${ideaId}`, JSON.stringify(generatedSlides))
       } catch {
-        // persistence is best-effort
+        // best-effort
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
-      throw err // let callers (handleRegenerateSlides) know it failed
-    } finally {
       setIsGeneratingSlides(false)
-    }
-  }
-
-  // User-initiated regeneration of the carousel — enforces the 2-per-session
-  // limit and snapshots the current slides (as JSON) first. Reads the count
-  // imperatively (getState) so it can't act on a stale render value, and
-  // increments BEFORE generating so rapid clicks can't slip through.
-  async function handleRegenerateSlides() {
-    console.log("[REGEN-CHECK] ideaId:", ideaId, "count:", useRegenerationStore.getState().regenerationCount[ideaId] ?? 0)
-    const currentCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
-    if (currentCount >= MAX_REGENERATIONS) {
-      setToastMsg("You've used all regenerations for this session")
-      setTimeout(() => setToastMsg(null), 5000)
       return
     }
-    if (slides) addVersion(ideaId, JSON.stringify(slides))
-    // Capture the instruction + current slides, then clear the input. Sending
-    // the current slides lets the API do a targeted edit instead of a rewrite.
-    const userInstruction = slidesInstruction.trim() || undefined
-    const currentSlides = userInstruction && slides ? JSON.stringify(slides) : undefined
-    setSlidesInstruction("")
-    // Reserve the slot synchronously BEFORE generating, so a second call can't
-    // read a stale count and slip past the limit.
-    increment(ideaId)
-    try {
-      await generateSlides(userInstruction, currentSlides)
-      const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
-      if (newCount >= MAX_REGENERATIONS) {
-        setToastMsg("You've used both regenerations for this session")
-        setTimeout(() => setToastMsg(null), 5000)
+    setIsGeneratingSlides(false)
+
+    // Step 2 — generate images ONE BY ONE from the client. Each call generates a
+    // single slide and does NOT persist (persist: false), so no junk Posts.
+    setIsGeneratingImages(true)
+    const generatedImages: SlideImage[] = []
+
+    for (let i = 0; i < generatedSlides.length; i++) {
+      const slide = generatedSlides[i]
+      setLoadingMessage(`Generating slide ${i + 1} of ${generatedSlides.length}...`)
+
+      try {
+        const imgRes = await fetch("/api/generate/carousel-images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            slides: [slide], // ONE slide only
+            size: size ?? "4:5",
+            ideaId,
+            persist: false,
+          }),
+        })
+        const imgData = await imgRes.json()
+        if (imgData.slides?.[0]) {
+          generatedImages.push(imgData.slides[0] as SlideImage)
+          setSlideImages([...generatedImages]) // show each image as it arrives
+        }
+      } catch (err) {
+        console.error(`[carousel] slide ${i + 1} failed:`, err)
       }
-    } catch {
-      decrement(ideaId) // generation failed — refund the reserved slot
+    }
+
+    setIsGeneratingImages(false)
+    persistImages(generatedImages)
+
+    // After ALL slides are generated, persist the whole carousel to the DB in one
+    // call. generatedImages already carry slideNumber/role/headline/imageUrl, so
+    // we send them directly (no fragile index-merge with the prompt slides).
+    if (generatedImages.length > 0) {
+      try {
+        await fetch("/api/generate/carousel-images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            slides: generatedImages,
+            size: size ?? "4:5",
+            ideaId,
+            persistOnly: true, // just save to DB, no image generation
+          }),
+        })
+      } catch (err) {
+        console.error("[carousel] DB persist failed:", err)
+      }
     }
   }
 
@@ -277,28 +360,6 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
     }
   }
 
-  function handleRestoreSlides(content: string) {
-    try {
-      const parsed = JSON.parse(content) as Slide[]
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        setSlides(parsed)
-        localStorage.setItem(`carouselSlides_${ideaId}`, content)
-      }
-    } catch {
-      // corrupt snapshot — ignore
-    }
-  }
-
-  // Readable preview for a stored slides snapshot (joined headlines).
-  function slidesPreview(content: string): string {
-    try {
-      const parsed = JSON.parse(content) as Slide[]
-      return parsed.map((s) => s.headline).join(" · ")
-    } catch {
-      return content
-    }
-  }
-
   async function handleCopyCaption() {
     await navigator.clipboard.writeText(caption)
     setCaptionCopied(true)
@@ -324,38 +385,16 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       if (!res.ok) throw new Error((data as { error?: string }).error ?? "Image generation failed")
 
       const image = data.slides[0] as SlideImage
-      setSlideImages((prev) =>
-        prev.map((img) => (img.slideNumber === slideNumber ? image : img)),
-      )
+      setSlideImages((prev) => {
+        const next = prev.map((img) => (img.slideNumber === slideNumber ? image : img))
+        persistImages(next)
+        return next
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
       throw err // let regenerateSlideImage refund the reserved slot on failure
     } finally {
       setRegeneratingSlide(null)
-    }
-  }
-
-  // Generate every slide image in ONE request. The endpoint loops sequentially
-  // and, on success, persists a single Post with one child Slide per image.
-  async function generateAllSlideImages() {
-    if (!slides) return
-    setIsGeneratingImages(true)
-    setError(null)
-    setSlideImages([])
-
-    try {
-      const res = await fetch("/api/generate/carousel-images", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId, size: size ?? "4:5", slides }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Image generation failed")
-      setSlideImages(data.slides as SlideImage[])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong")
-    } finally {
-      setIsGeneratingImages(false)
     }
   }
 
@@ -423,7 +462,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
               <div className="flex flex-col gap-1.5">
                 <textarea
                   value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
+                  onChange={(e) => handleCaptionChange(e.target.value)}
                   rows={16}
                   className="w-full px-4 py-3 rounded-xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[13px] text-[rgba(255,255,255,0.75)] leading-[1.65] resize-none focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
                 />
@@ -479,7 +518,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
 
           <div className="grid grid-cols-2 gap-4">
             <button
-              onClick={() => setSize("4:5")}
+              onClick={() => selectSize("4:5")}
               className={[
                 "group flex flex-col items-center gap-5 p-6 rounded-2xl border transition-all duration-150 outline-none cursor-pointer",
                 size === "4:5"
@@ -509,7 +548,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
             </button>
 
             <button
-              onClick={() => setSize("1:1")}
+              onClick={() => selectSize("1:1")}
               className={[
                 "group flex flex-col items-center gap-5 p-6 rounded-2xl border transition-all duration-150 outline-none cursor-pointer",
                 size === "1:1"
@@ -635,7 +674,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
               </p>
               <textarea
                 value={caption}
-                onChange={(e) => setCaption(e.target.value)}
+                onChange={(e) => handleCaptionChange(e.target.value)}
                 rows={20}
                 className="w-full px-4 py-3 rounded-xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[13px] text-[rgba(255,255,255,0.75)] leading-[1.65] resize-none focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
               />
@@ -650,91 +689,35 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
               </div>
             </div>
 
-            {/* Right: Slide prompts */}
+            {/* Right: carousel images (the slide-prompt step is bypassed) */}
             <div className="flex flex-col gap-4">
-              {/* Generate button — shown before slides exist */}
-              {!slides && !isGeneratingSlides && (
+              {/* Single button — confirm, then generate prompts + all images in one go */}
+              {slideImages.length === 0 && !isGeneratingSlides && !isGeneratingImages && (
                 <button
-                  onClick={() => void generateSlides().catch(() => {})}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-all"
+                  onClick={() => setConfirmOpen(true)}
+                  className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-all"
                 >
                   <Sparkles size={14} strokeWidth={2} />
-                  Generate Slide Prompts
+                  Generate Carousel
                 </button>
               )}
 
-              {/* Generating skeleton */}
-              {isGeneratingSlides && (
-                <div className="flex flex-col gap-2.5 pt-1">
-                  <p className="text-[12px] text-[rgba(255,255,255,0.32)] animate-pulse">
-                    Generating 7–8 slide prompts…
-                  </p>
-                  {SKELETON_WIDTHS.map((w, i) => (
-                    <div
-                      key={i}
-                      className="h-3 rounded-full bg-[rgba(255,255,255,0.05)] animate-pulse"
-                      style={{ width: w }}
-                    />
-                  ))}
+              {(isGeneratingSlides || isGeneratingImages) && loadingMessage && (
+                <div className="flex items-center gap-2.5 text-[13px] font-medium text-[#C4B5FD]">
+                  <Loader2 size={15} className="animate-spin" strokeWidth={2.2} />
+                  {loadingMessage}
                 </div>
               )}
 
-              {/* Slide list */}
-              {slides && !isGeneratingSlides && (
-                <div className="flex flex-col gap-4">
-                  <CarouselSlideList slides={slides} />
-                  <div className="flex items-end gap-2">
-                    <textarea
-                      value={slidesInstruction}
-                      onChange={(e) => setSlidesInstruction(e.target.value)}
-                      disabled={isGeneratingSlides || atLimit}
-                      rows={2}
-                      placeholder="What should change? (e.g. make it shorter, add more stats, make it funnier...)"
-                      className="flex-1 px-3.5 py-2.5 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[13px] text-[rgba(255,255,255,0.75)] leading-[1.5] resize-none placeholder:text-[rgba(255,255,255,0.25)] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors disabled:opacity-50"
-                    />
-                    <button
-                      onClick={handleRegenerateSlides}
-                      disabled={isGeneratingSlides || atLimit}
-                      className="flex-shrink-0 px-3.5 py-2 rounded-lg bg-[rgba(124,58,237,0.1)] hover:bg-[rgba(124,58,237,0.18)] border border-[rgba(124,58,237,0.2)] text-[12px] font-medium text-[#A78BFA] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      Regenerate Slides
-                    </button>
-                  </div>
-                  {/* Version history — silent, below the slides */}
-                  <VersionHistory
-                    versions={versions}
-                    onRestore={handleRestoreSlides}
-                    preview={slidesPreview}
-                  />
-
-                  {/* ── Generate actual slide images from the prompts ── */}
-                  {slideImages.length === 0 && !isGeneratingImages && (
-                    <button
-                      onClick={() => setConfirmOpen(true)}
-                      className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-all"
-                    >
-                      <Sparkles size={14} strokeWidth={2} />
-                      Generate All Slides as Images
-                    </button>
-                  )}
-
-                  {isGeneratingImages && (
-                    <div className="flex items-center gap-2.5 text-[13px] font-medium text-[#C4B5FD]">
-                      <Loader2 size={15} className="animate-spin" strokeWidth={2.2} />
-                      Generating {slides.length} slide images… this can take 2–3 minutes.
-                    </div>
-                  )}
-
-                  {slideImages.length > 0 && (
-                    <CarouselImageGrid
-                      images={slideImages}
-                      size={size ?? "4:5"}
-                      ideaId={ideaId}
-                      onRegenerate={regenerateSlideImage}
-                      regeneratingSlide={regeneratingSlide}
-                    />
-                  )}
-                </div>
+              {/* Grid fills in one image at a time as each slide is generated */}
+              {slideImages.length > 0 && (
+                <CarouselImageGrid
+                  images={slideImages}
+                  size={size ?? "4:5"}
+                  ideaId={ideaId}
+                  onRegenerate={regenerateSlideImage}
+                  regeneratingSlide={regeneratingSlide}
+                />
               )}
             </div>
           </div>
@@ -752,10 +735,10 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Generate All Slide Images?</DialogTitle>
+            <DialogTitle>Generate Carousel?</DialogTitle>
             <DialogDescription>
-              This will generate {slides?.length ?? 0} images using AI. This takes 2-3 minutes
-              and uses your image generation credits.
+              This will generate 7-8 slide images. Takes 2-3 minutes and uses your image
+              generation credits.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -768,11 +751,11 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
             <button
               onClick={() => {
                 setConfirmOpen(false)
-                void generateAllSlideImages()
+                void generateCarouselFlow()
               }}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-all"
             >
-              Yes, generate all →
+              Yes, generate →
             </button>
           </DialogFooter>
         </DialogContent>

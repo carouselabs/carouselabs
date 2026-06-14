@@ -10,8 +10,6 @@ export function buildCarouselPrompt(
   size: string,
   hasReference: boolean,
   keyTalkingPoints: unknown,
-  recommendedStructure: unknown,
-  storytellingAngle: unknown,
   strongEndingLine: unknown,
   userInstruction?: string,
   niche?: string,
@@ -66,8 +64,6 @@ If there is no reference image, use a clean modern LinkedIn carousel aesthetic.
   const talkingPointsList = Array.isArray(keyTalkingPoints)
     ? keyTalkingPoints.map((point, i) => `${i + 1}. ${point}`).join("\n")
     : String(keyTalkingPoints)
-  const structureStr = toStr(recommendedStructure)
-  const angleStr = toStr(storytellingAngle)
   const endingStr = toStr(strongEndingLine)
 
   return `${referenceLeadBlock}${nicheBlock}Here is the LinkedIn heading of my posting:
@@ -81,12 +77,6 @@ ${caption}
 
 Here are the key talking points from the breakdown:
 ${talkingPointsList}
-
-Here is the recommended post structure:
-${structureStr}
-
-Here is the suggested storytelling angle:
-${angleStr}
 
 Here is the strong ending line:
 ${endingStr}

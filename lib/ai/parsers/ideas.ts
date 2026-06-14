@@ -18,9 +18,14 @@ const CATEGORY_ALIASES: Record<string, RawCategory> = {
   "news": "Latest News",
   "trending": "Trending",
   "trend": "Trending",
+  "trending topic": "Trending",
+  "trending topics": "Trending",
   "industry": "Industry",
+  "industry topic": "Industry",
+  "industry topics": "Industry",
   "random": "Random",
   "random but relevant": "Random",
+  "random but related": "Random",
 }
 
 // Maps Claude's display categories to the Prisma enums stored in DB
@@ -148,8 +153,15 @@ function isNoiseLine(line: string): boolean {
   // Strip markdown bold first so bold section headers (e.g. **Latest News**)
   // are still recognized as noise by the header checks below.
   const t = line.replace(/\*\*/g, "").trim()
+
+  // NEVER filter a real idea line. Any line containing a quote mark or a
+  // [Category] bracket is an idea (or close enough) — keep it and let the
+  // strict/loose parser tiers extract it. This guard runs first so idea lines
+  // can't be dropped by the length or header checks below.
+  if (/["“”]/.test(t) || /\[[^\]]+\]/.test(t)) return false
+
   if (!t) return true // empty line
-  if (t.length < 15) return true // too short to be a real idea
+  if (t.length < 20) return true // too short to be a real idea
   if (/^i'?ll search/i.test(t)) return true
   if (/^based on my web search/i.test(t)) return true
   if (/^now i'?ll generate/i.test(t)) return true

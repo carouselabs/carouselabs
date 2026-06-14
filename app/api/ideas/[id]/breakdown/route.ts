@@ -8,38 +8,65 @@ import type { Prisma } from "@prisma/client"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-function buildBreakdownPrompt(hook: string, category: string, profileContext: string): string {
-  return `You are generating a detailed LinkedIn post content breakdown.
+function buildBreakdownPrompt(hook: string, profileContext: string): string {
+  return `You are a world-class LinkedIn content strategist and ghostwriter. Your ONLY job is to take a post idea and BUILD the actual content — not explain it, not summarize it, but fully create it.
 
-Selected LinkedIn post idea:
-Category: ${category}
-Hook: "${hook}"
+Think of yourself as the person who sits between the idea and the post. You take a rough idea and turn it into something real, detailed, and ready to use.
 
-User profile:
+POST IDEA: "${hook}"
+
+USER PROFILE:
 ${profileContext}
 
-Generate a detailed content breakdown. Return ONLY a valid JSON object with exactly these keys (no markdown fences, no preamble, no trailing text):
+YOUR TASK:
+Build out the FULL CONTENT for this post idea. Go deep. Be specific. Create real value.
 
+HOW TO BUILD IT:
+
+If the idea is a LIST (10 truths, 5 tools, 7 mistakes, etc.):
+→ Write out EVERY item on the list
+→ For each item: give it a bold header, then 3-4 sentences explaining it clearly
+→ Include real examples, real names, real numbers where possible
+→ Make each point standalone and powerful
+
+If the idea is a STORY (my journey, what happened when, how I went from X to Y):
+→ Build the full story arc: setup → conflict → turning point → lesson
+→ Include specific details, emotions, dialogue if relevant
+→ End with a clear takeaway
+
+If the idea is an OPINION or HOT TAKE (unpopular opinion, why X is wrong, the truth about Y):
+→ Build the full argument with evidence
+→ Include counterarguments and why they're wrong
+→ Give real examples that support the point
+→ Make it provocative but backed up
+
+If the idea is EDUCATIONAL (how to do X, the framework for Y, understanding Z):
+→ Break it into clear steps or components
+→ Explain each one with examples
+→ Include common mistakes people make
+→ Give actionable takeaways
+
+FORMAT:
+- **Bold Header** for each main point or section
+- 3-5 sentences of rich content under each header
+- 5-7 sections total
+- 600-800 words
+- No bullet points inside sections — write in flowing sentences
+- Real specific examples over generic statements
+
+WRITING STYLE:
+- Simple English — write like you are talking to a friend
+- Short sentences — easy to read
+- Confident and direct — no fluff
+- Every sentence must earn its place
+
+Return ONLY valid JSON with no markdown fences:
 {
-  "deepDive": "A 600-700 word explanation of this topic written in 4-5 clear paragraphs. Explain what the topic/news is about, the background context, why it matters now, and what the implications are for the user's industry and audience. Write it like a well-researched mini article that gives someone the full picture before writing about it. Use clear, engaging prose — no bullet points, no headers, just flowing paragraphs.",
-  "refinedHook": "The sharpened final hook line for the post",
-  "postObjective": "What this post is trying to achieve in 1-2 sentences",
-  "targetEmotion": "Primary emotion or psychological trigger this post creates in the reader",
-  "recommendedStructure": "Step-by-step post structure e.g. Hook → Relatable problem → Framework → Proof → CTA",
-  "keyTalkingPoints": "3-5 specific talking points to cover, separated by semicolons",
-  "storytellingAngle": "The specific storytelling approach and framing to use",
-  "suggestedCTA": "The exact call-to-action text to end the post with",
-  "recommendedFormat": "text post / carousel / story / thread — pick the best one and explain why in one sentence",
-  "visualIdea": "A concrete visual concept for image or slide if applicable, or N/A for text post",
-  "engagementTips": "2-3 specific tips to maximize comments, saves, and shares on this exact post",
-  "strongEndingLine": "The very last line of the post — a punchy, memorable closer"
-}
-
-Rules:
-- Keep writing style aligned with user brand and tone
-- Make output practical, engaging, and high-retention
-- Avoid generic advice — every insight must be specific to this idea and profile
-- Make output detailed enough that another AI can generate the full post directly from it`
+  "deepDive": "your full 600-800 word content build here with **Bold Headers** and detailed paragraphs",
+  "refinedHook": "the sharpest most compelling version of this hook for LinkedIn",
+  "keyTalkingPoints": "the 4-5 main points you covered, each in one sentence, separated by semicolons",
+  "strongEndingLine": "one punchy memorable line that would make a perfect ending for this post"
+}`
 }
 
 // Extracts the JSON object from Claude's response, handles markdown fences and preamble text
@@ -161,22 +188,21 @@ export async function POST(
       })
     }
 
-    // Call Claude
+    // Call Claude — single call, no web search, no tools.
     const profileContext = formatProfile(user.profile)
-    const prompt = buildBreakdownPrompt(idea.hook, idea.category, profileContext)
+    const prompt = buildBreakdownPrompt(idea.hook, profileContext)
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-5",
-      max_tokens: 2048,
+      max_tokens: 3000,
       messages: [{ role: "user", content: prompt }],
     })
 
     const block = message.content[0]
     if (block.type !== "text") {
-      return NextResponse.json({ error: "Unexpected response from AI" }, { status: 502 })
+      return NextResponse.json({ error: "Unexpected AI response" }, { status: 502 })
     }
 
-    // Parse — throws with a clear message if Claude's output isn't valid JSON
     const breakdown = extractJSON(block.text)
 
     // Persist

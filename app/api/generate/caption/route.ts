@@ -7,20 +7,40 @@ import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const CAPTION_GHOSTWRITER_INSTRUCTION = `Act as a top 0.1% LinkedIn ghostwriter for AI founders. Read the deep dive and identify every unique insight, strategic implication, supporting argument, and founder perspective. Rewrite it into a LinkedIn post that preserves all high-value information while removing fluff, repetition, and unnecessary exposition. Optimize for readability, engagement, and authority—not virality or clickbait. The writing should feel human, opinionated, and experience-driven, with natural transitions and varied sentence lengths. The first three lines should create curiosity without hiding the value, and the rest should progressively reveal deeper insights. Prioritize clarity over hype, include practical takeaways, and end with a question that invites thoughtful discussion rather than generic comments. If any important idea from the original is omitted, explicitly add it back so that no meaningful strategic insight is lost. The final post should sound like an experienced founder or investor sharing hard-earned lessons, not an AI summarizing an article.
+const CAPTION_GHOSTWRITER_INSTRUCTION = `You are the ghostwriter behind the top 0.1% of LinkedIn creators. You write captions that people cannot stop reading. Your secret is you write like a human telling a story to a friend — not like a marketer selling something.
 
-READABILITY RULES:
-- Write at a 8th grade reading level — simple words, short sentences
-- No jargon, buzzwords, or corporate speak
-- Every sentence must be immediately understandable by a non-expert
--
-- Use simple words: 'use' not 'utilize', 'help' not 'facilitate', 'show' not 'demonstrate'
-- If a normal person can't understand a sentence in 3 seconds, rewrite it
-- The caption must be so clear that someone who knows nothing about the topic instantly understands what the post is about just from reading the first 3 lines`
+STORYTELLING RULES:
+- Open with ONE line that stops the scroll — a surprising fact, a bold statement, or a question that makes people think
+- Never start with "I" — start with the story, the fact, or the situation
+- Build tension and curiosity — make the reader feel like they HAVE to keep reading to find out what happens
+- Use the "but then..." technique — set up a situation, then flip it
+- Write in short punchy paragraphs — never more than 2-3 sentences per paragraph
+- Use white space generously — every 2-3 lines should have a line break
+- Include one moment that makes the reader think "wait, I never thought of it that way"
+- End with a question that makes people want to comment their own experience
+- The caption should feel like the reader is eavesdropping on a smart conversation
+
+VOICE AND TONE:
+- Sound like a real person sharing a real insight — not a thought leader giving a speech
+- Use contractions (it's, don't, can't, won't) — sounds more human
+- Be direct and confident — no hedging, no "I think maybe possibly"
+- Use simple words — if a 10-year-old wouldn't understand it, rewrite it
+- Show personality — a little humor, a little edge, a little humility
+
+STRUCTURE THAT WORKS:
+Line 1: The scroll-stopper (shocking fact, bold claim, or story hook)
+Lines 2-3: The setup (what most people think or do)
+Lines 4-6: The flip (what's actually true or what changed)
+Lines 7-10: The insight (the real lesson or observation)
+Lines 11-13: The proof or example (make it concrete)
+Line 14-15: The bigger implication (why this matters)
+Last line: The question (invite discussion)
+Hashtags: 7-8 relevant ones at the very end
+
+LENGTH: 1500-2500 characters total including hashtags.`
 
 function buildCaptionPrompt(
   profileContext: string,
-  idea: { hook: string; category: string },
   breakdown: BreakdownOutline,
   tone?: string,
   userInstruction?: string,
@@ -35,70 +55,64 @@ function buildCaptionPrompt(
 
   return `${CAPTION_GHOSTWRITER_INSTRUCTION}
 
+User profile:
 ${profileContext}
 
-Selected LinkedIn post idea:
-Category: ${idea.category}
-Hook: "${idea.hook}"
+POST HEADING (use this as the core topic):
+${breakdown.refinedHook}
 
-Post breakdown:
-Refined Hook: ${breakdown.refinedHook}
-Post Objective: ${breakdown.postObjective}
-Target Emotion: ${breakdown.targetEmotion}
-Recommended Structure: ${breakdown.recommendedStructure}
-Key Talking Points: ${breakdown.keyTalkingPoints}
-Storytelling Angle: ${breakdown.storytellingAngle}
-Suggested CTA: ${breakdown.suggestedCTA}
-Strong Ending Line: ${breakdown.strongEndingLine}
+FULL DEEP DIVE (use ALL of this to build the caption — this is your content source):
+${breakdown.deepDive}
+
+KEY TALKING POINTS:
+${breakdown.keyTalkingPoints}
+
+STRONG ENDING LINE:
+${breakdown.strongEndingLine}
 ${toneInstruction}
 ${userInstructionBlock}
-Generate a high-performing LinkedIn caption optimized for more views, likes, comments, higher retention, and profile visits.
 
-The caption must:
-- Start with the refined hook above as the very first line
-- Use short readable paragraphs (1-3 sentences max per paragraph)
-- Follow the recommended structure
-- Cover the key talking points naturally
-- Trigger curiosity, emotion, relatability, or debate
-- Match the user's personal brand and tone
-- End with the suggested CTA
-- At the very end of the caption, after the CTA, add a blank line then include 7-8 relevant niche-specific hashtags directly in the caption text like this: #AITools #LinkedInGrowth #ContentMarketing etc. These hashtags should be relevant to the post topic and the user's niche.
-- Feel human and platform-native
-- Avoid generic AI-style writing or filler phrases
+Using the heading and full deep dive above, write a LinkedIn caption that:
+- Takes the story and insights from the deep dive
+- Presents them in a compelling storytelling format
+- Makes people read every single word
+- Feels like it was written by a real expert sharing real insights
+- NOT a summary — a story built from the content above
 
-After the caption, output exactly this delimiter on its own line:
----HOOKS---
-Then write 3 alternative opening hook lines, one per line. Each should be distinctly different in angle or style from the others and from the caption's opening line.
+CRITICAL LENGTH RULE:
+The caption must be under 3000 CHARACTERS total (including hashtags and spaces).
+Aim for 1500-2500 characters for best LinkedIn performance.
 
-Output format (follow exactly):
-[full caption text ending with hashtags]
+Output format:
+[Full LinkedIn caption ending with 7-8 hashtags]
 
 ---HOOKS---
-[hook variation 1]
-[hook variation 2]
-[hook variation 3]`
+[3 alternative opening lines the user could use instead]`
 }
 
 // Targeted edit mode — apply ONLY the user's instruction to the existing
 // caption, changing as little as possible. Keeps the same output format so the
 // client's caption + ---HOOKS--- parsing still works.
 function buildCaptionEditPrompt(currentCaption: string, userInstruction: string): string {
-  return `You are editing an existing LinkedIn caption. Do NOT rewrite it from scratch.
+  return `You are editing a LinkedIn caption. Follow these rules strictly:
 
-Apply ONLY this instruction to the current caption: ${userInstruction}
+1. Apply ONLY this instruction: ${userInstruction}
+2. Make MINIMUM changes to the caption
+3. Return ONLY the edited caption text — no explanations, no reasoning, no meta-commentary
+4. Do NOT explain what you changed or why
+5. Do NOT say things like "I notice..." or "The caption is already..."
+6. Just return the final caption text directly
 
-Current caption:
+Current caption to edit:
 ${currentCaption}
-
-Make MINIMUM changes. Preserve everything else exactly as is — keep all wording, structure, line breaks, emojis, and hashtags that the instruction does not require changing. Change only what the instruction explicitly asks for.
-
-Output format (follow exactly):
-[full edited caption text ending with hashtags]
 
 ---HOOKS---
 [hook variation 1]
 [hook variation 2]
-[hook variation 3]`
+[hook variation 3]
+
+Return the edited caption first, then the ---HOOKS--- separator, then 3 hook variations.
+Return NOTHING else. No explanations. Just the caption and hooks.`
 }
 
 function formatProfile(profile: {
@@ -207,7 +221,7 @@ export async function POST(req: Request) {
   const prompt =
     userInstruction && currentCaption
       ? buildCaptionEditPrompt(currentCaption, userInstruction)
-      : buildCaptionPrompt(profileContext, { hook: idea.hook, category: idea.category }, breakdown, tone, userInstruction)
+      : buildCaptionPrompt(profileContext, breakdown, tone, userInstruction)
 
   // Stream Claude's response as plain text
   const encoder = new TextEncoder()
@@ -216,7 +230,7 @@ export async function POST(req: Request) {
       try {
         const stream = anthropic.messages.stream({
           model: "claude-sonnet-4-5",
-          max_tokens: 2048,
+          max_tokens: 3000,
           messages: [{ role: "user", content: prompt }],
         })
 

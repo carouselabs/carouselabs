@@ -1,44 +1,25 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import {
-  Zap,
-  Target,
-  Heart,
-  AlignLeft,
-  List,
-  Mic2,
-  ArrowRight,
-  FileText,
-  ImageIcon,
-  TrendingUp,
-  Flag,
-  Newspaper,
-} from "lucide-react"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
-
-const SECTIONS: {
-  key: keyof BreakdownOutline
-  label: string
-  icon: React.ElementType
-}[] = [
-  { key: "refinedHook", label: "Refined Hook", icon: Zap },
-  // deepDive is rendered separately above the grid
-  { key: "postObjective", label: "Post Objective", icon: Target },
-  { key: "targetEmotion", label: "Target Emotion", icon: Heart },
-  { key: "recommendedStructure", label: "Recommended Structure", icon: AlignLeft },
-  { key: "keyTalkingPoints", label: "Key Talking Points", icon: List },
-  { key: "storytellingAngle", label: "Storytelling Angle", icon: Mic2 },
-  { key: "suggestedCTA", label: "Suggested CTA", icon: ArrowRight },
-  { key: "recommendedFormat", label: "Recommended Format", icon: FileText },
-  { key: "visualIdea", label: "Visual Idea", icon: ImageIcon },
-  { key: "engagementTips", label: "Engagement Tips", icon: TrendingUp },
-  { key: "strongEndingLine", label: "Strong Ending Line", icon: Flag },
-]
 
 interface BreakdownViewProps {
   ideaId: string
   initialBreakdown: BreakdownOutline | null
+}
+
+// Render inline **bold** segments inside a line as actual bold text.
+function renderInline(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={i} className="font-semibold text-[rgba(255,255,255,0.9)]">
+          {part.slice(2, -2)}
+        </strong>
+      )
+    }
+    return part
+  })
 }
 
 export function BreakdownView({ ideaId, initialBreakdown }: BreakdownViewProps) {
@@ -101,7 +82,8 @@ export function BreakdownView({ ideaId, initialBreakdown }: BreakdownViewProps) 
 
   if (!breakdown) return null
 
-  // Split deepDive into paragraphs on double-newlines or single newlines
+  // Split deepDive into lines (drop blank lines — section headers carry their
+  // own top spacing).
   const deepDiveParagraphs = breakdown.deepDive
     ? breakdown.deepDive
         .split(/\n{2,}|\n/)
@@ -109,61 +91,44 @@ export function BreakdownView({ ideaId, initialBreakdown }: BreakdownViewProps) 
         .filter(Boolean)
     : []
 
+  if (deepDiveParagraphs.length === 0) return null
+
+  // Render the deep dive as markdown: **bold** headers, - bullet lists, and
+  // normal paragraphs — at a comfortable reading width.
   return (
-    <div className="flex flex-col gap-6">
-      {/* ── Deep Dive ─────────────────────────────────────────── */}
-      {deepDiveParagraphs.length > 0 && (
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-[rgba(147,197,253,0.1)] border border-[rgba(147,197,253,0.2)] flex items-center justify-center flex-shrink-0">
-              <Newspaper size={13} className="text-[#93C5FD]" strokeWidth={2} />
-            </div>
-            <p className="text-[12px] font-semibold text-[rgba(255,255,255,0.35)] uppercase tracking-widest">
-              Deep Dive
-            </p>
-          </div>
-
-          <div className="px-5 py-4 rounded-xl bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] flex flex-col gap-4">
-            {deepDiveParagraphs.map((para, i) => (
-              <p
-                key={i}
-                className="text-[14.5px] text-[rgba(255,255,255,0.7)] leading-[1.75] tracking-[-0.01em]"
-              >
-                {para}
-              </p>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Content Breakdown ─────────────────────────────────── */}
-      <div className="flex flex-col gap-3">
-        <p className="text-[12px] font-medium text-[rgba(255,255,255,0.28)] uppercase tracking-widest">
-          Content Breakdown
-        </p>
-        {SECTIONS.map(({ key, label, icon: Icon }) => {
-          const value = breakdown[key]
-          if (!value || value === "N/A for text post") return null
+    <div className="flex flex-col gap-1.5 max-w-[680px]">
+      {deepDiveParagraphs.map((line, i) => {
+        // Bold header: **Section Title**
+        if (line.startsWith("**") && line.endsWith("**")) {
+          const text = line.replace(/\*\*/g, "")
           return (
-            <div
-              key={key}
-              className="flex gap-3 px-4 py-3.5 rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)]"
+            <h3
+              key={i}
+              className="text-[17px] font-bold text-[rgba(255,255,255,0.9)] mt-6 mb-2"
             >
-              <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-[rgba(124,58,237,0.12)] border border-[rgba(124,58,237,0.2)] flex items-center justify-center mt-0.5">
-                <Icon size={13} className="text-[#A78BFA]" strokeWidth={2} />
-              </div>
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-[11px] font-semibold text-[rgba(255,255,255,0.35)] uppercase tracking-wider">
-                  {label}
-                </span>
-                <p className="text-[13px] text-[rgba(255,255,255,0.75)] leading-[1.5]">
-                  {value}
-                </p>
-              </div>
+              {text}
+            </h3>
+          )
+        }
+        // Bullet point: - item
+        if (line.startsWith("- ")) {
+          const text = line.slice(2)
+          return (
+            <div key={i} className="flex gap-2 items-start">
+              <span className="text-[#7C3AED] mt-1 flex-shrink-0">•</span>
+              <p className="text-[15px] text-[rgba(255,255,255,0.72)] leading-[1.7]">
+                {renderInline(text)}
+              </p>
             </div>
           )
-        })}
-      </div>
+        }
+        // Regular paragraph
+        return (
+          <p key={i} className="text-[15px] text-[rgba(255,255,255,0.72)] leading-[1.7]">
+            {renderInline(line)}
+          </p>
+        )
+      })}
     </div>
   )
 }

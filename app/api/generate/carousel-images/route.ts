@@ -10,7 +10,10 @@ interface SlideInput {
   slideNumber: number
   role: "hook" | "body" | "cta"
   headline: string
-  prompt: string
+  // Present in generation mode (the prompt to render); absent in persistOnly
+  // mode, where the already-generated image URL is sent instead.
+  prompt?: string
+  imageUrl?: string
 }
 
 // Carousel slide roles map onto the Slide.role enum stored in the DB.
@@ -28,6 +31,7 @@ export async function POST(req: Request) {
   let size: string
   let ideaId: string
   let persist: boolean
+  let persistOnly: boolean
 
   try {
     const body = await req.json()
@@ -38,6 +42,8 @@ export async function POST(req: Request) {
     // Persist a Post by default; single-slide regenerations pass persist:false so
     // they don't spawn a junk Post for every regeneration.
     persist = body.persist !== false
+    // persistOnly: skip all OpenAI calls — just save the already-generated images.
+    persistOnly = body.persistOnly === true
     if (!ideaId) throw new Error("Missing ideaId")
     if (slides.length === 0) throw new Error("No slides provided")
   } catch (err) {
@@ -53,6 +59,46 @@ export async function POST(req: Request) {
   const idea = await db.idea.findUnique({ where: { id: ideaId } })
   if (!idea || idea.userId !== user.id) {
     return NextResponse.json({ error: "Idea not found" }, { status: 404 })
+  }
+
+  // persistOnly mode — no image generation. Create one Post + child Slides from
+  // the imageUrls the client already generated (one-by-one) and return.
+  if (persistOnly) {
+    const publicUrl = process.env.CLOUDFLARE_R2_PUBLIC_URL ?? ""
+    const withUrls = slides.filter((s) => typeof s.imageUrl === "string" && s.imageUrl)
+    if (withUrls.length === 0) {
+      return NextResponse.json({ error: "No image URLs to persist" }, { status: 400 })
+    }
+    // Derive the R2 object key from the public URL (best-effort).
+    const toKey = (url: string) => (publicUrl ? url.replace(`${publicUrl}/`, "") : url)
+
+    try {
+      const post = await db.post.create({
+        data: {
+          userId: user.id,
+          ideaId,
+          title: idea.hook,
+          caption: "",
+          format: "CAROUSEL",
+          status: "READY",
+          imageUrls: withUrls.map((s) => s.imageUrl as string),
+          r2Keys: withUrls.map((s) => toKey(s.imageUrl as string)),
+          slides: {
+            create: withUrls.map((s) => ({
+              role: ROLE_TO_SLIDE_ROLE[s.role] ?? "CONTENT",
+              order: s.slideNumber,
+              headline: s.headline,
+              imageUrl: s.imageUrl as string,
+              r2Key: toKey(s.imageUrl as string),
+            })),
+          },
+        },
+      })
+      return NextResponse.json({ success: true, postId: post.id })
+    } catch (err) {
+      console.error("[generate/carousel-images] persistOnly failed:", err)
+      return NextResponse.json({ error: "Failed to save carousel" }, { status: 502 })
+    }
   }
 
   const openaiSize: "1024x1024" | "1024x1280" =
@@ -73,7 +119,7 @@ export async function POST(req: Request) {
     for (const slide of slides) {
       const imageResponse = await openai.images.generate({
         model: "gpt-image-2",
-        prompt: slide.prompt,
+        prompt: slide.prompt ?? "",
         n: 1,
         size: openaiSize,
         quality: "medium", // medium quality keeps carousel generation cheaper/faster

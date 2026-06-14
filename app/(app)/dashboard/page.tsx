@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { Sparkles } from "lucide-react"
 import { GenerateBar } from "@/components/dashboard/GenerateBar"
 import { IdeaFeed } from "@/components/dashboard/IdeaFeed"
@@ -103,13 +104,21 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-2xl mx-auto flex flex-col gap-6">
-      {/* Generate Bar */}
-      <GenerateBar
-        value={topicInput}
-        onChange={setTopicInput}
-        onGenerate={handleGenerate}
-        isLoading={isGenerating}
-      />
+      {/* Generate Bar + bring-your-own-idea entry point */}
+      <div className="flex flex-col gap-3">
+        <GenerateBar
+          value={topicInput}
+          onChange={setTopicInput}
+          onGenerate={handleGenerate}
+          isLoading={isGenerating}
+        />
+        <Link
+          href="/my-idea"
+          className="self-start inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.06)] text-[13px] font-medium text-[rgba(255,255,255,0.6)] transition-colors"
+        >
+          My Own Idea ✍️
+        </Link>
+      </div>
 
       {/* Error */}
       {error && (

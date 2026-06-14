@@ -58,7 +58,7 @@ export default async function IdeaPage({
         >
           {rawCategory}
         </span>
-        <h1 className="text-[22px] font-semibold text-[rgba(255,255,255,0.9)] leading-[1.35]">
+        <h1 className="text-[26px] font-bold text-[rgba(255,255,255,0.92)] leading-[1.3] tracking-[-0.01em]">
           {idea.hook}
         </h1>
         <p className="text-[12px] text-[rgba(255,255,255,0.28)]">

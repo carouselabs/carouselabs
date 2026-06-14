@@ -176,7 +176,7 @@ export function CaptionEditor({
           </span>
           {isOverLimit && (
             <span className="text-[11px] text-[rgba(239,68,68,0.7)] ml-1">
-              Over limit — trim before saving
+              Too long for LinkedIn
             </span>
           )}
           {isNearLimit && (

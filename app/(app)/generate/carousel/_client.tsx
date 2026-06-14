@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ArrowLeft, Sparkles, Copy, Check, History, Loader2 } from "lucide-react"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
 import { CarouselImageGrid, type SlideImage } from "@/components/generate/CarouselImageGrid"
+import { LoadingGame } from "@/components/generate/LoadingGame"
 import { RegenerationLimit } from "@/components/generate/RegenerationLimit"
 import {
   Dialog,
@@ -59,6 +60,9 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
   const [regeneratingSlide, setRegeneratingSlide] = useState<number | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState("")
+  // Once image generation has started, keep the 2-column layout (with the
+  // LoadingGame) so the user can keep playing even after the carousel is done.
+  const [gameStarted, setGameStarted] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
   const [captionCopied, setCaptionCopied] = useState(false)
@@ -243,6 +247,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
 
     // Step 1 — slide prompts (silent).
     setIsGeneratingSlides(true)
+    setGameStarted(true) // keep the game visible for the whole flow
     setLoadingMessage("Building your carousel structure...")
 
     let generatedSlides: Slide[]
@@ -420,6 +425,67 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       decrement(ideaId)
     }
   }
+
+  // The step-4 caption + carousel grid. Rendered centered normally; once image
+  // generation has started it moves into a 70% left column with the LoadingGame
+  // on the right.
+  const carouselGrid = (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+      {/* Left: Caption */}
+      <div className="flex flex-col gap-3">
+        <p className="text-[11px] font-medium text-[rgba(255,255,255,0.28)] uppercase tracking-widest">
+          Caption
+        </p>
+        <textarea
+          value={caption}
+          onChange={(e) => handleCaptionChange(e.target.value)}
+          rows={20}
+          className="w-full px-4 py-3 rounded-xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[13px] text-[rgba(255,255,255,0.75)] leading-[1.65] resize-none focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
+        />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCopyCaption}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.06)] text-[12px] font-medium text-[rgba(255,255,255,0.52)] transition-colors"
+          >
+            {captionCopied ? <Check size={12} /> : <Copy size={12} />}
+            {captionCopied ? "Copied!" : "Copy Caption"}
+          </button>
+        </div>
+      </div>
+
+      {/* Right: carousel images (the slide-prompt step is bypassed) */}
+      <div className="flex flex-col gap-4">
+        {/* Single button — confirm, then generate prompts + all images in one go */}
+        {slideImages.length === 0 && !isGeneratingSlides && !isGeneratingImages && (
+          <button
+            onClick={() => setConfirmOpen(true)}
+            className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-all"
+          >
+            <Sparkles size={14} strokeWidth={2} />
+            Generate Carousel
+          </button>
+        )}
+
+        {(isGeneratingSlides || isGeneratingImages) && loadingMessage && (
+          <div className="flex items-center gap-2.5 text-[13px] font-medium text-[#C4B5FD]">
+            <Loader2 size={15} className="animate-spin" strokeWidth={2.2} />
+            {loadingMessage}
+          </div>
+        )}
+
+        {/* Grid fills in one image at a time as each slide is generated */}
+        {slideImages.length > 0 && (
+          <CarouselImageGrid
+            images={slideImages}
+            size={size ?? "4:5"}
+            ideaId={ideaId}
+            onRegenerate={regenerateSlideImage}
+            regeneratingSlide={regeneratingSlide}
+          />
+        )}
+      </div>
+    </div>
+  )
 
   return (
     <div className="max-w-4xl mx-auto flex flex-col gap-8">
@@ -666,61 +732,19 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-            {/* Left: Caption */}
-            <div className="flex flex-col gap-3">
-              <p className="text-[11px] font-medium text-[rgba(255,255,255,0.28)] uppercase tracking-widest">
-                Caption
-              </p>
-              <textarea
-                value={caption}
-                onChange={(e) => handleCaptionChange(e.target.value)}
-                rows={20}
-                className="w-full px-4 py-3 rounded-xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[13px] text-[rgba(255,255,255,0.75)] leading-[1.65] resize-none focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
-              />
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleCopyCaption}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.06)] text-[12px] font-medium text-[rgba(255,255,255,0.52)] transition-colors"
-                >
-                  {captionCopied ? <Check size={12} /> : <Copy size={12} />}
-                  {captionCopied ? "Copied!" : "Copy Caption"}
-                </button>
+          {/* Once generation has started, keep the 2-column layout (caption+images
+              left, game right) so the user can keep playing after the carousel is
+              done. Before that, the normal centered grid. */}
+          {gameStarted ? (
+            <div style={{ display: "flex", gap: "2rem", alignItems: "flex-start" }}>
+              <div style={{ flex: "0 0 70%", maxWidth: "70%" }}>{carouselGrid}</div>
+              <div style={{ flex: "0 0 28%", maxWidth: "28%" }}>
+                <LoadingGame />
               </div>
             </div>
-
-            {/* Right: carousel images (the slide-prompt step is bypassed) */}
-            <div className="flex flex-col gap-4">
-              {/* Single button — confirm, then generate prompts + all images in one go */}
-              {slideImages.length === 0 && !isGeneratingSlides && !isGeneratingImages && (
-                <button
-                  onClick={() => setConfirmOpen(true)}
-                  className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-all"
-                >
-                  <Sparkles size={14} strokeWidth={2} />
-                  Generate Carousel
-                </button>
-              )}
-
-              {(isGeneratingSlides || isGeneratingImages) && loadingMessage && (
-                <div className="flex items-center gap-2.5 text-[13px] font-medium text-[#C4B5FD]">
-                  <Loader2 size={15} className="animate-spin" strokeWidth={2.2} />
-                  {loadingMessage}
-                </div>
-              )}
-
-              {/* Grid fills in one image at a time as each slide is generated */}
-              {slideImages.length > 0 && (
-                <CarouselImageGrid
-                  images={slideImages}
-                  size={size ?? "4:5"}
-                  ideaId={ideaId}
-                  onRegenerate={regenerateSlideImage}
-                  regeneratingSlide={regeneratingSlide}
-                />
-              )}
-            </div>
-          </div>
+          ) : (
+            carouselGrid
+          )}
         </div>
       )}
 

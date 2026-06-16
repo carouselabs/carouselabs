@@ -1,6 +1,7 @@
-import { auth } from "@clerk/nextjs/server"
+import { auth, currentUser } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { sendOnboardingCompleteEmail } from "@/lib/email"
 import type { ProfileData, VoicePreset } from "@/lib/profile/options"
 
 const INDUSTRY_SEP = " — "
@@ -104,11 +105,27 @@ export async function POST(req: Request) {
 
   const columns = buildProfileColumns(body)
 
+  // Detect first-time completion so the onboarding email is sent exactly once
+  // (not on every re-submit of the onboarding form).
+  const existing = await db.profile.findUnique({ where: { userId: user.id } })
+  const wasOnboarded = existing?.onboardingDone ?? false
+
   await db.profile.upsert({
     where: { userId: user.id },
     create: { userId: user.id, ...columns, onboardingDone: true },
     update: { ...columns, onboardingDone: true },
   })
+
+  // Onboarding-complete email — only on first completion, best-effort.
+  if (!wasOnboarded) {
+    try {
+      const clerkUser = await currentUser()
+      const name = clerkUser?.firstName ?? clerkUser?.fullName ?? ""
+      await sendOnboardingCompleteEmail(user.email, name)
+    } catch (err) {
+      console.error("[profile] onboarding email failed:", err)
+    }
+  }
 
   return NextResponse.json({ success: true })
 }

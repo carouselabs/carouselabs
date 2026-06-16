@@ -3,6 +3,8 @@ import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { db } from "@/lib/db"
+import { consumeCredit } from "@/lib/credits"
+import { validateContentTopic } from "@/lib/validateTopic"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 import type { Prisma } from "@prisma/client"
 
@@ -180,12 +182,32 @@ export async function POST(
       return NextResponse.json({ error: "Idea not found" }, { status: 404 })
     }
 
-    // Return cached breakdown immediately if it exists
+    // Return cached breakdown immediately if it exists (does NOT cost a credit).
     if (idea.breakdowns[0]) {
       return NextResponse.json({
         breakdown: idea.breakdowns[0].outline as unknown as BreakdownOutline,
         cached: true,
       })
+    }
+
+    // Keep CarouseLabs to social-media content — reject general-assistant misuse
+    // before spending a credit or calling the model.
+    const topicCheck = validateContentTopic(idea.hook)
+    if (!topicCheck.valid) {
+      return NextResponse.json(
+        { error: topicCheck.error, invalidTopic: true },
+        { status: 400 },
+      )
+    }
+
+    // Generating a NEW breakdown costs one credit. Free users get 1 lifetime
+    // post; Pro users spend monthly, then extra credits.
+    const credit = await consumeCredit(user.id)
+    if (!credit.ok) {
+      return NextResponse.json(
+        { error: "No credits", requiresUpgrade: credit.requiresUpgrade },
+        { status: 402 },
+      )
     }
 
     // Call Claude — single call, no web search, no tools.

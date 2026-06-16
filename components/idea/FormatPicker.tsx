@@ -63,9 +63,12 @@ export function FormatPicker({ ideaId }: FormatPickerProps) {
   // The format awaiting first-time confirmation in the dialog.
   const [pending, setPending] = useState<Format | null>(null)
 
-  // Read the locked format from localStorage on mount (client-only).
+  // Read the locked format from localStorage on mount (client-only). Setting
+  // state here is the SSR-safe way to hydrate from localStorage without a
+  // hydration mismatch; a lazy initializer would diverge from the server render.
   useEffect(() => {
     try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLockedId(localStorage.getItem(storageKey))
     } catch {
       // localStorage unavailable — treat as unlocked
@@ -105,7 +108,7 @@ export function FormatPicker({ ideaId }: FormatPickerProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-[12px] font-medium text-[rgba(255,255,255,0.28)] uppercase tracking-widest">
+      <p className="text-[12px] font-medium text-[#ADA99F] uppercase tracking-widest">
         Choose Output Type
       </p>
 
@@ -121,22 +124,22 @@ export function FormatPicker({ ideaId }: FormatPickerProps) {
               onClick={() => handleClick(format)}
               disabled={isLocked}
               className={[
-                "group relative flex flex-col gap-2.5 p-4 rounded-xl border text-left transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50",
+                "group relative flex flex-col gap-2.5 p-4 rounded-xl border text-left transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/50",
                 isActive
-                  ? "border-[#7C3AED] bg-[rgba(124,58,237,0.1)] shadow-[0_0_24px_rgba(124,58,237,0.18)] cursor-pointer"
+                  ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.1)] shadow-[0_0_24px_rgba(26,26,26,0.18)] cursor-pointer"
                   : isLocked
-                    ? "border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] opacity-50 cursor-not-allowed"
-                    : "border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] hover:border-[rgba(124,58,237,0.4)] hover:bg-[rgba(124,58,237,0.06)] cursor-pointer",
+                    ? "border-[#E9E7E1] bg-[#F6F4EE] opacity-50 cursor-not-allowed"
+                    : "border-[#E5E3DE] bg-[#F4F2EC] hover:border-[rgba(26,26,26,0.4)] hover:bg-[rgba(26,26,26,0.06)] cursor-pointer",
               ].join(" ")}
             >
               {/* Status marker — checkmark when active, lock when locked */}
               {isActive && (
-                <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[#7C3AED] flex items-center justify-center">
+                <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[#1A1A1A] flex items-center justify-center">
                   <Check size={12} strokeWidth={3} className="text-white" />
                 </span>
               )}
               {isLocked && (
-                <span className="absolute top-3 right-3 text-[rgba(255,255,255,0.3)]">
+                <span className="absolute top-3 right-3 text-[#9CA3AF]">
                   <Lock size={13} strokeWidth={2} />
                 </span>
               )}
@@ -145,22 +148,22 @@ export function FormatPicker({ ideaId }: FormatPickerProps) {
                 className={[
                   "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
                   isActive
-                    ? "bg-[rgba(124,58,237,0.2)] border border-[rgba(124,58,237,0.4)]"
-                    : "bg-[rgba(124,58,237,0.1)] border border-[rgba(124,58,237,0.2)]",
+                    ? "bg-[rgba(26,26,26,0.2)] border border-[rgba(26,26,26,0.4)]"
+                    : "bg-[rgba(26,26,26,0.1)] border border-[rgba(26,26,26,0.2)]",
                 ].join(" ")}
               >
-                <Icon size={15} className="text-[#A78BFA]" strokeWidth={1.8} />
+                <Icon size={15} className="text-[#1A1A1A]" strokeWidth={1.8} />
               </div>
 
               <div className="flex flex-col gap-0.5">
-                <span className="text-[13px] font-semibold text-[rgba(255,255,255,0.82)]">
+                <span className="text-[13px] font-semibold text-[#1A1A1A]">
                   {format.label}
                 </span>
-                <span className="text-[12px] text-[rgba(255,255,255,0.35)] leading-[1.4]">
+                <span className="text-[12px] text-[#9CA3AF] leading-[1.4]">
                   {format.description}
                 </span>
                 {isLocked && (
-                  <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-[rgba(255,255,255,0.3)]">
+                  <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-[#9CA3AF]">
                     <Lock size={10} strokeWidth={2} />
                     Locked for this session
                   </span>
@@ -175,7 +178,7 @@ export function FormatPicker({ ideaId }: FormatPickerProps) {
       {activeFormat && (
         <button
           onClick={() => goToFormat(activeFormat)}
-          className="self-start mt-1 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-all"
+          className="self-start mt-1 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
         >
           Continue to {activeFormat.label} →
         </button>
@@ -183,12 +186,12 @@ export function FormatPicker({ ideaId }: FormatPickerProps) {
 
       {/* First-time lock-in confirmation */}
       <Dialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
-        <DialogContent className="bg-[#0D0D1A] border-[rgba(255,255,255,0.08)] text-[#F0F0FA]">
+        <DialogContent className="bg-[#FFFFFF] border-[#E5E3DE] text-[#0A0A0A]">
           <DialogHeader>
-            <DialogTitle className="text-[16px] font-semibold text-[rgba(255,255,255,0.92)]">
+            <DialogTitle className="text-[16px] font-semibold text-[#0A0A0A]">
               Lock in this format?
             </DialogTitle>
-            <DialogDescription className="text-[13px] text-[rgba(255,255,255,0.5)] leading-[1.55]">
+            <DialogDescription className="text-[13px] text-[#6B7280] leading-[1.55]">
               Once you choose Caption Only / Image + Caption / Caption + Slides,
               the other formats will be locked for this session. You can start a
               new session to try a different format.
@@ -197,13 +200,13 @@ export function FormatPicker({ ideaId }: FormatPickerProps) {
           <DialogFooter className="gap-2 sm:gap-2">
             <button
               onClick={() => setPending(null)}
-              className="px-4 py-2 rounded-xl text-[13px] font-medium text-[rgba(255,255,255,0.5)] hover:text-[rgba(255,255,255,0.8)] hover:bg-[rgba(255,255,255,0.05)] transition-colors"
+              className="px-4 py-2 rounded-xl text-[13px] font-medium text-[#6B7280] hover:text-[#1A1A1A] hover:bg-[#ECEAE4] transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleConfirm}
-              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-all"
+              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
             >
               Yes, lock it in →
             </button>

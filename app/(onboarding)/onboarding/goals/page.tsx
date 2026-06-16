@@ -66,8 +66,8 @@ export default function GoalsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-[#F0F0FA] mb-1">What are your content goals?</h1>
-      <p className="text-sm text-[rgba(255,255,255,0.45)] mb-8">
+      <h1 className="text-2xl font-semibold text-[#0A0A0A] mb-1">What are your content goals?</h1>
+      <p className="text-sm text-[#6B7280] mb-8">
         Select all that apply. Tap a selected goal to mark it as primary.
       </p>
 
@@ -81,34 +81,34 @@ export default function GoalsPage() {
               onClick={() => toggle(goal.id)}
               className={`flex items-start gap-4 px-5 py-4 rounded-xl border cursor-pointer transition-all ${
                 selected
-                  ? "border-[#7C3AED] bg-[rgba(124,58,237,0.08)]"
-                  : "border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] hover:border-[rgba(255,255,255,0.14)]"
+                  ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.08)]"
+                  : "border-[#E5E3DE] bg-[#F6F4EE] hover:border-[#DEDBD4]"
               }`}
             >
               <span className="text-xl mt-0.5 select-none">{goal.emoji}</span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className={`text-sm font-medium ${selected ? "text-[#F0F0FA]" : "text-[rgba(255,255,255,0.65)]"}`}>
+                  <p className={`text-sm font-medium ${selected ? "text-[#0A0A0A]" : "text-[#4B5563]"}`}>
                     {goal.label}
                   </p>
                   {isPrimary && (
-                    <span className="px-2 py-0.5 rounded-full bg-[rgba(124,58,237,0.2)] border border-[rgba(124,58,237,0.3)] text-[#A78BFA] text-[10px] font-medium leading-none py-1">
+                    <span className="px-2 py-0.5 rounded-full bg-[rgba(26,26,26,0.2)] border border-[rgba(26,26,26,0.3)] text-[#1A1A1A] text-[10px] font-medium leading-none py-1">
                       Primary
                     </span>
                   )}
                   {selected && !isPrimary && (
                     <button
                       onClick={(e) => makePrimary(goal.id, e)}
-                      className="text-[10px] text-[rgba(255,255,255,0.3)] hover:text-[rgba(167,139,250,0.7)] transition-colors"
+                      className="text-[10px] text-[#9CA3AF] hover:text-[rgba(26,26,26,0.7)] transition-colors"
                     >
                       Set primary
                     </button>
                   )}
                 </div>
-                <p className="text-xs text-[rgba(255,255,255,0.35)] mt-0.5">{goal.description}</p>
+                <p className="text-xs text-[#9CA3AF] mt-0.5">{goal.description}</p>
               </div>
               {selected && (
-                <div className="w-5 h-5 rounded-full bg-[#7C3AED] flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="w-5 h-5 rounded-full bg-[#1A1A1A] flex items-center justify-center flex-shrink-0 mt-0.5">
                   <Check size={11} className="text-white" />
                 </div>
               )}

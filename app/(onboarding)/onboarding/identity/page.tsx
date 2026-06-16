@@ -21,8 +21,8 @@ export default function IdentityPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-[#F0F0FA] mb-1">Which best describes you?</h1>
-      <p className="text-sm text-[rgba(255,255,255,0.45)] mb-8">
+      <h1 className="text-2xl font-semibold text-[#0A0A0A] mb-1">Which best describes you?</h1>
+      <p className="text-sm text-[#6B7280] mb-8">
         This helps us tailor your content strategy.
       </p>
 
@@ -33,8 +33,8 @@ export default function IdentityPage() {
             onClick={() => setRole(r.id)}
             className={`flex items-center gap-4 px-5 py-3.5 rounded-xl border text-left transition-all ${
               role === r.id
-                ? "border-[#7C3AED] bg-[rgba(124,58,237,0.1)] text-[#F0F0FA]"
-                : "border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] text-[rgba(255,255,255,0.65)] hover:border-[rgba(255,255,255,0.15)] hover:text-[#F0F0FA]"
+                ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.1)] text-[#0A0A0A]"
+                : "border-[#E5E3DE] bg-[#F6F4EE] text-[#4B5563] hover:border-[#DEDBD4] hover:text-[#0A0A0A]"
             }`}
           >
             <span className="text-lg">{r.emoji}</span>

@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { db } from "@/lib/db"
+import { validateContentTopic } from "@/lib/validateTopic"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 import type { Prisma } from "@prisma/client"
 
@@ -129,6 +130,16 @@ export async function POST(req: Request) {
     } catch (err) {
       return NextResponse.json(
         { error: err instanceof Error ? err.message : "Invalid request body" },
+        { status: 400 },
+      )
+    }
+
+    // Keep CarouseLabs to social-media content — block general-assistant misuse
+    // (code, homework, recipes, translation, etc.) across topic + angle + notes.
+    const topicCheck = validateContentTopic([topic, pov, guidelines].filter(Boolean).join(" "))
+    if (!topicCheck.valid) {
+      return NextResponse.json(
+        { error: topicCheck.error, invalidTopic: true },
         { status: 400 },
       )
     }

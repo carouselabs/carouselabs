@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { availableCredits, FREE_LIFETIME_POSTS } from "@/lib/credits"
 
 export async function GET() {
   const { userId } = await auth()
@@ -13,13 +14,25 @@ export async function GET() {
 
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
+  const sub = user.subscription
+  const plan = sub?.plan ?? "FREE"
+  const creditsRemaining = availableCredits({
+    plan,
+    creditsUsed: sub?.creditsUsed ?? 0,
+    creditsTotal: sub?.creditsTotal ?? 30,
+    extraCredits: sub?.extraCredits ?? 0,
+    extraCreditsExpiry: sub?.extraCreditsExpiry ?? null,
+  })
+
   return NextResponse.json({
     id: user.id,
     email: user.email,
     name: user.profile?.name ?? null,
-    plan: user.subscription?.plan ?? "FREE",
+    plan,
     postsToday: user.usage?.postsToday ?? 0,
     postsTotal: user.usage?.postsTotal ?? 0,
+    creditsRemaining,
+    freeLimit: FREE_LIFETIME_POSTS,
     onboardingDone: user.profile?.onboardingDone ?? false,
   })
 }

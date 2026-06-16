@@ -6,10 +6,10 @@ import { Bookmark, ArrowRight } from "lucide-react"
 import type { RawCategory } from "@/lib/ai/parsers/ideas"
 
 const CATEGORY_COLORS: Record<RawCategory, { color: string; bg: string }> = {
-  "Latest News": { color: "#93C5FD", bg: "rgba(147,197,253,0.10)" }, // blue
-  "Trending": { color: "#6EE7B7", bg: "rgba(110,231,183,0.10)" }, // green
-  "Industry": { color: "#C4B5FD", bg: "rgba(196,181,253,0.10)" }, // purple
-  "Random": { color: "#FCD34D", bg: "rgba(252,211,77,0.10)" }, // amber
+  "Latest News": { color: "#2563EB", bg: "rgba(147,197,253,0.10)" }, // blue
+  "Trending": { color: "#059669", bg: "rgba(110,231,183,0.10)" }, // green
+  "Industry": { color: "#1A1A1A", bg: "rgba(196,181,253,0.10)" }, // purple
+  "Random": { color: "#D97706", bg: "rgba(252,211,77,0.10)" }, // amber
 }
 
 export interface PinnedIdea {
@@ -40,7 +40,7 @@ export function PinnedCard({ idea, onRemove }: PinnedCardProps) {
   const cat = CATEGORY_COLORS[idea.category]
 
   return (
-    <div className="group relative flex flex-col gap-4 p-5 rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] hover:border-[rgba(124,58,237,0.35)] hover:bg-[rgba(124,58,237,0.04)] transition-all duration-150">
+    <div className="group relative flex flex-col gap-4 p-5 rounded-2xl border border-[#E5E3DE] bg-[#F4F2EC] hover:border-[rgba(26,26,26,0.35)] hover:bg-[rgba(26,26,26,0.04)] transition-all duration-150">
       {/* Top: category pill + pin marker */}
       <div className="flex items-start justify-between gap-3">
         <span
@@ -49,33 +49,33 @@ export function PinnedCard({ idea, onRemove }: PinnedCardProps) {
         >
           {idea.category}
         </span>
-        <Bookmark size={15} className="text-[#A78BFA] flex-shrink-0" fill="#A78BFA" strokeWidth={1.8} />
+        <Bookmark size={15} className="text-[#1A1A1A] flex-shrink-0" fill="#1A1A1A" strokeWidth={1.8} />
       </div>
 
       {/* Hook — the focal point */}
-      <h3 className="text-[17px] font-semibold text-[rgba(255,255,255,0.9)] leading-[1.4] tracking-[-0.2px]">
+      <h3 className="text-[17px] font-semibold text-[#0A0A0A] leading-[1.4] tracking-[-0.2px]">
         {idea.hook}
       </h3>
 
       {/* Divider */}
-      <div className="h-px bg-[rgba(255,255,255,0.05)] mt-auto" />
+      <div className="h-px bg-[#ECEAE4] mt-auto" />
 
       {/* Footer: pinned time + actions */}
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[11.5px] text-[rgba(255,255,255,0.35)]">
+        <span className="text-[11.5px] text-[#9CA3AF]">
           {pinnedAgo(idea.pinnedAt)}
         </span>
 
         <div className="flex items-center gap-2">
           <button
             onClick={() => onRemove(idea.id)}
-            className="px-3 py-1.5 rounded-lg text-[12px] font-medium text-[rgba(255,255,255,0.4)] hover:text-[rgba(255,255,255,0.75)] hover:bg-[rgba(255,255,255,0.05)] transition-colors"
+            className="px-3 py-1.5 rounded-lg text-[12px] font-medium text-[#9CA3AF] hover:text-[#374151] hover:bg-[#ECEAE4] transition-colors"
           >
             Remove
           </button>
           <button
             onClick={() => router.push(`/idea/${idea.id}`)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#7C3AED] hover:bg-[#6D28D9] text-[12px] font-semibold text-white shadow-[0_0_18px_rgba(124,58,237,0.2)] transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#1A1A1A] hover:bg-[#000000] text-[12px] font-semibold text-white shadow-[0_0_18px_rgba(26,26,26,0.2)] transition-colors"
           >
             Generate now
             <ArrowRight size={12} strokeWidth={2.4} />

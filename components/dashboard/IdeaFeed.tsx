@@ -24,21 +24,31 @@ export function IdeaFeed({ ideas, isLoadingMore, onLoadMore, onPin, onDismiss }:
   return (
     <div className="flex flex-col gap-3">
       <AnimatePresence mode="popLayout">
-        {visible.map((idea) => (
+        {visible.map((idea, i) => (
           <motion.div
             key={idea.id}
             layout
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.15 } }}
+            style={{ transformPerspective: 900 }}
+            initial={{ opacity: 0, y: -55, rotateX: -30, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95, y: 12, transition: { duration: 0.15 } }}
             transition={{
-              duration: 0.22,
-              ease: [0.25, 0.46, 0.45, 0.94],
-              // Stagger per batch: each idea's position within its 10-idea batch
-              delay: idea.batchPosition * 0.08,
+              type: "spring",
+              stiffness: 280,
+              damping: 22,
+              // Stagger per batch: each idea drops in a beat after the previous
+              delay: idea.batchPosition * 0.07,
             }}
           >
-            <IdeaCard idea={idea} onPin={onPin} onDismiss={onDismiss} />
+            {/* Inner wrapper does a gentle, perpetual bob (separate transform
+                context from the drop-in above, so they never fight) */}
+            <div
+              style={{
+                animation: `floatSoft ${3.4 + (i % 4) * 0.4}s ease-in-out infinite ${(i % 5) * 0.25}s`,
+              }}
+            >
+              <IdeaCard idea={idea} onPin={onPin} onDismiss={onDismiss} />
+            </div>
           </motion.div>
         ))}
       </AnimatePresence>
@@ -49,7 +59,7 @@ export function IdeaFeed({ ideas, isLoadingMore, onLoadMore, onPin, onDismiss }:
           {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="h-[88px] rounded-xl bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)] animate-pulse"
+              className="h-[88px] rounded-xl bg-[#F6F4EE] border border-[#F1EFE9] animate-pulse"
             />
           ))}
         </div>
@@ -59,11 +69,11 @@ export function IdeaFeed({ ideas, isLoadingMore, onLoadMore, onPin, onDismiss }:
       {!atCap && total > 0 && !isLoadingMore && (
         <button
           onClick={onLoadMore}
-          className="mt-2 flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-[rgba(255,255,255,0.07)] text-[13px] font-medium text-[rgba(255,255,255,0.45)] hover:border-[rgba(255,255,255,0.14)] hover:text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.02)] transition-all duration-150"
+          className="mt-2 flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-[#E9E7E1] text-[13px] font-medium text-[#6B7280] hover:border-[#DEDBD4] hover:text-[#374151] hover:bg-[#F6F4EE] transition-all duration-150"
         >
           <RefreshCw size={13} strokeWidth={2.2} />
           Load more ideas
-          <span className="text-[rgba(255,255,255,0.22)] text-[11px] tabular-nums">
+          <span className="text-[#ADA99F] text-[11px] tabular-nums">
             {total} / {SESSION_CAP}
           </span>
         </button>
@@ -71,7 +81,7 @@ export function IdeaFeed({ ideas, isLoadingMore, onLoadMore, onPin, onDismiss }:
 
       {/* Spinner while loading more (bottom of existing list) */}
       {isLoadingMore && (
-        <div className="flex items-center justify-center gap-2 py-2 text-[12px] text-[rgba(255,255,255,0.28)]">
+        <div className="flex items-center justify-center gap-2 py-2 text-[12px] text-[#ADA99F]">
           <Loader2 size={13} className="animate-spin" />
           Generating more ideas…
         </div>
@@ -80,10 +90,10 @@ export function IdeaFeed({ ideas, isLoadingMore, onLoadMore, onPin, onDismiss }:
       {/* Session cap message */}
       {atCap && !isLoadingMore && (
         <div className="mt-2 flex flex-col items-center gap-1 py-4 text-center">
-          <p className="text-[13px] text-[rgba(255,255,255,0.38)]">
+          <p className="text-[13px] text-[#9CA3AF]">
             You&apos;ve reached the {SESSION_CAP}-idea session limit.
           </p>
-          <p className="text-[12px] text-[rgba(255,255,255,0.22)]">
+          <p className="text-[12px] text-[#ADA99F]">
             Click &ldquo;New session&rdquo; in the top bar to start fresh.
           </p>
         </div>

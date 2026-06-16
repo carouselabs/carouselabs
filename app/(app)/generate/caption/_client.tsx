@@ -212,7 +212,7 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
       {/* Back */}
       <Link
         href={`/idea/${ideaId}`}
-        className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[rgba(255,255,255,0.32)] hover:text-[rgba(255,255,255,0.6)] transition-colors"
+        className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
       >
         <ArrowLeft size={13} strokeWidth={2.2} />
         Back to breakdown
@@ -220,14 +220,14 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
 
       {/* Idea hook */}
       <div className="flex flex-col gap-1.5">
-        <p className="text-[11px] font-medium text-[rgba(255,255,255,0.28)] uppercase tracking-widest">
+        <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
           Caption for
         </p>
-        <p className="text-[15px] font-medium text-[rgba(255,255,255,0.65)] leading-[1.4]">
+        <p className="text-[15px] font-medium text-[#4B5563] leading-[1.4]">
           {ideaHook}
         </p>
         {restored && (
-          <span className="mt-1 self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#A78BFA] bg-[rgba(124,58,237,0.1)] border border-[rgba(124,58,237,0.2)]">
+          <span className="mt-1 self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#1A1A1A] bg-[rgba(26,26,26,0.1)] border border-[rgba(26,26,26,0.2)]">
             <History size={11} strokeWidth={2.2} />
             Restored from last session
           </span>
@@ -255,7 +255,7 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
         disabled={isGenerating || atLimit}
         rows={2}
         placeholder="What should change? (e.g. make it shorter, add more stats, make it funnier...)"
-        className="w-full px-3.5 py-2.5 rounded-xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[13px] text-[rgba(255,255,255,0.75)] leading-[1.5] resize-none placeholder:text-[rgba(255,255,255,0.25)] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors disabled:opacity-50"
+        className="w-full px-3.5 py-2.5 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.5] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors disabled:opacity-50"
       />
 
       {/* Caption editor */}

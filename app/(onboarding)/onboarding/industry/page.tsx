@@ -63,14 +63,14 @@ export default function IndustryPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-[#F0F0FA] mb-1">What's your industry?</h1>
-      <p className="text-sm text-[rgba(255,255,255,0.45)] mb-8">
+      <h1 className="text-2xl font-semibold text-[#0A0A0A] mb-1">What's your industry?</h1>
+      <p className="text-sm text-[#6B7280] mb-8">
         We'll align your content with your space.
       </p>
 
       <div className="space-y-5">
         <div className="relative" ref={dropdownRef}>
-          <label className="block text-xs font-medium text-[rgba(255,255,255,0.45)] mb-2 uppercase tracking-wide">
+          <label className="block text-xs font-medium text-[#6B7280] mb-2 uppercase tracking-wide">
             Industry
           </label>
           <input
@@ -83,18 +83,18 @@ export default function IndustryPage() {
             }}
             onFocus={() => setOpen(true)}
             placeholder="Search your industry…"
-            className="w-full px-4 py-3 rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)] text-[#F0F0FA] placeholder-[rgba(255,255,255,0.22)] text-sm focus:outline-none focus:border-[#7C3AED] transition-colors"
+            className="w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors"
           />
           {open && filtered.length > 0 && (
-            <div className="absolute z-20 mt-1 w-full rounded-xl bg-[#0D0D1A] border border-[rgba(255,255,255,0.08)] shadow-2xl overflow-auto max-h-52">
+            <div className="absolute z-20 mt-1 w-full rounded-xl bg-[#FFFFFF] border border-[#E5E3DE] shadow-2xl overflow-auto max-h-52">
               {filtered.map((item) => (
                 <button
                   key={item}
                   onMouseDown={() => handleSelect(item)}
                   className={`w-full text-left px-4 py-3 text-sm transition-colors ${
                     industry === item
-                      ? "text-[#A78BFA] bg-[rgba(124,58,237,0.1)]"
-                      : "text-[rgba(255,255,255,0.75)] hover:bg-[rgba(255,255,255,0.04)] hover:text-[#F0F0FA]"
+                      ? "text-[#1A1A1A] bg-[rgba(26,26,26,0.1)]"
+                      : "text-[#374151] hover:bg-[#F1EFE9] hover:text-[#0A0A0A]"
                   }`}
                 >
                   {item}
@@ -105,16 +105,15 @@ export default function IndustryPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-[rgba(255,255,255,0.45)] mb-2 uppercase tracking-wide">
-            Niche or Specialization{" "}
-            <span className="text-[rgba(255,255,255,0.3)] normal-case font-normal">(optional)</span>
+          <label className="block text-xs font-medium text-[#6B7280] mb-2 uppercase tracking-wide">
+            Describe your business
           </label>
           <input
             type="text"
             value={niche}
             onChange={(e) => setNiche(e.target.value)}
-            placeholder="e.g. B2B SaaS growth, Seed-stage startups…"
-            className="w-full px-4 py-3 rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)] text-[#F0F0FA] placeholder-[rgba(255,255,255,0.22)] text-sm focus:outline-none focus:border-[#7C3AED] transition-colors"
+            placeholder="e.g. I help B2B SaaS founders grow with content"
+            className="w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors"
           />
         </div>
       </div>
@@ -122,7 +121,7 @@ export default function IndustryPage() {
       <StepNav
         backHref="/onboarding/identity"
         onContinue={() => router.push("/onboarding/topics")}
-        canContinue={!!industry}
+        canContinue={!!industry && !!niche.trim()}
       />
     </div>
   )

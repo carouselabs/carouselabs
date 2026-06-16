@@ -5,7 +5,13 @@ const isPublicRoute = createRouteMatcher([
   "/",
   "/sign-in(.*)",
   "/sign-up(.*)",
+  "/terms(.*)",
+  "/privacy(.*)",
+  "/refund(.*)",
+  "/contact(.*)",
+  "/api/contact(.*)",
   "/api/webhooks/clerk(.*)",
+  "/api/webhooks/razorpay(.*)",
 ])
 
 const handler = clerkMiddleware(

@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     default: "CarouseLabs",
     template: "%s | CarouseLabs",
   },
-  description: "AI-native LinkedIn content studio. Create carousels, captions, and posts in seconds.",
+  description: "AI-native social media content studio. Create carousels, captions, and posts for LinkedIn, Instagram, and Twitter/X in seconds.",
 };
 
 export default function RootLayout({

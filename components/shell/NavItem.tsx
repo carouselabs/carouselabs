@@ -14,22 +14,22 @@ export function NavItem({ href, label, icon: Icon, isActive }: NavItemProps) {
   return (
     <div className="relative">
       {isActive && (
-        <span className="absolute left-0 top-[5px] bottom-[5px] w-[2px] bg-[#7C3AED] rounded-r-full" />
+        <span className="absolute left-0 top-[6px] bottom-[6px] w-[3px] bg-[#1A1A1A] rounded-r-full" />
       )}
       <Link
         href={href}
-        className={`group flex items-center gap-[10px] px-3 py-[9px] rounded-lg text-[13px] tracking-[-0.1px] transition-colors ${
+        className={`group flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium tracking-[-0.1px] transition-colors ${
           isActive
-            ? "bg-[rgba(124,58,237,0.12)] text-[rgba(255,255,255,0.85)]"
-            : "text-[rgba(255,255,255,0.35)] hover:bg-[rgba(255,255,255,0.04)] hover:text-[rgba(255,255,255,0.6)]"
+            ? "bg-[#F1EFE9] text-[#0A0A0A]"
+            : "text-[#6B7280] hover:bg-[#F4F2EC] hover:text-[#0A0A0A]"
         }`}
       >
         <Icon
-          size={15}
+          size={16}
           className={
             isActive
-              ? "text-[#8B5CF6]"
-              : "text-[rgba(255,255,255,0.3)] group-hover:text-[rgba(255,255,255,0.5)]"
+              ? "text-[#1A1A1A]"
+              : "text-[#9CA3AF] group-hover:text-[#6B7280]"
           }
         />
         {label}

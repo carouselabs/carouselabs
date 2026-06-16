@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
+import { Sparkles, ArrowLeft } from "lucide-react"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 interface BreakdownViewProps {
@@ -13,7 +15,7 @@ function renderInline(text: string) {
   return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
-        <strong key={i} className="font-semibold text-[rgba(255,255,255,0.9)]">
+        <strong key={i} className="font-semibold text-[#0A0A0A]">
           {part.slice(2, -2)}
         </strong>
       )
@@ -26,6 +28,7 @@ export function BreakdownView({ ideaId, initialBreakdown }: BreakdownViewProps) 
   const [breakdown, setBreakdown] = useState<BreakdownOutline | null>(initialBreakdown)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [invalidTopic, setInvalidTopic] = useState<string | null>(null)
 
   useEffect(() => {
     if (initialBreakdown) return
@@ -35,10 +38,18 @@ export function BreakdownView({ ideaId, initialBreakdown }: BreakdownViewProps) 
   async function generate() {
     setIsGenerating(true)
     setError(null)
+    setInvalidTopic(null)
     try {
       const res = await fetch(`/api/ideas/${ideaId}/breakdown`, { method: "POST" })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? "Failed to generate breakdown")
+      if (!res.ok) {
+        // Off-topic / general-assistant misuse → show the friendly guard card.
+        if (data.invalidTopic) {
+          setInvalidTopic(data.error ?? "This isn't a social media content topic.")
+          return
+        }
+        throw new Error(data.error ?? "Failed to generate breakdown")
+      }
       setBreakdown(data.breakdown)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
@@ -47,16 +58,39 @@ export function BreakdownView({ ideaId, initialBreakdown }: BreakdownViewProps) 
     }
   }
 
+  if (invalidTopic) {
+    return (
+      <div className="max-w-md mx-auto flex flex-col items-center text-center gap-5 py-12">
+        <div className="w-14 h-14 rounded-2xl bg-[rgba(26,26,26,0.06)] border border-[rgba(26,26,26,0.16)] flex items-center justify-center">
+          <Sparkles size={24} className="text-[#1A1A1A]" strokeWidth={1.8} />
+        </div>
+        <div className="flex flex-col gap-2">
+          <h2 className="text-[18px] font-semibold text-[#0A0A0A]">
+            That&apos;s not a content topic
+          </h2>
+          <p className="text-[14px] text-[#6B7280] leading-[1.6]">{invalidTopic}</p>
+        </div>
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1A1A1A] hover:bg-black text-white text-[13px] font-semibold transition-colors shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
+        >
+          <ArrowLeft size={15} strokeWidth={2.2} />
+          Go back to dashboard
+        </Link>
+      </div>
+    )
+  }
+
   if (isGenerating) {
     return (
       <div className="flex flex-col gap-3">
-        <p className="text-[12px] text-[rgba(255,255,255,0.28)] mb-1">
+        <p className="text-[12px] text-[#ADA99F] mb-1">
           Generating breakdown…
         </p>
         {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
-            className="h-[72px] rounded-xl bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)] animate-pulse"
+            className="h-[72px] rounded-xl bg-[#F6F4EE] border border-[#F1EFE9] animate-pulse"
             style={{ animationDelay: `${i * 80}ms` }}
           />
         ))}
@@ -72,7 +106,7 @@ export function BreakdownView({ ideaId, initialBreakdown }: BreakdownViewProps) 
         </div>
         <button
           onClick={generate}
-          className="self-start text-[13px] font-medium text-[#A78BFA] hover:text-[#C4B5FD] transition-colors"
+          className="self-start text-[13px] font-medium text-[#1A1A1A] hover:text-[#1A1A1A] transition-colors"
         >
           Try again
         </button>
@@ -104,7 +138,7 @@ export function BreakdownView({ ideaId, initialBreakdown }: BreakdownViewProps) 
           return (
             <h3
               key={i}
-              className="text-[17px] font-bold text-[rgba(255,255,255,0.9)] mt-6 mb-2"
+              className="text-[17px] font-bold text-[#0A0A0A] mt-6 mb-2"
             >
               {text}
             </h3>
@@ -115,8 +149,8 @@ export function BreakdownView({ ideaId, initialBreakdown }: BreakdownViewProps) 
           const text = line.slice(2)
           return (
             <div key={i} className="flex gap-2 items-start">
-              <span className="text-[#7C3AED] mt-1 flex-shrink-0">•</span>
-              <p className="text-[15px] text-[rgba(255,255,255,0.72)] leading-[1.7]">
+              <span className="text-[#1A1A1A] mt-1 flex-shrink-0">•</span>
+              <p className="text-[15px] text-[#374151] leading-[1.7]">
                 {renderInline(text)}
               </p>
             </div>
@@ -124,7 +158,7 @@ export function BreakdownView({ ideaId, initialBreakdown }: BreakdownViewProps) 
         }
         // Regular paragraph
         return (
-          <p key={i} className="text-[15px] text-[rgba(255,255,255,0.72)] leading-[1.7]">
+          <p key={i} className="text-[15px] text-[#374151] leading-[1.7]">
             {renderInline(line)}
           </p>
         )

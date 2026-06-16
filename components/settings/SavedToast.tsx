@@ -23,8 +23,8 @@ export function SavedToast({ open, onClose, message = "Saved" }: SavedToastProps
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60]">
       <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#14141F] border border-[rgba(110,231,183,0.3)] shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
-        <Check size={14} className="text-[#6EE7B7]" strokeWidth={2.5} />
-        <span className="text-[13px] font-medium text-[rgba(255,255,255,0.9)]">{message}</span>
+        <Check size={14} className="text-[#059669]" strokeWidth={2.5} />
+        <span className="text-[13px] font-medium text-[#0A0A0A]">{message}</span>
       </div>
     </div>
   )

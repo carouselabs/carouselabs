@@ -99,8 +99,8 @@ export default function VoicePage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-[#F0F0FA] mb-1">What's your content voice?</h1>
-      <p className="text-sm text-[rgba(255,255,255,0.45)] mb-8">
+      <h1 className="text-2xl font-semibold text-[#0A0A0A] mb-1">What's your content voice?</h1>
+      <p className="text-sm text-[#6B7280] mb-8">
         Choose up to 2 tones that feel most like you.
       </p>
 
@@ -115,22 +115,22 @@ export default function VoicePage() {
               disabled={disabled}
               className={`w-full text-left px-5 py-4 rounded-xl border transition-all ${
                 selected
-                  ? "border-[#7C3AED] bg-[rgba(124,58,237,0.08)]"
+                  ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.08)]"
                   : disabled
-                  ? "border-[rgba(255,255,255,0.04)] bg-transparent opacity-35 cursor-not-allowed"
-                  : "border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] hover:border-[rgba(255,255,255,0.14)]"
+                  ? "border-[#F1EFE9] bg-transparent opacity-35 cursor-not-allowed"
+                  : "border-[#E5E3DE] bg-[#F6F4EE] hover:border-[#DEDBD4]"
               }`}
             >
               <div className="flex items-center justify-between mb-1">
-                <p className={`text-sm font-medium ${selected ? "text-[#F0F0FA]" : "text-[rgba(255,255,255,0.65)]"}`}>
+                <p className={`text-sm font-medium ${selected ? "text-[#0A0A0A]" : "text-[#4B5563]"}`}>
                   {tone.label}
                 </p>
                 {selected && (
-                  <span className="w-4 h-4 rounded-full bg-[#7C3AED] flex-shrink-0" />
+                  <span className="w-4 h-4 rounded-full bg-[#1A1A1A] flex-shrink-0" />
                 )}
               </div>
-              <p className="text-xs text-[rgba(255,255,255,0.35)] mb-2">{tone.description}</p>
-              <p className="text-xs text-[rgba(255,255,255,0.4)] italic font-light">{tone.preview}</p>
+              <p className="text-xs text-[#9CA3AF] mb-2">{tone.description}</p>
+              <p className="text-xs text-[#9CA3AF] italic font-light">{tone.preview}</p>
             </button>
           )
         })}

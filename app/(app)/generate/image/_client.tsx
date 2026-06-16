@@ -44,7 +44,6 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
 
   const [error, setError] = useState<string | null>(null)
   const [captionCopied, setCaptionCopied] = useState(false)
-  const [promptCopied, setPromptCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [saved, setSaved] = useState(false)
   const [restored, setRestored] = useState(false)
@@ -204,7 +203,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
 
   // Single-button flow: silently generate the image prompt, then immediately use
   // it to generate the image. Only the final image is shown. The prompt is still
-  // kept in state + localStorage so Copy Prompt and Regenerate Image keep working.
+  // kept in state + localStorage so Regenerate Image keeps working.
   async function generateImageFlow() {
     setIsGeneratingImage(true)
     setGameStarted(true) // keep the game visible from now on
@@ -357,13 +356,6 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
     setTimeout(() => setCaptionCopied(false), 2000)
   }
 
-  async function handleCopyPrompt() {
-    if (!imagePrompt) return
-    await navigator.clipboard.writeText(imagePrompt)
-    setPromptCopied(true)
-    setTimeout(() => setPromptCopied(false), 2000)
-  }
-
   // Route through the same-origin proxy so R2's CORS policy can't block the
   // fetch, then download the bytes as carouselabs-image-[ideaId].png. If the
   // proxy fetch fails, fall back to opening the original image in a new tab.
@@ -411,19 +403,19 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
       {/* Left: Caption */}
       <div className="flex flex-col gap-3">
-        <p className="text-[11px] font-medium text-[rgba(255,255,255,0.28)] uppercase tracking-widest">
+        <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
           Caption
         </p>
         <textarea
           value={caption}
           onChange={(e) => handleCaptionChange(e.target.value)}
           rows={20}
-          className="w-full px-4 py-3 rounded-xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[13px] text-[rgba(255,255,255,0.75)] leading-[1.65] resize-none focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
+          className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.65] resize-none focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors"
         />
         <div className="flex items-center gap-2">
           <button
             onClick={handleCopyCaption}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.06)] text-[12px] font-medium text-[rgba(255,255,255,0.52)] transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] hover:bg-[#E9E7E1] text-[12px] font-medium text-[#6B7280] transition-colors"
           >
             {captionCopied ? <Check size={12} /> : <Copy size={12} />}
             {captionCopied ? "Copied!" : "Copy Caption"}
@@ -431,7 +423,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
           {postId && (
             <button
               onClick={handleSaveDraft}
-              className="px-3.5 py-2 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.06)] text-[12px] font-medium text-[rgba(255,255,255,0.52)] transition-colors"
+              className="px-3.5 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] hover:bg-[#E9E7E1] text-[12px] font-medium text-[#6B7280] transition-colors"
             >
               {saved ? "Saved!" : "Save Draft"}
             </button>
@@ -452,7 +444,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
               <button
                 onClick={handleDownloadImage}
                 disabled={downloading}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-colors disabled:opacity-50"
               >
                 {downloading ? (
                   <Loader2 size={13} className="animate-spin" strokeWidth={2.2} />
@@ -464,17 +456,10 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
               <button
                 onClick={handleRegenerateImage}
                 disabled={atLimit}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[rgba(124,58,237,0.3)] bg-[rgba(124,58,237,0.08)] hover:bg-[rgba(124,58,237,0.14)] text-[12px] font-medium text-[#C4B5FD] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[rgba(26,26,26,0.3)] bg-[rgba(26,26,26,0.08)] hover:bg-[rgba(26,26,26,0.14)] text-[12px] font-medium text-[#1A1A1A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <RefreshCw size={13} strokeWidth={2.2} />
                 Regenerate Image
-              </button>
-              <button
-                onClick={handleCopyPrompt}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.06)] text-[12px] font-medium text-[rgba(255,255,255,0.52)] transition-colors"
-              >
-                {promptCopied ? <Check size={13} strokeWidth={2.5} /> : <Copy size={13} strokeWidth={2} />}
-                {promptCopied ? "Copied!" : "Copy Prompt"}
               </button>
             </div>
           </div>
@@ -483,15 +468,15 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
         {isGeneratingImage && (
           <div
             className={[
-              "flex flex-col items-center justify-center gap-4 rounded-2xl bg-[rgba(124,58,237,0.04)] border border-[rgba(124,58,237,0.12)]",
+              "flex flex-col items-center justify-center gap-4 rounded-2xl bg-[rgba(26,26,26,0.04)] border border-[rgba(26,26,26,0.12)]",
               size === "1:1" ? "aspect-square" : "aspect-[4/5]",
             ].join(" ")}
           >
-            <div className="h-10 w-10 rounded-full border-2 border-[rgba(124,58,237,0.25)] border-t-[#7C3AED] animate-spin" />
-            <p className="text-[13px] font-medium text-[#C4B5FD]">
+            <div className="h-10 w-10 rounded-full border-2 border-[rgba(26,26,26,0.25)] border-t-[#1A1A1A] animate-spin" />
+            <p className="text-[13px] font-medium text-[#1A1A1A]">
               Generating your image…
             </p>
-            <p className="text-[11px] text-[rgba(255,255,255,0.32)]">(this can take up to a minute)</p>
+            <p className="text-[11px] text-[#9CA3AF]">(this can take up to a minute)</p>
           </div>
         )}
 
@@ -499,7 +484,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
         {!imageUrl && !isGeneratingImage && (
           <button
             onClick={() => void generateImageFlow().catch(() => {})}
-            className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-all"
+            className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
           >
             <Sparkles size={14} strokeWidth={2} />
             Generate Image
@@ -513,16 +498,16 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
     <div className="max-w-4xl mx-auto flex flex-col gap-8">
       <Link
         href={`/idea/${ideaId}`}
-        className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[rgba(255,255,255,0.32)] hover:text-[rgba(255,255,255,0.6)] transition-colors"
+        className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
       >
         <ArrowLeft size={13} strokeWidth={2.2} />
         Back to breakdown
       </Link>
 
-      <p className="text-[13px] text-[rgba(255,255,255,0.38)] leading-[1.5] max-w-2xl">{ideaHook}</p>
+      <p className="text-[13px] text-[#9CA3AF] leading-[1.5] max-w-2xl">{ideaHook}</p>
 
       {restored && (
-        <span className="self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#A78BFA] bg-[rgba(124,58,237,0.1)] border border-[rgba(124,58,237,0.2)]">
+        <span className="self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#1A1A1A] bg-[rgba(26,26,26,0.1)] border border-[rgba(26,26,26,0.2)]">
           <History size={11} strokeWidth={2.2} />
           Restored from last session
         </span>
@@ -531,14 +516,14 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
       {/* ── STEP 1: Caption Generation ── */}
       {step === 1 && (
         <div className="flex flex-col gap-6 max-w-2xl">
-          <h1 className="text-[22px] font-bold text-[rgba(255,255,255,0.9)]">Your Caption</h1>
+          <h1 className="text-[22px] font-bold text-[#0A0A0A]">Your Caption</h1>
 
           {isStreamingCaption && !caption && (
             <div className="flex flex-col gap-2.5">
               {SKELETON_WIDTHS.map((w, i) => (
                 <div
                   key={i}
-                  className="h-3.5 rounded-full bg-[rgba(255,255,255,0.05)] animate-pulse"
+                  className="h-3.5 rounded-full bg-[#ECEAE4] animate-pulse"
                   style={{ width: w }}
                 />
               ))}
@@ -552,9 +537,9 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
                   value={caption}
                   onChange={(e) => handleCaptionChange(e.target.value)}
                   rows={16}
-                  className="w-full px-4 py-3 rounded-xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[13px] text-[rgba(255,255,255,0.75)] leading-[1.65] resize-none focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
+                  className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.65] resize-none focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors"
                 />
-                <p className="text-[11px] text-[rgba(255,255,255,0.24)] text-right tabular-nums">
+                <p className="text-[11px] text-[#ADA99F] text-right tabular-nums">
                   {caption.length} chars
                 </p>
               </div>
@@ -565,12 +550,12 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
                   disabled={isStreamingCaption || atLimit}
                   rows={2}
                   placeholder="What should change? (e.g. make it shorter, add more stats, make it funnier...)"
-                  className="flex-1 px-3.5 py-2.5 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[13px] text-[rgba(255,255,255,0.75)] leading-[1.5] resize-none placeholder:text-[rgba(255,255,255,0.25)] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors disabled:opacity-50"
+                  className="flex-1 px-3.5 py-2.5 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.5] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors disabled:opacity-50"
                 />
                 <button
                   onClick={handleRegenerateCaption}
                   disabled={isStreamingCaption || atLimit}
-                  className="flex-shrink-0 px-3.5 py-2 rounded-lg bg-[rgba(124,58,237,0.1)] hover:bg-[rgba(124,58,237,0.18)] border border-[rgba(124,58,237,0.2)] text-[12px] font-medium text-[#A78BFA] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex-shrink-0 px-3.5 py-2 rounded-lg bg-[rgba(26,26,26,0.1)] hover:bg-[rgba(26,26,26,0.18)] border border-[rgba(26,26,26,0.2)] text-[12px] font-medium text-[#1A1A1A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Regenerate caption
                 </button>
@@ -590,8 +575,8 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
             className={[
               "self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
               captionReady
-                ? "bg-[#7C3AED] hover:bg-[#6D28D9] cursor-pointer shadow-[0_0_24px_rgba(124,58,237,0.22)]"
-                : "bg-[rgba(124,58,237,0.3)] cursor-not-allowed opacity-50",
+                ? "bg-[#1A1A1A] hover:bg-[#000000] cursor-pointer shadow-[0_0_24px_rgba(26,26,26,0.22)]"
+                : "bg-[rgba(26,26,26,0.3)] cursor-not-allowed opacity-50",
             ].join(" ")}
           >
             Continue to Image →
@@ -602,7 +587,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
       {/* ── STEP 2: Choose Ratio ── */}
       {step === 2 && (
         <div className="flex flex-col gap-6 max-w-2xl">
-          <h1 className="text-[22px] font-bold text-[rgba(255,255,255,0.9)]">Choose your image format</h1>
+          <h1 className="text-[22px] font-bold text-[#0A0A0A]">Choose your image format</h1>
 
           <div className="grid grid-cols-2 gap-4">
             <button
@@ -610,28 +595,28 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
               className={[
                 "group flex flex-col items-center gap-5 p-6 rounded-2xl border transition-all duration-150 outline-none cursor-pointer",
                 size === "4:5"
-                  ? "border-[#7C3AED] bg-[rgba(124,58,237,0.1)] shadow-[0_0_28px_rgba(124,58,237,0.18)]"
-                  : "border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] hover:border-[rgba(124,58,237,0.3)] hover:bg-[rgba(124,58,237,0.05)]",
+                  ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.1)] shadow-[0_0_28px_rgba(26,26,26,0.18)]"
+                  : "border-[#E5E3DE] bg-[#F4F2EC] hover:border-[rgba(26,26,26,0.3)] hover:bg-[rgba(26,26,26,0.05)]",
               ].join(" ")}
             >
               <div
                 className={[
                   "w-10 aspect-[4/5] rounded-lg transition-colors",
                   size === "4:5"
-                    ? "bg-[rgba(124,58,237,0.35)] border border-[rgba(124,58,237,0.6)]"
-                    : "bg-[rgba(255,255,255,0.08)] border border-[rgba(255,255,255,0.12)] group-hover:bg-[rgba(124,58,237,0.15)] group-hover:border-[rgba(124,58,237,0.3)]",
+                    ? "bg-[rgba(26,26,26,0.35)] border border-[rgba(26,26,26,0.6)]"
+                    : "bg-[#E5E3DE] border border-[#E5E3DE] group-hover:bg-[rgba(26,26,26,0.15)] group-hover:border-[rgba(26,26,26,0.3)]",
                 ].join(" ")}
               />
               <div className="flex flex-col gap-1 text-center">
                 <span
                   className={[
                     "text-[14px] font-semibold transition-colors",
-                    size === "4:5" ? "text-[#C4B5FD]" : "text-[rgba(255,255,255,0.72)]",
+                    size === "4:5" ? "text-[#1A1A1A]" : "text-[#374151]",
                   ].join(" ")}
                 >
                   4:5 Portrait
                 </span>
-                <span className="text-[12px] text-[rgba(255,255,255,0.32)]">Best for LinkedIn feed</span>
+                <span className="text-[12px] text-[#9CA3AF]">Best for LinkedIn feed</span>
               </div>
             </button>
 
@@ -640,28 +625,28 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
               className={[
                 "group flex flex-col items-center gap-5 p-6 rounded-2xl border transition-all duration-150 outline-none cursor-pointer",
                 size === "1:1"
-                  ? "border-[#7C3AED] bg-[rgba(124,58,237,0.1)] shadow-[0_0_28px_rgba(124,58,237,0.18)]"
-                  : "border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] hover:border-[rgba(124,58,237,0.3)] hover:bg-[rgba(124,58,237,0.05)]",
+                  ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.1)] shadow-[0_0_28px_rgba(26,26,26,0.18)]"
+                  : "border-[#E5E3DE] bg-[#F4F2EC] hover:border-[rgba(26,26,26,0.3)] hover:bg-[rgba(26,26,26,0.05)]",
               ].join(" ")}
             >
               <div
                 className={[
                   "w-12 aspect-square rounded-lg transition-colors",
                   size === "1:1"
-                    ? "bg-[rgba(124,58,237,0.35)] border border-[rgba(124,58,237,0.6)]"
-                    : "bg-[rgba(255,255,255,0.08)] border border-[rgba(255,255,255,0.12)] group-hover:bg-[rgba(124,58,237,0.15)] group-hover:border-[rgba(124,58,237,0.3)]",
+                    ? "bg-[rgba(26,26,26,0.35)] border border-[rgba(26,26,26,0.6)]"
+                    : "bg-[#E5E3DE] border border-[#E5E3DE] group-hover:bg-[rgba(26,26,26,0.15)] group-hover:border-[rgba(26,26,26,0.3)]",
                 ].join(" ")}
               />
               <div className="flex flex-col gap-1 text-center">
                 <span
                   className={[
                     "text-[14px] font-semibold transition-colors",
-                    size === "1:1" ? "text-[#C4B5FD]" : "text-[rgba(255,255,255,0.72)]",
+                    size === "1:1" ? "text-[#1A1A1A]" : "text-[#374151]",
                   ].join(" ")}
                 >
                   1:1 Square
                 </span>
-                <span className="text-[12px] text-[rgba(255,255,255,0.32)]">Classic format</span>
+                <span className="text-[12px] text-[#9CA3AF]">Classic format</span>
               </div>
             </button>
           </div>
@@ -669,7 +654,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setStep(1)}
-              className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-[rgba(255,255,255,0.4)] hover:text-[rgba(255,255,255,0.7)] transition-colors"
+              className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-[#9CA3AF] hover:text-[#374151] transition-colors"
             >
               ← Back
             </button>
@@ -679,8 +664,8 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
               className={[
                 "inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
                 size
-                  ? "bg-[#7C3AED] hover:bg-[#6D28D9] cursor-pointer shadow-[0_0_24px_rgba(124,58,237,0.22)]"
-                  : "bg-[rgba(124,58,237,0.3)] cursor-not-allowed opacity-50",
+                  ? "bg-[#1A1A1A] hover:bg-[#000000] cursor-pointer shadow-[0_0_24px_rgba(26,26,26,0.22)]"
+                  : "bg-[rgba(26,26,26,0.3)] cursor-not-allowed opacity-50",
               ].join(" ")}
             >
               Continue →
@@ -693,10 +678,10 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
       {step === 3 && (
         <div className="flex flex-col gap-6 max-w-2xl">
           <div className="flex flex-col gap-1.5">
-            <h1 className="text-[22px] font-bold text-[rgba(255,255,255,0.9)]">
+            <h1 className="text-[22px] font-bold text-[#0A0A0A]">
               Upload a style reference (optional)
             </h1>
-            <p className="text-[13px] text-[rgba(255,255,255,0.38)]">
+            <p className="text-[13px] text-[#9CA3AF]">
               We&apos;ll match the style — not copy the image
             </p>
           </div>
@@ -713,7 +698,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
           <div className="flex items-center gap-3 flex-wrap">
             <button
               onClick={() => setStep(2)}
-              className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-[rgba(255,255,255,0.4)] hover:text-[rgba(255,255,255,0.7)] transition-colors"
+              className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-[#9CA3AF] hover:text-[#374151] transition-colors"
             >
               ← Back
             </button>
@@ -722,14 +707,14 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
                 setReferenceImage(null)
                 setStep(4)
               }}
-              className="px-4 py-2.5 rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.07)] text-[13px] font-medium text-[rgba(255,255,255,0.6)] transition-colors"
+              className="px-4 py-2.5 rounded-xl border border-[#E5E3DE] bg-[#F1EFE9] hover:bg-[#E9E7E1] text-[13px] font-medium text-[#4B5563] transition-colors"
             >
               Skip, generate without reference
             </button>
             {referenceImage && (
               <button
                 onClick={() => setStep(4)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.22)] transition-all"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
               >
                 Continue with reference →
               </button>
@@ -743,7 +728,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
         <div className="flex flex-col gap-6">
           <button
             onClick={() => setStep(3)}
-            className="self-start text-[12px] text-[rgba(255,255,255,0.32)] hover:text-[rgba(255,255,255,0.6)] transition-colors"
+            className="self-start text-[12px] text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
           >
             ← Back
           </button>

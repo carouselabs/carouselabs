@@ -27,9 +27,9 @@ export function RegenerationLimit({
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] pointer-events-none">
-      <div className="pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl bg-[#14141F] border border-[rgba(255,255,255,0.12)] shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
-        <AlertCircle size={15} className="text-[#A78BFA] flex-shrink-0" strokeWidth={2} />
-        <span className="text-[13px] font-medium text-[rgba(255,255,255,0.9)] whitespace-nowrap">
+      <div className="pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl bg-[#14141F] border border-[#E5E3DE] shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
+        <AlertCircle size={15} className="text-[#1A1A1A] flex-shrink-0" strokeWidth={2} />
+        <span className="text-[13px] font-medium text-[#0A0A0A] whitespace-nowrap">
           {message}
         </span>
       </div>

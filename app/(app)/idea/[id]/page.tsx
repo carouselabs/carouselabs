@@ -10,10 +10,10 @@ import type { BreakdownOutline } from "@/lib/types/breakdown"
 import type { RawCategory } from "@/lib/ai/parsers/ideas"
 
 const CATEGORY_COLORS: Record<RawCategory, { color: string; bg: string }> = {
-  "Latest News": { color: "#93C5FD", bg: "rgba(147,197,253,0.10)" },
-  "Trending": { color: "#6EE7B7", bg: "rgba(110,231,183,0.10)" },
-  "Industry": { color: "#C4B5FD", bg: "rgba(196,181,253,0.10)" },
-  "Random": { color: "#FCD34D", bg: "rgba(252,211,77,0.10)" },
+  "Latest News": { color: "#2563EB", bg: "rgba(147,197,253,0.10)" },
+  "Trending": { color: "#059669", bg: "rgba(110,231,183,0.10)" },
+  "Industry": { color: "#1A1A1A", bg: "rgba(196,181,253,0.10)" },
+  "Random": { color: "#D97706", bg: "rgba(252,211,77,0.10)" },
 }
 
 export default async function IdeaPage({
@@ -58,22 +58,22 @@ export default async function IdeaPage({
         >
           {rawCategory}
         </span>
-        <h1 className="text-[26px] font-bold text-[rgba(255,255,255,0.92)] leading-[1.3] tracking-[-0.01em]">
+        <h1 className="text-[26px] font-bold text-[#0A0A0A] leading-[1.3] tracking-[-0.01em]">
           {idea.hook}
         </h1>
-        <p className="text-[12px] text-[rgba(255,255,255,0.28)]">
+        <p className="text-[12px] text-[#ADA99F]">
           Created {new Date(idea.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
         </p>
       </div>
 
       {/* Divider */}
-      <div className="h-px bg-[rgba(255,255,255,0.05)]" />
+      <div className="h-px bg-[#ECEAE4]" />
 
       {/* Breakdown — client component handles auto-generation */}
       <BreakdownView ideaId={id} initialBreakdown={cachedBreakdown} />
 
       {/* Divider */}
-      <div className="h-px bg-[rgba(255,255,255,0.05)]" />
+      <div className="h-px bg-[#ECEAE4]" />
 
       {/* Format picker */}
       <FormatPicker ideaId={id} plan={plan} />

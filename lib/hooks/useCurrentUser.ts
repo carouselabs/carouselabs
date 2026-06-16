@@ -9,6 +9,8 @@ export interface CurrentUser {
   plan: "FREE" | "PRO"
   postsToday: number
   postsTotal: number
+  creditsRemaining: number
+  freeLimit: number
   onboardingDone: boolean
 }
 

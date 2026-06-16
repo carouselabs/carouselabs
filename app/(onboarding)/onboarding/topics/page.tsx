@@ -59,19 +59,19 @@ export default function TopicsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-[#F0F0FA] mb-1">What do you post about?</h1>
-      <p className="text-sm text-[rgba(255,255,255,0.45)] mb-8">
+      <h1 className="text-2xl font-semibold text-[#0A0A0A] mb-1">What do you post about?</h1>
+      <p className="text-sm text-[#6B7280] mb-8">
         Type your own topics or pick {MIN}+ from the suggestions below.
       </p>
 
       <div
-        className="min-h-[112px] p-4 rounded-xl bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.08)] flex flex-wrap gap-2 cursor-text focus-within:border-[#7C3AED] transition-colors mb-2"
+        className="min-h-[112px] p-4 rounded-xl bg-[#F6F4EE] border border-[#E5E3DE] flex flex-wrap gap-2 cursor-text focus-within:border-[#1A1A1A] transition-colors mb-2"
         onClick={() => document.getElementById("tag-input")?.focus()}
       >
         {topics.map((tag) => (
           <span
             key={tag}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[rgba(124,58,237,0.16)] border border-[rgba(124,58,237,0.25)] text-[#A78BFA] text-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[rgba(26,26,26,0.16)] border border-[rgba(26,26,26,0.25)] text-[#1A1A1A] text-sm"
           >
             {tag}
             <button
@@ -79,7 +79,7 @@ export default function TopicsPage() {
                 e.stopPropagation()
                 removeTopic(tag)
               }}
-              className="text-[rgba(167,139,250,0.55)] hover:text-[#A78BFA] transition-colors"
+              className="text-[rgba(26,26,26,0.55)] hover:text-[#1A1A1A] transition-colors"
             >
               <X size={11} />
             </button>
@@ -92,17 +92,17 @@ export default function TopicsPage() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKey}
             placeholder={topics.length === 0 ? "Type a topic, press Enter…" : ""}
-            className="flex-1 min-w-[160px] bg-transparent text-[#F0F0FA] text-sm placeholder-[rgba(255,255,255,0.2)] outline-none"
+            className="flex-1 min-w-[160px] bg-transparent text-[#0A0A0A] text-sm placeholder-[#C4C0B6] outline-none"
           />
         )}
       </div>
 
-      <p className="text-xs text-[rgba(255,255,255,0.28)] mb-7">
+      <p className="text-xs text-[#ADA99F] mb-7">
         {topics.length}/{MAX} · type 1 custom topic or pick {MIN}+ from below
       </p>
 
       <div>
-        <p className="text-xs text-[rgba(255,255,255,0.35)] mb-3 uppercase tracking-wide font-medium">
+        <p className="text-xs text-[#9CA3AF] mb-3 uppercase tracking-wide font-medium">
           Suggestions
         </p>
         <div className="flex flex-wrap gap-2">
@@ -111,7 +111,7 @@ export default function TopicsPage() {
               key={s}
               onClick={() => addTopic(s, false)}
               disabled={topics.length >= MAX}
-              className="px-3 py-1.5 rounded-full border border-[rgba(255,255,255,0.08)] text-sm text-[rgba(255,255,255,0.5)] hover:border-[rgba(255,255,255,0.18)] hover:text-[rgba(255,255,255,0.8)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
+              className="px-3 py-1.5 rounded-full border border-[#E5E3DE] text-sm text-[#6B7280] hover:border-[#D6D3CC] hover:text-[#1A1A1A] disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
             >
               + {s}
             </button>

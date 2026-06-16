@@ -38,57 +38,57 @@
   --radius-2xl: calc(var(--radius) * 1.8);
 }
 
-/* ── CarouseLabs design tokens — always dark ────────────────────── */
+/* ── CarouseLabs design tokens — cream + charcoal ───────────────── */
 :root {
-  --background:          #080810;
-  --foreground:          #F0F0FA;
-  --card:                rgba(255, 255, 255, 0.03);
-  --card-foreground:     #F0F0FA;
-  --popover:             #0D0D1A;
-  --popover-foreground:  #F0F0FA;
-  --primary:             #7C3AED;
-  --primary-foreground:  #F0F0FA;
-  --secondary:           rgba(255, 255, 255, 0.06);
-  --secondary-foreground:#F0F0FA;
-  --muted:               rgba(255, 255, 255, 0.06);
-  --muted-foreground:    rgba(255, 255, 255, 0.5);
-  --accent:              #7C3AED;
-  --accent-foreground:   #F0F0FA;
-  --accent-light:        #A78BFA;
+  --background:          #F9F7F2;
+  --foreground:          #0A0A0A;
+  --card:                #FFFFFF;
+  --card-foreground:     #0A0A0A;
+  --popover:             #FFFFFF;
+  --popover-foreground:  #0A0A0A;
+  --primary:             #1A1A1A;
+  --primary-foreground:  #FFFFFF;
+  --secondary:           #ECEAE4;
+  --secondary-foreground:#0A0A0A;
+  --muted:               #ECEAE4;
+  --muted-foreground:    #6B7280;
+  --accent:              #F1EFE9;
+  --accent-foreground:   #0A0A0A;
+  --accent-light:        #6B7280;
   --destructive:         #EF4444;
-  --border:              rgba(255, 255, 255, 0.08);
-  --input:               rgba(255, 255, 255, 0.08);
-  --ring:                #7C3AED;
-  --sidebar:             #0D0D1A;
-  --sidebar-foreground:  #F0F0FA;
-  --success:             #10B981;
-  --text-primary:        #F0F0FA;
-  --text-secondary:      rgba(255, 255, 255, 0.5);
+  --border:              #E5E3DE;
+  --input:               #E5E3DE;
+  --ring:                #1A1A1A;
+  --sidebar:             #FFFFFF;
+  --sidebar-foreground:  #0A0A0A;
+  --success:             #059669;
+  --text-primary:        #0A0A0A;
+  --text-secondary:      #6B7280;
   --radius:              0.75rem;
 }
 
-/* Mirror dark tokens so shadcn's .dark class also matches */
+/* Mirror tokens so shadcn's .dark class (set on <html>) also matches */
 .dark {
-  --background:          #080810;
-  --foreground:          #F0F0FA;
-  --card:                rgba(255, 255, 255, 0.03);
-  --card-foreground:     #F0F0FA;
-  --popover:             #0D0D1A;
-  --popover-foreground:  #F0F0FA;
-  --primary:             #7C3AED;
-  --primary-foreground:  #F0F0FA;
-  --secondary:           rgba(255, 255, 255, 0.06);
-  --secondary-foreground:#F0F0FA;
-  --muted:               rgba(255, 255, 255, 0.06);
-  --muted-foreground:    rgba(255, 255, 255, 0.5);
-  --accent:              #7C3AED;
-  --accent-foreground:   #F0F0FA;
+  --background:          #F9F7F2;
+  --foreground:          #0A0A0A;
+  --card:                #FFFFFF;
+  --card-foreground:     #0A0A0A;
+  --popover:             #FFFFFF;
+  --popover-foreground:  #0A0A0A;
+  --primary:             #1A1A1A;
+  --primary-foreground:  #FFFFFF;
+  --secondary:           #ECEAE4;
+  --secondary-foreground:#0A0A0A;
+  --muted:               #ECEAE4;
+  --muted-foreground:    #6B7280;
+  --accent:              #F1EFE9;
+  --accent-foreground:   #0A0A0A;
   --destructive:         #EF4444;
-  --border:              rgba(255, 255, 255, 0.08);
-  --input:               rgba(255, 255, 255, 0.08);
-  --ring:                #7C3AED;
-  --sidebar:             #0D0D1A;
-  --sidebar-foreground:  #F0F0FA;
+  --border:              #E5E3DE;
+  --input:               #E5E3DE;
+  --ring:                #1A1A1A;
+  --sidebar:             #FFFFFF;
+  --sidebar-foreground:  #0A0A0A;
 }
 
 @layer base {
@@ -104,16 +104,16 @@
   }
 
   body {
-    background-color: #080810;
-    color: #F0F0FA;
+    background-color: #F9F7F2;
+    color: #0A0A0A;
     min-height: 100svh;
   }
 
-  /* Dark scrollbar */
+  /* Light scrollbar */
   ::-webkit-scrollbar        { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track  { background: #080810; }
-  ::-webkit-scrollbar-thumb  { background: rgba(255,255,255,0.12); border-radius: 9999px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+  ::-webkit-scrollbar-track  { background: #F9F7F2; }
+  ::-webkit-scrollbar-thumb  { background: rgba(0,0,0,0.18); border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.3); }
 }
 
 @layer utilities {
@@ -139,4 +139,24 @@
   .glow-accent {
     box-shadow: 0 0 24px rgba(124, 58, 237, 0.35);
   }
+
+  /* Hide scrollbar while keeping scroll behavior */
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { width: 0; height: 0; display: none; }
+}
+
+/* Floating hero elements */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%      { transform: translateY(-10px); }
+}
+
+/* Gentle continuous bob for idea cards */
+@keyframes floatSoft {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*="float"] { animation: none !important; }
 }

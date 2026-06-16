@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useCallback, useEffect } from "react"
+import { useState, useRef, useCallback } from "react"
 import { Upload, X } from "lucide-react"
 
 interface ReferenceUploaderProps {
@@ -13,10 +13,6 @@ export function ReferenceUploader({ value, onChange, onClear }: ReferenceUploade
   const [isDragging, setIsDragging] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (!value) setPreviewUrl(null)
-  }, [value])
 
   const handleFile = useCallback(
     (file: File) => {
@@ -51,11 +47,11 @@ export function ReferenceUploader({ value, onChange, onClear }: ReferenceUploade
   if (value && previewUrl) {
     return (
       <div className="flex flex-col gap-2">
-        <p className="text-[11px] font-medium text-[rgba(255,255,255,0.28)] uppercase tracking-widest">
+        <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
           Reference Style
         </p>
         <div className="flex items-start gap-3">
-          <div className="relative w-24 h-24 rounded-xl overflow-hidden border border-[rgba(255,255,255,0.08)] flex-shrink-0">
+          <div className="relative w-24 h-24 rounded-xl overflow-hidden border border-[#E5E3DE] flex-shrink-0">
             <img src={previewUrl} alt="Reference" className="w-full h-full object-cover" />
             <button
               onClick={onClear}
@@ -64,7 +60,7 @@ export function ReferenceUploader({ value, onChange, onClear }: ReferenceUploade
               <X size={10} className="text-white" strokeWidth={2.5} />
             </button>
           </div>
-          <p className="text-[12px] text-[rgba(255,255,255,0.32)] leading-[1.55] mt-1">
+          <p className="text-[12px] text-[#9CA3AF] leading-[1.55] mt-1">
             Claude will match this visual style when generating the image prompt.
           </p>
         </div>
@@ -74,9 +70,9 @@ export function ReferenceUploader({ value, onChange, onClear }: ReferenceUploade
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[11px] font-medium text-[rgba(255,255,255,0.28)] uppercase tracking-widest">
+      <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
         Reference Style{" "}
-        <span className="normal-case tracking-normal font-normal text-[rgba(255,255,255,0.2)]">
+        <span className="normal-case tracking-normal font-normal text-[#C4C0B6]">
           (optional)
         </span>
       </p>
@@ -90,12 +86,12 @@ export function ReferenceUploader({ value, onChange, onClear }: ReferenceUploade
         onClick={() => inputRef.current?.click()}
         className={`flex flex-col items-center justify-center gap-2 h-24 rounded-xl border border-dashed cursor-pointer transition-all duration-150 ${
           isDragging
-            ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.08)]"
-            : "border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.02)] hover:border-[rgba(255,255,255,0.18)] hover:bg-[rgba(255,255,255,0.03)]"
+            ? "border-[rgba(26,26,26,0.55)] bg-[rgba(26,26,26,0.08)]"
+            : "border-[#E5E3DE] bg-[#F6F4EE] hover:border-[#D6D3CC] hover:bg-[#F4F2EC]"
         }`}
       >
-        <Upload size={15} className="text-[rgba(255,255,255,0.25)]" strokeWidth={1.8} />
-        <p className="text-[12px] text-[rgba(255,255,255,0.3)]">
+        <Upload size={15} className="text-[#ADA99F]" strokeWidth={1.8} />
+        <p className="text-[12px] text-[#9CA3AF]">
           Drag an image or click to upload a style reference
         </p>
         <input

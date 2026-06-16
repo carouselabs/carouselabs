@@ -105,8 +105,8 @@ export default function HistoryPage() {
     <div className="max-w-2xl mx-auto flex flex-col gap-6">
       {/* Header */}
       <div className="flex flex-col gap-1">
-        <h1 className="text-[20px] font-bold text-[rgba(255,255,255,0.9)]">History</h1>
-        <p className="text-[13px] text-[rgba(255,255,255,0.35)]">
+        <h1 className="text-[20px] font-bold text-[#0A0A0A]">History</h1>
+        <p className="text-[13px] text-[#9CA3AF]">
           Pick up exactly where you left off on any idea.
         </p>
       </div>
@@ -115,13 +115,13 @@ export default function HistoryPage() {
       <div className="relative">
         <Search
           size={15}
-          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[rgba(255,255,255,0.3)]"
+          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]"
         />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by idea keyword…"
-          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[13px] text-[rgba(255,255,255,0.8)] placeholder:text-[rgba(255,255,255,0.25)] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
+          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors"
         />
       </div>
 
@@ -134,8 +134,8 @@ export default function HistoryPage() {
             className={[
               "px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer",
               filter === f
-                ? "bg-[rgba(124,58,237,0.15)] text-[#A78BFA] border border-[rgba(124,58,237,0.3)]"
-                : "text-[rgba(255,255,255,0.4)] border border-transparent hover:text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.04)]",
+                ? "bg-[rgba(26,26,26,0.15)] text-[#1A1A1A] border border-[rgba(26,26,26,0.3)]"
+                : "text-[#9CA3AF] border border-transparent hover:text-[#374151] hover:bg-[#F1EFE9]",
             ].join(" ")}
           >
             {f}
@@ -156,7 +156,7 @@ export default function HistoryPage() {
           {Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
-              className="h-[120px] rounded-xl bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)] animate-pulse"
+              className="h-[120px] rounded-xl bg-[#F6F4EE] border border-[#F1EFE9] animate-pulse"
               style={{ animationDelay: `${i * 60}ms` }}
             />
           ))}
@@ -181,14 +181,14 @@ export default function HistoryPage() {
       {/* Empty state */}
       {!loading && visible.length === 0 && !error && (
         <div className="flex flex-col items-center justify-center min-h-[40vh] text-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-[rgba(124,58,237,0.1)] border border-[rgba(124,58,237,0.18)] flex items-center justify-center">
-            <Clock size={20} className="text-[#7C3AED]" strokeWidth={1.8} />
+          <div className="w-12 h-12 rounded-2xl bg-[rgba(26,26,26,0.1)] border border-[rgba(26,26,26,0.18)] flex items-center justify-center">
+            <Clock size={20} className="text-[#1A1A1A]" strokeWidth={1.8} />
           </div>
           <div className="flex flex-col gap-1">
-            <p className="text-[15px] font-medium text-[rgba(255,255,255,0.55)]">
+            <p className="text-[15px] font-medium text-[#6B7280]">
               {entries.length === 0 ? "No history yet" : "Nothing matches"}
             </p>
-            <p className="text-[13px] text-[rgba(255,255,255,0.25)] max-w-xs">
+            <p className="text-[13px] text-[#ADA99F] max-w-xs">
               {entries.length === 0
                 ? "Open an idea and start generating — it'll show up here so you can continue anytime."
                 : "Try a different search or filter."}

@@ -91,21 +91,21 @@ export function LoadingGame() {
   const targetPct = target !== null ? (target / 5) * 100 : null
 
   return (
-    <div className="flex flex-col gap-4 p-6 rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)]">
-      <p className="text-[12px] text-[rgba(255,255,255,0.4)] text-center">Your image is generating. Play while you wait!</p>
+    <div className="flex flex-col gap-4 p-6 rounded-2xl border border-[#E5E3DE] bg-[#F6F4EE]">
+      <p className="text-[12px] text-[#9CA3AF] text-center">Your image is generating. Play while you wait!</p>
       <p className="text-[11px] text-[#F59E0B] text-center font-medium">🎁 Win the most unique prize in the world — stop on the EXACT same number!</p>
 
       <div className="text-center">
-        <p className="text-[10px] text-[rgba(255,255,255,0.3)] uppercase tracking-widest mb-1">
+        <p className="text-[10px] text-[#9CA3AF] uppercase tracking-widest mb-1">
           {phase === 'set' ? 'Round 1 — Set your target (0.00 - 5.00)' : `Attempt ${attempt + 1} of 3 — Match ${target?.toFixed(2)}`}
         </p>
-        <div className="text-[64px] font-bold text-white tabular-nums leading-none">
+        <div className="text-[64px] font-bold text-[#0A0A0A] tabular-nums leading-none">
           {current.toFixed(2)}
         </div>
       </div>
 
-      <div className="relative h-2 rounded-full bg-[rgba(255,255,255,0.08)] overflow-hidden">
-        <div className="h-full rounded-full bg-[#7C3AED] transition-none" style={{ width: pct + '%' }} />
+      <div className="relative h-2 rounded-full bg-[#E5E3DE] overflow-hidden">
+        <div className="h-full rounded-full bg-[#1A1A1A] transition-none" style={{ width: pct + '%' }} />
         {targetPct !== null && (
           <div className="absolute top-0 h-full w-0.5 bg-red-400" style={{ left: targetPct + '%' }} />
         )}
@@ -119,14 +119,14 @@ export function LoadingGame() {
 
       <div className="flex gap-2 justify-center">
         {dots.map((d, i) => (
-          <div key={i} className="w-2.5 h-2.5 rounded-full border border-[rgba(255,255,255,0.2)]"
-            style={{ background: d === 'win' ? '#10B981' : d === 'fail' ? '#EF4444' : 'rgba(255,255,255,0.1)' }} />
+          <div key={i} className="w-2.5 h-2.5 rounded-full border border-[#C4C0B6]"
+            style={{ background: d === 'win' ? '#10B981' : d === 'fail' ? '#EF4444' : '#E5E3DE' }} />
         ))}
       </div>
 
       {gameState === 'playing' && (
         <button onClick={handleStop}
-          className="w-full py-4 rounded-xl text-[15px] font-bold text-white bg-[#7C3AED] hover:bg-[#6D28D9] transition-colors">
+          className="w-full py-4 rounded-xl text-[15px] font-bold text-white bg-[#1A1A1A] hover:bg-[#000000] transition-colors">
           STOP
         </button>
       )}
@@ -134,15 +134,15 @@ export function LoadingGame() {
       {gameState === 'won' && (
         <div className="text-center flex flex-col gap-2">
           <p className="text-[#10B981] font-bold text-[15px]">🎉 You won the most unique prize in the world!</p>
-          <p className="text-[12px] text-[rgba(255,255,255,0.4)]">Our team will contact you on your registered email. Stay tuned!</p>
+          <p className="text-[12px] text-[#9CA3AF]">Our team will contact you on your registered email. Stay tuned!</p>
         </div>
       )}
 
       {gameState === 'lost' && (
         <div className="text-center flex flex-col gap-2">
-          <p className="text-[rgba(255,255,255,0.6)] text-[13px]">No attempts left!</p>
+          <p className="text-[#4B5563] text-[13px]">No attempts left!</p>
           <button onClick={resetGame}
-            className="w-full py-3 rounded-xl text-[13px] font-medium text-white border border-[rgba(255,255,255,0.1)] hover:bg-[rgba(255,255,255,0.05)]">
+            className="w-full py-3 rounded-xl text-[13px] font-medium text-[#1A1A1A] border border-[#E5E3DE] hover:bg-[#ECEAE4]">
             Try Again
           </button>
         </div>

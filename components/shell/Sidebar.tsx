@@ -26,24 +26,22 @@ export function Sidebar() {
   return (
     <>
       {/* Desktop sidebar — row-span-2 so it fills both topbar and main rows */}
-      <aside className="hidden md:flex md:row-span-2 flex-col bg-[#0D0D1A] border-r border-[rgba(255,255,255,0.05)]">
+      <aside className="hidden md:flex md:row-span-2 flex-col bg-white border-r border-[#E5E3DE]">
         {/* Logo */}
-        <div className="flex items-center gap-2.5 h-[52px] px-4 border-b border-[rgba(255,255,255,0.05)] flex-shrink-0">
-          <div className="w-[26px] h-[26px] rounded-md bg-gradient-to-br from-[#7C3AED] to-[#5B21B6] flex items-center justify-center flex-shrink-0">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <line x1="4.67" y1="0" x2="4.67" y2="14" stroke="rgba(255,255,255,0.35)" strokeWidth="0.8" />
-              <line x1="9.33" y1="0" x2="9.33" y2="14" stroke="rgba(255,255,255,0.35)" strokeWidth="0.8" />
-              <line x1="0" y1="4.67" x2="14" y2="4.67" stroke="rgba(255,255,255,0.35)" strokeWidth="0.8" />
-              <line x1="0" y1="9.33" x2="14" y2="9.33" stroke="rgba(255,255,255,0.35)" strokeWidth="0.8" />
-            </svg>
-          </div>
-          <span className="text-[14px] font-semibold text-[rgba(255,255,255,0.8)] tracking-[-0.2px]">
+        <div className="flex items-center gap-2.5 h-[56px] px-5 border-b border-[#E5E3DE] flex-shrink-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/favicon.ico"
+            alt="CarouseLabs"
+            className="w-7 h-7 rounded-lg object-cover flex-shrink-0"
+          />
+          <span className="text-[15px] font-semibold text-[#0A0A0A] tracking-[-0.2px]">
             CarouseLabs
           </span>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-[10px] pt-2.5 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-3 pt-3 space-y-1 overflow-y-auto">
           {NAV_ITEMS.map((item) => (
             <NavItem
               key={item.href}
@@ -56,17 +54,17 @@ export function Sidebar() {
         </nav>
 
         {/* User section */}
-        <div className="border-t border-[rgba(255,255,255,0.05)] px-2 py-2 flex-shrink-0">
+        <div className="border-t border-[#E5E3DE] px-2 py-2 flex-shrink-0">
           {user ? (
             <UserMenu user={user} />
           ) : (
-            <div className="h-[52px] rounded-lg bg-[rgba(255,255,255,0.02)] animate-pulse" />
+            <div className="h-[52px] rounded-lg bg-[#F1EFE9] animate-pulse" />
           )}
         </div>
       </aside>
 
       {/* Mobile tab bar */}
-      <div className="md:hidden fixed bottom-0 inset-x-0 z-50 h-[56px] bg-[#0D0D1A] border-t border-[rgba(255,255,255,0.07)] flex items-center justify-around">
+      <div className="md:hidden fixed bottom-0 inset-x-0 z-50 h-[58px] bg-white border-t border-[#E5E3DE] flex items-center justify-around">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const active = isActive(href)
           return (
@@ -75,13 +73,10 @@ export function Sidebar() {
               href={href}
               className="flex flex-col items-center gap-[3px] flex-1 py-2"
             >
-              <Icon
-                size={20}
-                className={active ? "text-[#8B5CF6]" : "text-[rgba(255,255,255,0.3)]"}
-              />
+              <Icon size={20} className={active ? "text-[#1A1A1A]" : "text-[#9CA3AF]"} />
               <span
                 className={`text-[10px] font-medium leading-none ${
-                  active ? "text-[#A78BFA]" : "text-[rgba(255,255,255,0.28)]"
+                  active ? "text-[#1A1A1A]" : "text-[#9CA3AF]"
                 }`}
               >
                 {label}

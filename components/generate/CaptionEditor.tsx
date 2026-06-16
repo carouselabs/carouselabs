@@ -67,7 +67,7 @@ export function CaptionEditor({
     <div className="flex flex-col gap-4">
       {/* Toolbar */}
       <div className="flex items-center justify-between">
-        <p className="text-[12px] font-medium text-[rgba(255,255,255,0.28)] uppercase tracking-widest">
+        <p className="text-[12px] font-medium text-[#ADA99F] uppercase tracking-widest">
           Caption
         </p>
         <div className="flex items-center gap-2">
@@ -76,7 +76,7 @@ export function CaptionEditor({
             onClick={onRegenerate}
             disabled={isGenerating || regenerateDisabled}
             title="Regenerate"
-            className="flex items-center gap-1.5 h-[30px] px-2.5 rounded-lg border border-[rgba(255,255,255,0.08)] text-[12px] font-medium text-[rgba(255,255,255,0.45)] hover:border-[rgba(255,255,255,0.14)] hover:text-[rgba(255,255,255,0.65)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 h-[30px] px-2.5 rounded-lg border border-[#E5E3DE] text-[12px] font-medium text-[#6B7280] hover:border-[#DEDBD4] hover:text-[#4B5563] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isGenerating ? (
               <Loader2 size={12} className="animate-spin" />
@@ -90,10 +90,10 @@ export function CaptionEditor({
           <button
             onClick={handleCopy}
             disabled={!caption || isGenerating}
-            className="flex items-center gap-1.5 h-[30px] px-2.5 rounded-lg border border-[rgba(255,255,255,0.08)] text-[12px] font-medium text-[rgba(255,255,255,0.45)] hover:border-[rgba(255,255,255,0.14)] hover:text-[rgba(255,255,255,0.65)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 h-[30px] px-2.5 rounded-lg border border-[#E5E3DE] text-[12px] font-medium text-[#6B7280] hover:border-[#DEDBD4] hover:text-[#4B5563] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {copied ? (
-              <Check size={12} strokeWidth={2.5} className="text-[#6EE7B7]" />
+              <Check size={12} strokeWidth={2.5} className="text-[#059669]" />
             ) : (
               <Copy size={12} strokeWidth={2.2} />
             )}
@@ -107,8 +107,8 @@ export function CaptionEditor({
             className={cn(
               "flex items-center gap-1.5 h-[30px] px-3 rounded-lg text-[12px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
               saved
-                ? "bg-[rgba(110,231,183,0.15)] border border-[rgba(110,231,183,0.3)] text-[#6EE7B7]"
-                : "bg-[#7C3AED] hover:bg-[#6D28D9] text-white border border-transparent",
+                ? "bg-[rgba(110,231,183,0.15)] border border-[rgba(110,231,183,0.3)] text-[#059669]"
+                : "bg-[#1A1A1A] hover:bg-[#000000] text-white border border-transparent",
             )}
           >
             {saving ? (
@@ -132,18 +132,18 @@ export function CaptionEditor({
           placeholder={isGenerating ? "Generating your caption…" : "Your caption will appear here…"}
           className={cn(
             "w-full min-h-[340px] px-4 py-3.5 rounded-xl text-[14px] leading-[1.65] resize-y outline-none transition-all duration-150",
-            "bg-[rgba(255,255,255,0.03)] border text-[rgba(255,255,255,0.82)]",
-            "placeholder:text-[rgba(255,255,255,0.18)] disabled:opacity-60",
+            "bg-[#F4F2EC] border text-[#1A1A1A]",
+            "placeholder:text-[#D6D3CC] disabled:opacity-60",
             isOverLimit
               ? "border-[rgba(239,68,68,0.5)] focus:border-[rgba(239,68,68,0.7)]"
               : isNearLimit
                 ? "border-[rgba(251,191,36,0.4)] focus:border-[rgba(251,191,36,0.6)]"
-                : "border-[rgba(255,255,255,0.08)] focus:border-[rgba(124,58,237,0.5)]",
+                : "border-[#E5E3DE] focus:border-[rgba(26,26,26,0.5)]",
           )}
         />
         {isGenerating && caption.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="flex items-center gap-2 text-[13px] text-[rgba(255,255,255,0.28)]">
+            <div className="flex items-center gap-2 text-[13px] text-[#ADA99F]">
               <Loader2 size={14} className="animate-spin" />
               Generating…
             </div>
@@ -166,12 +166,12 @@ export function CaptionEditor({
                 ? "text-[rgba(239,68,68,0.8)]"
                 : isNearLimit
                   ? "text-[rgba(251,191,36,0.7)]"
-                  : "text-[rgba(255,255,255,0.22)]",
+                  : "text-[#ADA99F]",
             )}
           >
             {charCount.toLocaleString()}
           </span>
-          <span className="text-[12px] text-[rgba(255,255,255,0.14)]">
+          <span className="text-[12px] text-[#DEDBD4]">
             / {MAX_CHARS.toLocaleString()}
           </span>
           {isOverLimit && (

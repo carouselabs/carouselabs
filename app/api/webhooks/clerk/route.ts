@@ -2,6 +2,7 @@ import { headers } from "next/headers"
 import { Webhook } from "svix"
 import type { WebhookEvent } from "@clerk/nextjs/server"
 import { db } from "@/lib/db"
+import { sendWelcomeEmail } from "@/lib/email"
 
 export async function POST(req: Request) {
   const secret = process.env.CLERK_WEBHOOK_SECRET
@@ -33,7 +34,8 @@ export async function POST(req: Request) {
   }
 
   if (event.type === "user.created") {
-    const { id: clerkId, email_addresses, primary_email_address_id } = event.data
+    const { id: clerkId, email_addresses, primary_email_address_id, first_name, last_name } =
+      event.data
     const primary = email_addresses.find((e) => e.id === primary_email_address_id)
     if (!primary) {
       return new Response("No primary email", { status: 400 })
@@ -46,6 +48,14 @@ export async function POST(req: Request) {
         usage: { create: {} },
       },
     })
+
+    // Welcome email — best-effort, never fail the webhook on email errors.
+    const name = [first_name, last_name].filter(Boolean).join(" ")
+    try {
+      await sendWelcomeEmail(primary.email_address, name)
+    } catch (err) {
+      console.error("[webhooks/clerk] welcome email failed:", err)
+    }
   }
 
   if (event.type === "user.deleted") {

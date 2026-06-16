@@ -23,14 +23,14 @@ export function ProgressBar() {
 
   return (
     <div className="w-full">
-      <div className="h-[4px] w-full bg-[rgba(255,255,255,0.06)]">
+      <div className="h-[4px] w-full bg-[#E9E7E1]">
         <div
-          className="h-full bg-[#7C3AED] transition-all duration-500 ease-out"
+          className="h-full bg-[#1A1A1A] transition-all duration-500 ease-out"
           style={{ width: `${pct}%` }}
         />
       </div>
       <div className="flex justify-end px-6 pt-2.5">
-        <span className="text-xs text-[rgba(255,255,255,0.3)] tabular-nums">
+        <span className="text-xs text-[#9CA3AF] tabular-nums">
           Step {current} of {TOTAL}
         </span>
       </div>

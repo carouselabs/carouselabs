@@ -1,7 +1,7 @@
 "use client"
 
-import Link from "next/link"
 import { Sparkles } from "lucide-react"
+import { motion } from "framer-motion"
 import { GenerateBar } from "@/components/dashboard/GenerateBar"
 import { IdeaFeed } from "@/components/dashboard/IdeaFeed"
 import { useIdeaSessionStore } from "@/lib/store/ideaSessionStore"
@@ -101,72 +101,87 @@ export default function DashboardPage() {
 
   // ── Render states ─────────────────────────────────────────────
   const hasIdeas = ideas.length > 0
+  // Bar sits at the bottom while empty; once generating/has results it flies
+  // to the top and the ideas drop in beneath it.
+  const barOnTop = hasIdeas || isGenerating
 
   return (
-    <div className="max-w-2xl mx-auto flex flex-col gap-6">
-      {/* Generate Bar + bring-your-own-idea entry point */}
-      <div className="flex flex-col gap-3">
-        <GenerateBar
-          value={topicInput}
-          onChange={setTopicInput}
-          onGenerate={handleGenerate}
-          isLoading={isGenerating}
-        />
-        <Link
-          href="/my-idea"
-          className="self-start inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.06)] text-[13px] font-medium text-[rgba(255,255,255,0.6)] transition-colors"
-        >
-          My Own Idea ✍️
-        </Link>
-      </div>
+    <div className="relative h-full">
+      <div className="relative z-10 h-full max-w-2xl mx-auto flex flex-col">
+        {/* Scrollable region — ideas drop in here (scrollbar hidden) */}
+        <div className="order-2 flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-3 py-1">
+          {/* Error */}
+          {error && (
+            <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
+              {error}
+            </div>
+          )}
 
-      {/* Error */}
-      {error && (
-        <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
-          {error}
-        </div>
-      )}
+          {/* Generating skeleton */}
+          {isGenerating && (
+            <div className="flex flex-col gap-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-[88px] rounded-xl bg-[#F4F2EC] border border-[#F1EFE9] animate-pulse"
+                  style={{ animationDelay: `${i * 60}ms` }}
+                />
+              ))}
+            </div>
+          )}
 
-      {/* Generating skeleton */}
-      {isGenerating && (
-        <div className="flex flex-col gap-3">
-          {Array.from({ length: 10 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-[88px] rounded-xl bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)] animate-pulse"
-              style={{ animationDelay: `${i * 60}ms` }}
+          {/* Idea feed */}
+          {!isGenerating && hasIdeas && (
+            <IdeaFeed
+              ideas={ideas}
+              isLoadingMore={isLoadingMore}
+              onLoadMore={handleLoadMore}
+              onPin={handlePin}
+              onDismiss={handleDismiss}
             />
-          ))}
-        </div>
-      )}
+          )}
 
-      {/* Idea feed */}
-      {!isGenerating && hasIdeas && (
-        <IdeaFeed
-          ideas={ideas}
-          isLoadingMore={isLoadingMore}
-          onLoadMore={handleLoadMore}
-          onPin={handlePin}
-          onDismiss={handleDismiss}
-        />
-      )}
-
-      {/* Empty state */}
-      {!isGenerating && !hasIdeas && !error && (
-        <div className="flex flex-col items-center justify-center min-h-[40vh] text-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-[rgba(124,58,237,0.1)] border border-[rgba(124,58,237,0.18)] flex items-center justify-center">
-            <Sparkles size={20} className="text-[#7C3AED]" strokeWidth={1.8} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <p className="text-[15px] font-medium text-[rgba(255,255,255,0.55)]">
-              Generate your first ideas
-            </p>
-            <p className="text-[13px] text-[rgba(255,255,255,0.25)] max-w-xs">
-              Type a topic above or leave it blank to let AI pick based on your profile.
-            </p>
-          </div>
+          {/* Empty state — centered */}
+          {!isGenerating && !hasIdeas && !error && (
+            <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
+              <motion.div
+                initial={{ opacity: 0, y: -20, rotateX: -25, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
+                transition={{ type: "spring", stiffness: 220, damping: 18 }}
+                style={{ transformPerspective: 800 }}
+                className="w-14 h-14 rounded-2xl bg-white border border-[#E5E3DE] shadow-[0_10px_28px_rgba(10,10,10,0.06)] flex items-center justify-center"
+              >
+                <Sparkles size={22} className="text-[#1A1A1A]" strokeWidth={1.8} />
+              </motion.div>
+              <div className="flex flex-col gap-1">
+                <p className="text-[16px] font-semibold text-[#0A0A0A]">
+                  Generate your first ideas
+                </p>
+                <p className="text-[13px] text-[#9CA3AF] max-w-xs">
+                  Type a topic in the bar below, or leave it blank to let AI pick based on your
+                  profile.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Generate bar — flies to the top when results appear, sits at the
+            bottom when empty (framer animates the move) */}
+        <motion.div
+          layout="position"
+          transition={{ type: "spring", stiffness: 240, damping: 26 }}
+          style={{ transformPerspective: 1000 }}
+          className={`flex-shrink-0 ${barOnTop ? "order-1 pb-3" : "order-3 pt-3"}`}
+        >
+          <GenerateBar
+            value={topicInput}
+            onChange={setTopicInput}
+            onGenerate={handleGenerate}
+            isLoading={isGenerating}
+          />
+        </motion.div>
+      </div>
     </div>
   )
 }

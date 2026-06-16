@@ -22,7 +22,7 @@ interface ToneSelectorProps {
 export function ToneSelector({ selected, onSelect, disabled }: ToneSelectorProps) {
   return (
     <div className="flex flex-col gap-2.5">
-      <p className="text-[11px] font-medium text-[rgba(255,255,255,0.28)] uppercase tracking-widest">
+      <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
         Tone
       </p>
       <div className="flex flex-wrap gap-2">
@@ -34,14 +34,14 @@ export function ToneSelector({ selected, onSelect, disabled }: ToneSelectorProps
             className={cn(
               "flex flex-col items-start px-3 py-2 rounded-xl border text-left transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed",
               selected === value
-                ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.12)]"
-                : "border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)] hover:border-[rgba(255,255,255,0.13)] hover:bg-[rgba(255,255,255,0.03)]",
+                ? "border-[rgba(26,26,26,0.55)] bg-[rgba(26,26,26,0.12)]"
+                : "border-[#E9E7E1] bg-[#F6F4EE] hover:border-[#E5E3DE] hover:bg-[#F4F2EC]",
             )}
           >
             <span
               className={cn(
                 "text-[12px] font-semibold leading-none",
-                selected === value ? "text-[#C4B5FD]" : "text-[rgba(255,255,255,0.6)]",
+                selected === value ? "text-[#1A1A1A]" : "text-[#4B5563]",
               )}
             >
               {value}
@@ -51,7 +51,7 @@ export function ToneSelector({ selected, onSelect, disabled }: ToneSelectorProps
                 "text-[10px] mt-1 leading-none",
                 selected === value
                   ? "text-[rgba(196,181,253,0.55)]"
-                  : "text-[rgba(255,255,255,0.25)]",
+                  : "text-[#ADA99F]",
               )}
             >
               {description}

@@ -10,7 +10,18 @@ export async function getCurrentUser() {
     where: { clerkId: userId },
     include: { profile: true, subscription: true },
   })
-  if (existing) return existing
+  if (existing) {
+    // Backfill: users created via the old bootstrap path (before this fix)
+    // may have no Subscription row. Create one with schema defaults on access.
+    if (!existing.subscription) {
+      await db.subscription.create({ data: { userId: existing.id } })
+      return db.user.findUnique({
+        where: { clerkId: userId },
+        include: { profile: true, subscription: true },
+      })
+    }
+    return existing
+  }
 
   // No DB row yet — webhook hasn't fired (common in local dev).
   // Bootstrap the user record from Clerk's session data.
@@ -24,7 +35,12 @@ export async function getCurrentUser() {
 
   return db.user.upsert({
     where: { clerkId: userId },
-    create: { clerkId: userId, email },
+    create: {
+      clerkId: userId,
+      email,
+      subscription: { create: {} },
+      usage: { create: {} },
+    },
     update: {},
     include: { profile: true, subscription: true },
   })

@@ -4,6 +4,8 @@ import OpenAI from "openai"
 import { db } from "@/lib/db"
 import { uploadToR2 } from "@/lib/r2"
 
+export const maxDuration = 300
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 interface SlideInput {

@@ -6,6 +6,8 @@ import { db } from "@/lib/db"
 import { uploadToR2 } from "@/lib/r2"
 import type { Prisma } from "@prisma/client"
 
+export const maxDuration = 300
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 export async function POST(req: Request) {

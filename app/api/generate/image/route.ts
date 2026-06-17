@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import OpenAI from "openai"
+import sharp from "sharp"
 import { db } from "@/lib/db"
 import { uploadToR2 } from "@/lib/r2"
 import type { Prisma } from "@prisma/client"
@@ -60,11 +61,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Failed to generate image" }, { status: 502 })
   }
 
+  // Re-encode with sharp to strip C2PA/content-credentials metadata (and any
+  // EXIF/XMP/ICC). OpenAI embeds C2PA in generated images, which makes
+  // LinkedIn/Instagram/X show a "Made with AI" badge and a CR icon. sharp
+  // drops all metadata by default, leaving a clean PNG.
+  let cleanedB64: string
+  try {
+    const cleanedBuffer = await sharp(Buffer.from(imageB64, "base64"))
+      .png()
+      .toBuffer()
+    cleanedB64 = cleanedBuffer.toString("base64")
+  } catch (err) {
+    console.error("[generate/image] sharp re-encode error:", err)
+    return NextResponse.json({ error: "Failed to process image" }, { status: 502 })
+  }
+
   // Upload to Cloudflare R2
   const filename = `posts/${user.id}/${Date.now()}.png`
   let imageUrl: string
   try {
-    imageUrl = await uploadToR2(imageB64, filename)
+    imageUrl = await uploadToR2(cleanedB64, filename)
   } catch (err) {
     console.error("[generate/image] R2 upload error:", err)
     return NextResponse.json({ error: "Failed to store image" }, { status: 502 })

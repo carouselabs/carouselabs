@@ -1,6 +1,6 @@
 // app/api/my-idea/generate/route.ts
-import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
 import Anthropic from "@anthropic-ai/sdk"
 import { db } from "@/lib/db"
 import { validateContentTopic } from "@/lib/validateTopic"
@@ -111,8 +111,8 @@ function formatProfile(profile: {
 
 export async function POST(req: Request) {
   try {
-    const { userId: clerkId } = await auth()
-    if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const user = await getCurrentUser()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     // Parse body
     let topic: string
@@ -144,11 +144,6 @@ export async function POST(req: Request) {
       )
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId },
-      include: { profile: true },
-    })
-    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
     if (!user.profile) {
       return NextResponse.json(
         { error: "Profile not found. Complete onboarding first." },

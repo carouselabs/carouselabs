@@ -1,5 +1,5 @@
-import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
 import OpenAI from "openai"
 import { db } from "@/lib/db"
 import { uploadToR2 } from "@/lib/r2"
@@ -26,8 +26,8 @@ const ROLE_TO_SLIDE_ROLE = {
 } as const
 
 export async function POST(req: Request) {
-  const { userId: clerkId } = await auth()
-  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   let slides: SlideInput[]
   let size: string
@@ -54,9 +54,6 @@ export async function POST(req: Request) {
       { status: 400 },
     )
   }
-
-  const user = await db.user.findUnique({ where: { clerkId } })
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
 
   const idea = await db.idea.findUnique({ where: { id: ideaId } })
   if (!idea || idea.userId !== user.id) {

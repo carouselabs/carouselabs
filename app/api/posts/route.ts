@@ -1,20 +1,17 @@
 // app/api/posts/route.ts
-import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 
 // GET /api/posts?ideaId=[id] — most recent saved post (with caption) for an
 // idea, so a generation flow can restore the last session instead of
 // regenerating from scratch.
 export async function GET(req: Request) {
-  const { userId: clerkId } = await auth()
-  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const ideaId = new URL(req.url).searchParams.get("ideaId")
   if (!ideaId) return NextResponse.json({ error: "Missing ideaId" }, { status: 400 })
-
-  const user = await db.user.findUnique({ where: { clerkId } })
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
 
   const post = await db.post.findFirst({
     where: { userId: user.id, ideaId, caption: { not: null } },
@@ -26,8 +23,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const { userId: clerkId } = await auth()
-  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   let ideaId: string, caption: string
   try {
@@ -38,9 +35,6 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
   }
-
-  const user = await db.user.findUnique({ where: { clerkId } })
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
 
   const idea = await db.idea.findUnique({ where: { id: ideaId } })
   if (!idea || idea.userId !== user.id) {

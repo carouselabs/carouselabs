@@ -1,13 +1,13 @@
-import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { userId: clerkId } = await auth()
-  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { id: postId } = await params
 
@@ -19,9 +19,6 @@ export async function PATCH(
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
   }
-
-  const user = await db.user.findUnique({ where: { clerkId } })
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
 
   const post = await db.post.findUnique({ where: { id: postId } })
   if (!post || post.userId !== user.id) {

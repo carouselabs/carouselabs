@@ -1,6 +1,6 @@
 // app/api/billing/create-subscription/route.ts
-import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { razorpay } from "@/lib/razorpay"
 
@@ -9,16 +9,13 @@ import { razorpay } from "@/lib/razorpay"
 // the Razorpay dashboard and its id set as RAZORPAY_PLAN_ID. International
 // payments must be enabled on the Razorpay account for USD billing.
 export async function POST() {
-  const { userId: clerkId } = await auth()
-  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const planId = process.env.RAZORPAY_PLAN_ID
   if (!planId) {
     return NextResponse.json({ error: "Pro plan is not configured" }, { status: 500 })
   }
-
-  const user = await db.user.findUnique({ where: { clerkId } })
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
 
   try {
     const subscription = await razorpay.subscriptions.create({

@@ -1,6 +1,7 @@
-import { auth, currentUser } from "@clerk/nextjs/server"
+import { currentUser } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { getCurrentUser } from "@/lib/auth"
 import { sendOnboardingCompleteEmail } from "@/lib/email"
 import type { ProfileData, VoicePreset } from "@/lib/profile/options"
 
@@ -46,14 +47,8 @@ function safeParse<T>(value: unknown, fallback: T): T {
 
 // GET /api/profile — normalized profile for the settings pages (+ email/plan).
 export async function GET() {
-  const { userId: clerkId } = await auth()
-  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-  const user = await db.user.findUnique({
-    where: { clerkId },
-    include: { profile: true, subscription: true },
-  })
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const p = user.profile
   const ws = safeParse(p?.writingStyle, { role: "", tones: [], goals: [], primaryGoal: "" } as {
@@ -96,13 +91,10 @@ export async function GET() {
 
 // POST /api/profile — onboarding (creates the profile, marks it complete).
 export async function POST(req: Request) {
-  const { userId } = await auth()
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const body = await req.json()
-  const user = await db.user.findUnique({ where: { clerkId: userId } })
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
-
   const columns = buildProfileColumns(body)
 
   // Detect first-time completion so the onboarding email is sent exactly once
@@ -135,13 +127,10 @@ export async function POST(req: Request) {
 //   • voice presets   (when `voicePresets` is present)
 // Either or both may be sent. Never touches onboardingDone.
 export async function PATCH(req: Request) {
-  const { userId: clerkId } = await auth()
-  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const body = await req.json()
-  const user = await db.user.findUnique({ where: { clerkId } })
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
-
   const profile = await db.profile.findUnique({ where: { userId: user.id } })
   if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 })
 

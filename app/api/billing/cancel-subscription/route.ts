@@ -1,6 +1,6 @@
 // app/api/billing/cancel-subscription/route.ts
-import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
 import { cancelSubscription } from "@lemonsqueezy/lemonsqueezy.js"
 import { db } from "@/lib/db"
 import { initLemonSqueezy } from "@/lib/lemonsqueezy"
@@ -9,14 +9,8 @@ import { initLemonSqueezy } from "@/lib/lemonsqueezy"
 // The plan downgrade + email is finalised via the subscription_cancelled
 // webhook when Lemon Squeezy confirms.
 export async function POST() {
-  const { userId: clerkId } = await auth()
-  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-  const user = await db.user.findUnique({
-    where: { clerkId },
-    include: { subscription: true },
-  })
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const subId = user.subscription?.lsSubscriptionId
   if (!subId) {

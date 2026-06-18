@@ -1,6 +1,6 @@
 // app/api/ideas/[id]/breakdown/route.ts
-import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
 import Anthropic from "@anthropic-ai/sdk"
 import { db } from "@/lib/db"
 import { consumeCredit } from "@/lib/credits"
@@ -128,13 +128,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { userId: clerkId } = await auth()
-    if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const user = await getCurrentUser()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const { id } = await params
-
-    const user = await db.user.findUnique({ where: { clerkId } })
-    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
 
     const idea = await db.idea.findUnique({
       where: { id },
@@ -161,16 +158,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { userId: clerkId } = await auth()
-    if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const user = await getCurrentUser()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const { id } = await params
 
-    const user = await db.user.findUnique({
-      where: { clerkId },
-      include: { profile: true },
-    })
-    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
     if (!user.profile) return NextResponse.json({ error: "Profile not found. Complete onboarding first." }, { status: 400 })
 
     const idea = await db.idea.findUnique({

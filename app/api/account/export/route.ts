@@ -1,15 +1,18 @@
 // app/api/account/export/route.ts
-import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 
 // GET /api/account/export — all of the user's data as a downloadable JSON file.
 export async function GET() {
-  const { userId: clerkId } = await auth()
-  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const current = await getCurrentUser()
+  if (!current) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+  // getCurrentUser only includes profile + subscription; the export also needs
+  // ideas + posts, so re-fetch the full graph by id (the user row is guaranteed
+  // to exist now that getCurrentUser has self-healed it).
   const user = await db.user.findUnique({
-    where: { clerkId },
+    where: { id: current.id },
     include: {
       profile: true,
       subscription: true,

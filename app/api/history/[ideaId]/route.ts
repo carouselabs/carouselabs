@@ -1,5 +1,5 @@
-import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
 import type { HistoryStatus } from "@prisma/client"
 import { db } from "@/lib/db"
 
@@ -20,8 +20,8 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ ideaId: string }> },
 ) {
-  const { userId: clerkId } = await auth()
-  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { ideaId } = await params
 
@@ -33,9 +33,6 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
   }
-
-  const user = await db.user.findUnique({ where: { clerkId } })
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
 
   // Ownership guard — only track ideas that belong to this user.
   const idea = await db.idea.findUnique({ where: { id: ideaId } })
@@ -63,8 +60,8 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ ideaId: string }> },
 ) {
-  const { userId: clerkId } = await auth()
-  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { ideaId } = await params
 
@@ -76,9 +73,6 @@ export async function PATCH(
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
   }
-
-  const user = await db.user.findUnique({ where: { clerkId } })
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
 
   const existing = await db.ideaHistory.findUnique({
     where: { userId_ideaId: { userId: user.id, ideaId } },
@@ -98,13 +92,10 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ ideaId: string }> },
 ) {
-  const { userId: clerkId } = await auth()
-  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { ideaId } = await params
-
-  const user = await db.user.findUnique({ where: { clerkId } })
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
 
   await db.ideaHistory.deleteMany({ where: { userId: user.id, ideaId } })
 

@@ -1,23 +1,18 @@
 // app/api/ideas/[id]/pin/route.ts
-import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 
 export async function PATCH(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { userId: clerkId } = await auth()
-  if (!clerkId) {
+  const user = await getCurrentUser()
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   const { id } = await params
-
-  const user = await db.user.findUnique({ where: { clerkId } })
-  if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 })
-  }
 
   const idea = await db.idea.findUnique({ where: { id } })
   if (!idea || idea.userId !== user.id) {

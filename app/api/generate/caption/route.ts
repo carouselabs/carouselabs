@@ -1,6 +1,6 @@
 // app/api/generate/caption/route.ts
-import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
 import Anthropic from "@anthropic-ai/sdk"
 import { db } from "@/lib/db"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
@@ -152,8 +152,8 @@ function formatProfile(profile: {
 }
 
 export async function POST(req: Request) {
-  const { userId: clerkId } = await auth()
-  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   let ideaId: string,
     tone: string | undefined,
@@ -176,11 +176,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
   }
 
-  const user = await db.user.findUnique({
-    where: { clerkId },
-    include: { profile: true },
-  })
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
   if (!user.profile) return NextResponse.json({ error: "Profile not found" }, { status: 400 })
 
   const idea = await db.idea.findUnique({

@@ -5,6 +5,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import { Ratelimit } from "@upstash/ratelimit"
 import { Redis } from "@upstash/redis"
 import { db } from "@/lib/db"
+import { getCurrentUser } from "@/lib/auth"
 import { buildModeAPrompt, buildModeBPrompt } from "@/lib/ai/prompts/ideas"
 import { parseIdeasResponse } from "@/lib/ai/parsers/ideas"
 
@@ -97,13 +98,11 @@ export async function POST(req: Request) {
     // empty body is fine — defaults to Mode A
   }
 
-  // Fetch user + profile
-  const user = await db.user.findUnique({
-    where: { clerkId },
-    include: { profile: true },
-  })
+  // Fetch user + profile (self-healing: creates User/Subscription/Usage if the
+  // Clerk webhook hasn't landed yet).
+  const user = await getCurrentUser()
   if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 })
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
   if (!user.profile) {
     return NextResponse.json({ error: "Profile not found. Complete onboarding first." }, { status: 400 })

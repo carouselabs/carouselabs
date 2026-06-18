@@ -1,6 +1,6 @@
 // app/api/pinned/route.ts
-import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { dbEnumsToRawCategory } from "@/lib/ai/parsers/ideas"
 
@@ -8,11 +8,8 @@ import { dbEnumsToRawCategory } from "@/lib/ai/parsers/ideas"
 // pinned first. Pinning is just a saved-for-later flag: no session, no history,
 // no post-limit impact.
 export async function GET() {
-  const { userId: clerkId } = await auth()
-  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-  const user = await db.user.findUnique({ where: { clerkId } })
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const rows = await db.idea.findMany({
     where: { userId: user.id, isPinned: true },

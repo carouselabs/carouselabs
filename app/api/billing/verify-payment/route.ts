@@ -1,6 +1,6 @@
 // app/api/billing/verify-payment/route.ts
-import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
 import crypto from "node:crypto"
 import { db } from "@/lib/db"
 import { PRO_MONTHLY_CREDITS } from "@/lib/razorpay"
@@ -20,8 +20,8 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 export async function POST(req: Request) {
-  const { userId: clerkId } = await auth()
-  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const body = await req.json().catch(() => ({}))
   const {
@@ -39,9 +39,6 @@ export async function POST(req: Request) {
   if (!razorpay_payment_id || !razorpay_signature) {
     return NextResponse.json({ error: "Missing payment fields" }, { status: 400 })
   }
-
-  const user = await db.user.findUnique({ where: { clerkId } })
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
 
   // ── Subscription (Pro upgrade) ──
   if (razorpay_subscription_id) {

@@ -73,6 +73,9 @@ Return ONLY valid JSON with no markdown fences:
 
 // Extracts the JSON object from Claude's response, handles markdown fences and preamble text
 function extractJSON(text: string): BreakdownOutline {
+  // Log raw Claude output to help debug format variations / parse failures
+  console.log("[breakdown] Raw Claude response:\n", text)
+
   let raw = text.trim()
 
   // Strip markdown fences: ```json ... ``` or ``` ... ```

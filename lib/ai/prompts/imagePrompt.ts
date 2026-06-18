@@ -23,13 +23,19 @@ export function buildImagePrompt(
 The image attached is a STYLE REFERENCE ONLY.
 DO NOT recreate this image.
 DO NOT copy the subjects, people, scene, or content of this image.
-ONLY extract these style elements:
-- Color palette (extract hex codes)
-- Typography style (font type, weight, size hierarchy)
-- Overall mood and aesthetic
-- Lighting style
-- Composition approach
-- Visual texture and rendering style
+
+When using the reference image for style, describe ONLY broad stylistic qualities in general terms:
+- Overall mood/tone (e.g. 'warm and editorial', 'bold and modern', 'minimalist and clean')
+- General color family (e.g. 'warm earth tones', 'cool blues and purples') — NOT exact hex codes or exact color placement
+- General illustration approach (e.g. 'flat design', 'photographic', 'hand-drawn style') — NOT exact character poses or exact scene composition
+- Typography feel (e.g. 'bold sans-serif headlines') — NOT exact font matching
+
+DO NOT describe:
+- Specific character poses, positions, or actions from the reference
+- Specific objects or scene elements and their exact placement
+- Specific text layout positions
+
+The new image should feel like it's from the same 'brand style' or 'design system' as the reference, but be a COMPLETELY DIFFERENT composition built around the actual caption content provided (refinedHook, deepDive, caption). Think of it as 'same design language, totally different scene' rather than 'recreate this image with new text'.
 
 The image prompt you generate must be about this LinkedIn post:
 
@@ -65,7 +71,7 @@ The visual prompt must:
 - Include composition, subject, lighting, mood, style, colors, typography placement, and visual hierarchy
 - Make the visual instantly understandable and scroll-stopping
 - Ensure the image visually communicates the hook, core message, and CTA clearly
-- Match the user's uploaded visual template, screenshot, inspiration image, or design style if provided (extract STYLE ONLY — color palette, typography, mood, aesthetic — do NOT copy image content)
+- If a reference is provided, capture only its general design language (broad mood, general color family, illustration approach, typography feel) — do NOT copy its exact colors, composition, layout, scene, or content
 - Adapt the design direction according to the uploaded reference and user requirements
 - Be optimized for high CTR and stopping scroll on LinkedIn
 - Feel modern, premium, clean, and attention-grabbing
@@ -78,7 +84,7 @@ No arrows pointing right, no 'next' indicators, no swipe prompts.
 
 CRITICAL IMAGE PROMPT REQUIREMENTS:
 - Minimum 400 words
-- Include exact hex color codes for EVERY color
+- Include specific hex color codes for EVERY color in the NEW design (choose colors that sit within the reference's general color family, but do NOT copy the reference's exact palette or color placement)
 - Describe composition in detail (foreground, background, left, right, center)
 - Describe lighting (direction, intensity, color)
 - Describe typography (font style, weight, placement, hex color)

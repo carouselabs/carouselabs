@@ -7,6 +7,14 @@ import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+// Appended to the prompt only when a reference image is attached. Stops the
+// model from lifting text/headlines visible in the reference (it should treat
+// the reference as a pure visual-style cue, not a content source).
+const REFERENCE_IMAGE_INSTRUCTION = `
+
+CRITICAL — REFERENCE IMAGE USAGE:
+If a reference image is provided, use it ONLY for visual style — colors, typography style, layout structure, illustration style, mood, and composition. NEVER copy or reuse any text, words, or headlines visible in the reference image. All text content in the generated image must come EXCLUSIVELY from the breakdown's refinedHook and the user's actual content provided below. The reference image's text content should be completely ignored.`
+
 const CAPTION_GHOSTWRITER_INSTRUCTION = `Act as a top 0.1% LinkedIn ghostwriter for AI founders. Read the deep dive and identify every unique insight, strategic implication, supporting argument, and founder perspective. Rewrite it into a LinkedIn post that preserves all high-value information while removing fluff, repetition, and unnecessary exposition. Optimize for readability, engagement, and authority—not virality or clickbait. The writing should feel human, opinionated, and experience-driven, with natural transitions and varied sentence lengths. The first three lines should create curiosity without hiding the value, and the rest should progressively reveal deeper insights. Prioritize clarity over hype, include practical takeaways, and end with a question that invites thoughtful discussion rather than generic comments. If any important idea from the original is omitted, explicitly add it back so that no meaningful strategic insight is lost. The final post should sound like an experienced founder or investor sharing hard-earned lessons, not an AI summarizing an article.`
 
 // Targeted edit mode — apply ONLY the user's instruction to the existing image
@@ -185,7 +193,7 @@ ${buildImagePrompt(breakdown.refinedHook, breakdown.deepDive, caption, size, use
               data: referenceImage,
             },
           },
-          { type: "text", text: prompt },
+          { type: "text", text: prompt + REFERENCE_IMAGE_INSTRUCTION },
         ]
       : prompt
 

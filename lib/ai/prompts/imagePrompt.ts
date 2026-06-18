@@ -61,19 +61,19 @@ ${caption}
 ${nicheBlock}Using the selected LinkedIn post idea, detailed post breakdown, user niche, tone, audience, writing style, and any uploaded references, generate content based on the user's selected output type.
 
 Generate:
-1. A high-performing LinkedIn caption optimized for engagement
+1. A high-performing caption optimized for social media engagement across platforms (LinkedIn, Instagram, Twitter/X)
 2. A detailed AI image prompt for creating a single visual that explains/supports the post
 
 The visual prompt must:
 - Clearly represent the post's core message
-- Match LinkedIn viral content aesthetics
+- Match viral social media content aesthetics across platforms (LinkedIn, Instagram, Twitter/X)
 - Be highly detailed and visually descriptive
 - Include composition, subject, lighting, mood, style, colors, typography placement, and visual hierarchy
 - Make the visual instantly understandable and scroll-stopping
 - Ensure the image visually communicates the hook, core message, and CTA clearly
 - If a reference is provided, capture only its general design language (broad mood, general color family, illustration approach, typography feel) — do NOT copy its exact colors, composition, layout, scene, or content
 - Adapt the design direction according to the uploaded reference and user requirements
-- Be optimized for high CTR and stopping scroll on LinkedIn
+- Be optimized for high CTR and stopping scroll across social media platforms (LinkedIn, Instagram, Twitter/X)
 - Feel modern, premium, clean, and attention-grabbing
 - Explain the idea visually in one image
 

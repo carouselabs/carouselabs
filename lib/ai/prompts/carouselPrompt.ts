@@ -54,10 +54,10 @@ NOW apply this EXACT extracted style to ALL slides:
 The CONTENT of each slide is about the LinkedIn post topic.
 The VISUAL STYLE must be IDENTICAL to the reference image.
 
-If there is no reference image, use a clean modern LinkedIn carousel aesthetic.
+If there is no reference image, use a clean modern social media carousel aesthetic.
 
 `
-    : `No reference image was provided. Use a clean, modern LinkedIn carousel aesthetic — consistent background, typography, color palette, and highlight treatment across all slides so they look like one cohesive set.
+    : `No reference image was provided. Use a clean, modern social media carousel aesthetic — consistent background, typography, color palette, and highlight treatment across all slides so they look like one cohesive set.
 
 `
 

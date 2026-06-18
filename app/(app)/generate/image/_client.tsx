@@ -616,7 +616,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
                 >
                   4:5 Portrait
                 </span>
-                <span className="text-[12px] text-[#9CA3AF]">Best for LinkedIn feed</span>
+                <span className="text-[12px] text-[#9CA3AF]">Instagram, LinkedIn, Facebook</span>
               </div>
             </button>
 
@@ -646,7 +646,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
                 >
                   1:1 Square
                 </span>
-                <span className="text-[12px] text-[#9CA3AF]">Classic format</span>
+                <span className="text-[12px] text-[#9CA3AF]">Instagram, Twitter/X, Facebook</span>
               </div>
             </button>
           </div>

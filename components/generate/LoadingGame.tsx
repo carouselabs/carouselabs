@@ -29,12 +29,12 @@ export function LoadingGame() {
     if (intervalRef.current) clearInterval(intervalRef.current)
     intervalRef.current = setInterval(() => {
       setCurrent(prev => {
-        let next = parseFloat((prev + directionRef.current * 0.05).toFixed(2))
+        let next = parseFloat((prev + directionRef.current * 0.01).toFixed(2))
         if (next >= 5) { next = 5; directionRef.current = -1 }
         if (next <= 0) { next = 0; directionRef.current = 1 }
         return next
       })
-    }, 50)
+    }, 10)
   }
 
   function stopLoop() {

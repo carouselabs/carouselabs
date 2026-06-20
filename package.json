@@ -16,6 +16,7 @@
     "@lemonsqueezy/lemonsqueezy.js": "^4.0.0",
     "@prisma/client": "^5.22.0",
     "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.0.6",
     "@sentry/nextjs": "^10.56.0",
     "@tanstack/react-query": "^5.101.0",
     "@upstash/ratelimit": "^2.0.8",

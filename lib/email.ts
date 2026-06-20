@@ -1,5 +1,6 @@
 // lib/email.ts
 import { Resend } from "resend"
+import { render } from "@react-email/render"
 import { WelcomeEmail } from "@/emails/WelcomeEmail"
 import { OnboardingCompleteEmail } from "@/emails/OnboardingCompleteEmail"
 import { FirstPostEmail } from "@/emails/FirstPostEmail"
@@ -17,61 +18,61 @@ const resend = new Resend(process.env.RESEND_API_KEY)
 // verification needed). Swap for a verified domain sender in production.
 const FROM = "CarouseLabs <onboarding@resend.dev>"
 
-export function sendWelcomeEmail(email: string, name: string) {
+export async function sendWelcomeEmail(email: string, name: string) {
   return resend.emails.send({
     from: FROM,
     to: email,
     subject: "Welcome to CarouseLabs 🎨",
-    react: WelcomeEmail({ name }),
+    html: await render(WelcomeEmail({ name })),
   })
 }
 
-export function sendOnboardingCompleteEmail(email: string, name: string) {
+export async function sendOnboardingCompleteEmail(email: string, name: string) {
   return resend.emails.send({
     from: FROM,
     to: email,
     subject: "You're all set! Let's create your first post",
-    react: OnboardingCompleteEmail({ name }),
+    html: await render(OnboardingCompleteEmail({ name })),
   })
 }
 
-export function sendFirstPostEmail(email: string, name: string) {
+export async function sendFirstPostEmail(email: string, name: string) {
   return resend.emails.send({
     from: FROM,
     to: email,
     subject: "You just created your first post 🎉",
-    react: FirstPostEmail({ name }),
+    html: await render(FirstPostEmail({ name })),
   })
 }
 
-export function sendUpgradedToProEmail(email: string, name: string, credits: number) {
+export async function sendUpgradedToProEmail(email: string, name: string, credits: number) {
   return resend.emails.send({
     from: FROM,
     to: email,
     subject: "Welcome to Pro! You have 30 credits ready 🚀",
-    react: UpgradedToProEmail({ name, credits }),
+    html: await render(UpgradedToProEmail({ name, credits })),
   })
 }
 
-export function sendCreditsLowEmail(email: string, name: string, creditsLeft: number) {
+export async function sendCreditsLowEmail(email: string, name: string, creditsLeft: number) {
   return resend.emails.send({
     from: FROM,
     to: email,
     subject: "You have 5 credits left this month ⚠️",
-    react: CreditsLowEmail({ name, creditsLeft }),
+    html: await render(CreditsLowEmail({ name, creditsLeft })),
   })
 }
 
-export function sendCreditsExhaustedEmail(email: string, name: string) {
+export async function sendCreditsExhaustedEmail(email: string, name: string) {
   return resend.emails.send({
     from: FROM,
     to: email,
     subject: "You've used all your credits for this month 🔴",
-    react: CreditsExhaustedEmail({ name }),
+    html: await render(CreditsExhaustedEmail({ name })),
   })
 }
 
-export function sendExtraCreditsEmail(
+export async function sendExtraCreditsEmail(
   email: string,
   name: string,
   creditsAdded: number,
@@ -81,20 +82,20 @@ export function sendExtraCreditsEmail(
     from: FROM,
     to: email,
     subject: "Your extra credits are ready! ✅",
-    react: ExtraCreditsEmail({ name, creditsAdded, expiryDate }),
+    html: await render(ExtraCreditsEmail({ name, creditsAdded, expiryDate })),
   })
 }
 
-export function sendMonthlyResetEmail(email: string, name: string, credits: number) {
+export async function sendMonthlyResetEmail(email: string, name: string, credits: number) {
   return resend.emails.send({
     from: FROM,
     to: email,
     subject: "Your 30 credits have been reset 🔄",
-    react: MonthlyResetEmail({ name, credits }),
+    html: await render(MonthlyResetEmail({ name, credits })),
   })
 }
 
-export function sendRenewalReminderEmail(
+export async function sendRenewalReminderEmail(
   email: string,
   name: string,
   renewalDate: string,
@@ -104,15 +105,15 @@ export function sendRenewalReminderEmail(
     from: FROM,
     to: email,
     subject: "Your Pro subscription renews in 3 days",
-    react: RenewalReminderEmail({ name, renewalDate, amount }),
+    html: await render(RenewalReminderEmail({ name, renewalDate, amount })),
   })
 }
 
-export function sendSubscriptionCancelledEmail(email: string, name: string) {
+export async function sendSubscriptionCancelledEmail(email: string, name: string) {
   return resend.emails.send({
     from: FROM,
     to: email,
     subject: "Your Pro subscription has been cancelled",
-    react: SubscriptionCancelledEmail({ name }),
+    html: await render(SubscriptionCancelledEmail({ name })),
   })
 }

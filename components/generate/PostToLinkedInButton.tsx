@@ -22,7 +22,8 @@ function LinkedInIcon({ size = 13, className }: { size?: number; className?: str
 
 interface PostToLinkedInButtonProps {
   caption: string
-  imageUrls: string[]
+  /** Omit or pass [] for a text-only post (e.g. the caption-only flow). */
+  imageUrls?: string[]
   /** Disabled while the underlying content is still generating. */
   disabled?: boolean
 }
@@ -32,7 +33,7 @@ interface PostToLinkedInButtonProps {
 // user to Settings, and shows a "View post" link on success.
 export function PostToLinkedInButton({
   caption,
-  imageUrls,
+  imageUrls = [],
   disabled,
 }: PostToLinkedInButtonProps) {
   const [posting, setPosting] = useState(false)

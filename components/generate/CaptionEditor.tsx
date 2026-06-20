@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Copy, Check, Save, RefreshCw, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { PostToLinkedInButton } from "@/components/generate/PostToLinkedInButton"
 
 const WARN_AT = 2500
 const MAX_CHARS = 3000
@@ -120,6 +121,9 @@ export function CaptionEditor({
             )}
             {saved ? "Saved!" : saving ? "Saving…" : "Save Draft"}
           </button>
+
+          {/* Post to LinkedIn — text-only post (no images in this flow) */}
+          <PostToLinkedInButton caption={caption} disabled={!caption || isGenerating} />
         </div>
       </div>
 

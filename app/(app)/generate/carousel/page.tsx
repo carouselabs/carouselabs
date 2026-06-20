@@ -14,8 +14,16 @@ export default async function CarouselPage({
   const { userId: clerkId } = await auth()
   if (!clerkId) redirect("/sign-in")
 
-  const user = await db.user.findUnique({ where: { clerkId } })
+  const user = await db.user.findUnique({
+    where: { clerkId },
+    include: { subscription: true },
+  })
   if (!user) redirect("/sign-in")
+
+  // Carousels are a Pro-only feature. Enforce it server-side so Free users can't
+  // reach carousel generation by navigating to this URL directly (the
+  // FormatPicker hides the option, but that's only the client-side gate).
+  if ((user.subscription?.plan ?? "FREE") === "FREE") redirect("/settings/billing")
 
   const idea = await db.idea.findUnique({
     where: { id: ideaId },

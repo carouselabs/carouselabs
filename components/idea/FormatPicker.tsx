@@ -54,9 +54,13 @@ interface FormatPickerProps {
   plan: "FREE" | "PRO"
 }
 
-export function FormatPicker({ ideaId }: FormatPickerProps) {
+export function FormatPicker({ ideaId, plan }: FormatPickerProps) {
   const router = useRouter()
   const storageKey = `selectedFormat_${ideaId}`
+
+  // Carousels are a Pro-only feature. Free users (even with their 1 lifetime
+  // credit) can only use Caption Only and Image + Caption.
+  const isProLocked = (format: Format) => format.id === "slides" && plan === "FREE"
 
   // The format locked in for this session (null = nothing chosen yet).
   const [lockedId, setLockedId] = useState<string | null>(null)
@@ -81,6 +85,11 @@ export function FormatPicker({ ideaId }: FormatPickerProps) {
   }
 
   function handleClick(format: Format) {
+    if (isProLocked(format)) {
+      // Carousels need Pro — send Free users to upgrade instead of selecting.
+      router.push("/settings/billing")
+      return
+    }
     if (lockedId === null) {
       // First choice — confirm before locking.
       setPending(format)
@@ -117,6 +126,7 @@ export function FormatPicker({ ideaId }: FormatPickerProps) {
           const Icon = format.icon
           const isActive = lockedId === format.id
           const isLocked = lockedId !== null && lockedId !== format.id
+          const proLocked = isProLocked(format)
 
           return (
             <button
@@ -129,16 +139,18 @@ export function FormatPicker({ ideaId }: FormatPickerProps) {
                   ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.1)] shadow-[0_0_24px_rgba(26,26,26,0.18)] cursor-pointer"
                   : isLocked
                     ? "border-[#E9E7E1] bg-[#F6F4EE] opacity-50 cursor-not-allowed"
-                    : "border-[#E5E3DE] bg-[#F4F2EC] hover:border-[rgba(26,26,26,0.4)] hover:bg-[rgba(26,26,26,0.06)] cursor-pointer",
+                    : proLocked
+                      ? "border-[#E5E3DE] bg-[#F4F2EC] opacity-75 hover:opacity-100 hover:border-[rgba(124,58,237,0.4)] cursor-pointer"
+                      : "border-[#E5E3DE] bg-[#F4F2EC] hover:border-[rgba(26,26,26,0.4)] hover:bg-[rgba(26,26,26,0.06)] cursor-pointer",
               ].join(" ")}
             >
-              {/* Status marker — checkmark when active, lock when locked */}
+              {/* Status marker — checkmark when active, lock when locked / Pro-gated */}
               {isActive && (
                 <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[#1A1A1A] flex items-center justify-center">
                   <Check size={12} strokeWidth={3} className="text-white" />
                 </span>
               )}
-              {isLocked && (
+              {(isLocked || (proLocked && !isActive)) && (
                 <span className="absolute top-3 right-3 text-[#9CA3AF]">
                   <Lock size={13} strokeWidth={2} />
                 </span>
@@ -166,6 +178,12 @@ export function FormatPicker({ ideaId }: FormatPickerProps) {
                   <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-[#9CA3AF]">
                     <Lock size={10} strokeWidth={2} />
                     Locked for this session
+                  </span>
+                )}
+                {proLocked && !isActive && (
+                  <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#7C3AED]">
+                    <Lock size={10} strokeWidth={2.4} />
+                    Upgrade to Pro to unlock carousels
                   </span>
                 )}
               </div>

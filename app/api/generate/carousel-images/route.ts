@@ -30,6 +30,15 @@ export async function POST(req: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+  // Carousels are Pro-only. Defense-in-depth: the carousel page and FormatPicker
+  // already gate this, but block it at the API too.
+  if ((user.subscription?.plan ?? "FREE") === "FREE") {
+    return NextResponse.json(
+      { error: "Carousel generation requires Pro plan", requiresUpgrade: true },
+      { status: 403 },
+    )
+  }
+
   let slides: SlideInput[]
   let size: string
   let ideaId: string

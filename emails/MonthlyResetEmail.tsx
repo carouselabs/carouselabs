@@ -13,8 +13,8 @@ export function MonthlyResetEmail({ name, credits }: { name?: string; credits: n
         back up and are ready to use.
       </Text>
       <Text style={emailStyles.text}>
-        New month, new content. Plan your posts for the weeks ahead and keep your LinkedIn presence
-        growing.
+        New month, new content. Plan your posts for the weeks ahead and keep your social media
+        presence growing.
       </Text>
       <EmailButton href={`${APP_URL}/dashboard`}>Start Creating</EmailButton>
     </EmailLayout>

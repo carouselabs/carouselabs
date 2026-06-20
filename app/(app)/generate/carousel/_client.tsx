@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { ArrowLeft, Sparkles, Copy, Check, History, Loader2 } from "lucide-react"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
 import { CarouselImageGrid, type SlideImage } from "@/components/generate/CarouselImageGrid"
@@ -36,6 +37,7 @@ interface Slide {
 const SKELETON_WIDTHS = ["88%", "72%", "95%", "65%", "80%", "55%", "70%", "40%"]
 
 export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
+  const router = useRouter()
   const [step, setStep] = useState<Step>(1)
 
   // Step 1
@@ -265,6 +267,12 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       })
       const promptData = await promptRes.json()
       if (!promptRes.ok) {
+        // Pro-gated (Free user hitting carousels) → send them to upgrade.
+        if (promptData.requiresUpgrade) {
+          setIsGeneratingSlides(false)
+          router.push("/settings/billing")
+          return
+        }
         throw new Error((promptData as { error?: string }).error ?? "Generation failed")
       }
       generatedSlides = promptData.slides as Slide[]

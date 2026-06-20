@@ -16,7 +16,7 @@ export function OnboardingCompleteEmail({ name }: { name?: string }) {
       <ul style={emailStyles.list}>
         <li>Generate 10 fresh post ideas tailored to your niche</li>
         <li>Pick one and turn it into a caption, image, or carousel</li>
-        <li>Post it to LinkedIn and watch the engagement come in</li>
+        <li>Post it to LinkedIn, Instagram, or X and watch the engagement come in</li>
       </ul>
       <EmailButton href={`${APP_URL}/dashboard`}>Generate Ideas</EmailButton>
     </EmailLayout>

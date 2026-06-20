@@ -10,7 +10,7 @@ export function WelcomeEmail({ name }: { name?: string }) {
       <Heading style={emailStyles.heading}>Welcome to CarouseLabs 🎨</Heading>
       <Text style={emailStyles.text}>
         Hi {greeting}, welcome aboard! CarouseLabs turns your ideas into scroll-stopping
-        LinkedIn posts — captions, single images, and full carousels — in minutes.
+        social media posts — captions, single images, and full carousels — in minutes.
       </Text>
       <Text style={emailStyles.text}>Here&apos;s what you can do:</Text>
       <ul style={emailStyles.list}>

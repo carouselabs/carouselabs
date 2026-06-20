@@ -14,7 +14,14 @@ import {
 
 const BRAND = "#7C3AED"
 
-export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://carouselabs.com"
+// Email links must always point at the live site — never a dev URL. A localhost
+// value (e.g. from .env.local) would ship broken links to real inboxes, so we
+// ignore it and fall back to the production domain.
+const ENV_APP_URL = process.env.NEXT_PUBLIC_APP_URL
+export const APP_URL =
+  ENV_APP_URL && !ENV_APP_URL.includes("localhost")
+    ? ENV_APP_URL
+    : "https://carouselabs.com"
 
 // Shared text styles reused across every template.
 export const emailStyles = {
@@ -87,7 +94,7 @@ export function EmailLayout({
 
           <Section style={{ padding: "18px 32px" }}>
             <Text style={{ margin: 0, fontSize: "12px", lineHeight: "18px", color: "#9ca3af" }}>
-              CarouseLabs — your AI LinkedIn content studio.{" "}
+              CarouseLabs — your AI social media content studio.{" "}
               <Link href={APP_URL} style={{ color: "#9ca3af", textDecoration: "underline" }}>
                 {APP_URL.replace(/^https?:\/\//, "")}
               </Link>

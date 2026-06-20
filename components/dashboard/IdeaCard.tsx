@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Bookmark, X } from "lucide-react"
+import { Bookmark, X, Loader2 } from "lucide-react"
 import type { SessionIdea } from "@/lib/store/ideaSessionStore"
 import type { RawCategory } from "@/lib/ai/parsers/ideas"
 import { cn } from "@/lib/utils"
@@ -48,6 +48,10 @@ export function IdeaCard({ idea, onPin, onDismiss }: IdeaCardProps) {
   const router = useRouter()
   const style = CATEGORY_STYLES[idea.rawCategory]
   const [confirmOpen, setConfirmOpen] = useState(false)
+  // Navigating to the idea page kicks off breakdown generation, which can take a
+  // moment. Track it so the confirm button gives instant "working on it" feedback
+  // instead of looking like the click did nothing.
+  const [isNavigating, setIsNavigating] = useState(false)
 
   function handleCardClick() {
     // Selecting an idea locks the session — confirm before committing.
@@ -55,6 +59,7 @@ export function IdeaCard({ idea, onPin, onDismiss }: IdeaCardProps) {
   }
 
   function handleConfirm() {
+    setIsNavigating(true)
     router.push(`/idea/${idea.id}`)
   }
 
@@ -149,15 +154,24 @@ export function IdeaCard({ idea, onPin, onDismiss }: IdeaCardProps) {
         <DialogFooter className="gap-2 sm:gap-2">
           <button
             onClick={() => setConfirmOpen(false)}
-            className="px-4 py-2 rounded-xl text-[13px] font-medium text-[#6B7280] hover:text-[#1A1A1A] hover:bg-[#ECEAE4] transition-colors"
+            disabled={isNavigating}
+            className="px-4 py-2 rounded-xl text-[13px] font-medium text-[#6B7280] hover:text-[#1A1A1A] hover:bg-[#ECEAE4] transition-colors disabled:opacity-50 disabled:pointer-events-none"
           >
             Cancel
           </button>
           <button
             onClick={handleConfirm}
-            className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
+            disabled={isNavigating}
+            className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all disabled:opacity-80 disabled:cursor-wait"
           >
-            Let&apos;s go →
+            {isNavigating ? (
+              <>
+                <Loader2 size={14} strokeWidth={2.4} className="animate-spin" />
+                Generating…
+              </>
+            ) : (
+              <>Let&apos;s go →</>
+            )}
           </button>
         </DialogFooter>
       </DialogContent>

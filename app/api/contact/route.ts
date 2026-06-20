@@ -5,7 +5,7 @@ import { Resend } from "resend"
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 const SUPPORT_EMAIL = "support@carouselabs.com"
-const FROM = "CarouseLabs <onboarding@resend.dev>"
+const FROM = "CarouseLabs <support@carouselabs.com>"
 
 function escapeHtml(s: string): string {
   return s

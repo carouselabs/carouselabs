@@ -21,7 +21,7 @@ export async function POST() {
     // Resend returns { data, error } — it does NOT throw on API errors, so check
     // `error` here (this is the usual reason an email silently fails to send).
     const { data, error } = await resend.emails.send({
-      from: "CarouseLabs <onboarding@resend.dev>",
+      from: "CarouseLabs <support@carouselabs.com>",
       to: "carouselabs@gmail.com",
       subject: "🎉 New Game Winner on CarouseLabs!",
       html: `

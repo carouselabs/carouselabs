@@ -14,9 +14,8 @@ import { SubscriptionCancelledEmail } from "@/emails/SubscriptionCancelledEmail"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-// onboarding@resend.dev is Resend's shared sender for testing (no domain
-// verification needed). Swap for a verified domain sender in production.
-const FROM = "CarouseLabs <onboarding@resend.dev>"
+// Verified domain sender (carouselabs.com is verified in Resend).
+const FROM = "CarouseLabs <support@carouselabs.com>"
 
 export async function sendWelcomeEmail(email: string, name: string) {
   return resend.emails.send({

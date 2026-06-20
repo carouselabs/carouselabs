@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
+import { notifyFirstPostIfFirst } from "@/lib/email"
 
 // GET /api/posts?ideaId=[id] — most recent saved post (with caption) for an
 // idea, so a generation flow can restore the last session instead of
@@ -53,6 +54,13 @@ export async function POST(req: Request) {
       r2Keys: [],
     },
   })
+
+  // First-ever post? Send the celebratory email (best-effort).
+  try {
+    await notifyFirstPostIfFirst(user.id, user.email, user.profile?.name ?? "")
+  } catch (err) {
+    console.error("[posts] first-post email failed:", err)
+  }
 
   return NextResponse.json({ postId: post.id })
 }

@@ -1,6 +1,7 @@
 // lib/email.ts
 import { Resend } from "resend"
 import { render } from "@react-email/render"
+import { db } from "@/lib/db"
 import { WelcomeEmail } from "@/emails/WelcomeEmail"
 import { OnboardingCompleteEmail } from "@/emails/OnboardingCompleteEmail"
 import { FirstPostEmail } from "@/emails/FirstPostEmail"
@@ -115,4 +116,14 @@ export async function sendSubscriptionCancelledEmail(email: string, name: string
     subject: "Your Pro subscription has been cancelled",
     html: await render(SubscriptionCancelledEmail({ name })),
   })
+}
+
+// Sends the celebratory "first post" email only when the post just created is
+// this user's first ever (db.post.count === 1). Call right AFTER db.post.create.
+// Best-effort: callers should swallow errors so email never breaks post saving.
+export async function notifyFirstPostIfFirst(userId: string, email: string, name: string) {
+  const count = await db.post.count({ where: { userId } })
+  if (count === 1) {
+    await sendFirstPostEmail(email, name)
+  }
 }

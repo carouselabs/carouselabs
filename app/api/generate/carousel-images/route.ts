@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth"
 import OpenAI from "openai"
 import { db } from "@/lib/db"
 import { uploadToR2 } from "@/lib/r2"
+import { notifyFirstPostIfFirst } from "@/lib/email"
 
 export const maxDuration = 300
 
@@ -93,6 +94,11 @@ export async function POST(req: Request) {
           },
         },
       })
+      try {
+        await notifyFirstPostIfFirst(user.id, user.email, user.profile?.name ?? "")
+      } catch (err) {
+        console.error("[generate/carousel-images] first-post email failed:", err)
+      }
       return NextResponse.json({ success: true, postId: post.id })
     } catch (err) {
       console.error("[generate/carousel-images] persistOnly failed:", err)
@@ -176,6 +182,11 @@ export async function POST(req: Request) {
         },
       })
       postId = post.id
+      try {
+        await notifyFirstPostIfFirst(user.id, user.email, user.profile?.name ?? "")
+      } catch (emailErr) {
+        console.error("[generate/carousel-images] first-post email failed:", emailErr)
+      }
     } catch (err) {
       console.error("[generate/carousel-images] Post persist failed:", err)
     }

@@ -4,6 +4,7 @@ import OpenAI from "openai"
 import sharp from "sharp"
 import { db } from "@/lib/db"
 import { uploadToR2 } from "@/lib/r2"
+import { notifyFirstPostIfFirst } from "@/lib/email"
 import type { Prisma } from "@prisma/client"
 
 export const maxDuration = 300
@@ -108,6 +109,14 @@ export async function POST(req: Request) {
       },
     },
   })
+
+  // First-ever post? Send the celebratory email. Best-effort — a failure here
+  // must not fail the (already-succeeded) post creation.
+  try {
+    await notifyFirstPostIfFirst(user.id, user.email, user.profile?.name ?? "")
+  } catch (err) {
+    console.error("[generate/image] first-post email failed:", err)
+  }
 
   return NextResponse.json({ imageUrl, postId: post.id })
 }

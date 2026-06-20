@@ -29,19 +29,26 @@ export function availableCredits(sub: CreditSub): number {
 
 // Atomically consume one credit. Free users get one lifetime post; Pro users
 // spend their monthly allowance first, then valid extra credits.
+// `remaining` is the user's available balance AFTER this consumption (0 on a
+// failed consume), so callers can fire low-balance / exhausted notifications.
 export async function consumeCredit(
   userId: string,
-): Promise<{ ok: boolean; requiresUpgrade: boolean }> {
+): Promise<{ ok: boolean; requiresUpgrade: boolean; remaining: number }> {
   const sub = await db.subscription.findUnique({ where: { userId } })
-  if (!sub) return { ok: false, requiresUpgrade: true }
+  if (!sub) return { ok: false, requiresUpgrade: true, remaining: 0 }
 
   if (sub.plan === "FREE") {
-    if (sub.creditsUsed >= FREE_LIFETIME_POSTS) return { ok: false, requiresUpgrade: true }
+    if (sub.creditsUsed >= FREE_LIFETIME_POSTS)
+      return { ok: false, requiresUpgrade: true, remaining: 0 }
     await db.subscription.update({
       where: { userId },
       data: { creditsUsed: { increment: 1 } },
     })
-    return { ok: true, requiresUpgrade: false }
+    return {
+      ok: true,
+      requiresUpgrade: false,
+      remaining: availableCredits({ ...sub, creditsUsed: sub.creditsUsed + 1 }),
+    }
   }
 
   // PRO — spend monthly credits first.
@@ -51,7 +58,11 @@ export async function consumeCredit(
       where: { userId },
       data: { creditsUsed: { increment: 1 } },
     })
-    return { ok: true, requiresUpgrade: false }
+    return {
+      ok: true,
+      requiresUpgrade: false,
+      remaining: availableCredits({ ...sub, creditsUsed: sub.creditsUsed + 1 }),
+    }
   }
   // Then valid extra credits.
   if (extraCreditsValid(sub)) {
@@ -59,10 +70,14 @@ export async function consumeCredit(
       where: { userId },
       data: { extraCredits: { decrement: 1 } },
     })
-    return { ok: true, requiresUpgrade: false }
+    return {
+      ok: true,
+      requiresUpgrade: false,
+      remaining: availableCredits({ ...sub, extraCredits: sub.extraCredits - 1 }),
+    }
   }
   // Pro user is out of everything — they buy extra credits, not "upgrade".
-  return { ok: false, requiresUpgrade: false }
+  return { ok: false, requiresUpgrade: false, remaining: 0 }
 }
 
 export { MONTHLY_CREDITS, FREE_LIFETIME_POSTS }

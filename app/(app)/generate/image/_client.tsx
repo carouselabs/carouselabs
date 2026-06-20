@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ArrowLeft, Sparkles, Copy, Check, History, Download, RefreshCw, Loader2 } from "lucide-react"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
 import { ImagePreview } from "@/components/generate/ImagePreview"
+import { PostToLinkedInButton } from "@/components/generate/PostToLinkedInButton"
 import { LoadingGame } from "@/components/generate/LoadingGame"
 import { RegenerationLimit } from "@/components/generate/RegenerationLimit"
 import { trackHistory } from "@/lib/hooks/useHistory"
@@ -461,6 +462,11 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
                 <RefreshCw size={13} strokeWidth={2.2} />
                 Regenerate Image
               </button>
+              <PostToLinkedInButton
+                caption={caption}
+                imageUrls={imageUrl ? [imageUrl] : []}
+                disabled={!imageUrl}
+              />
             </div>
           </div>
         )}

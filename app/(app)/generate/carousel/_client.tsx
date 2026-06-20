@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { ArrowLeft, Sparkles, Copy, Check, History, Loader2 } from "lucide-react"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
 import { CarouselImageGrid, type SlideImage } from "@/components/generate/CarouselImageGrid"
+import { PostToLinkedInButton } from "@/components/generate/PostToLinkedInButton"
 import { LoadingGame } from "@/components/generate/LoadingGame"
 import { RegenerationLimit } from "@/components/generate/RegenerationLimit"
 import {
@@ -458,6 +459,15 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
             {captionCopied ? <Check size={12} /> : <Copy size={12} />}
             {captionCopied ? "Copied!" : "Copy Caption"}
           </button>
+          {slideImages.length > 0 && !isGeneratingImages && (
+            <PostToLinkedInButton
+              caption={caption}
+              imageUrls={slideImages
+                .map((s) => s.imageUrl)
+                .filter((u): u is string => !!u)}
+              disabled={isGeneratingImages}
+            />
+          )}
         </div>
       </div>
 

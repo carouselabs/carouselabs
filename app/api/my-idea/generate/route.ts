@@ -1,6 +1,10 @@
 // app/api/my-idea/generate/route.ts
+import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+import { Ratelimit } from "@upstash/ratelimit"
+import { Redis } from "@upstash/redis"
 import { getCurrentUser } from "@/lib/auth"
+import { consumeCredit } from "@/lib/credits"
 import Anthropic from "@anthropic-ai/sdk"
 import { db } from "@/lib/db"
 import { validateContentTopic } from "@/lib/validateTopic"
@@ -8,6 +12,12 @@ import type { BreakdownOutline } from "@/lib/types/breakdown"
 import type { Prisma } from "@prisma/client"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(10, "1 h"),
+  analytics: false,
+})
 
 // Builds the deep-dive prompt for a user's OWN idea — shaped by their angle/POV
 // and any specific points they want covered. Same JSON shape as the regular
@@ -114,6 +124,17 @@ export async function POST(req: Request) {
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+    // Rate limit (cost guard) — keyed by Clerk user id so it can't be spammed
+    // even by a Pro user with credits. 10/hour, same window as ideas/generate.
+    const { userId: clerkId } = await auth()
+    const { success } = await ratelimit.limit(`my-idea:generate:${clerkId}`)
+    if (!success) {
+      return NextResponse.json(
+        { error: "Rate limit reached. You can generate up to 10 times per hour." },
+        { status: 429 },
+      )
+    }
+
     // Parse body
     let topic: string
     let pov: string | undefined
@@ -148,6 +169,18 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "Profile not found. Complete onboarding first." },
         { status: 400 },
+      )
+    }
+
+    // Generating a deep-dive breakdown costs one credit — same gate as the
+    // standard breakdown route. Charged after input validation (above) so a
+    // request that 400s on a bad topic/profile never burns a credit, and before
+    // any Claude API call so it can't be bypassed for free generation.
+    const credit = await consumeCredit(user.id)
+    if (!credit.ok) {
+      return NextResponse.json(
+        { error: "No credits", requiresUpgrade: credit.requiresUpgrade },
+        { status: 402 },
       )
     }
 

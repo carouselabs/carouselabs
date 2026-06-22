@@ -1,4 +1,7 @@
+import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+import { Ratelimit } from "@upstash/ratelimit"
+import { Redis } from "@upstash/redis"
 import { getCurrentUser } from "@/lib/auth"
 import OpenAI from "openai"
 import sharp from "sharp"
@@ -11,9 +14,26 @@ export const maxDuration = 300
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
+// Image generation doesn't consume a credit but does cost real OpenAI money per
+// call, so cap regenerations at 20/hour per user.
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(20, "1 h"),
+  analytics: false,
+})
+
 export async function POST(req: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const { userId: clerkId } = await auth()
+  const { success } = await ratelimit.limit(`generate:image:${clerkId}`)
+  if (!success) {
+    return NextResponse.json(
+      { error: "Rate limit reached. Please try again later." },
+      { status: 429 },
+    )
+  }
 
   let ideaId: string
   let imagePrompt: string

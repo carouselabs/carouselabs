@@ -1,8 +1,17 @@
 // app/api/contact/route.ts
 import { NextResponse } from "next/server"
+import { Ratelimit } from "@upstash/ratelimit"
+import { Redis } from "@upstash/redis"
 import { Resend } from "resend"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
+
+// Spam guard for this unauthenticated endpoint: 3 messages/hour per IP.
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(3, "1 h"),
+  analytics: false,
+})
 
 const SUPPORT_EMAIL = "support@carouselabs.com"
 const FROM = "CarouseLabs <support@carouselabs.com>"
@@ -16,6 +25,19 @@ function escapeHtml(s: string): string {
 }
 
 export async function POST(req: Request) {
+  // Rate limit by client IP (best-effort: trusts the proxy-set forwarding header).
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    "unknown"
+  const { success } = await ratelimit.limit(`contact:${ip}`)
+  if (!success) {
+    return NextResponse.json(
+      { error: "Too many messages. Please try again later." },
+      { status: 429 },
+    )
+  }
+
   let body: { name?: string; email?: string; subject?: string; message?: string }
   try {
     body = await req.json()

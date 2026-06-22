@@ -5,7 +5,6 @@ import { db } from "@/lib/db"
 import { availableCredits } from "@/lib/credits"
 import { SettingsTabs } from "@/components/settings/SettingsTabs"
 import { LemonSqueezyButton } from "@/components/billing/LemonSqueezyButton"
-import { BuyCreditsCard } from "@/components/billing/BuyCreditsCard"
 import { CancelSubscriptionButton } from "@/components/billing/CancelSubscriptionButton"
 
 export default async function BillingPage() {
@@ -105,25 +104,18 @@ export default async function BillingPage() {
         </div>
       )}
 
-      {/* Pro → buy credits + cancel */}
+      {/* Pro → manage subscription */}
       {isPro && (
-        <>
-          <div className="flex flex-col gap-3">
-            <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Extra credits</h2>
-            <BuyCreditsCard email={user.email} />
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Manage subscription</h2>
-            {sub?.cancelAtPeriodEnd ? (
-              <p className="text-[13px] text-[#6B7280]">
-                Your subscription is set to cancel at the end of the current period.
-              </p>
-            ) : (
-              <CancelSubscriptionButton />
-            )}
-          </div>
-        </>
+        <div className="flex flex-col gap-3">
+          <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Manage subscription</h2>
+          {sub?.cancelAtPeriodEnd ? (
+            <p className="text-[13px] text-[#6B7280]">
+              Your subscription is set to cancel at the end of the current period.
+            </p>
+          ) : (
+            <CancelSubscriptionButton />
+          )}
+        </div>
       )}
     </div>
   )

@@ -38,12 +38,13 @@ export async function consumeCredit(
   if (!sub) return { ok: false, requiresUpgrade: true, remaining: 0 }
 
   if (sub.plan === "FREE") {
-    if (sub.creditsUsed >= FREE_LIFETIME_POSTS)
-      return { ok: false, requiresUpgrade: true, remaining: 0 }
-    await db.subscription.update({
-      where: { userId },
+    // Atomic: only the row that still has a free post left is incremented, so
+    // concurrent requests can't both slip past the lifetime limit.
+    const res = await db.subscription.updateMany({
+      where: { userId, creditsUsed: { lt: FREE_LIFETIME_POSTS } },
       data: { creditsUsed: { increment: 1 } },
     })
+    if (res.count === 0) return { ok: false, requiresUpgrade: true, remaining: 0 }
     return {
       ok: true,
       requiresUpgrade: false,
@@ -51,29 +52,38 @@ export async function consumeCredit(
     }
   }
 
-  // PRO — spend monthly credits first.
-  const monthlyRemaining = sub.creditsTotal - sub.creditsUsed
-  if (monthlyRemaining > 0) {
-    await db.subscription.update({
-      where: { userId },
-      data: { creditsUsed: { increment: 1 } },
-    })
+  // PRO — spend monthly credits first. The conditional where clause makes the
+  // check-and-decrement atomic; res.count === 0 means the allowance was already
+  // exhausted (possibly by a concurrent request), so fall through to extras.
+  const monthlyRes = await db.subscription.updateMany({
+    where: { userId, creditsUsed: { lt: sub.creditsTotal } },
+    data: { creditsUsed: { increment: 1 } },
+  })
+  if (monthlyRes.count > 0) {
     return {
       ok: true,
       requiresUpgrade: false,
       remaining: availableCredits({ ...sub, creditsUsed: sub.creditsUsed + 1 }),
     }
   }
-  // Then valid extra credits.
+
+  // Then valid extra credits — atomic so the balance can't go negative under
+  // concurrency. The expiry guard mirrors extraCreditsValid().
   if (extraCreditsValid(sub)) {
-    await db.subscription.update({
-      where: { userId },
+    const extraRes = await db.subscription.updateMany({
+      where: {
+        userId,
+        extraCredits: { gt: 0 },
+        OR: [{ extraCreditsExpiry: null }, { extraCreditsExpiry: { gt: new Date() } }],
+      },
       data: { extraCredits: { decrement: 1 } },
     })
-    return {
-      ok: true,
-      requiresUpgrade: false,
-      remaining: availableCredits({ ...sub, extraCredits: sub.extraCredits - 1 }),
+    if (extraRes.count > 0) {
+      return {
+        ok: true,
+        requiresUpgrade: false,
+        remaining: availableCredits({ ...sub, extraCredits: sub.extraCredits - 1 }),
+      }
     }
   }
   // Pro user is out of everything — they buy extra credits, not "upgrade".

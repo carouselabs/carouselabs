@@ -1,4 +1,7 @@
+import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
+import { Ratelimit } from "@upstash/ratelimit"
+import { Redis } from "@upstash/redis"
 import { getCurrentUser } from "@/lib/auth"
 import OpenAI from "openai"
 import { db } from "@/lib/db"
@@ -8,6 +11,14 @@ import { notifyFirstPostIfFirst } from "@/lib/email"
 export const maxDuration = 300
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+// Carousel image generation doesn't consume a credit but costs real OpenAI
+// money per slide, so cap regenerations at 20/hour per user.
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(20, "1 h"),
+  analytics: false,
+})
 
 interface SlideInput {
   slideNumber: number
@@ -29,6 +40,15 @@ const ROLE_TO_SLIDE_ROLE = {
 export async function POST(req: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const { userId: clerkId } = await auth()
+  const { success } = await ratelimit.limit(`generate:carousel-images:${clerkId}`)
+  if (!success) {
+    return NextResponse.json(
+      { error: "Rate limit reached. Please try again later." },
+      { status: 429 },
+    )
+  }
 
   // Carousels are Pro-only. Defense-in-depth: the carousel page and FormatPicker
   // already gate this, but block it at the API too.

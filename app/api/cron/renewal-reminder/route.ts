@@ -4,7 +4,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { sendRenewalReminderEmail } from "@/lib/email"
-import { PRO_MONTHLY_PRICE_CENTS } from "@/lib/razorpay"
+import { PRO_MONTHLY_PRICE_CENTS } from "@/lib/lemonsqueezy"
 
 const DAY_MS = 24 * 60 * 60 * 1000
 

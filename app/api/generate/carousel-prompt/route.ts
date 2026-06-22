@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth"
 import Anthropic from "@anthropic-ai/sdk"
 import { db } from "@/lib/db"
 import { buildCarouselPrompt } from "@/lib/ai/prompts/carouselPrompt"
+import { validateReferenceImage } from "@/lib/validateImage"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -177,6 +178,18 @@ export async function POST(req: Request) {
       { error: err instanceof Error ? err.message : "Invalid request body" },
       { status: 400 },
     )
+  }
+
+  // Validate the reference image (size / type / magic bytes) before it ever
+  // reaches Claude vision. Replaces the client-supplied values with the cleaned,
+  // verified ones.
+  if (referenceImageBase64) {
+    const check = validateReferenceImage(referenceImageBase64, referenceMediaType)
+    if (!check.ok) {
+      return NextResponse.json({ error: check.error }, { status: 400 })
+    }
+    referenceImageBase64 = check.data
+    referenceMediaType = check.mediaType
   }
 
   const idea = await db.idea.findUnique({

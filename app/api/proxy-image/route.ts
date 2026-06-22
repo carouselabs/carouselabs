@@ -8,10 +8,18 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Missing url" }, { status: 400 })
   }
 
-  // Only allow R2 public URLs for security
-  const R2_PUBLIC_URL = process.env.CLOUDFLARE_R2_PUBLIC_URL ?? ""
-  if (!R2_PUBLIC_URL || !imageUrl.startsWith(R2_PUBLIC_URL)) {
-    return NextResponse.json({ error: "Invalid image URL" }, { status: 403 })
+  // Only allow images served from our R2 public bucket. Compare full URL
+  // origins (not a string prefix) so a host like "<r2-host>.attacker.com" can't
+  // satisfy the check and turn this into an SSRF / open proxy. Any malformed
+  // URL (or unset env var) throws and fails closed with a 400.
+  try {
+    const allowedOrigin = new URL(process.env.CLOUDFLARE_R2_PUBLIC_URL!).origin
+    const requestedOrigin = new URL(imageUrl).origin
+    if (requestedOrigin !== allowedOrigin) {
+      return NextResponse.json({ error: "Invalid image URL" }, { status: 400 })
+    }
+  } catch {
+    return NextResponse.json({ error: "Invalid image URL" }, { status: 400 })
   }
 
   try {

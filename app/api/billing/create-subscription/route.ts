@@ -4,8 +4,8 @@ import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { razorpay } from "@/lib/razorpay"
 
-// Creates a Razorpay subscription for the Pro plan ($34/month). The plan itself
-// (amount 3400 cents, currency USD, monthly interval) must be created once in
+// Creates a Razorpay subscription for the Pro plan ($24/month). The plan itself
+// (amount 2400 cents, currency USD, monthly interval) must be created once in
 // the Razorpay dashboard and its id set as RAZORPAY_PLAN_ID. International
 // payments must be enabled on the Razorpay account for USD billing.
 export async function POST() {

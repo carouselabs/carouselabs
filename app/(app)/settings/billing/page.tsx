@@ -97,7 +97,7 @@ export default async function BillingPage() {
           <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Upgrade to Pro</h2>
           <div className="flex flex-col gap-3 p-4 rounded-xl border border-[rgba(26,26,26,0.2)] bg-[rgba(26,26,26,0.05)]">
             <p className="text-[13px] text-[#374151] leading-[1.6]">
-              <strong className="text-[#0A0A0A]">$34/month</strong> — 30 content credits every month,
+              <strong className="text-[#0A0A0A]">$24/month</strong> — 30 content credits every month,
               unlimited ideas, full image &amp; carousel generation, and PDF downloads.
             </p>
             <LemonSqueezyButton email={user.email} />

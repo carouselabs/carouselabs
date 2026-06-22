@@ -26,7 +26,7 @@ export function UpgradeButton({ email }: { email?: string }) {
         key,
         subscription_id: data.subscriptionId,
         name: "CarouseLabs Pro",
-        description: "$34/month — 30 credits",
+        description: "$24/month — 30 credits",
         theme: { color: "#1A1A1A" },
         prefill: email ? { email } : undefined,
         handler: async (response) => {
@@ -59,7 +59,7 @@ export function UpgradeButton({ email }: { email?: string }) {
         className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all disabled:opacity-60"
       >
         {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} strokeWidth={2} />}
-        Upgrade to Pro · $34/mo
+        Upgrade to Pro · $24/mo
       </button>
       {error && <p className="text-[12px] text-[rgba(239,68,68,0.9)]">{error}</p>}
     </div>

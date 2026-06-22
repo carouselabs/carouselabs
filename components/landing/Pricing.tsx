@@ -83,7 +83,7 @@ export function Pricing() {
                 </span>
               </div>
               <div className="flex items-end gap-1.5 mt-2">
-                <span className="text-[2.6rem] font-bold text-[#0A0A0A] leading-none">$34</span>
+                <span className="text-[2.6rem] font-bold text-[#0A0A0A] leading-none">$24</span>
                 <span className="text-[13px] text-[#6B7280] pb-1.5">/ month</span>
               </div>
               <p className="text-[11px] text-[#9CA3AF] mt-0.5">Billed monthly · cancel anytime</p>

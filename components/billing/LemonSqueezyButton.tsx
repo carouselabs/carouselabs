@@ -76,7 +76,7 @@ export function LemonSqueezyButton({ email }: { email?: string }) {
         ) : (
           <Sparkles size={14} strokeWidth={2} />
         )}
-        Upgrade to Pro · $34/mo
+        Upgrade to Pro · $24/mo
       </button>
       {error && <p className="text-[12px] text-[rgba(239,68,68,0.9)]">{error}</p>}
     </div>

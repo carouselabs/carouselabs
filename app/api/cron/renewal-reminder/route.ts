@@ -35,7 +35,7 @@ export async function GET(req: Request) {
     include: { user: { include: { profile: true } } },
   })
 
-  const amount = `$${Math.round(PRO_MONTHLY_PRICE_CENTS / 100)}` // "$34"
+  const amount = `$${Math.round(PRO_MONTHLY_PRICE_CENTS / 100)}` // "$24"
 
   let sent = 0
   for (const sub of subs) {

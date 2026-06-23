@@ -37,13 +37,6 @@ interface Slide {
 
 const SKELETON_WIDTHS = ["88%", "72%", "95%", "65%", "80%", "55%", "70%", "40%"]
 
-// TEMPORARY — when true, generateCarouselFlow stops after fetching the slide
-// PROMPTS from Claude and renders them on screen instead of calling the OpenAI
-// image routes. Lets us read/debug the generated prompts (incl. the reference
-// handling) without spending image-generation credits. Set to false to restore
-// real image generation.
-const DEBUG_SKIP_IMAGE_GENERATION = true
-
 export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
   const router = useRouter()
   const [step, setStep] = useState<Step>(1)
@@ -298,8 +291,6 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
 
     let generatedSlides: Slide[]
     try {
-      console.log("[carousel][DIAGNOSTIC] Full referenceImage value:", referenceImage)
-      console.log("[carousel][DIAGNOSTIC] referenceImage state was last set by handleReferenceChange - confirm timing")
       const promptRes = await fetch("/api/generate/carousel-prompt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -335,14 +326,6 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       return
     }
     setIsGeneratingSlides(false)
-
-    // DEBUG — stop here: the slide prompts are already in `slides` state and are
-    // rendered for inspection below. No OpenAI image calls are made.
-    if (DEBUG_SKIP_IMAGE_GENERATION) {
-      setGameStarted(false)
-      setLoadingMessage("")
-      return
-    }
 
     // Step 2 — generate images ONE BY ONE from the client. Each call generates a
     // single slide and does NOT persist (persist: false), so no junk Posts.
@@ -760,16 +743,6 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
             <p className="text-[12px] text-[#D97706] leading-[1.5]">{referenceNotice}</p>
           )}
 
-          {/* TEMPORARY DIAGNOSTIC — shows the exact image that will be sent to the
-              API, so you can visually confirm it matches what you just uploaded. */}
-          {referenceImage && (
-            <img
-              src={`data:${referenceMediaType};base64,${referenceImage}`}
-              alt="debug preview"
-              style={{ maxWidth: "150px", border: "3px solid red" }}
-            />
-          )}
-
           <div className="flex items-center gap-3 flex-wrap">
             <button
               onClick={() => setStep(2)}
@@ -814,31 +787,10 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
             </div>
           )}
 
-          {/* DEBUG — prompt preview (no images generated). */}
-          {DEBUG_SKIP_IMAGE_GENERATION && slides && slideImages.length === 0 ? (
-            <div className="flex flex-col gap-4">
-              <div className="px-3 py-2 rounded-lg bg-[rgba(217,119,6,0.1)] border border-[rgba(217,119,6,0.25)] text-[12px] text-[#B45309]">
-                DEBUG_SKIP_IMAGE_GENERATION is ON — showing generated prompts only,
-                no images were generated. Set the flag to false to generate images.
-              </div>
-              {slides.map((slide) => (
-                <div
-                  key={slide.slideNumber}
-                  className="flex flex-col gap-1.5 p-4 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC]"
-                >
-                  <p className="text-[12px] font-semibold text-[#0A0A0A]">
-                    Slide {slide.slideNumber} ({slide.role}): {slide.headline}
-                  </p>
-                  <pre className="whitespace-pre-wrap text-[12px] text-[#374151] leading-[1.6] font-sans">
-                    {slide.prompt}
-                  </pre>
-                </div>
-              ))}
-            </div>
-          ) : /* Once generation has started, keep the 2-column layout (caption+images
+          {/* Once generation has started, keep the 2-column layout (caption+images
               left, game right) so the user can keep playing after the carousel is
-              done. Before that, the normal centered grid. */
-          gameStarted ? (
+              done. Before that, the normal centered grid. */}
+          {gameStarted ? (
             <div style={{ display: "flex", gap: "2rem", alignItems: "flex-start" }}>
               <div style={{ flex: "0 0 70%", maxWidth: "70%" }}>{carouselGrid}</div>
               <div style={{ flex: "0 0 28%", maxWidth: "28%" }}>

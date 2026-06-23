@@ -302,8 +302,6 @@ ${buildCarouselPrompt(
     niche,
   )}`
 
-  console.log("[carousel-prompt] Full prompt sent to Claude:\n", prompt)
-
   let claudeRaw: string
   try {
     const messages = referenceImageBase64
@@ -349,8 +347,6 @@ ${buildCarouselPrompt(
     console.error("[generate/carousel-prompt] Claude error:", err)
     return NextResponse.json({ error: "Failed to generate content" }, { status: 502 })
   }
-
-  console.log("[generate/carousel-prompt] Raw Claude response:\n", claudeRaw)
 
   if (!claudeRaw.trimEnd().endsWith("}")) {
     console.warn("[generate/carousel-prompt] WARNING: Response may be truncated — does not end with }")

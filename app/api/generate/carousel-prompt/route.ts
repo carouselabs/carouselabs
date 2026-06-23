@@ -70,6 +70,47 @@ function isValidSlideArray(val: unknown): val is Slide[] {
   )
 }
 
+// Lenient cleanup for a roughly-extracted string value: unescape \" and flatten
+// any escaped/raw newlines so a long prompt survives as plain single-line text.
+// Used only by the recovery path, where exact escaping fidelity doesn't matter.
+function cleanLooseString(s: string): string {
+  return s
+    .replace(/\\"/g, '"') // \" → "
+    .replace(/\\n|\\t|\\r/g, " ") // escaped whitespace → space
+    .replace(/[\r\n\t]+/g, " ") // raw control chars → space
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+// Per-slide recovery: split the candidate into one chunk per slide (at each
+// "slideNumber" key) and pull slideNumber/role/headline/prompt out of each chunk
+// with tolerant regexes. Because each slide is handled independently, one slide
+// with unescaped quotes can't break the rest. `prompt` is the last field in the
+// shape, so it's captured greedily up to the final quote in its chunk — which
+// survives embedded unescaped quotes inside the prompt text.
+function recoverSlides(candidate: string): { caption: string; slides: Slide[] } | null {
+  const caption = extractStringValue(candidate, "caption") ?? ""
+
+  const chunks = candidate.split(/(?="slideNumber"\s*:)/).slice(1)
+  const slides: Slide[] = []
+  for (const chunk of chunks) {
+    const numMatch = chunk.match(/"slideNumber"\s*:\s*(\d+)/)
+    const roleMatch = chunk.match(/"role"\s*:\s*"(hook|body|cta)"/)
+    const headlineMatch = chunk.match(/"headline"\s*:\s*"([\s\S]*?)"\s*,\s*"prompt"\s*:/)
+    const promptMatch = chunk.match(/"prompt"\s*:\s*"([\s\S]*)"/)
+
+    if (!numMatch || !headlineMatch || !promptMatch) continue
+    slides.push({
+      slideNumber: Number(numMatch[1]),
+      role: (roleMatch?.[1] as Slide["role"]) ?? "body",
+      headline: cleanLooseString(headlineMatch[1]),
+      prompt: cleanLooseString(promptMatch[1]),
+    })
+  }
+
+  return slides.length > 0 ? { caption: cleanLooseString(caption), slides } : null
+}
+
 function parseCarouselResponse(raw: string): { caption: string; slides: Slide[] } {
   // 1. Direct JSON.parse
   try {
@@ -129,6 +170,34 @@ function parseCarouselResponse(raw: string): { caption: string; slides: Slide[] 
       }
     } catch {}
   }
+
+  // 6. Aggressive recovery — for long slide prompts with bad escaping or raw
+  // newlines that break JSON.parse in strategies 1-5.
+  try {
+    const start = raw.indexOf("{")
+    const end = raw.lastIndexOf("}")
+    if (start !== -1 && end !== -1 && end > start) {
+      const candidate = raw.slice(start, end + 1)
+
+      // 6a. Raw (unescaped) line breaks inside string values are illegal JSON
+      // and a common cause of breakage — replace them with spaces and retry a
+      // strict parse. (Escaped "\n" sequences are untouched.)
+      try {
+        const parsed = JSON.parse(candidate.replace(/\r?\n/g, " "))
+        if (typeof parsed.caption === "string" && isValidSlideArray(parsed.slides)) {
+          console.log("[generate/carousel-prompt] Parsed via: newline sanitization")
+          return { caption: parsed.caption, slides: parsed.slides }
+        }
+      } catch {}
+
+      // 6b. Per-slide regex recovery — resilient to unescaped quotes in one slide.
+      const recovered = recoverSlides(candidate)
+      if (recovered) {
+        console.log("[generate/carousel-prompt] Parsed via: per-slide recovery")
+        return recovered
+      }
+    }
+  } catch {}
 
   throw new Error("All parsing strategies exhausted")
 }

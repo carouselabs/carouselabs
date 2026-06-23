@@ -177,6 +177,8 @@ Rules:
 - Avoid generic or cluttered slides
 - Every slide must feel premium, modern, viral-ready
 
+CRITICAL JSON ESCAPING: any double-quote character that appears WITHIN a string value (e.g. quoting a phrase like "AI doesn't work for us", denoting inches like 5", or hex codes in parentheses) MUST be properly escaped as \" — this is mandatory for valid JSON output. Do NOT include raw line breaks inside a string value; keep each value on a single logical line. Double-check escaping before outputting.
+
 Return ONLY valid JSON, no markdown:
 {
   "caption": string,

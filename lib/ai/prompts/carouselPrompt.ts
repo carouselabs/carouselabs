@@ -28,19 +28,21 @@ export function buildCarouselPrompt(
       : `User selected 4:5 Portrait format.\nPortrait 4:5 ratio (1080x1350px). ALL slides must be optimized for portrait orientation.`
 
   const referenceLeadBlock = hasReference
-    ? `You have been given a reference image. Look at it carefully right now.
+    ? `You have been given a reference image. This reference defines the EXACT visual design system for this entire carousel — treat it like a strict brand style guide.
 
-Before writing anything else, describe to yourself in your own reasoning:
-1. What are the EXACT colors in this image? Name them specifically (e.g. 'deep purple #6B46C1', 'soft cream #F5F0E8') based on what you actually observe.
-2. What illustration/art style is this? (watercolor, flat design, photographic, line art, etc.)
-3. What is the overall mood/aesthetic?
+COPY EXACTLY from the reference (non-negotiable):
+- The exact color palette — identify the precise colors you see (name them with hex codes) and use ONLY these colors across all 7-8 slides
+- The exact texture and rendering style (e.g. watercolor, flat vector, photographic, grainy, paper texture, gradient style)
+- The exact typography feel (font weight, letter spacing, how headlines are styled)
+- The exact overall visual treatment (shadows, highlights, borders, spacing patterns)
 
-Now, every single slide you generate (all 7-8 slides) MUST use:
-- The SAME color palette you just identified — these exact colors, consistently, across every slide
-- The SAME illustration style you just identified
-- The SAME overall mood and aesthetic
+KEEP ORIGINAL (based on the post content, not the reference):
+- The actual scene, characters, objects, and composition in each slide
+- What's literally depicted visually should illustrate THIS post's specific topic, headline, and breakdown content — not the reference's literal subject matter
 
-This is not optional. If your slides do not visually match the reference image's colors and style, you have failed this task. The content/scene in each slide should be original (not copying the reference's literal subject matter), but the COLORS and ART STYLE must clearly and obviously come from the reference image — someone looking at your slides next to the reference image should immediately recognize they're using the same color palette and art style.
+Think of it this way: if the reference image shows a person at a desk in watercolor style with a purple/cream palette, your slides should ALSO be watercolor style with that exact purple/cream palette — but showing scenes relevant to THIS post's actual topic (${refinedHook}), not literally recreating 'a person at a desk.'
+
+Every slide must look like it was designed using the EXACT SAME design system/template as the reference image — same colors, same texture, same visual DNA — while depicting original scenes built from this post's actual content.
 
 `
     : `No reference image was provided. Use a clean, modern social media carousel aesthetic — consistent background, typography, color palette, and highlight treatment across all slides so they look like one cohesive set.

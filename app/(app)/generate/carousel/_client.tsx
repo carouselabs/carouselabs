@@ -72,6 +72,9 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
   const [restored, setRestored] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [captionInstruction, setCaptionInstruction] = useState("")
+  // Shown when changing the reference image invalidates an already-generated
+  // carousel (the old style is baked into those slide prompts).
+  const [referenceNotice, setReferenceNotice] = useState<string | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
   const didInit = useRef(false)
@@ -240,12 +243,45 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
     }
   }
 
+  // The reference image is baked into each slide's prompt at generation time, so
+  // changing/removing it makes any already-generated carousel stale. Clear those
+  // saved slides/images and bounce the user out of step 4 so they regenerate
+  // with the new style. No-op for a carousel that hasn't been generated yet.
+  function invalidateGeneratedCarousel() {
+    if (!slides && slideImages.length === 0) return
+    setSlides(null)
+    setSlideImages([])
+    setGameStarted(false)
+    try {
+      localStorage.removeItem(`carouselSlides_${ideaId}`)
+      localStorage.removeItem(`carouselImages_${ideaId}`)
+    } catch {
+      // best-effort
+    }
+    setReferenceNotice(
+      "Reference image changed — please regenerate your carousel to apply the new style.",
+    )
+    if (step === 4) setStep(3)
+  }
+
+  function handleReferenceChange(b64: string, mediaType: string) {
+    setReferenceImage(b64)
+    setReferenceMediaType(mediaType)
+    invalidateGeneratedCarousel()
+  }
+
+  function handleReferenceClear() {
+    setReferenceImage(null)
+    invalidateGeneratedCarousel()
+  }
+
   // Single-button flow: silently generate the slide prompts, then generate the
   // slide images ONE AT A TIME from the client so each appears in the grid the
   // moment it's ready and progress is shown live. Slides are kept in state +
   // localStorage so per-slide Regenerate keeps working.
   async function generateCarouselFlow() {
     setError(null)
+    setReferenceNotice(null)
     setSlideImages([])
 
     // Step 1 — slide prompts (silent).
@@ -699,12 +735,13 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
 
           <ReferenceUploader
             value={referenceImage}
-            onChange={(b64, mediaType) => {
-              setReferenceImage(b64)
-              setReferenceMediaType(mediaType)
-            }}
-            onClear={() => setReferenceImage(null)}
+            onChange={handleReferenceChange}
+            onClear={handleReferenceClear}
           />
+
+          {referenceNotice && (
+            <p className="text-[12px] text-[#D97706] leading-[1.5]">{referenceNotice}</p>
+          )}
 
           <div className="flex items-center gap-3 flex-wrap">
             <button
@@ -715,7 +752,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
             </button>
             <button
               onClick={() => {
-                setReferenceImage(null)
+                handleReferenceClear()
                 setStep(4)
               }}
               className="px-4 py-2.5 rounded-xl border border-[#E5E3DE] bg-[#F1EFE9] hover:bg-[#E9E7E1] text-[13px] font-medium text-[#4B5563] transition-colors"

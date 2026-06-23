@@ -86,6 +86,13 @@ export function ReferenceUploader({ value, onChange, onClear }: ReferenceUploade
     if (file) handleFile(file)
   }
 
+  // Reset our own preview alongside the parent's value so the thumbnail can't
+  // linger as stale state after the image is removed.
+  const handleClear = useCallback(() => {
+    setPreviewUrl(null)
+    onClear()
+  }, [onClear])
+
   if (value && previewUrl) {
     return (
       <div className="flex flex-col gap-2">
@@ -96,7 +103,7 @@ export function ReferenceUploader({ value, onChange, onClear }: ReferenceUploade
           <div className="relative w-24 h-24 rounded-xl overflow-hidden border border-[#E5E3DE] flex-shrink-0">
             <img src={previewUrl} alt="Reference" className="w-full h-full object-cover" />
             <button
-              onClick={onClear}
+              onClick={handleClear}
               className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[rgba(0,0,0,0.65)] flex items-center justify-center hover:bg-[rgba(0,0,0,0.85)] transition-colors"
             >
               <X size={10} className="text-white" strokeWidth={2.5} />

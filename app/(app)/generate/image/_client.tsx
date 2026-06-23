@@ -50,6 +50,9 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
   const [restored, setRestored] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [captionInstruction, setCaptionInstruction] = useState("")
+  // Shown when changing the reference image invalidates an already-generated
+  // image (the old style is baked into its prompt).
+  const [referenceNotice, setReferenceNotice] = useState<string | null>(null)
   // Once image generation has started at least once, keep the 2-column layout
   // (with the LoadingGame) so the user can keep playing even after the image loads.
   const [gameStarted, setGameStarted] = useState(false)
@@ -202,6 +205,40 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
     }
   }
 
+  // The reference image is baked into the image prompt at generation time, so
+  // changing/removing it makes any already-generated image stale. Clear the
+  // saved prompt + image and bounce the user out of step 4 so they regenerate
+  // with the new style. No-op for an image that hasn't been generated yet.
+  function invalidateGeneratedImage() {
+    if (!imagePrompt && !imageUrl) return
+    setImagePrompt(null)
+    setImageUrl(null)
+    setPostId(null)
+    setSaved(false)
+    setGameStarted(false)
+    try {
+      localStorage.removeItem(`imagePrompt_${ideaId}`)
+      localStorage.removeItem(`imageUrl_${ideaId}`)
+    } catch {
+      // best-effort
+    }
+    setReferenceNotice(
+      "Reference image changed — please regenerate your image to apply the new style.",
+    )
+    if (step === 4) setStep(3)
+  }
+
+  function handleReferenceChange(b64: string, mediaType: string) {
+    setReferenceImage(b64)
+    setReferenceMediaType(mediaType)
+    invalidateGeneratedImage()
+  }
+
+  function handleReferenceClear() {
+    setReferenceImage(null)
+    invalidateGeneratedImage()
+  }
+
   // Single-button flow: silently generate the image prompt, then immediately use
   // it to generate the image. Only the final image is shown. The prompt is still
   // kept in state + localStorage so Regenerate Image keeps working.
@@ -209,6 +246,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
     setIsGeneratingImage(true)
     setGameStarted(true) // keep the game visible from now on
     setError(null)
+    setReferenceNotice(null)
     setImageUrl(null)
     setPostId(null)
 
@@ -694,12 +732,13 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
 
           <ReferenceUploader
             value={referenceImage}
-            onChange={(b64, mediaType) => {
-              setReferenceImage(b64)
-              setReferenceMediaType(mediaType)
-            }}
-            onClear={() => setReferenceImage(null)}
+            onChange={handleReferenceChange}
+            onClear={handleReferenceClear}
           />
+
+          {referenceNotice && (
+            <p className="text-[12px] text-[#D97706] leading-[1.5]">{referenceNotice}</p>
+          )}
 
           <div className="flex items-center gap-3 flex-wrap">
             <button
@@ -710,7 +749,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
             </button>
             <button
               onClick={() => {
-                setReferenceImage(null)
+                handleReferenceClear()
                 setStep(4)
               }}
               className="px-4 py-2.5 rounded-xl border border-[#E5E3DE] bg-[#F1EFE9] hover:bg-[#E9E7E1] text-[13px] font-medium text-[#4B5563] transition-colors"

@@ -28,38 +28,35 @@ export function buildCarouselPrompt(
       : `User selected 4:5 Portrait format.\nPortrait 4:5 ratio (1080x1350px). ALL slides must be optimized for portrait orientation.`
 
   const referenceLeadBlock = hasReference
-    ? `⚠️ MANDATORY STYLE EXTRACTION — DO THIS FIRST:
-Before writing ANY slide prompts, carefully analyze the reference image and extract EXACTLY:
+    ? `⚠️ CRITICAL REFERENCE IMAGE INSTRUCTION:
+The attached image is a STYLE REFERENCE ONLY — treat it as a mood board, NOT a template.
+DO NOT recreate this image. DO NOT copy its subjects, people, scene, objects, composition, or content.
 
-1. BACKGROUND: What is the exact background color/texture? (provide hex code)
-2. TYPOGRAPHY: What font style is used? Serif or sans-serif? Bold or light? What size hierarchy?
-3. COLOR PALETTE: List every color visible with exact hex codes
-4. LAYOUT: How is content arranged? Where is text placed? What are the margins?
-5. VISUAL ELEMENTS: What decorative elements exist? Lines, shapes, icons, highlights, markers, strokes?
-6. HIGHLIGHT TREATMENT: How are key words emphasized? Color blocks? Underlines? Marker strokes? What color?
-7. ILLUSTRATION STYLE: Is it photographic? Illustrated? Watercolor? Flat design? Editorial?
-8. MOOD: Dark/light? Minimal/busy? Modern/vintage? Professional/casual?
-9. TEXT OVERLAYS: How does text sit on the image? Boxed? Floating? With background?
-10. OVERALL AESTHETIC: What publication or brand does this feel like?
+From the reference, capture ONLY broad stylistic qualities, described in GENERAL terms:
+- Overall mood/tone (e.g. 'warm and editorial', 'bold and modern', 'minimalist and clean')
+- General color family (e.g. 'warm earth tones', 'cool blues and purples') — choose NEW hex codes that sit within this family; do NOT copy the reference's exact palette or exact color placement
+- General illustration approach (e.g. 'flat design', 'photographic', 'hand-drawn / watercolor') — NOT exact character poses or exact scene composition
+- Typography feel (e.g. 'bold sans-serif headlines') — NOT exact font matching
 
-NOW apply this EXACT extracted style to ALL slides:
-- Use the SAME background color/texture
-- Use the SAME typography approach and font weight
-- Use the SAME color palette with the SAME hex codes
-- Use the SAME layout and composition approach
-- Use the SAME decorative elements and highlight treatment
-- Use the SAME illustration or visual style
-- Every slide must look like it was made by the SAME designer as the reference
+DO NOT describe, for ANY slide:
+- Specific character poses, positions, or actions taken from the reference
+- Specific objects or scene elements and their exact placement from the reference
+- Specific text layout positions copied from the reference
 
-The CONTENT of each slide is about the LinkedIn post topic.
-The VISUAL STYLE must be IDENTICAL to the reference image.
-
-If there is no reference image, use a clean modern social media carousel aesthetic.
+Apply this general design language CONSISTENTLY across ALL slides so the carousel reads as one cohesive set from the same 'brand style' / 'design system' as the reference — but every slide must be a COMPLETELY DIFFERENT, ORIGINAL composition built around the actual post content (refinedHook, deepDive, talking points). Think 'same design language, totally different scenes' — never 'recreate the reference with new text'.
 
 `
     : `No reference image was provided. Use a clean, modern social media carousel aesthetic — consistent background, typography, color palette, and highlight treatment across all slides so they look like one cohesive set.
 
 `
+
+  // The hook slide is the most visually important and the most prone to copying
+  // the reference too literally — only warn about it when a reference exists.
+  const hookReferenceWarning = hasReference
+    ? `
+
+⚠️ EXTRA WARNING FOR THE HOOK SLIDE (Slide 1): This is the slide most likely to accidentally recreate the reference image too closely, because it's the most visually important slide. You MUST treat the reference image as nothing more than a mood board for color palette and illustration style. The hook slide's actual visual content (people, objects, scene, composition, pose) must be 100% original and built from the breakdown's refinedHook and deepDive — NOT from the reference image's scene. If you find yourself describing a scene similar to the reference image, STOP and rewrite it to depict the content's actual topic instead.`
+    : ""
 
   const talkingPointsList = Array.isArray(keyTalkingPoints)
     ? keyTalkingPoints.map((point, i) => `${i + 1}. ${point}`).join("\n")
@@ -98,7 +95,7 @@ Slide 1 — THE HOOK SLIDE (stop-scroll):
 - Minimal text — one short headline, no body copy
 - High-contrast typography, oversized hook line, strong color block
 - Must communicate the post's core promise in under 2 seconds of viewing
-- No icons, no decorations that compete with the hook — maximize impact
+- No icons, no decorations that compete with the hook — maximize impact${hookReferenceWarning}
 
 Slides 2 to N-1 — THE BODY SLIDES:
 - Carry the value: each body slide covers exactly ONE talking point from the list above

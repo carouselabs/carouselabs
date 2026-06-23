@@ -32,6 +32,7 @@ export function buildCarouselPrompt(
 
 COPY EXACTLY from the reference (non-negotiable):
 - The exact color palette — identify the precise colors you see (name them with hex codes) and use ONLY these colors across all 7-8 slides
+- Pay close attention to MULTIPLE SHADES of the same color family if present — for example, if the reference has both a light blue AND a darker/deeper blue, you must identify and use BOTH shades distinctly across the slides (e.g. light blue #93C5FD for backgrounds, dark blue #1E3A8A for accents/text) — do not simplify multiple shades into a single generic version or substitute one shade with white/cream just because it's lighter. Count and name EVERY distinct shade you observe, however subtle, and assign each one a specific hex code that matches its lightness/darkness level as closely as possible.
 - The exact texture and rendering style (e.g. watercolor, flat vector, photographic, grainy, paper texture, gradient style)
 - The exact typography feel (font weight, letter spacing, how headlines are styled)
 - The exact overall visual treatment (shadows, highlights, borders, spacing patterns)

@@ -8,6 +8,10 @@ import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+// The structured multi-slide generation can run long; allow up to 300s so it
+// isn't cut off by the platform's shorter default function timeout.
+export const maxDuration = 300
+
 const CAPTION_GHOSTWRITER_INSTRUCTION = `Act as a top 0.1% LinkedIn ghostwriter for AI founders. Read the deep dive and identify every unique insight, strategic implication, supporting argument, and founder perspective. Rewrite it into a LinkedIn post that preserves all high-value information while removing fluff, repetition, and unnecessary exposition. Optimize for readability, engagement, and authority—not virality or clickbait. The writing should feel human, opinionated, and experience-driven, with natural transitions and varied sentence lengths. The first three lines should create curiosity without hiding the value, and the rest should progressively reveal deeper insights. Prioritize clarity over hype, include practical takeaways, and end with a question that invites thoughtful discussion rather than generic comments. If any important idea from the original is omitted, explicitly add it back so that no meaningful strategic insight is lost. The final post should sound like an experienced founder or investor sharing hard-earned lessons, not an AI summarizing an article.`
 
 interface Slide {
@@ -333,7 +337,7 @@ ${buildCarouselPrompt(
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-5",
-      max_tokens: 16000,
+      max_tokens: 12000,
       messages,
     })
 

@@ -33,7 +33,7 @@ export function buildCarouselPrompt(
 EXTRACT ONLY THESE FROM THE REFERENCE (with exact hex codes you observe):
 - Illustration technique: name it precisely (watercolor and ink, flat vector, 3D render, photographic, paper collage, line art, gradient-mesh digital, editorial cartoon, etc.) — do not guess generically, identify what you actually see
 - Texture and finish: paper grain, brush bleed, flat clean edges, noise, glossy, matte — whatever is actually present
-- Color palette: list the 5-8 dominant hex codes you can identify from the reference and reuse ONLY these (plus logical tints/shades of them) across all slides
+- Color palette: list the 5-8 dominant hex codes you can identify from the reference and reuse ONLY these (plus logical tints/shades of them) across all slides. Pay close attention to MULTIPLE SHADES of the same color family if present — if the reference has both a light blue AND a darker/deeper blue, you must identify and use BOTH shades distinctly (e.g. light blue #93C5FD for backgrounds, dark blue #1E3A8A for accents/text). Do NOT simplify multiple shades into a single generic version, and do NOT substitute a lighter shade with white/cream just because it's light. Count and name EVERY distinct shade you observe, however subtle, each with a specific hex code that matches its lightness/darkness level as closely as possible
 - Typography treatment: font weight, whether serif or sans-serif, how headlines are highlighted (marker swipe, color block, underline, none), letter spacing, casing
 - Composition ratio: roughly what % of each slide is text vs illustration, and how that's arranged (top-heavy, centered, split)
 - Lighting style: warm/cool temperature, single or multiple light sources, soft or hard shadows, any glow effects
@@ -70,15 +70,13 @@ BACKGROUND: || [base color with hex code, texture/grain description]
 
 TYPOGRAPHY: || [font weight/style; the EXACT headline text for this slide; placement as top X% of canvas; which specific word(s) get a highlight treatment and the exact hex code of that highlight; subtitle text if relevant with hex code]
 
-MAIN ILLUSTRATION: || [this is the longest, most detailed segment — describe a complete original scene illustrating THIS slide's specific talking point, covering ALL of: (a) CHARACTERS — age, features, exact clothing with hex codes, exact posture, facial expression, what they are doing, where their eyes are looking; (b) SETTING — exact location, time of day, background elements, props visible; (c) LIGHTING — primary light source color+hex+direction, secondary source if any, which areas/characters each one hits; (d) KEY OBJECTS/PROPS — every meaningful object, its placement, its hex color, what it symbolically represents; (e) SMALL DETAILS — 3 to 5 tiny visual details a viewer would notice on a second look that reinforce the message; (f) CORE VISUAL MOMENT — the exact split-second being captured, the tension or contrast in it, and what a viewer understands in under 3 seconds before reading any text]
+MAIN ILLUSTRATION: || [the most detailed segment — describe a complete original scene illustrating THIS slide's specific talking point, covering ALL of: (a) CHARACTERS & SETTING — who is in the scene (age, features, key clothing with hex codes, posture, expression, what they're doing) and where it takes place (location, time of day, key background elements and props visible); (b) LIGHTING — primary light source color+hex+direction, secondary source if any, which areas/characters each one hits; (c) KEY OBJECTS & DETAILS — the meaningful objects with their placement and hex colors, plus 2-3 small details a viewer would notice on a second look that reinforce the message; (d) CORE VISUAL MOMENT — the exact split-second being captured, the tension or contrast in it, and what a viewer understands in under 3 seconds before reading any text]
 
 VISUAL HIERARCHY: || [numbered list describing the exact order the eye travels: 1st, 2nd, 3rd, 4th element]
 
 COLOR PALETTE: || [every color used in this slide listed as Name: #HEXCODE, comma separated — background, headline, highlight, every character's skin and clothing, every prop, every light source]
 
 MOOD: || [2-3 sentences naming the EXACT emotional target — never generic words like "powerful" or "emotional," describe specifically what the viewer should feel and why]
-
-CRITICAL NOTES: || [4-6 short technical musts/don'ts specific to the extracted style — e.g. "visible pencil sketch lines, not vector" / "no glossy 3D render" / "text must be perfectly legible" / "characters must look like real people not stock photos"]
 
 This structure is NON-NEGOTIABLE for every slide. Do not collapse it into vague prose — each labeled segment must actually contain the level of detail described.`
 
@@ -104,7 +102,7 @@ NOW generate 7-8 carousel slides where:
 
 IMPORTANT: Each slide prompt must be directly about the content above. Do NOT create generic slides. Every slide must reference the actual topic, facts, and insights from the breakdown above.
 
-Each slide's "prompt" string must be minimum 250 words once all labeled segments are combined, with exact hex color codes for every color mentioned.
+Each slide's "prompt" string must be minimum 150 words once all labeled segments are combined, with exact hex color codes for every color mentioned.
 
 CRITICAL SLIDE ROLE ENGINEERING:
 

@@ -28,35 +28,24 @@ export function buildCarouselPrompt(
       : `User selected 4:5 Portrait format.\nPortrait 4:5 ratio (1080x1350px). ALL slides must be optimized for portrait orientation.`
 
   const referenceLeadBlock = hasReference
-    ? `⚠️ CRITICAL REFERENCE IMAGE INSTRUCTION:
-The attached image is a STYLE REFERENCE ONLY — treat it as a mood board, NOT a template.
-DO NOT recreate this image. DO NOT copy its subjects, people, scene, objects, composition, or content.
+    ? `You have been given a reference image. Look at it carefully right now.
 
-From the reference, capture ONLY broad stylistic qualities, described in GENERAL terms:
-- Overall mood/tone (e.g. 'warm and editorial', 'bold and modern', 'minimalist and clean')
-- General color family (e.g. 'warm earth tones', 'cool blues and purples') — choose NEW hex codes that sit within this family; do NOT copy the reference's exact palette or exact color placement
-- General illustration approach (e.g. 'flat design', 'photographic', 'hand-drawn / watercolor') — NOT exact character poses or exact scene composition
-- Typography feel (e.g. 'bold sans-serif headlines') — NOT exact font matching
+Before writing anything else, describe to yourself in your own reasoning:
+1. What are the EXACT colors in this image? Name them specifically (e.g. 'deep purple #6B46C1', 'soft cream #F5F0E8') based on what you actually observe.
+2. What illustration/art style is this? (watercolor, flat design, photographic, line art, etc.)
+3. What is the overall mood/aesthetic?
 
-DO NOT describe, for ANY slide:
-- Specific character poses, positions, or actions taken from the reference
-- Specific objects or scene elements and their exact placement from the reference
-- Specific text layout positions copied from the reference
+Now, every single slide you generate (all 7-8 slides) MUST use:
+- The SAME color palette you just identified — these exact colors, consistently, across every slide
+- The SAME illustration style you just identified
+- The SAME overall mood and aesthetic
 
-Apply this general design language CONSISTENTLY across ALL slides so the carousel reads as one cohesive set from the same 'brand style' / 'design system' as the reference — but every slide must be a COMPLETELY DIFFERENT, ORIGINAL composition built around the actual post content (refinedHook, deepDive, talking points). Think 'same design language, totally different scenes' — never 'recreate the reference with new text'.
+This is not optional. If your slides do not visually match the reference image's colors and style, you have failed this task. The content/scene in each slide should be original (not copying the reference's literal subject matter), but the COLORS and ART STYLE must clearly and obviously come from the reference image — someone looking at your slides next to the reference image should immediately recognize they're using the same color palette and art style.
 
 `
     : `No reference image was provided. Use a clean, modern social media carousel aesthetic — consistent background, typography, color palette, and highlight treatment across all slides so they look like one cohesive set.
 
 `
-
-  // The hook slide is the most visually important and the most prone to copying
-  // the reference too literally — only warn about it when a reference exists.
-  const hookReferenceWarning = hasReference
-    ? `
-
-⚠️ EXTRA WARNING FOR THE HOOK SLIDE (Slide 1): This is the slide most likely to accidentally recreate the reference image too closely, because it's the most visually important slide. You MUST treat the reference image as nothing more than a mood board for color palette and illustration style. The hook slide's actual visual content (people, objects, scene, composition, pose) must be 100% original and built from the breakdown's refinedHook and deepDive — NOT from the reference image's scene. If you find yourself describing a scene similar to the reference image, STOP and rewrite it to depict the content's actual topic instead.`
-    : ""
 
   const talkingPointsList = Array.isArray(keyTalkingPoints)
     ? keyTalkingPoints.map((point, i) => `${i + 1}. ${point}`).join("\n")
@@ -95,7 +84,7 @@ Slide 1 — THE HOOK SLIDE (stop-scroll):
 - Minimal text — one short headline, no body copy
 - High-contrast typography, oversized hook line, strong color block
 - Must communicate the post's core promise in under 2 seconds of viewing
-- No icons, no decorations that compete with the hook — maximize impact${hookReferenceWarning}
+- No icons, no decorations that compete with the hook — maximize impact
 
 Slides 2 to N-1 — THE BODY SLIDES:
 - Carry the value: each body slide covers exactly ONE talking point from the list above

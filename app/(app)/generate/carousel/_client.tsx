@@ -298,6 +298,8 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
 
     let generatedSlides: Slide[]
     try {
+      console.log("[carousel][DIAGNOSTIC] Full referenceImage value:", referenceImage)
+      console.log("[carousel][DIAGNOSTIC] referenceImage state was last set by handleReferenceChange - confirm timing")
       const promptRes = await fetch("/api/generate/carousel-prompt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -756,6 +758,16 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
 
           {referenceNotice && (
             <p className="text-[12px] text-[#D97706] leading-[1.5]">{referenceNotice}</p>
+          )}
+
+          {/* TEMPORARY DIAGNOSTIC — shows the exact image that will be sent to the
+              API, so you can visually confirm it matches what you just uploaded. */}
+          {referenceImage && (
+            <img
+              src={`data:${referenceMediaType};base64,${referenceImage}`}
+              alt="debug preview"
+              style={{ maxWidth: "150px", border: "3px solid red" }}
+            />
           )}
 
           <div className="flex items-center gap-3 flex-wrap">

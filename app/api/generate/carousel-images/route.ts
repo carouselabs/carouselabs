@@ -151,9 +151,17 @@ export async function POST(req: Request) {
 
   try {
     for (const slide of slides) {
+      // Safety net: slide prompts are authored as " || "-separated labeled
+      // segments (STYLE: || ... CANVAS: || ...). Strip the labels + separators so
+      // gpt-image-2 receives clean prose, not the structural scaffolding.
+      const cleanPrompt = (slide.prompt ?? "")
+        .replace(/\b[A-Z][A-Z\s]*:\s*\|\|\s*/g, "")
+        .replace(/\s*\|\|\s*/g, " ")
+        .trim()
+
       const imageResponse = await openai.images.generate({
         model: "gpt-image-2",
-        prompt: slide.prompt ?? "",
+        prompt: cleanPrompt,
         n: 1,
         size: openaiSize,
         quality: "medium", // medium quality keeps carousel generation cheaper/faster

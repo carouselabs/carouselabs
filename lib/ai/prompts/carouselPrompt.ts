@@ -19,7 +19,7 @@ export function buildCarouselPrompt(
     : ""
 
   const nicheBlock = niche
-    ? `USER NICHE / INDUSTRY: ${niche}\nGround every slide's content and imagery in this niche.\n\n`
+    ? `USER NICHE / INDUSTRY: ${niche}\nGround every slide's scene, characters, and objects in this niche — not generic stock imagery.\n\n`
     : ""
 
   const sizeBlock =
@@ -27,26 +27,31 @@ export function buildCarouselPrompt(
       ? `User selected 1:1 Square format.\nSquare 1:1 ratio (1080x1080px). ALL slides must be optimized for square format.`
       : `User selected 4:5 Portrait format.\nPortrait 4:5 ratio (1080x1350px). ALL slides must be optimized for portrait orientation.`
 
-  const referenceLeadBlock = hasReference
-    ? `You have been given a reference image. This reference defines the EXACT visual design system for this entire carousel — treat it like a strict brand style guide.
+  const styleExtractionBlock = hasReference
+    ? `A reference image has been provided. It defines the VISUAL STYLE for this entire carousel ONLY. Treat it as a style guide, never as content to recreate.
 
-COPY EXACTLY from the reference (non-negotiable):
-- The exact color palette — identify the precise colors you see (name them with hex codes) and use ONLY these colors across all 7-8 slides
-- Pay close attention to MULTIPLE SHADES of the same color family if present — for example, if the reference has both a light blue AND a darker/deeper blue, you must identify and use BOTH shades distinctly across the slides (e.g. light blue #93C5FD for backgrounds, dark blue #1E3A8A for accents/text) — do not simplify multiple shades into a single generic version or substitute one shade with white/cream just because it's lighter. Count and name EVERY distinct shade you observe, however subtle, and assign each one a specific hex code that matches its lightness/darkness level as closely as possible.
-- The exact texture and rendering style (e.g. watercolor, flat vector, photographic, grainy, paper texture, gradient style)
-- The exact typography feel (font weight, letter spacing, how headlines are styled)
-- The exact overall visual treatment (shadows, highlights, borders, spacing patterns)
+EXTRACT ONLY THESE FROM THE REFERENCE (with exact hex codes you observe):
+- Illustration technique: name it precisely (watercolor and ink, flat vector, 3D render, photographic, paper collage, line art, gradient-mesh digital, editorial cartoon, etc.) — do not guess generically, identify what you actually see
+- Texture and finish: paper grain, brush bleed, flat clean edges, noise, glossy, matte — whatever is actually present
+- Color palette: list the 5-8 dominant hex codes you can identify from the reference and reuse ONLY these (plus logical tints/shades of them) across all slides
+- Typography treatment: font weight, whether serif or sans-serif, how headlines are highlighted (marker swipe, color block, underline, none), letter spacing, casing
+- Composition ratio: roughly what % of each slide is text vs illustration, and how that's arranged (top-heavy, centered, split)
+- Lighting style: warm/cool temperature, single or multiple light sources, soft or hard shadows, any glow effects
 
-KEEP ORIGINAL (based on the post content, not the reference):
-- The actual scene, characters, objects, and composition in each slide
-- What's literally depicted visually should illustrate THIS post's specific topic, headline, and breakdown content — not the reference's literal subject matter
+DO NOT EXTRACT OR REUSE:
+- The actual subject, characters, objects, or scene shown in the reference
+- Any text or words visible in the reference
+- The literal "story" the reference image tells
 
-Think of it this way: if the reference image shows a person at a desk in watercolor style with a purple/cream palette, your slides should ALSO be watercolor style with that exact purple/cream palette — but showing scenes relevant to THIS post's actual topic (${refinedHook}), not literally recreating 'a person at a desk.'
-
-Every slide must look like it was designed using the EXACT SAME design system/template as the reference image — same colors, same texture, same visual DNA — while depicting original scenes built from this post's actual content.
+Every one of the 7-8 slides below must look like it came from the same design system as the reference — same technique, same palette, same type treatment, same lighting logic — while depicting 100% ORIGINAL scenes built from THIS post's content (topic: ${refinedHook}). If the reference is, say, a flat-vector illustration of a woman at a desk in teal and cream, your slides are flat-vector illustrations in teal and cream depicting whatever THIS post is actually about — never a woman at a desk.
 
 `
-    : `No reference image was provided. Use a clean, modern social media carousel aesthetic — consistent background, typography, color palette, and highlight treatment across all slides so they look like one cohesive set.
+    : `No reference image was provided. Invent ONE cohesive, premium illustration system for this entire carousel and apply it identically across all 7-8 slides:
+- Pick a specific illustration technique appropriate to the niche (modern flat illustration, editorial watercolor, clean line art, etc.) and name it explicitly
+- Define a tight palette of 5-6 hex codes (1 background, 1-2 accent/highlight, 2-3 supporting tones) and reuse only those
+- Define one typography system (font weight, highlight treatment, placement rules) and reuse it on every slide
+- Define one lighting logic (warm/cool, single source) and reuse it on every slide
+State these choices explicitly at the top of the FIRST slide's prompt so they read as a deliberate system, not an accident.
 
 `
 
@@ -55,7 +60,29 @@ Every slide must look like it was designed using the EXACT SAME design system/te
     : String(keyTalkingPoints)
   const endingStr = toStr(strongEndingLine)
 
-  return `${referenceLeadBlock}${nicheBlock}Here is the LinkedIn heading of my posting:
+  const slidePromptStructureBlock = `EVERY SLIDE'S "prompt" FIELD MUST BE WRITTEN AS ONE SINGLE-LINE STRING (no raw line breaks — JSON requires this) BUT INTERNALLY STRUCTURED AS THESE LABELED SEGMENTS, SEPARATED BY " || " IN THIS EXACT ORDER:
+
+STYLE: || [the extracted or invented technique, texture, finish — 1-2 sentences, specific not vague]
+
+CANVAS: || [exact ratio from sizeBlock, % of canvas for typography vs illustration]
+
+BACKGROUND: || [base color with hex code, texture/grain description]
+
+TYPOGRAPHY: || [font weight/style; the EXACT headline text for this slide; placement as top X% of canvas; which specific word(s) get a highlight treatment and the exact hex code of that highlight; subtitle text if relevant with hex code]
+
+MAIN ILLUSTRATION: || [this is the longest, most detailed segment — describe a complete original scene illustrating THIS slide's specific talking point, covering ALL of: (a) CHARACTERS — age, features, exact clothing with hex codes, exact posture, facial expression, what they are doing, where their eyes are looking; (b) SETTING — exact location, time of day, background elements, props visible; (c) LIGHTING — primary light source color+hex+direction, secondary source if any, which areas/characters each one hits; (d) KEY OBJECTS/PROPS — every meaningful object, its placement, its hex color, what it symbolically represents; (e) SMALL DETAILS — 3 to 5 tiny visual details a viewer would notice on a second look that reinforce the message; (f) CORE VISUAL MOMENT — the exact split-second being captured, the tension or contrast in it, and what a viewer understands in under 3 seconds before reading any text]
+
+VISUAL HIERARCHY: || [numbered list describing the exact order the eye travels: 1st, 2nd, 3rd, 4th element]
+
+COLOR PALETTE: || [every color used in this slide listed as Name: #HEXCODE, comma separated — background, headline, highlight, every character's skin and clothing, every prop, every light source]
+
+MOOD: || [2-3 sentences naming the EXACT emotional target — never generic words like "powerful" or "emotional," describe specifically what the viewer should feel and why]
+
+CRITICAL NOTES: || [4-6 short technical musts/don'ts specific to the extracted style — e.g. "visible pencil sketch lines, not vector" / "no glossy 3D render" / "text must be perfectly legible" / "characters must look like real people not stock photos"]
+
+This structure is NON-NEGOTIABLE for every slide. Do not collapse it into vague prose — each labeled segment must actually contain the level of detail described.`
+
+  return `${styleExtractionBlock}${nicheBlock}Here is the LinkedIn heading of my posting:
 ${refinedHook}
 
 Here is the full deep dive context:
@@ -77,83 +104,34 @@ NOW generate 7-8 carousel slides where:
 
 IMPORTANT: Each slide prompt must be directly about the content above. Do NOT create generic slides. Every slide must reference the actual topic, facts, and insights from the breakdown above.
 
-Each slide prompt must be minimum 200 words with exact hex color codes for every color.
+Each slide's "prompt" string must be minimum 250 words once all labeled segments are combined, with exact hex color codes for every color mentioned.
 
 CRITICAL SLIDE ROLE ENGINEERING:
 
 Slide 1 — THE HOOK SLIDE (stop-scroll):
 - Single most important slide for engagement; engineered to stop the scroll
-- Must use a bold, scroll-stopping hook with maximum visual contrast
-- Minimal text — one short headline, no body copy
+- Bold, scroll-stopping headline with maximum visual contrast, minimal supporting text
 - High-contrast typography, oversized hook line, strong color block
 - Must communicate the post's core promise in under 2 seconds of viewing
-- No icons, no decorations that compete with the hook — maximize impact
+- The MAIN ILLUSTRATION here should be the single most visually striking scene in the whole carousel — no competing decoration
 
 Slides 2 to N-1 — THE BODY SLIDES:
-- Carry the value: each body slide covers exactly ONE talking point from the list above
-- Use the ACTUAL words, concepts, and specifics from the breakdown — not paraphrased generics
-- Strong visual hierarchy: headline + supporting visual + minimal body copy
-- Maintain consistent grid, palette, and typography across all body slides
-- Each slide must end in a way that pulls the user to swipe to the next one
+- Each body slide covers exactly ONE talking point from the list above, using the actual words/concepts from the breakdown, not paraphrased generics
+- Strong visual hierarchy: headline + supporting illustration + minimal body copy
+- Maintain the identical palette, typography system, and lighting logic across all body slides — only the scene changes
+- Each slide's CORE VISUAL MOMENT should leave a small open thread that makes the viewer want to swipe to the next slide
 
 Final Slide — THE CTA SLIDE:
-- Engineered specifically as the call-to-action slide
-- Must use "${endingStr}" as the saveable takeaway line
-- Must contain a strong, clear CTA encouraging comments, saves, shares, or profile visits
-- Visually distinct from body slides (inverted color block or accent shape)
-- CTA must feel earned by the value delivered in the body slides — not generic
-
-The CTA slide should focus on:
-- A strong call to action (comment, save, share)
-- A saveable one-line takeaway quote
-- An engagement question
+- Must use "${endingStr}" as the saveable takeaway line in the TYPOGRAPHY segment
+- MAIN ILLUSTRATION should depict a resolution/payoff scene — visually distinct energy from the body slides (calmer, warmer, or an inverted color block) while staying in the same style system
+- Must contain a strong, clear CTA encouraging comments, saves, shares, or profile visits, written into the TYPOGRAPHY segment
+- The CTA must feel earned by the value delivered in the body slides — not generic
 Do NOT include any social media handles, usernames, or @ mentions anywhere in the slide.
 
-Each slide prompt must include:
-- Slide objective/message (tied to the specific content above)
-- Headline/text for the slide
-- Slide role (hook / body / cta) — explicitly labeled
-- Visual composition
-- Design direction
-- Subject placement
-- Typography style
-- Colors and mood (with exact hex codes)
-- Visual storytelling flow
-- Icon/graphic suggestions
-- Transition logic between slides
+${slidePromptStructureBlock}
 
 CRITICAL VISUAL REQUIREMENT:
-Each slide must contain ACTUAL VISUAL IMAGERY — not just text on a background.
-
-Every slide prompt must describe:
-1. A MAIN VISUAL SCENE or ILLUSTRATION that takes up 40-60% of the slide space — this could be:
-   - An illustrated character, person, or scene relevant to the slide content
-   - A detailed environment or setting that represents the concept
-   - A visual metaphor brought to life as an actual scene/illustration
-   - Abstract but visually rich artwork that represents the idea
-
-2. The illustration style must match the reference image — if reference shows watercolor illustration style, describe watercolor illustrated characters and scenes. If reference shows photographic style, describe photographic scenes. If reference shows flat design illustrations, describe flat design characters.
-
-3. Text overlays on top of or beside the visual scene — the text does not float on a plain background.
-
-4. The visual scene must TELL THE STORY of that specific slide's content visually — a viewer should understand the slide message from the image alone, even without reading the text.
-
-EXAMPLE — Instead of:
-'Background is cream #F5F3EE with the headline text centered'
-
-Write:
-'A detailed watercolor illustration of a founder sitting at a laptop, looking concerned, while giant platform logos loom in the background above them like shadowy giants. The illustration uses warm amber and navy tones matching the reference style. The headline text overlays the upper portion of this scene in bold black typography with yellow highlight accents.'
-
-CRITICAL SLIDE PROMPT REQUIREMENTS:
-- Each individual slide prompt must be minimum 200 words
-- Be extremely detailed and descriptive for each slide
-- Include exact hex color codes for EVERY color mentioned (e.g. deep purple #7C3AED, off-white #F0F0FA)
-- Describe the exact composition — what elements are in foreground, background, left side, right side, center
-- Describe typography in detail — font weight (bold/light/medium), size, color with hex code, exact placement on slide
-- Describe lighting and shadows
-- Describe every visual element, icon, shape, line, graphic
-- Describe the mood and energy of the slide
-- Make each prompt detailed enough that any AI image generator can create the perfect slide
+Each slide must contain ACTUAL VISUAL IMAGERY in the MAIN ILLUSTRATION segment — never describe a slide as just "text on a background." A viewer must be able to understand that specific slide's message from the illustration alone, before reading any text.
 
 CRITICAL SIZE REQUIREMENT:
 ${sizeBlock}
@@ -162,11 +140,11 @@ ${userInstructionBlock}
 
 Rules:
 - Caption and visuals must feel connected
-- All slides must share consistent grid, palette, typography
+- All slides must share the identical style, palette, typography, and lighting logic established above — only scenes change
 - Avoid generic or cluttered slides
 - Every slide must feel premium, modern, viral-ready
 
-CRITICAL JSON ESCAPING: any double-quote character that appears WITHIN a string value (e.g. quoting a phrase like "AI doesn't work for us", denoting inches like 5", or hex codes in parentheses) MUST be properly escaped as \" — this is mandatory for valid JSON output. Do NOT include raw line breaks inside a string value; keep each value on a single logical line. Double-check escaping before outputting.
+CRITICAL JSON ESCAPING: any double-quote character that appears WITHIN a string value (e.g. quoting a phrase like "AI doesn't work for us", denoting inches like 5", or hex codes in parentheses) MUST be properly escaped as \" — this is mandatory for valid JSON output. Do NOT include raw line breaks inside any string value — within the "prompt" field, use " || " as the section separator exactly as instructed above, never an actual newline. Double-check escaping before outputting.
 
 Return ONLY valid JSON, no markdown:
 {

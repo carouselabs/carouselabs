@@ -271,3 +271,15 @@ model UsageCounter {
 
   @@index([userId])
 }
+
+// Tracks webhook deliveries we've already handled so a provider redelivery
+// (retry after a timeout/non-2xx) can't be processed twice — preventing
+// duplicate emails and double credit grants/resets.
+model ProcessedWebhookEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  source      String // "lemonsqueezy", "razorpay", etc. — for future use
+  processedAt DateTime @default(now())
+
+  @@index([source])
+}

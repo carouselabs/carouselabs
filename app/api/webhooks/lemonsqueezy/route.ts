@@ -16,7 +16,7 @@ export const runtime = "nodejs"
 // Lemon Squeezy nests the event name under `meta.event_name`; the resource
 // fields live under `data.attributes`.
 type LsWebhook = {
-  meta: { event_name: string; custom_data?: Record<string, unknown> }
+  meta: { event_name: string; webhook_id?: string; custom_data?: Record<string, unknown> }
   data: {
     id: string
     attributes: {
@@ -57,6 +57,25 @@ export async function POST(req: Request) {
     payload = JSON.parse(rawBody) as LsWebhook
   } catch {
     return new Response("Invalid JSON", { status: 400 })
+  }
+
+  // ── Idempotency ──
+  // Lemon Squeezy redelivers on timeout/non-2xx. Record each unique delivery and
+  // skip anything we've already processed, so a redelivery can't resend emails
+  // or re-reset credits. A true redelivery is byte-identical, so a hash of the
+  // raw body is a stable per-delivery key; prefer an explicit id if present.
+  const eventId =
+    payload.meta?.webhook_id ??
+    crypto.createHash("sha256").update(rawBody).digest("hex")
+
+  try {
+    await db.processedWebhookEvent.create({
+      data: { eventId, source: "lemonsqueezy" },
+    })
+  } catch {
+    // Unique-constraint violation = we've already handled this exact delivery.
+    console.log("[webhooks/lemonsqueezy] duplicate event, skipping:", eventId)
+    return new Response("OK (duplicate, skipped)", { status: 200 })
   }
 
   const eventName = payload.meta?.event_name
@@ -164,6 +183,9 @@ export async function POST(req: Request) {
     }
   } catch (err) {
     console.error("[webhooks/lemonsqueezy] handler error:", eventName, err)
+    // Roll back the idempotency record so Lemon Squeezy's retry can reprocess
+    // this event, instead of it being permanently skipped as a "duplicate".
+    await db.processedWebhookEvent.delete({ where: { eventId } }).catch(() => {})
     return new Response("Handler error", { status: 500 })
   }
 

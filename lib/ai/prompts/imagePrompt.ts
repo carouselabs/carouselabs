@@ -19,23 +19,22 @@ export function buildImagePrompt(
       ? `User selected 1:1 Square format.\nSquare 1:1 ratio (1080x1080px). Optimize ALL composition for perfect square. Balance elements symmetrically.`
       : `User selected 4:5 Portrait format.\nPortrait 4:5 ratio (1080x1350px). Optimize ALL composition for tall portrait. Keep key elements centered. Text placement must work in portrait orientation.`
 
-  return `⚠️ CRITICAL REFERENCE IMAGE INSTRUCTION:
-The image attached is a STYLE REFERENCE ONLY.
-DO NOT recreate this image.
-DO NOT copy the subjects, people, scene, or content of this image.
+  return `A reference image has been provided. It defines the VISUAL STYLE for this image ONLY. Treat it as a style guide, never as content to recreate.
 
-When using the reference image for style, describe ONLY broad stylistic qualities in general terms:
-- Overall mood/tone (e.g. 'warm and editorial', 'bold and modern', 'minimalist and clean')
-- General color family (e.g. 'warm earth tones', 'cool blues and purples') — NOT exact hex codes or exact color placement
-- General illustration approach (e.g. 'flat design', 'photographic', 'hand-drawn style') — NOT exact character poses or exact scene composition
-- Typography feel (e.g. 'bold sans-serif headlines') — NOT exact font matching
+EXTRACT ONLY THESE FROM THE REFERENCE (with exact hex codes you observe):
+- Illustration technique: name it precisely (watercolor and ink, flat vector, 3D render, photographic, paper collage, line art, gradient-mesh digital, editorial cartoon, etc.) — identify what you actually see, don't guess generically
+- Texture and finish: paper grain, brush bleed, flat clean edges, noise, glossy, matte — whatever is actually present
+- Color palette: list the 5-8 dominant hex codes you can identify from the reference and reuse ONLY these (plus logical tints/shades of them). Pay close attention to MULTIPLE SHADES of the same color family if present — if the reference has both a light and a darker version of a color, identify and use BOTH shades distinctly with separate hex codes. Do NOT simplify multiple shades into one, and do NOT substitute a lighter shade with white/cream just because it's light. Count and name EVERY distinct shade you observe, however subtle.
+- Typography treatment: font weight, serif/sans-serif, headline highlight style, letter spacing, casing
+- Composition ratio: % text vs % illustration, arrangement
+- Lighting style: warm/cool temperature, light source count, soft/hard shadows, glow effects
 
-DO NOT describe:
-- Specific character poses, positions, or actions from the reference
-- Specific objects or scene elements and their exact placement
-- Specific text layout positions
+DO NOT EXTRACT OR REUSE:
+- The actual subject, characters, objects, or scene shown in the reference
+- Any text or words visible in the reference
+- The literal 'story' the reference image tells
 
-The new image should feel like it's from the same 'brand style' or 'design system' as the reference, but be a COMPLETELY DIFFERENT composition built around the actual caption content provided (refinedHook, deepDive, caption). Think of it as 'same design language, totally different scene' rather than 'recreate this image with new text'.
+The image must look like it came from the same design system as the reference — same technique, same palette, same type treatment, same lighting logic — while depicting a 100% ORIGINAL scene built from THIS post's content (topic: ${refinedHook}). If the reference is, say, a flat-vector illustration of a woman at a desk in teal and cream, your image is a flat-vector illustration in teal and cream depicting whatever THIS post is actually about — never a woman at a desk.
 
 The image prompt you generate must be about this LinkedIn post:
 
@@ -71,7 +70,7 @@ The visual prompt must:
 - Include composition, subject, lighting, mood, style, colors, typography placement, and visual hierarchy
 - Make the visual instantly understandable and scroll-stopping
 - Ensure the image visually communicates the hook, core message, and CTA clearly
-- If a reference is provided, capture only its general design language (broad mood, general color family, illustration approach, typography feel) — do NOT copy its exact colors, composition, layout, scene, or content
+- If a reference is provided, reuse its EXACT palette (the exact hex codes identified above, including distinct shades) and exact illustration technique — but depict an ORIGINAL scene built from this post's content, not the reference's literal subject matter
 - Adapt the design direction according to the uploaded reference and user requirements
 - Be optimized for high CTR and stopping scroll across social media platforms (LinkedIn, Instagram, Twitter/X)
 - Feel modern, premium, clean, and attention-grabbing
@@ -84,7 +83,7 @@ No arrows pointing right, no 'next' indicators, no swipe prompts.
 
 CRITICAL IMAGE PROMPT REQUIREMENTS:
 - Minimum 400 words
-- Include specific hex color codes for EVERY color in the NEW design (choose colors that sit within the reference's general color family, but do NOT copy the reference's exact palette or color placement)
+- Include specific hex color codes for EVERY color — reuse the reference's EXACT hex codes identified above, not approximations, including any distinct shades within the same color family
 - Describe composition in detail (foreground, background, left, right, center)
 - Describe lighting (direction, intensity, color)
 - Describe typography (font style, weight, placement, hex color)

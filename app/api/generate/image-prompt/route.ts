@@ -8,6 +8,10 @@ import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+// Reference-image vision + a long image prompt can run past the platform's
+// shorter default function timeout; allow up to 300s (matches the other routes).
+export const maxDuration = 300
+
 // Appended to the prompt only when a reference image is attached. Stops the
 // model from lifting text/headlines visible in the reference (it should treat
 // the reference as a pure visual-style cue, not a content source).

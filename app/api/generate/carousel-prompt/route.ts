@@ -339,6 +339,8 @@ ${buildCarouselPrompt(
       messages,
     })
 
+    console.log("[carousel-prompt] Claude stop_reason:", response.stop_reason)
+
     claudeRaw = response.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)
@@ -350,6 +352,7 @@ ${buildCarouselPrompt(
 
   if (!claudeRaw.trimEnd().endsWith("}")) {
     console.warn("[generate/carousel-prompt] WARNING: Response may be truncated — does not end with }")
+    console.log("[carousel-prompt] Raw response length:", claudeRaw.length, "/ max_tokens:", 12000)
   }
 
   let parsed: { caption: string; slides: Slide[] }
@@ -363,6 +366,8 @@ ${buildCarouselPrompt(
   if (!parsed.slides.length) {
     return NextResponse.json({ error: "No slides found in AI response" }, { status: 502 })
   }
+
+  console.log("[carousel-prompt] Final slide count:", parsed.slides.length)
 
   return NextResponse.json({ caption: parsed.caption, slides: parsed.slides })
 }

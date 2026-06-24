@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useOnboardingStore } from "@/lib/store/onboardingStore"
 import { StepNav } from "@/components/onboarding/StepNav"
+import { WordLimitedField } from "@/components/WordLimitedField"
 
 const SENIORITY = [
   "Entry-level",
@@ -38,10 +39,12 @@ export default function AudiencePage() {
           <label className="block text-xs font-medium text-[#6B7280] mb-2 uppercase tracking-wide">
             Their Job Role
           </label>
-          <input
-            type="text"
+          <WordLimitedField
+            as="input"
             value={audienceRole}
-            onChange={(e) => setAudienceRole(e.target.value)}
+            onChange={setAudienceRole}
+            maxWords={5}
+            warnWithin={2}
             placeholder="e.g. Marketing Manager, CTO, Founder…"
             className="w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors"
           />
@@ -72,10 +75,12 @@ export default function AudiencePage() {
           <label className="block text-xs font-medium text-[#6B7280] mb-2 uppercase tracking-wide">
             Their Industry
           </label>
-          <input
-            type="text"
+          <WordLimitedField
+            as="input"
             value={audienceIndustry}
-            onChange={(e) => setAudienceIndustry(e.target.value)}
+            onChange={setAudienceIndustry}
+            maxWords={5}
+            warnWithin={2}
             placeholder="e.g. B2B SaaS, Healthcare, Finance…"
             className="w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors"
           />
@@ -85,11 +90,13 @@ export default function AudiencePage() {
           <label className="block text-xs font-medium text-[#6B7280] mb-2 uppercase tracking-wide">
             Core Problem They Face
           </label>
-          <textarea
+          <WordLimitedField
+            as="textarea"
             value={coreProblem}
-            onChange={(e) => setCoreProblem(e.target.value)}
-            placeholder="e.g. Struggling to generate leads on LinkedIn, building a brand without time…"
+            onChange={setCoreProblem}
+            maxWords={200}
             rows={3}
+            placeholder="e.g. Struggling to generate leads on LinkedIn, building a brand without time…"
             className="w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors resize-none"
           />
         </div>

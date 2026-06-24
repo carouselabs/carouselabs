@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { Check, X, Search } from "lucide-react"
 import { SettingsTabs } from "@/components/settings/SettingsTabs"
 import { SavedToast } from "@/components/settings/SavedToast"
+import { WordLimitedField } from "@/components/WordLimitedField"
 import {
   ROLES,
   INDUSTRIES,
@@ -257,9 +258,11 @@ export default function ProfileSettingsPage() {
                   </div>
                 )}
               </div>
-              <input
+              <WordLimitedField
+                as="input"
                 value={niche}
-                onChange={(e) => setNiche(e.target.value)}
+                onChange={setNiche}
+                maxWords={500}
                 placeholder="Describe your business — e.g. I help B2B SaaS founders grow with content"
                 className="w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-[13px] focus:outline-none focus:border-[#1A1A1A] transition-colors"
               />
@@ -332,9 +335,12 @@ export default function ProfileSettingsPage() {
           {/* ── Target Audience ── */}
           <Section title="Target Audience" hint="Who are you writing for?">
             <div className="flex flex-col gap-3">
-              <input
+              <WordLimitedField
+                as="input"
                 value={audienceRole}
-                onChange={(e) => setAudienceRole(e.target.value)}
+                onChange={setAudienceRole}
+                maxWords={5}
+                warnWithin={2}
                 placeholder="Their job role — e.g. Marketing Manager, CTO…"
                 className="w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-[13px] focus:outline-none focus:border-[#1A1A1A] transition-colors"
               />
@@ -354,15 +360,20 @@ export default function ProfileSettingsPage() {
                   </button>
                 ))}
               </div>
-              <input
+              <WordLimitedField
+                as="input"
                 value={audienceIndustry}
-                onChange={(e) => setAudienceIndustry(e.target.value)}
+                onChange={setAudienceIndustry}
+                maxWords={5}
+                warnWithin={2}
                 placeholder="Their industry — e.g. B2B SaaS, Healthcare…"
                 className="w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-[13px] focus:outline-none focus:border-[#1A1A1A] transition-colors"
               />
-              <textarea
+              <WordLimitedField
+                as="textarea"
                 value={coreProblem}
-                onChange={(e) => setCoreProblem(e.target.value)}
+                onChange={setCoreProblem}
+                maxWords={200}
                 rows={3}
                 placeholder="Core problem they face — e.g. struggling to generate leads on LinkedIn…"
                 className="w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-[13px] focus:outline-none focus:border-[#1A1A1A] transition-colors resize-none"

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useOnboardingStore } from "@/lib/store/onboardingStore"
 import { StepNav } from "@/components/onboarding/StepNav"
+import { WordLimitedField } from "@/components/WordLimitedField"
 
 const INDUSTRIES = [
   "Technology & SaaS",
@@ -108,10 +109,11 @@ export default function IndustryPage() {
           <label className="block text-xs font-medium text-[#6B7280] mb-2 uppercase tracking-wide">
             Describe your business
           </label>
-          <input
-            type="text"
+          <WordLimitedField
+            as="input"
             value={niche}
-            onChange={(e) => setNiche(e.target.value)}
+            onChange={setNiche}
+            maxWords={500}
             placeholder="e.g. I help B2B SaaS founders grow with content"
             className="w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors"
           />

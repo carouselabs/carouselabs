@@ -3,8 +3,7 @@ import { auth } from "@clerk/nextjs/server"
 import { redirect, notFound } from "next/navigation"
 import { db } from "@/lib/db"
 import { dbEnumsToRawCategory } from "@/lib/ai/parsers/ideas"
-import { BreakdownView } from "@/components/idea/BreakdownView"
-import { FormatPicker } from "@/components/idea/FormatPicker"
+import { IdeaWorkspace } from "@/components/idea/IdeaWorkspace"
 import { TrackVisit } from "@/components/history/TrackVisit"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 import type { RawCategory } from "@/lib/ai/parsers/ideas"
@@ -69,14 +68,9 @@ export default async function IdeaPage({
       {/* Divider */}
       <div className="h-px bg-[#ECEAE4]" />
 
-      {/* Breakdown — client component handles auto-generation */}
-      <BreakdownView ideaId={id} initialBreakdown={cachedBreakdown} />
-
-      {/* Divider */}
-      <div className="h-px bg-[#ECEAE4]" />
-
-      {/* Format picker */}
-      <FormatPicker ideaId={id} plan={plan} />
+      {/* Breakdown + format picker — the picker stays disabled until the
+          breakdown finishes generating. */}
+      <IdeaWorkspace ideaId={id} initialBreakdown={cachedBreakdown} plan={plan} />
     </div>
   )
 }

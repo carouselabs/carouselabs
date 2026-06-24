@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { trackHistory } from "@/lib/hooks/useHistory"
 import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
+import { friendlyGenerationError } from "@/lib/friendlyError"
 
 interface CarouselClientProps {
   ideaId: string
@@ -611,8 +612,17 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
           )}
 
           {error && (
-            <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
-              {error}
+            <div className="flex flex-col gap-3">
+              <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
+                {friendlyGenerationError(error)}
+              </div>
+              <button
+                onClick={() => void streamCaption()}
+                disabled={isStreamingCaption}
+                className="self-start text-[13px] font-medium text-[#1A1A1A] hover:text-black transition-colors disabled:opacity-50"
+              >
+                Try Again
+              </button>
             </div>
           )}
 
@@ -782,8 +792,17 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
           </button>
 
           {error && (
-            <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
-              {error}
+            <div className="flex flex-col gap-3">
+              <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
+                {friendlyGenerationError(error)}
+              </div>
+              <button
+                onClick={() => void generateCarouselFlow()}
+                disabled={isGeneratingSlides || isGeneratingImages}
+                className="self-start text-[13px] font-medium text-[#1A1A1A] hover:text-black transition-colors disabled:opacity-50"
+              >
+                Try Again
+              </button>
             </div>
           )}
 

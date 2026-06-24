@@ -52,9 +52,12 @@ const FORMATS: Format[] = [
 interface FormatPickerProps {
   ideaId: string
   plan: "FREE" | "PRO"
+  // While true (breakdown still generating), all options are visible but
+  // disabled so the user can't pick a format before the breakdown is ready.
+  disabled?: boolean
 }
 
-export function FormatPicker({ ideaId, plan }: FormatPickerProps) {
+export function FormatPicker({ ideaId, plan, disabled = false }: FormatPickerProps) {
   const router = useRouter()
   const storageKey = `selectedFormat_${ideaId}`
 
@@ -85,6 +88,7 @@ export function FormatPicker({ ideaId, plan }: FormatPickerProps) {
   }
 
   function handleClick(format: Format) {
+    if (disabled) return // breakdown still generating
     if (isProLocked(format)) {
       // Carousels need Pro — send Free users to upgrade instead of selecting.
       router.push("/settings/billing")
@@ -132,16 +136,18 @@ export function FormatPicker({ ideaId, plan }: FormatPickerProps) {
             <button
               key={format.id}
               onClick={() => handleClick(format)}
-              disabled={isLocked}
+              disabled={isLocked || disabled}
               className={[
                 "group relative flex flex-col gap-2.5 p-4 rounded-xl border text-left transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/50",
-                isActive
-                  ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.1)] shadow-[0_0_24px_rgba(26,26,26,0.18)] cursor-pointer"
-                  : isLocked
-                    ? "border-[#E9E7E1] bg-[#F6F4EE] opacity-50 cursor-not-allowed"
-                    : proLocked
-                      ? "border-[#E5E3DE] bg-[#F4F2EC] opacity-75 hover:opacity-100 hover:border-[rgba(124,58,237,0.4)] cursor-pointer"
-                      : "border-[#E5E3DE] bg-[#F4F2EC] hover:border-[rgba(26,26,26,0.4)] hover:bg-[rgba(26,26,26,0.06)] cursor-pointer",
+                disabled
+                  ? "border-[#E9E7E1] bg-[#F6F4EE] opacity-50 cursor-not-allowed"
+                  : isActive
+                    ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.1)] shadow-[0_0_24px_rgba(26,26,26,0.18)] cursor-pointer"
+                    : isLocked
+                      ? "border-[#E9E7E1] bg-[#F6F4EE] opacity-50 cursor-not-allowed"
+                      : proLocked
+                        ? "border-[#E5E3DE] bg-[#F4F2EC] opacity-75 hover:opacity-100 hover:border-[rgba(124,58,237,0.4)] cursor-pointer"
+                        : "border-[#E5E3DE] bg-[#F4F2EC] hover:border-[rgba(26,26,26,0.4)] hover:bg-[rgba(26,26,26,0.06)] cursor-pointer",
               ].join(" ")}
             >
               {/* Status marker — checkmark when active, lock when locked / Pro-gated */}
@@ -196,7 +202,8 @@ export function FormatPicker({ ideaId, plan }: FormatPickerProps) {
       {activeFormat && (
         <button
           onClick={() => goToFormat(activeFormat)}
-          className="self-start mt-1 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
+          disabled={disabled}
+          className="self-start mt-1 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Continue to {activeFormat.label} →
         </button>

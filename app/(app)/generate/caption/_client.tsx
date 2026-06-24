@@ -10,6 +10,7 @@ import { RegenerationLimit } from "@/components/generate/RegenerationLimit"
 import { VersionHistory } from "@/components/generate/VersionHistory"
 import { trackHistory } from "@/lib/hooks/useHistory"
 import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
+import { friendlyGenerationError } from "@/lib/friendlyError"
 
 interface CaptionClientProps {
   ideaId: string
@@ -241,10 +242,19 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
         disabled={isGenerating || atLimit}
       />
 
-      {/* Error */}
+      {/* Error — technical parse failures become a friendly retry message */}
       {error && (
-        <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
-          {error}
+        <div className="flex flex-col gap-3">
+          <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
+            {friendlyGenerationError(error)}
+          </div>
+          <button
+            onClick={() => void generate(tone).catch(() => {})}
+            disabled={isGenerating}
+            className="self-start text-[13px] font-medium text-[#1A1A1A] hover:text-black transition-colors disabled:opacity-50"
+          >
+            Try Again
+          </button>
         </div>
       )}
 

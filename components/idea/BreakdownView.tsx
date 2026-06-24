@@ -4,10 +4,14 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Sparkles, ArrowLeft } from "lucide-react"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
+import { friendlyGenerationError } from "@/lib/friendlyError"
 
 interface BreakdownViewProps {
   ideaId: string
   initialBreakdown: BreakdownOutline | null
+  // Notifies the parent while the breakdown is (re)generating so sibling UI
+  // (e.g. the format picker) can disable itself.
+  onGeneratingChange?: (generating: boolean) => void
 }
 
 // Render inline **bold** segments inside a line as actual bold text.
@@ -24,7 +28,7 @@ function renderInline(text: string) {
   })
 }
 
-export function BreakdownView({ ideaId, initialBreakdown }: BreakdownViewProps) {
+export function BreakdownView({ ideaId, initialBreakdown, onGeneratingChange }: BreakdownViewProps) {
   const [breakdown, setBreakdown] = useState<BreakdownOutline | null>(initialBreakdown)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -37,6 +41,7 @@ export function BreakdownView({ ideaId, initialBreakdown }: BreakdownViewProps) 
 
   async function generate() {
     setIsGenerating(true)
+    onGeneratingChange?.(true)
     setError(null)
     setInvalidTopic(null)
     try {
@@ -55,6 +60,7 @@ export function BreakdownView({ ideaId, initialBreakdown }: BreakdownViewProps) 
       setError(err instanceof Error ? err.message : "Something went wrong")
     } finally {
       setIsGenerating(false)
+      onGeneratingChange?.(false)
     }
   }
 
@@ -102,13 +108,13 @@ export function BreakdownView({ ideaId, initialBreakdown }: BreakdownViewProps) 
     return (
       <div className="flex flex-col gap-3">
         <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
-          {error}
+          {friendlyGenerationError(error)}
         </div>
         <button
           onClick={generate}
           className="self-start text-[13px] font-medium text-[#1A1A1A] hover:text-[#1A1A1A] transition-colors"
         >
-          Try again
+          Try Again
         </button>
       </div>
     )

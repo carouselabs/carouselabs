@@ -82,6 +82,7 @@ export async function GET() {
     primaryGoal: ws.primaryGoal ?? "",
     tones: ws.tones ?? [],
     voicePresets: (p?.voicePresets as unknown as VoicePreset[]) ?? [],
+    voiceGuidelines: p?.voiceGuidelines ?? "",
     email: user.email,
     plan: (user.subscription?.plan ?? "FREE") as "FREE" | "PRO",
   }
@@ -122,10 +123,11 @@ export async function POST(req: Request) {
   return NextResponse.json({ success: true })
 }
 
-// PATCH /api/profile — settings updates. Handles two independent sections:
-//   • profile fields (when `industry` is present)
-//   • voice presets   (when `voicePresets` is present)
-// Either or both may be sent. Never touches onboardingDone.
+// PATCH /api/profile — settings updates. Handles independent sections:
+//   • profile fields    (when `industry` is present)
+//   • voice presets     (when `voicePresets` is present)
+//   • voice guidelines  (when `voiceGuidelines` is present)
+// Any combination may be sent. Never touches onboardingDone.
 export async function PATCH(req: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -141,6 +143,10 @@ export async function PATCH(req: Request) {
   }
   if (Array.isArray(body.voicePresets)) {
     data.voicePresets = (body.voicePresets as VoicePreset[]).slice(0, 5)
+  }
+  // Voice guidelines — free-form, no maximum. An empty string clears them.
+  if (typeof body.voiceGuidelines === "string") {
+    data.voiceGuidelines = body.voiceGuidelines
   }
 
   if (Object.keys(data).length === 0) {

@@ -101,6 +101,7 @@ model Profile {
   targetAudience   String?
   contentPillars   String[]
   writingStyle     String?
+  voiceGuidelines  String?  @db.Text
   voicePresets     Json?
   linkedInUrl      String?
   timezone         String   @default("UTC")

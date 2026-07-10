@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Plus, Pencil, Trash2, Check } from "lucide-react"
 import { SettingsTabs } from "@/components/settings/SettingsTabs"
 import { SavedToast } from "@/components/settings/SavedToast"
+import { countWords } from "@/lib/wordCount"
 import {
   TONES,
   toneLabel,
@@ -11,6 +12,10 @@ import {
   type ProfileData,
   type VoicePreset,
 } from "@/lib/profile/options"
+
+// Below this many words we nudge the user to add more detail (soft guidance —
+// there is no hard maximum and no minimum enforced).
+const VOICE_GUIDELINES_TARGET_WORDS = 1000
 
 function makeId() {
   return `vp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
@@ -20,7 +25,12 @@ export default function VoicePresetsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [savedMsg, setSavedMsg] = useState("Saved")
   const [presets, setPresets] = useState<VoicePreset[]>([])
+
+  // Voice guidelines — free-form voice instructions saved on the profile.
+  const [voiceGuidelines, setVoiceGuidelines] = useState("")
+  const [savingGuidelines, setSavingGuidelines] = useState(false)
 
   // Editor state — non-null when adding or editing.
   const [editing, setEditing] = useState<VoicePreset | null>(null)
@@ -32,7 +42,11 @@ export default function VoicePresetsPage() {
         const res = await fetch("/api/profile")
         const data = await res.json()
         if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to load")
-        if (active) setPresets((data.profile as ProfileData).voicePresets ?? [])
+        if (active) {
+          const profile = data.profile as ProfileData
+          setPresets(profile.voicePresets ?? [])
+          setVoiceGuidelines(profile.voiceGuidelines ?? "")
+        }
       } catch (err) {
         if (active) setError(err instanceof Error ? err.message : "Something went wrong")
       } finally {
@@ -55,12 +69,35 @@ export default function VoicePresetsPage() {
         body: JSON.stringify({ voicePresets: next }),
       })
       if (!res.ok) throw new Error()
+      setSavedMsg("Presets saved")
       setSaved(true)
     } catch {
       setPresets(snapshot)
       setError("Failed to save preset")
     }
   }
+
+  // Persist just the voice guidelines field via the shared profile PATCH route.
+  async function saveGuidelines() {
+    setSavingGuidelines(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voiceGuidelines }),
+      })
+      if (!res.ok) throw new Error()
+      setSavedMsg("Voice guidelines saved")
+      setSaved(true)
+    } catch {
+      setError("Failed to save voice guidelines")
+    } finally {
+      setSavingGuidelines(false)
+    }
+  }
+
+  const guidelineWords = countWords(voiceGuidelines)
 
   function startAdd() {
     setEditing({ id: makeId(), name: "", tones: [] })
@@ -229,7 +266,48 @@ export default function VoicePresetsPage() {
         </div>
       )}
 
-      <SavedToast open={saved} onClose={() => setSaved(false)} message="Presets saved" />
+      {/* ── Voice Guidelines ── */}
+      {!loading && (
+        <div className="flex flex-col gap-4 pt-8 border-t border-[#F1EFE9]">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-[15px] font-semibold text-[#0A0A0A]">Voice Guidelines</h2>
+            <p className="text-[12.5px] text-[#9CA3AF] leading-[1.5]">
+              Write detailed instructions for how your captions should sound — your tone,
+              phrases you use, phrases you avoid, writing style, examples of your best posts.
+              The more detail you provide, the better the AI will match your voice.
+            </p>
+          </div>
+
+          <textarea
+            value={voiceGuidelines}
+            onChange={(e) => setVoiceGuidelines(e.target.value)}
+            placeholder="Describe your voice in detail — the tone you use, the phrases you love, the ones you avoid, how you structure posts, and paste a few of your best-performing posts as examples…"
+            className="w-full min-h-[300px] px-4 py-3.5 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.6] resize-y placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(26,26,26,0.5)] transition-colors"
+          />
+
+          <div className="flex flex-col gap-1">
+            <p className="text-[12px] text-[#9CA3AF] tabular-nums">
+              {guidelineWords} {guidelineWords === 1 ? "word" : "words"}
+            </p>
+            {guidelineWords >= 1 && guidelineWords < VOICE_GUIDELINES_TARGET_WORDS && (
+              <p className="text-[12px] text-[rgba(217,119,6,0.9)]">
+                Add more detail for better results — aim for at least{" "}
+                {VOICE_GUIDELINES_TARGET_WORDS.toLocaleString()} words
+              </p>
+            )}
+          </div>
+
+          <button
+            onClick={saveGuidelines}
+            disabled={savingGuidelines}
+            className="inline-flex items-center gap-2 self-start px-4 py-2.5 rounded-xl bg-[#1A1A1A] hover:bg-[#000000] text-[13px] font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {savingGuidelines ? "Saving…" : "Save guidelines"}
+          </button>
+        </div>
+      )}
+
+      <SavedToast open={saved} onClose={() => setSaved(false)} message={savedMsg} />
     </div>
   )
 }

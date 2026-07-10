@@ -105,6 +105,7 @@ export interface ProfileData {
   primaryGoal: string
   tones: string[]
   voicePresets: VoicePreset[]
+  voiceGuidelines: string
   email: string
   plan: "FREE" | "PRO"
 }

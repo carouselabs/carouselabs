@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ArrowLeft, Sparkles, Copy, Check, History, Download, RefreshCw, Loader2 } from "lucide-react"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
 import { InstructionBox } from "@/components/generate/InstructionBox"
+import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { ImagePreview } from "@/components/generate/ImagePreview"
 import { PostToLinkedInButton } from "@/components/generate/PostToLinkedInButton"
 import { LoadingGame } from "@/components/generate/LoadingGame"
@@ -53,6 +54,8 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
   const [restored, setRestored] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [captionInstruction, setCaptionInstruction] = useState("")
+  // Opt-in flag: apply the user's saved voice guidelines on caption regeneration.
+  const [useVoiceGuidelines, setUseVoiceGuidelines] = useState(false)
   // Custom instruction for the image generate/regenerate flow (step 4).
   const [imageInstruction, setImageInstruction] = useState("")
   // Shown when changing the reference image invalidates an already-generated
@@ -152,7 +155,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
       const res = await fetch("/api/generate/caption", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId, userInstruction, currentCaption }),
+        body: JSON.stringify({ ideaId, userInstruction, currentCaption, useVoiceGuidelines }),
         signal: controller.signal,
       })
 
@@ -612,6 +615,10 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
                   <span>{caption.length} chars</span>
                 </div>
               </div>
+              <VoiceGuidelinesToggle
+                checked={useVoiceGuidelines}
+                onChange={setUseVoiceGuidelines}
+              />
               <div className="flex items-end gap-2">
                 <textarea
                   value={captionInstruction}

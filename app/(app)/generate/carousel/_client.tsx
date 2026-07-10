@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Sparkles, Copy, Check, History, Loader2 } from "lucide-react"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
+import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { CarouselImageGrid, type SlideImage } from "@/components/generate/CarouselImageGrid"
 import { PostToLinkedInButton } from "@/components/generate/PostToLinkedInButton"
 import { LoadingGame } from "@/components/generate/LoadingGame"
@@ -74,6 +75,8 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
   const [restored, setRestored] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [captionInstruction, setCaptionInstruction] = useState("")
+  // Opt-in flag: apply the user's saved voice guidelines on caption regeneration.
+  const [useVoiceGuidelines, setUseVoiceGuidelines] = useState(false)
   // Per-slide custom instructions for individual slide regeneration, keyed by
   // slideNumber. Cleared per slide on that slide's successful regeneration.
   const [slideInstructions, setSlideInstructions] = useState<Record<number, string>>({})
@@ -187,7 +190,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       const res = await fetch("/api/generate/caption", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId, userInstruction, currentCaption }),
+        body: JSON.stringify({ ideaId, userInstruction, currentCaption, useVoiceGuidelines }),
         signal: controller.signal,
       })
 
@@ -638,6 +641,10 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
                   <span>{caption.length} chars</span>
                 </div>
               </div>
+              <VoiceGuidelinesToggle
+                checked={useVoiceGuidelines}
+                onChange={setUseVoiceGuidelines}
+              />
               <div className="flex items-end gap-2">
                 <textarea
                   value={captionInstruction}

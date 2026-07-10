@@ -44,6 +44,7 @@ function buildCaptionPrompt(
   breakdown: BreakdownOutline,
   tone?: string,
   userInstruction?: string,
+  voiceGuidelines?: string,
 ): string {
   const toneInstruction = tone
     ? `\nTone override: Rewrite entirely in a ${tone} voice throughout.`
@@ -53,7 +54,14 @@ function buildCaptionPrompt(
     ? `\nUser's specific instruction for this regeneration: ${userInstruction}\n`
     : ""
 
-  return `${CAPTION_GHOSTWRITER_INSTRUCTION}
+  // Framed as a style guide, placed right after the ghostwriter instruction and
+  // before any content/breakdown context so the voice rules clearly govern HOW
+  // the caption is written, not WHAT it's about.
+  const voiceGuidelinesBlock = voiceGuidelines
+    ? `\n\nVOICE GUIDELINES — the user has provided detailed instructions for their writing voice. Follow these guidelines closely when writing the caption:\n${voiceGuidelines}\n`
+    : ""
+
+  return `${CAPTION_GHOSTWRITER_INSTRUCTION}${voiceGuidelinesBlock}
 
 User profile:
 ${profileContext}
@@ -158,7 +166,8 @@ export async function POST(req: Request) {
   let ideaId: string,
     tone: string | undefined,
     userInstruction: string | undefined,
-    currentCaption: string | undefined
+    currentCaption: string | undefined,
+    useVoiceGuidelines: boolean
   try {
     const body = await req.json()
     ideaId = body.ideaId
@@ -171,6 +180,7 @@ export async function POST(req: Request) {
       typeof body.currentCaption === "string" && body.currentCaption.trim()
         ? body.currentCaption
         : undefined
+    useVoiceGuidelines = body.useVoiceGuidelines === true
     if (!ideaId) throw new Error("Missing ideaId")
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
@@ -211,12 +221,19 @@ export async function POST(req: Request) {
   console.log(
     `[caption] Profile used: role=${capRole} industry=${user.profile.industry ?? ""} tones=${capTones}`,
   )
+  // Voice guidelines only apply to full generation (not the minimal-change edit
+  // path) and only when the user opted in AND has saved non-empty guidelines.
+  const voiceGuidelines =
+    useVoiceGuidelines && user.profile.voiceGuidelines?.trim()
+      ? user.profile.voiceGuidelines.trim()
+      : undefined
+
   // Targeted edit when the user gave an instruction AND we have the current
   // caption to edit; otherwise full regeneration as before.
   const prompt =
     userInstruction && currentCaption
       ? buildCaptionEditPrompt(currentCaption, userInstruction)
-      : buildCaptionPrompt(profileContext, breakdown, tone, userInstruction)
+      : buildCaptionPrompt(profileContext, breakdown, tone, userInstruction, voiceGuidelines)
 
   // Stream Claude's response as plain text
   const encoder = new TextEncoder()

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, History } from "lucide-react"
 import { CaptionEditor } from "@/components/generate/CaptionEditor"
+import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { ToneSelector, type Tone } from "@/components/generate/ToneSelector"
 import { HookVariations } from "@/components/generate/HookVariations"
 import { RegenerationLimit } from "@/components/generate/RegenerationLimit"
@@ -51,6 +52,8 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
   const [restored, setRestored] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [instruction, setInstruction] = useState("")
+  // Opt-in flag: apply the user's saved voice guidelines on the next generation.
+  const [useVoiceGuidelines, setUseVoiceGuidelines] = useState(false)
   const bufferRef = useRef("")
   const didInit = useRef(false)
 
@@ -123,7 +126,13 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
       const res = await fetch("/api/generate/caption", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId, tone: activeTone ?? undefined, userInstruction, currentCaption }),
+        body: JSON.stringify({
+          ideaId,
+          tone: activeTone ?? undefined,
+          userInstruction,
+          currentCaption,
+          useVoiceGuidelines,
+        }),
       })
 
       if (!res.ok) {
@@ -257,6 +266,9 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
           </button>
         </div>
       )}
+
+      {/* Opt-in voice guidelines — only rendered if the user has saved some */}
+      <VoiceGuidelinesToggle checked={useVoiceGuidelines} onChange={setUseVoiceGuidelines} />
 
       {/* Regeneration instruction — applied on the next regenerate */}
       <textarea

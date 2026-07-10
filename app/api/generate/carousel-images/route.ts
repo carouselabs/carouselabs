@@ -64,6 +64,7 @@ export async function POST(req: Request) {
   let ideaId: string
   let persist: boolean
   let persistOnly: boolean
+  let userInstruction: string | undefined
 
   try {
     const body = await req.json()
@@ -76,6 +77,12 @@ export async function POST(req: Request) {
     persist = body.persist !== false
     // persistOnly: skip all OpenAI calls — just save the already-generated images.
     persistOnly = body.persistOnly === true
+    // Optional per-slide custom instruction, applied on top of the slide prompt
+    // when regenerating a single slide's image.
+    userInstruction =
+      typeof body.userInstruction === "string" && body.userInstruction.trim()
+        ? body.userInstruction.trim()
+        : undefined
     if (!ideaId) throw new Error("Missing ideaId")
     if (slides.length === 0) throw new Error("No slides provided")
   } catch (err) {
@@ -159,9 +166,16 @@ export async function POST(req: Request) {
         .replace(/\s*\|\|\s*/g, " ")
         .trim()
 
+      // Layer the user's custom instruction on top of the slide prompt so a
+      // single-slide regeneration applies the requested change (e.g. "make the
+      // background darker") while keeping the rest of the slide intact.
+      const finalPrompt = userInstruction
+        ? `${cleanPrompt}\n\nADDITIONAL INSTRUCTION: ${userInstruction}`
+        : cleanPrompt
+
       const imageResponse = await openai.images.generate({
         model: "gpt-image-2",
-        prompt: cleanPrompt,
+        prompt: finalPrompt,
         n: 1,
         size: openaiSize,
         quality: "medium", // medium quality keeps carousel generation cheaper/faster

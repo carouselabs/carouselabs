@@ -335,7 +335,7 @@ ${buildCarouselPrompt(
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-5",
-      max_tokens: 12000,
+      max_tokens: 16000,
       messages,
     })
 
@@ -352,7 +352,7 @@ ${buildCarouselPrompt(
 
   if (!claudeRaw.trimEnd().endsWith("}")) {
     console.warn("[generate/carousel-prompt] WARNING: Response may be truncated — does not end with }")
-    console.log("[carousel-prompt] Raw response length:", claudeRaw.length, "/ max_tokens:", 12000)
+    console.log("[carousel-prompt] Raw response length:", claudeRaw.length, "/ max_tokens:", 16000)
   }
 
   let parsed: { caption: string; slides: Slide[] }

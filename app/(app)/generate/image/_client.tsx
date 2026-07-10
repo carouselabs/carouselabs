@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { ArrowLeft, Sparkles, Copy, Check, History, Download, RefreshCw, Loader2 } from "lucide-react"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
+import { InstructionBox } from "@/components/generate/InstructionBox"
 import { ImagePreview } from "@/components/generate/ImagePreview"
 import { PostToLinkedInButton } from "@/components/generate/PostToLinkedInButton"
 import { LoadingGame } from "@/components/generate/LoadingGame"
@@ -11,6 +12,7 @@ import { RegenerationLimit } from "@/components/generate/RegenerationLimit"
 import { trackHistory } from "@/lib/hooks/useHistory"
 import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
 import { friendlyGenerationError } from "@/lib/friendlyError"
+import { countWords } from "@/lib/wordCount"
 
 interface ImageClientProps {
   ideaId: string
@@ -51,6 +53,8 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
   const [restored, setRestored] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [captionInstruction, setCaptionInstruction] = useState("")
+  // Custom instruction for the image generate/regenerate flow (step 4).
+  const [imageInstruction, setImageInstruction] = useState("")
   // Shown when changing the reference image invalidates an already-generated
   // image (the old style is baked into its prompt).
   const [referenceNotice, setReferenceNotice] = useState<string | null>(null)
@@ -243,7 +247,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
   // Single-button flow: silently generate the image prompt, then immediately use
   // it to generate the image. Only the final image is shown. The prompt is still
   // kept in state + localStorage so Regenerate Image keeps working.
-  async function generateImageFlow() {
+  async function generateImageFlow(userInstruction?: string) {
     setIsGeneratingImage(true)
     setGameStarted(true) // keep the game visible from now on
     setError(null)
@@ -252,7 +256,9 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
     setPostId(null)
 
     try {
-      // 1) Generate the image prompt silently (no UI update).
+      // 1) Generate the image prompt silently (no UI update). When the user gave
+      // an instruction AND a prompt already exists, send it as currentImagePrompt
+      // so the API does a targeted edit instead of a full rewrite.
       const promptRes = await fetch("/api/generate/image-prompt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -262,6 +268,8 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
           size,
           referenceImage: referenceImage ?? undefined,
           referenceMediaType: referenceImage ? referenceMediaType : undefined,
+          userInstruction,
+          currentImagePrompt: userInstruction ? imagePrompt ?? undefined : undefined,
         }),
       })
       const promptData = await promptRes.json()
@@ -289,6 +297,7 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
       }
       setImageUrl(imgData.imageUrl)
       setPostId(imgData.postId)
+      setImageInstruction("") // clear the instruction box on success
       try {
         localStorage.setItem(`imageUrl_${ideaId}`, imgData.imageUrl)
       } catch {
@@ -379,7 +388,14 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
     // read a stale count and slip past the limit.
     increment(ideaId)
     try {
-      await generateImage()
+      // With a custom instruction, re-run the full flow so the prompt is edited
+      // first; without one, just re-render the image from the existing prompt.
+      const userInstruction = imageInstruction.trim() || undefined
+      if (userInstruction) {
+        await generateImageFlow(userInstruction)
+      } else {
+        await generateImage()
+      }
       const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
       if (newCount >= MAX_REGENERATIONS) {
         setToastMsg("You've used both regenerations for this session")
@@ -452,6 +468,9 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
           rows={20}
           className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.65] resize-none focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors"
         />
+        {countWords(caption) > 0 && (
+          <p className="text-[11px] text-[#ADA99F] tabular-nums">{countWords(caption)} words</p>
+        )}
         <div className="flex items-center gap-2">
           <button
             onClick={handleCopyCaption}
@@ -528,12 +547,20 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
         {/* Single button — generates the prompt then the image in one go. */}
         {!imageUrl && !isGeneratingImage && (
           <button
-            onClick={() => void generateImageFlow().catch(() => {})}
+            onClick={() =>
+              void generateImageFlow(imageInstruction.trim() || undefined).catch(() => {})
+            }
             className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
           >
             <Sparkles size={14} strokeWidth={2} />
             Generate Image
           </button>
+        )}
+
+        {/* Custom instruction box — applies to both the first Generate Image and
+            subsequent Regenerate Image actions. */}
+        {!isGeneratingImage && (
+          <InstructionBox value={imageInstruction} onChange={setImageInstruction} />
         )}
       </div>
     </div>
@@ -584,9 +611,10 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
                   rows={16}
                   className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.65] resize-none focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors"
                 />
-                <p className="text-[11px] text-[#ADA99F] text-right tabular-nums">
-                  {caption.length} chars
-                </p>
+                <div className="flex items-center justify-between text-[11px] text-[#ADA99F] tabular-nums">
+                  <span>{countWords(caption) > 0 ? `${countWords(caption)} words` : ""}</span>
+                  <span>{caption.length} chars</span>
+                </div>
               </div>
               <div className="flex items-end gap-2">
                 <textarea

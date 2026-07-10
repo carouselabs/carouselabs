@@ -3,6 +3,8 @@
 import { useState } from "react"
 import { Download, RefreshCw, Loader2, FileDown } from "lucide-react"
 import { jsPDF } from "jspdf"
+import { InstructionBox } from "@/components/generate/InstructionBox"
+import { countWords } from "@/lib/wordCount"
 
 export interface SlideImage {
   slideNumber: number
@@ -17,6 +19,9 @@ interface CarouselImageGridProps {
   ideaId: string
   onRegenerate: (slideNumber: number) => void
   regeneratingSlide: number | null
+  // Per-slide custom instructions, keyed by slideNumber, and a change handler.
+  instructions: Record<number, string>
+  onInstructionChange: (slideNumber: number, value: string) => void
 }
 
 const ROLE_CONFIG = {
@@ -65,6 +70,8 @@ export function CarouselImageGrid({
   ideaId,
   onRegenerate,
   regeneratingSlide,
+  instructions,
+  onInstructionChange,
 }: CarouselImageGridProps) {
   const [downloadingAll, setDownloadingAll] = useState(false)
   const [downloadingSlide, setDownloadingSlide] = useState<number | null>(null)
@@ -205,6 +212,11 @@ export function CarouselImageGrid({
               <p className="text-[12px] text-[#4B5563] leading-[1.45] line-clamp-2">
                 {slide.headline}
               </p>
+              {countWords(slide.headline) > 0 && (
+                <p className="text-[11px] text-[#ADA99F] tabular-nums">
+                  {countWords(slide.headline)} words
+                </p>
+              )}
 
               {/* Actions: regenerate + download (both functional) */}
               <div className="flex items-center gap-2">
@@ -229,6 +241,14 @@ export function CarouselImageGrid({
                   Download
                 </button>
               </div>
+
+              {/* Per-slide custom instruction for this slide's regeneration */}
+              <InstructionBox
+                value={instructions[slide.slideNumber] ?? ""}
+                onChange={(v) => onInstructionChange(slide.slideNumber, v)}
+                disabled={isRegenerating}
+                rows={2}
+              />
             </div>
           )
         })}

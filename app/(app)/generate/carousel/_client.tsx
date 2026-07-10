@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Sparkles, Copy, Check, History, Loader2 } from "lucide-react"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
+import { InstructionBox } from "@/components/generate/InstructionBox"
 import { CarouselImageGrid, type SlideImage } from "@/components/generate/CarouselImageGrid"
 import { PostToLinkedInButton } from "@/components/generate/PostToLinkedInButton"
 import { LoadingGame } from "@/components/generate/LoadingGame"
@@ -20,6 +21,7 @@ import {
 import { trackHistory } from "@/lib/hooks/useHistory"
 import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
 import { friendlyGenerationError } from "@/lib/friendlyError"
+import { countWords } from "@/lib/wordCount"
 
 interface CarouselClientProps {
   ideaId: string
@@ -73,6 +75,11 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
   const [restored, setRestored] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [captionInstruction, setCaptionInstruction] = useState("")
+  // Custom instruction for the main "Generate Carousel" action.
+  const [carouselInstruction, setCarouselInstruction] = useState("")
+  // Per-slide custom instructions for individual slide regeneration, keyed by
+  // slideNumber. Cleared per slide on that slide's successful regeneration.
+  const [slideInstructions, setSlideInstructions] = useState<Record<number, string>>({})
   // Shown when changing the reference image invalidates an already-generated
   // carousel (the old style is baked into those slide prompts).
   const [referenceNotice, setReferenceNotice] = useState<string | null>(null)
@@ -290,6 +297,9 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
     setGameStarted(true) // keep the game visible for the whole flow
     setLoadingMessage("Building your carousel structure...")
 
+    // Capture the custom instruction for this run. When slides already exist we
+    // send them as currentSlides so the API does a targeted edit, not a rewrite.
+    const userInstruction = carouselInstruction.trim() || undefined
     let generatedSlides: Slide[]
     try {
       const promptRes = await fetch("/api/generate/carousel-prompt", {
@@ -301,6 +311,9 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
           size,
           referenceImage: referenceImage ?? undefined,
           referenceMediaType: referenceImage ? referenceMediaType : undefined,
+          userInstruction,
+          currentSlides:
+            userInstruction && slides ? JSON.stringify(slides) : undefined,
         }),
       })
       const promptData = await promptRes.json()
@@ -315,6 +328,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       }
       generatedSlides = promptData.slides as Slide[]
       setSlides(generatedSlides)
+      setCarouselInstruction("") // clear the instruction box on success
       trackHistory(ideaId, "CAROUSEL_DONE")
       try {
         localStorage.setItem(`carouselSlides_${ideaId}`, JSON.stringify(generatedSlides))
@@ -427,10 +441,17 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
     setRegeneratingSlide(slideNumber)
     setError(null)
     try {
+      const userInstruction = slideInstructions[slideNumber]?.trim() || undefined
       const res = await fetch("/api/generate/carousel-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId, size: size ?? "4:5", slides: [slide], persist: false }),
+        body: JSON.stringify({
+          ideaId,
+          size: size ?? "4:5",
+          slides: [slide],
+          persist: false,
+          userInstruction,
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error((data as { error?: string }).error ?? "Image generation failed")
@@ -439,6 +460,12 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       setSlideImages((prev) => {
         const next = prev.map((img) => (img.slideNumber === slideNumber ? image : img))
         persistImages(next)
+        return next
+      })
+      // Clear this slide's instruction box on success.
+      setSlideInstructions((prev) => {
+        const next = { ...prev }
+        delete next[slideNumber]
         return next
       })
     } catch (err) {
@@ -488,6 +515,9 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
           rows={20}
           className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.65] resize-none focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors"
         />
+        {countWords(caption) > 0 && (
+          <p className="text-[11px] text-[#ADA99F] tabular-nums">{countWords(caption)} words</p>
+        )}
         <div className="flex items-center gap-2">
           <button
             onClick={handleCopyCaption}
@@ -512,13 +542,16 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       <div className="flex flex-col gap-4">
         {/* Single button — confirm, then generate prompts + all images in one go */}
         {slideImages.length === 0 && !isGeneratingSlides && !isGeneratingImages && (
-          <button
-            onClick={() => setConfirmOpen(true)}
-            className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
-          >
-            <Sparkles size={14} strokeWidth={2} />
-            Generate Carousel
-          </button>
+          <>
+            <button
+              onClick={() => setConfirmOpen(true)}
+              className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
+            >
+              <Sparkles size={14} strokeWidth={2} />
+              Generate Carousel
+            </button>
+            <InstructionBox value={carouselInstruction} onChange={setCarouselInstruction} />
+          </>
         )}
 
         {(isGeneratingSlides || isGeneratingImages) && loadingMessage && (
@@ -536,6 +569,10 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
             ideaId={ideaId}
             onRegenerate={regenerateSlideImage}
             regeneratingSlide={regeneratingSlide}
+            instructions={slideInstructions}
+            onInstructionChange={(slideNumber, value) =>
+              setSlideInstructions((prev) => ({ ...prev, [slideNumber]: value }))
+            }
           />
         )}
       </div>
@@ -587,9 +624,10 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
                   rows={16}
                   className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.65] resize-none focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors"
                 />
-                <p className="text-[11px] text-[#ADA99F] text-right tabular-nums">
-                  {caption.length} chars
-                </p>
+                <div className="flex items-center justify-between text-[11px] text-[#ADA99F] tabular-nums">
+                  <span>{countWords(caption) > 0 ? `${countWords(caption)} words` : ""}</span>
+                  <span>{caption.length} chars</span>
+                </div>
               </div>
               <div className="flex items-end gap-2">
                 <textarea

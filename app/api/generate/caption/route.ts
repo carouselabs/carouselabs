@@ -100,8 +100,17 @@ Output format:
 
 // Targeted edit mode — apply ONLY the user's instruction to the existing
 // caption, changing as little as possible. Keeps the same output format so the
-// client's caption + ---HOOKS--- parsing still works.
-function buildCaptionEditPrompt(currentCaption: string, userInstruction: string): string {
+// client's caption + ---HOOKS--- parsing still works. When voiceGuidelines are
+// provided, they're appended so the edit still honors the user's writing voice.
+function buildCaptionEditPrompt(
+  currentCaption: string,
+  userInstruction: string,
+  voiceGuidelines?: string,
+): string {
+  const voiceGuidelinesBlock = voiceGuidelines
+    ? `\n\nVOICE GUIDELINES — follow these writing style instructions closely when editing:\n${voiceGuidelines}`
+    : ""
+
   return `You are editing a LinkedIn caption. Follow these rules strictly:
 
 1. Apply ONLY this instruction: ${userInstruction}
@@ -120,7 +129,7 @@ ${currentCaption}
 [hook variation 3]
 
 Return the edited caption first, then the ---HOOKS--- separator, then 3 hook variations.
-Return NOTHING else. No explanations. Just the caption and hooks.`
+Return NOTHING else. No explanations. Just the caption and hooks.${voiceGuidelinesBlock}`
 }
 
 function formatProfile(profile: {
@@ -229,10 +238,11 @@ export async function POST(req: Request) {
       : undefined
 
   // Targeted edit when the user gave an instruction AND we have the current
-  // caption to edit; otherwise full regeneration as before.
+  // caption to edit; otherwise full regeneration as before. Voice guidelines are
+  // threaded into BOTH paths so the toggle applies to edits too.
   const prompt =
     userInstruction && currentCaption
-      ? buildCaptionEditPrompt(currentCaption, userInstruction)
+      ? buildCaptionEditPrompt(currentCaption, userInstruction, useVoiceGuidelines ? voiceGuidelines : undefined)
       : buildCaptionPrompt(profileContext, breakdown, tone, userInstruction, voiceGuidelines)
 
   // Stream Claude's response as plain text

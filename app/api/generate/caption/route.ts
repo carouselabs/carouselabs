@@ -229,9 +229,13 @@ export async function POST(req: Request) {
   } catch {}
   console.log(
     `[caption] Profile used: role=${capRole} industry=${user.profile.industry ?? ""} tones=${capTones}`,
+    "voiceGuidelines:",
+    useVoiceGuidelines,
+    "hasGuidelines:",
+    !!user.profile.voiceGuidelines,
   )
-  // Voice guidelines only apply to full generation (not the minimal-change edit
-  // path) and only when the user opted in AND has saved non-empty guidelines.
+  // Voice guidelines apply to BOTH the full-generation and edit paths, but only
+  // when the user opted in AND has saved non-empty guidelines.
   const voiceGuidelines =
     useVoiceGuidelines && user.profile.voiceGuidelines?.trim()
       ? user.profile.voiceGuidelines.trim()

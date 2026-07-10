@@ -80,6 +80,11 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
   // Shown when changing the reference image invalidates an already-generated
   // carousel (the old style is baked into those slide prompts).
   const [referenceNotice, setReferenceNotice] = useState<string | null>(null)
+  // LinkedIn "these post as separate images, not swipeable slides" warning. Held
+  // open while we await the user's choice; the pending promise resolver lets the
+  // dialog's buttons drive the intercepted post-to-LinkedIn flow.
+  const [linkedInWarnOpen, setLinkedInWarnOpen] = useState(false)
+  const linkedInResolve = useRef<((proceed: boolean) => void) | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
   const didInit = useRef(false)
@@ -421,6 +426,22 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
     setTimeout(() => setCaptionCopied(false), 2000)
   }
 
+  // Gate passed to PostToLinkedInButton: open the "separate images, not swipeable
+  // slides" warning and resolve with the user's choice. Returns true to proceed
+  // with posting, false to cancel.
+  function confirmLinkedInPost(): Promise<boolean> {
+    return new Promise((resolve) => {
+      linkedInResolve.current = resolve
+      setLinkedInWarnOpen(true)
+    })
+  }
+
+  function resolveLinkedInWarn(proceed: boolean) {
+    setLinkedInWarnOpen(false)
+    linkedInResolve.current?.(proceed)
+    linkedInResolve.current = null
+  }
+
   // Regenerate a single slide's image. Sends persist:false so a regeneration
   // doesn't create a new Post — it just swaps the image in local state. Throws on
   // failure so the caller can refund the reserved regeneration slot.
@@ -523,6 +544,7 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
                 .map((s) => s.imageUrl)
                 .filter((u): u is string => !!u)}
               disabled={isGeneratingImages}
+              beforePost={confirmLinkedInPost}
             />
           )}
         </div>
@@ -879,6 +901,46 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
             >
               Yes, generate →
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Warn that a multi-image LinkedIn post renders as separate images, not a
+          swipeable slide deck, before actually posting. */}
+      <Dialog
+        open={linkedInWarnOpen}
+        onOpenChange={(open) => {
+          // Any dismissal (overlay/esc/close) counts as "Go Back" — don't post.
+          if (!open) resolveLinkedInWarn(false)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              ⚠️ Heads up — LinkedIn will show these as separate images, not swipeable
+              slides.
+            </DialogTitle>
+            <DialogDescription>
+              For the best carousel experience (swipeable slides), download the images and
+              upload them manually to LinkedIn as a PDF document.
+              <br />
+              <br />
+              How would you like to proceed?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              onClick={() => resolveLinkedInWarn(false)}
+              className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-[#6B7280] hover:text-[#1A1A1A] transition-colors"
+            >
+              Go Back
+            </button>
+            <button
+              onClick={() => resolveLinkedInWarn(true)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#0A66C2] hover:bg-[#004182] transition-colors"
+            >
+              Upload as Images
             </button>
           </DialogFooter>
         </DialogContent>

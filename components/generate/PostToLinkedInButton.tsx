@@ -26,6 +26,12 @@ interface PostToLinkedInButtonProps {
   imageUrls?: string[]
   /** Disabled while the underlying content is still generating. */
   disabled?: boolean
+  /**
+   * Optional gate run before posting. Return `true` to proceed, `false` to
+   * abort. Lets a caller (e.g. the carousel flow) intercept the click and show a
+   * confirmation before anything is sent to LinkedIn.
+   */
+  beforePost?: () => Promise<boolean>
 }
 
 // Self-contained button that posts the given caption + images to the user's
@@ -35,6 +41,7 @@ export function PostToLinkedInButton({
   caption,
   imageUrls = [],
   disabled,
+  beforePost,
 }: PostToLinkedInButtonProps) {
   const [posting, setPosting] = useState(false)
   const [postUrl, setPostUrl] = useState<string | null>(null)
@@ -42,6 +49,11 @@ export function PostToLinkedInButton({
   const [notConnected, setNotConnected] = useState(false)
 
   async function handlePost() {
+    // Give the caller a chance to intercept (e.g. show a warning) and cancel.
+    if (beforePost) {
+      const proceed = await beforePost()
+      if (!proceed) return
+    }
     setPosting(true)
     setError(null)
     setNotConnected(false)

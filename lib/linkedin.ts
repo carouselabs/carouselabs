@@ -6,6 +6,8 @@
 // digitalmediaAsset URN, which is then referenced in the post body. Multiple
 // images in one ugcPost render as a native multi-image ("carousel") post.
 
+import sharp from "sharp"
+
 const OAUTH_BASE = "https://www.linkedin.com/oauth/v2"
 const API_BASE = "https://api.linkedin.com"
 
@@ -165,6 +167,13 @@ async function registerImageUpload(
 }
 
 // Step 2: fetch the source image bytes and PUT them to the upload URL.
+//
+// The bytes are re-encoded through sharp first, which drops ALL metadata
+// (C2PA/content-credentials, EXIF, XMP, ICC). OpenAI's gpt-image models embed
+// C2PA, which makes LinkedIn show a "Made with AI"/CR badge on the post. Carousel
+// slide images are uploaded to R2 without this stripping, so we clean them here
+// at the last hop before they reach LinkedIn. If sharp fails for any reason we
+// fall back to the original bytes so posting still succeeds.
 async function uploadImageBytes(
   uploadUrl: string,
   accessToken: string,
@@ -172,8 +181,17 @@ async function uploadImageBytes(
 ): Promise<void> {
   const imgRes = await fetch(imageUrl)
   if (!imgRes.ok) throw new Error(`Failed to fetch image for upload: ${imageUrl}`)
-  const bytes = Buffer.from(await imgRes.arrayBuffer())
-  const contentType = imgRes.headers.get("content-type") ?? "image/png"
+  const original = Buffer.from(await imgRes.arrayBuffer())
+
+  let bytes: Buffer
+  let contentType = "image/png"
+  try {
+    bytes = await sharp(original).png().toBuffer() // strips all metadata
+  } catch (err) {
+    console.error("[linkedin] sharp metadata strip failed, using original bytes:", err)
+    bytes = original
+    contentType = imgRes.headers.get("content-type") ?? "image/png"
+  }
 
   const res = await fetch(uploadUrl, {
     method: "PUT",
@@ -181,7 +199,7 @@ async function uploadImageBytes(
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": contentType,
     },
-    body: bytes,
+    body: new Uint8Array(bytes),
   })
 
   if (!res.ok) {

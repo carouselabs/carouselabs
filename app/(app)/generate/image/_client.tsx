@@ -499,6 +499,9 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
               alt="Generated LinkedIn image"
               size={size ?? undefined}
             />
+            {/* Custom instruction — only after a successful generation. Typing
+                here + clicking "Regenerate Image" applies the change. */}
+            <InstructionBox value={imageInstruction} onChange={setImageInstruction} />
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={handleDownloadImage}
@@ -544,23 +547,16 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
           </div>
         )}
 
-        {/* Single button — generates the prompt then the image in one go. */}
+        {/* Single button — generates the prompt then the image in one go. No
+            instruction box before generation; it appears only after success. */}
         {!imageUrl && !isGeneratingImage && (
           <button
-            onClick={() =>
-              void generateImageFlow(imageInstruction.trim() || undefined).catch(() => {})
-            }
+            onClick={() => void generateImageFlow().catch(() => {})}
             className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
           >
             <Sparkles size={14} strokeWidth={2} />
             Generate Image
           </button>
-        )}
-
-        {/* Custom instruction box — applies to both the first Generate Image and
-            subsequent Regenerate Image actions. */}
-        {!isGeneratingImage && (
-          <InstructionBox value={imageInstruction} onChange={setImageInstruction} />
         )}
       </div>
     </div>

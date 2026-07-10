@@ -5,7 +5,6 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Sparkles, Copy, Check, History, Loader2 } from "lucide-react"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
-import { InstructionBox } from "@/components/generate/InstructionBox"
 import { CarouselImageGrid, type SlideImage } from "@/components/generate/CarouselImageGrid"
 import { PostToLinkedInButton } from "@/components/generate/PostToLinkedInButton"
 import { LoadingGame } from "@/components/generate/LoadingGame"
@@ -75,8 +74,6 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
   const [restored, setRestored] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [captionInstruction, setCaptionInstruction] = useState("")
-  // Custom instruction for the main "Generate Carousel" action.
-  const [carouselInstruction, setCarouselInstruction] = useState("")
   // Per-slide custom instructions for individual slide regeneration, keyed by
   // slideNumber. Cleared per slide on that slide's successful regeneration.
   const [slideInstructions, setSlideInstructions] = useState<Record<number, string>>({})
@@ -297,9 +294,6 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
     setGameStarted(true) // keep the game visible for the whole flow
     setLoadingMessage("Building your carousel structure...")
 
-    // Capture the custom instruction for this run. When slides already exist we
-    // send them as currentSlides so the API does a targeted edit, not a rewrite.
-    const userInstruction = carouselInstruction.trim() || undefined
     let generatedSlides: Slide[]
     try {
       const promptRes = await fetch("/api/generate/carousel-prompt", {
@@ -311,9 +305,6 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
           size,
           referenceImage: referenceImage ?? undefined,
           referenceMediaType: referenceImage ? referenceMediaType : undefined,
-          userInstruction,
-          currentSlides:
-            userInstruction && slides ? JSON.stringify(slides) : undefined,
         }),
       })
       const promptData = await promptRes.json()
@@ -328,7 +319,6 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       }
       generatedSlides = promptData.slides as Slide[]
       setSlides(generatedSlides)
-      setCarouselInstruction("") // clear the instruction box on success
       trackHistory(ideaId, "CAROUSEL_DONE")
       try {
         localStorage.setItem(`carouselSlides_${ideaId}`, JSON.stringify(generatedSlides))
@@ -542,16 +532,13 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
       <div className="flex flex-col gap-4">
         {/* Single button — confirm, then generate prompts + all images in one go */}
         {slideImages.length === 0 && !isGeneratingSlides && !isGeneratingImages && (
-          <>
-            <button
-              onClick={() => setConfirmOpen(true)}
-              className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
-            >
-              <Sparkles size={14} strokeWidth={2} />
-              Generate Carousel
-            </button>
-            <InstructionBox value={carouselInstruction} onChange={setCarouselInstruction} />
-          </>
+          <button
+            onClick={() => setConfirmOpen(true)}
+            className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
+          >
+            <Sparkles size={14} strokeWidth={2} />
+            Generate Carousel
+          </button>
         )}
 
         {(isGeneratingSlides || isGeneratingImages) && loadingMessage && (

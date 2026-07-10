@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, History } from "lucide-react"
+import { ArrowLeft, History, Sparkles } from "lucide-react"
 import { CaptionEditor } from "@/components/generate/CaptionEditor"
 import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { ToneSelector, type Tone } from "@/components/generate/ToneSelector"
@@ -91,10 +91,10 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
         }
       }
     } catch {
-      // fall through to generation if the lookup fails
+      // fall through — user generates manually below
     }
-    // Initial auto-generation is not a "regeneration" — swallow its rejection.
-    void generate(null, undefined).catch(() => {})
+    // No auto-generation on mount: the user picks their voice-guidelines
+    // preference first, then clicks "Generate Caption" (see the button below).
   }
 
   // Persist the generated caption so it survives a page revisit.
@@ -267,20 +267,38 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
         </div>
       )}
 
-      {/* Opt-in voice guidelines — only rendered if the user has saved some */}
+      {/* Opt-in voice guidelines — only rendered if the user has saved some. Set
+          BEFORE generating so the very first caption can honor the preference. */}
       <VoiceGuidelinesToggle checked={useVoiceGuidelines} onChange={setUseVoiceGuidelines} />
 
-      {/* Regeneration instruction — applied on the next regenerate */}
-      <textarea
-        value={instruction}
-        onChange={(e) => setInstruction(e.target.value)}
-        disabled={isGenerating || atLimit}
-        rows={2}
-        placeholder="What should change? (e.g. make it shorter, add more stats, make it funnier...)"
-        className="w-full px-3.5 py-2.5 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.5] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors disabled:opacity-50"
-      />
+      {/* First generation — no caption yet. Generates directly (not counted as a
+          regeneration) so the toggle above can be set first. */}
+      {!caption && !isGenerating && (
+        <button
+          onClick={() => void generate(tone).catch(() => {})}
+          className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
+        >
+          <Sparkles size={14} strokeWidth={2} />
+          Generate Caption
+        </button>
+      )}
 
-      {/* Caption editor */}
+      {/* Regeneration instruction — only relevant once a caption exists */}
+      {(caption || isGenerating) && (
+        <textarea
+          value={instruction}
+          onChange={(e) => setInstruction(e.target.value)}
+          disabled={isGenerating || atLimit}
+          rows={2}
+          placeholder="What should change? (e.g. make it shorter, add more stats, make it funnier...)"
+          className="w-full px-3.5 py-2.5 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.5] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors disabled:opacity-50"
+        />
+      )}
+
+      {/* Caption editor — only shown once generation has started or a caption
+          exists, so the empty editor + its Regenerate button don't appear before
+          the first "Generate Caption" click. */}
+      {(caption || isGenerating) && (
       <CaptionEditor
         caption={caption}
         onChange={setCaption}
@@ -289,6 +307,7 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
         onRegenerate={() => handleRegenerate(tone)}
         regenerateDisabled={atLimit}
       />
+      )}
 
       {/* Version history — silent, below the editor */}
       <VersionHistory versions={versions} onRestore={(content) => setCaption(content)} />

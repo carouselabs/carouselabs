@@ -172,8 +172,9 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
     else if (savedCaption) setStep(2)
     else setStep(1)
 
-    // Auto-generate the caption ONLY for a brand-new idea with nothing saved.
-    if (!hasAnySaved) streamCaption()
+    // No auto-generation on mount. A brand-new idea lands on step 1 with the
+    // voice-guidelines toggle + a "Generate Caption" button, so the user can set
+    // their preference before the first caption is generated.
   }
 
   async function streamCaption(userInstruction?: string, currentCaption?: string) {
@@ -624,6 +625,24 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
                   style={{ width: w }}
                 />
               ))}
+            </div>
+          )}
+
+          {/* First generation — no caption yet. The voice-guidelines toggle sits
+              above the button so the user can opt in before generating. */}
+          {!caption && !isStreamingCaption && (
+            <div className="flex flex-col gap-4">
+              <VoiceGuidelinesToggle
+                checked={useVoiceGuidelines}
+                onChange={setUseVoiceGuidelines}
+              />
+              <button
+                onClick={() => void streamCaption()}
+                className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
+              >
+                <Sparkles size={14} strokeWidth={2} />
+                Generate Caption
+              </button>
             </div>
           )}
 

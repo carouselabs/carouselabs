@@ -9,6 +9,9 @@ const isPublicRoute = createRouteMatcher([
   "/privacy(.*)",
   "/refund(.*)",
   "/contact(.*)",
+  "/for(.*)", // programmatic SEO niche pages — must be publicly crawlable
+  "/sitemap.xml",
+  "/robots.txt",
   "/api/contact(.*)",
   "/api/webhooks/clerk(.*)",
   "/api/webhooks/lemonsqueezy(.*)",
@@ -29,7 +32,7 @@ export function proxy(request: NextRequest, event: NextFetchEvent) {
 
 export const config = {
   matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|xml|txt)).*)",
     "/(api|trpc)(.*)",
   ],
 }

@@ -2,7 +2,20 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import Image from "next/image"
 import { notFound } from "next/navigation"
-import { ArrowRight, AlertTriangle, CheckCircle2, Sparkles, Hash } from "lucide-react"
+import {
+  ArrowRight,
+  AlertTriangle,
+  CheckCircle2,
+  Sparkles,
+  Hash,
+  Users,
+  Zap,
+  Eye,
+  XCircle,
+  LayoutGrid,
+  Trophy,
+  Quote,
+} from "lucide-react"
 import {
   AnimatedSection,
   AnimatedFadeIn,
@@ -234,6 +247,29 @@ export default async function NicheForPage({
         </div>
       </section>
 
+      {/* ── SECTION 4b — CONTENT STRATEGY ── */}
+      <section className="px-6 py-16 sm:py-20">
+        <div className="max-w-4xl mx-auto flex flex-col gap-10">
+          <AnimatedSection className="text-center">
+            <h2 className="text-[clamp(1.8rem,4vw,2.75rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
+              Proven LinkedIn Content Strategy for {niche.name}
+            </h2>
+          </AnimatedSection>
+          <ol className="flex flex-col gap-5">
+            {niche.content_strategy.map((tip, i) => (
+              <AnimatedSection key={i} delay={i * 0.05}>
+                <li className="flex items-start gap-5 p-6 rounded-2xl border border-[#E5E3DE] bg-[#FFFDF8]">
+                  <span className="shrink-0 w-9 h-9 rounded-xl bg-[#7C3AED] text-white text-[15px] font-bold flex items-center justify-center">
+                    {i + 1}
+                  </span>
+                  <p className="flex-1 text-[16px] leading-[1.6] text-[#3F3F46]">{tip}</p>
+                </li>
+              </AnimatedSection>
+            ))}
+          </ol>
+        </div>
+      </section>
+
       {/* ── SECTION 5 — PRODUCT SCREENSHOT 2 ── */}
       <section className="px-6 py-20">
         <AnimatedFadeIn className="max-w-[900px] mx-auto">
@@ -253,6 +289,42 @@ export default async function NicheForPage({
             </figcaption>
           </figure>
         </AnimatedFadeIn>
+      </section>
+
+      {/* ── SECTION 5b — WHY GROWING FAST ── */}
+      <section className="px-6 py-16 sm:py-20 bg-[#FBFAF6]">
+        <div className="max-w-4xl mx-auto flex flex-col gap-8">
+          <AnimatedSection className="text-center">
+            <h2 className="text-[clamp(1.8rem,4vw,2.75rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
+              Why {niche.name} Are Growing Fast on LinkedIn
+            </h2>
+          </AnimatedSection>
+          <AnimatedSection delay={0.05}>
+            <p className="text-[17px] leading-[1.7] text-[#3F3F46]">{niche.why_linkedin}</p>
+          </AnimatedSection>
+          <AnimatedSection delay={0.1}>
+            <p className="text-[16px] leading-[1.7] text-[#4B5563]">{niche.long_description}</p>
+          </AnimatedSection>
+          <div className="grid sm:grid-cols-3 gap-4 pt-2">
+            {[
+              { icon: <Users size={20} className="text-[#7C3AED]" strokeWidth={2} />, stat: "1B+ users", label: "professionals reachable on LinkedIn" },
+              { icon: <LayoutGrid size={20} className="text-[#7C3AED]" strokeWidth={2} />, stat: "3x more reach", label: "carousel posts vs. plain text" },
+              { icon: <Eye size={20} className="text-[#7C3AED]" strokeWidth={2} />, stat: "5x profile views", label: "from posting consistently" },
+            ].map((box, i) => (
+              <AnimatedSection key={i} delay={0.15 + i * 0.05}>
+                <div className="h-full flex flex-col gap-2 p-6 rounded-2xl border border-[#E5DEF7] bg-white text-center items-center">
+                  <div className="w-11 h-11 rounded-xl bg-[#EDE9FE] flex items-center justify-center mb-1">
+                    {box.icon}
+                  </div>
+                  <span className="text-[22px] font-extrabold text-[#0A0A0A] tracking-[-0.02em]">
+                    {box.stat}
+                  </span>
+                  <span className="text-[13px] text-[#6B7280] leading-[1.4]">{box.label}</span>
+                </div>
+              </AnimatedSection>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* ── SECTION 6 — EXAMPLE POST IDEAS ── */}
@@ -306,6 +378,80 @@ export default async function NicheForPage({
               </span>
             ))}
           </AnimatedSection>
+        </div>
+      </section>
+
+      {/* ── SECTION 7b — COMMON CONTENT MISTAKES ── */}
+      <section className="px-6 py-16 sm:py-20 bg-[#FBFAF6]">
+        <div className="max-w-5xl mx-auto flex flex-col gap-10">
+          <AnimatedSection className="text-center">
+            <h2 className="text-[clamp(1.8rem,4vw,2.75rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
+              Content Mistakes {niche.name} Make (And How to Avoid Them)
+            </h2>
+          </AnimatedSection>
+          <div className="grid sm:grid-cols-2 gap-5">
+            {niche.common_mistakes.map((item, i) => (
+              <AnimatedSection key={i} delay={(i % 2) * 0.05}>
+                <div className="h-full flex flex-col gap-4 p-6 rounded-2xl border border-[#E5E3DE] bg-white">
+                  <div className="flex items-start gap-3">
+                    <XCircle size={20} className="shrink-0 mt-0.5 text-[#DC2626]" strokeWidth={2} />
+                    <p className="text-[15px] leading-[1.55] text-[#3F3F46] font-medium">
+                      {item.mistake}
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-3 pt-4 border-t border-[#F0EEE8]">
+                    <CheckCircle2 size={20} className="shrink-0 mt-0.5 text-[#7C3AED]" strokeWidth={2} />
+                    <p className="text-[15px] leading-[1.55] text-[#4B5563]">
+                      <span className="font-semibold text-[#7C3AED]">CarouseLabs Fix: </span>
+                      {item.fix}
+                    </p>
+                  </div>
+                </div>
+              </AnimatedSection>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── SECTION 7c — REAL CAROUSEL EXAMPLES ── */}
+      <section className="px-6 py-16 sm:py-20">
+        <div className="max-w-5xl mx-auto flex flex-col gap-10">
+          <AnimatedSection className="text-center">
+            <h2 className="text-[clamp(1.8rem,4vw,2.75rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
+              What Your Carousels Could Look Like
+            </h2>
+            <p className="mt-3 text-[16px] text-[#6B7280]">
+              Two carousels CarouseLabs could generate for {niche.name}, slide by slide.
+            </p>
+          </AnimatedSection>
+          <div className="grid md:grid-cols-2 gap-6">
+            {niche.carousel_examples.map((example, i) => (
+              <AnimatedSection key={i} delay={i * 0.08}>
+                <div className="h-full flex flex-col gap-5 p-7 rounded-2xl border border-[#E5DEF7] bg-[#FFFDF8]">
+                  <div className="flex items-center gap-3">
+                    <div className="shrink-0 w-10 h-10 rounded-xl bg-[#7C3AED] flex items-center justify-center">
+                      <LayoutGrid size={18} className="text-white" strokeWidth={2} />
+                    </div>
+                    <h3 className="text-[18px] font-bold leading-snug text-[#0A0A0A]">
+                      {example.title}
+                    </h3>
+                  </div>
+                  <ol className="flex flex-col gap-3">
+                    {example.slides.map((slide, j) => (
+                      <li key={j} className="flex items-start gap-3">
+                        <span className="shrink-0 w-6 h-6 rounded-md bg-[#EDE9FE] text-[#7C3AED] text-[12px] font-bold flex items-center justify-center mt-0.5">
+                          {j + 1}
+                        </span>
+                        <span className="flex-1 text-[14px] leading-[1.55] text-[#4B5563]">
+                          {slide}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </AnimatedSection>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -371,6 +517,46 @@ export default async function NicheForPage({
           </div>
         </section>
       )}
+
+      {/* ── SECTION 9b — WHAT THEY ACHIEVE ── */}
+      <section className="px-6 py-16 sm:py-20 bg-[#FBFAF6]">
+        <div className="max-w-5xl mx-auto flex flex-col gap-10">
+          <AnimatedSection className="text-center">
+            <h2 className="text-[clamp(1.8rem,4vw,2.75rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
+              What {niche.name} Achieve with CarouseLabs
+            </h2>
+          </AnimatedSection>
+          <div className="grid sm:grid-cols-3 gap-5">
+            {niche.success_metrics.map((metric, i) => (
+              <AnimatedSection key={i} delay={i * 0.05}>
+                <div className="h-full flex flex-col gap-3 p-6 rounded-2xl border border-[#E5DEF7] bg-white">
+                  <div className="w-11 h-11 rounded-xl bg-[#EDE9FE] flex items-center justify-center">
+                    <Trophy size={20} className="text-[#7C3AED]" strokeWidth={2} />
+                  </div>
+                  <p className="text-[15px] leading-[1.55] text-[#3F3F46] font-medium">{metric}</p>
+                </div>
+              </AnimatedSection>
+            ))}
+          </div>
+          <AnimatedSection delay={0.15}>
+            <figure className="relative rounded-2xl bg-[#7C3AED] px-8 py-10 sm:px-10 overflow-hidden">
+              <Quote
+                size={44}
+                className="absolute top-6 right-6 text-white/15"
+                strokeWidth={2}
+                aria-hidden
+              />
+              <blockquote className="relative text-[18px] sm:text-[20px] leading-[1.6] font-medium text-white">
+                &ldquo;{niche.testimonial_placeholder}&rdquo;
+              </blockquote>
+              <figcaption className="relative mt-5 flex items-center gap-2 text-[13px] font-semibold text-white/80">
+                <Zap size={14} strokeWidth={2.4} fill="currentColor" />
+                Results {niche.name} see with CarouseLabs
+              </figcaption>
+            </figure>
+          </AnimatedSection>
+        </div>
+      </section>
 
       {/* ── SECTION 10 — FINAL CTA ── */}
       <section className="px-6 py-20 sm:py-24">

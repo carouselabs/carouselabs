@@ -588,6 +588,31 @@ export default async function NicheForPage({
           </div>
         </AnimatedSection>
       </section>
+
+      {/* ── CROSS-LINK — content ideas for this niche ── */}
+      <section className="px-6 pb-20 -mt-6">
+        <AnimatedSection className="max-w-4xl mx-auto">
+          <Link
+            href={`/ideas/${niche.slug}`}
+            className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-2xl border border-[#E5DEF7] bg-[#F3F0FF] hover:border-[#C4B5FD] transition-colors"
+          >
+            <span className="text-[16px] font-medium text-[#1F2937]">
+              Looking for content ideas?{" "}
+              <span className="font-semibold text-[#7C3AED]">
+                See 10 LinkedIn carousel ideas for {niche.name}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 shrink-0 text-[14px] font-semibold text-[#7C3AED]">
+              View ideas
+              <ArrowRight
+                size={16}
+                strokeWidth={2.2}
+                className="group-hover:translate-x-0.5 transition-transform"
+              />
+            </span>
+          </Link>
+        </AnimatedSection>
+      </section>
     </>
   )
 }

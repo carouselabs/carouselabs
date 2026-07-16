@@ -1,3 +1,5 @@
+import { ideasContent } from "./ideas-data"
+
 export interface CarouselExample {
   title: string
   slides: string[]
@@ -6,6 +8,21 @@ export interface CarouselExample {
 export interface ContentMistake {
   mistake: string
   fix: string
+}
+
+/** A single LinkedIn carousel idea shown on the /ideas/[slug] pages. */
+export interface CarouselIdea {
+  title: string
+  why_it_works: string
+  hook: string
+  engagement: "High" | "Very High" | "Viral Potential"
+}
+
+/** One week of the 4-week content calendar on the /ideas/[slug] pages. */
+export interface ContentWeek {
+  week: string
+  theme: string
+  post_ideas: string[]
 }
 
 export interface Niche {
@@ -29,9 +46,26 @@ export interface Niche {
   success_metrics: string[]
   carousel_examples: CarouselExample[]
   testimonial_placeholder: string
+  // ── /ideas/[slug] page fields (merged in from ideas-data.ts) ──
+  carousel_post_ideas: CarouselIdea[]
+  content_calendar: ContentWeek[]
+  best_posting_times: string
+  content_pillars: string[]
 }
 
-export const niches: Niche[] = [
+/**
+ * The 112 base niche records below carry every field except the four
+ * /ideas-specific ones, which live in ./ideas-data.ts and are merged in at
+ * the `niches` export at the bottom of this file. This keeps the large body
+ * of ideas content in its own module while the exported `niches` remains
+ * fully populated with the complete Niche shape.
+ */
+type BaseNiche = Omit<
+  Niche,
+  "carousel_post_ideas" | "content_calendar" | "best_posting_times" | "content_pillars"
+>
+
+const baseNiches: BaseNiche[] = [
   {
     slug: "saas-founders",
     name: "SaaS Founders",
@@ -12689,3 +12723,16 @@ export const niches: Niche[] = [
       "A cleantech founder using CarouseLabs turned mission and science into clear, optimistic carousels and attracted patient investors and mission-driven talent — from people who said the content made a complex climate solution feel real and fundable.",
   },
 ]
+
+/**
+ * Merge the base niche records with their /ideas content. Every base niche
+ * must have a matching entry in ideasContent (keyed by slug); a missing entry
+ * fails the build via generateStaticParams so gaps never ship silently.
+ */
+export const niches: Niche[] = baseNiches.map((base) => {
+  const ideas = ideasContent[base.slug]
+  if (!ideas) {
+    throw new Error(`Missing ideas content for niche "${base.slug}" in ideas-data.ts`)
+  }
+  return { ...base, ...ideas }
+})

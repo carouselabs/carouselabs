@@ -21,5 +21,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }))
 
-  return [...staticRoutes, ...nicheRoutes]
+  const ideasRoutes: MetadataRoute.Sitemap = niches.map((niche) => ({
+    url: `${BASE_URL}/ideas/${niche.slug}`,
+    lastModified: new Date(),
+    changeFrequency: "monthly" as const,
+    priority: 0.8,
+  }))
+
+  return [...staticRoutes, ...nicheRoutes, ...ideasRoutes]
 }

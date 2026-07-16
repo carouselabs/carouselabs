@@ -613,6 +613,29 @@ export default async function NicheForPage({
           </Link>
         </AnimatedSection>
       </section>
+
+      {/* ── CROSS-LINK — how CarouseLabs compares to alternatives ── */}
+      <section className="px-6 pb-24">
+        <AnimatedSection className="max-w-4xl mx-auto text-center flex flex-col items-center gap-3">
+          <p className="text-[15px] text-[#6B7280]">
+            See how CarouseLabs compares to alternatives &rarr;
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href="/vs/taplio"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
+            >
+              CarouseLabs vs Taplio
+            </Link>
+            <Link
+              href="/vs/canva"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
+            >
+              CarouseLabs vs Canva
+            </Link>
+          </div>
+        </AnimatedSection>
+      </section>
     </>
   )
 }

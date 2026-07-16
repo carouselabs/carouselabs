@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next"
 import { niches } from "./(marketing)/for/data"
+import { competitors } from "./(marketing)/vs/data"
 
 const BASE_URL = "https://carouselabs.com"
 
@@ -28,5 +29,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }))
 
-  return [...staticRoutes, ...nicheRoutes, ...ideasRoutes]
+  // High-intent buyer comparison pages — higher priority than niche pages.
+  const versusRoutes: MetadataRoute.Sitemap = competitors.map((competitor) => ({
+    url: `${BASE_URL}/vs/${competitor.slug}`,
+    lastModified: new Date(),
+    changeFrequency: "monthly" as const,
+    priority: 0.9,
+  }))
+
+  return [...staticRoutes, ...nicheRoutes, ...ideasRoutes, ...versusRoutes]
 }

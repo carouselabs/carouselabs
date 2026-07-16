@@ -22,6 +22,14 @@ const NICHE_LINKS = [
   { href: "/for/personal-trainers", label: "Personal Trainers" },
 ]
 
+const COMPARE_LINKS = [
+  { href: "/vs/taplio", label: "vs Taplio" },
+  { href: "/vs/supergrow", label: "vs Supergrow" },
+  { href: "/vs/canva", label: "vs Canva" },
+  { href: "/vs/chatgpt", label: "vs ChatGPT" },
+  { href: "/vs/postnitro", label: "vs PostNitro" },
+]
+
 export function Footer() {
   return (
     <footer className="py-12 px-6 border-t border-[#E5E3DE] bg-[#F9F7F2]">
@@ -30,6 +38,21 @@ export function Footer() {
           <span className="text-[13px] font-semibold text-[#0A0A0A]">For Your Niche</span>
           <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
             {NICHE_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-[12px] text-[#6B7280] hover:text-[#7C3AED] transition-colors"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+
+        <div className="flex flex-col items-center gap-4 pb-8 border-b border-[#E5E3DE]">
+          <span className="text-[13px] font-semibold text-[#0A0A0A]">Compare</span>
+          <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
+            {COMPARE_LINKS.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}

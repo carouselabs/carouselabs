@@ -9,7 +9,13 @@ const isPublicRoute = createRouteMatcher([
   "/privacy(.*)",
   "/refund(.*)",
   "/contact(.*)",
-  "/for(.*)", // programmatic SEO niche pages — must be publicly crawlable
+  // ── Marketing / programmatic SEO pages — must be publicly crawlable ──
+  "/for(.*)", // 112 niche landing pages
+  "/ideas(.*)", // 112 carousel-ideas pages
+  "/how-to(.*)", // 112 step-by-step guide pages
+  "/vs(.*)", // competitor comparison pages
+  "/tools(.*)", // reserved: future marketing tools pages
+  "/strategy(.*)", // reserved: future strategy pages
   "/sitemap.xml",
   "/robots.txt",
   "/api/contact(.*)",

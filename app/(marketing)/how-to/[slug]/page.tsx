@@ -598,6 +598,29 @@ export default async function NicheHowToPage({
             </div>
           )}
 
+          {/* AI tools for this niche — the product that makes the guide easier */}
+          <AnimatedSection>
+            <Link
+              href={`/tools/${niche.slug}`}
+              className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-2xl border border-[#C4B5FD] bg-[#F3F0FF] hover:border-[#A78BFA] transition-colors"
+            >
+              <span className="text-[16px] font-medium text-[#1F2937]">
+                See the tools that make this easier &rarr;{" "}
+                <span className="font-semibold text-[#7C3AED]">
+                  AI content tools for {niche.name}
+                </span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 shrink-0 text-[14px] font-semibold text-[#7C3AED]">
+                Explore the toolkit
+                <ArrowRight
+                  size={16}
+                  strokeWidth={2.2}
+                  className="group-hover:translate-x-0.5 transition-transform"
+                />
+              </span>
+            </Link>
+          </AnimatedSection>
+
           {/* Comparison pages */}
           <AnimatedSection className="flex flex-col items-center gap-3 pt-2">
             <p className="text-[13px] font-semibold text-[#6B7280]">

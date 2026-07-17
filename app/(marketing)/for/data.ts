@@ -1,5 +1,6 @@
 import { ideasContent } from "./ideas-data"
 import { howToContent } from "./how-to-data"
+import { toolsContent } from "./tools-data"
 
 export interface CarouselExample {
   title: string
@@ -13,6 +14,26 @@ export interface HowToStep {
   description: string
   time_required: string
   carouselabs_tip: string
+}
+
+/**
+ * One of CarouseLabs' four tools, described for a specific niche. `tool_name`
+ * is intentionally identical across all niches — it names a real product
+ * surface (/generate/caption, /generate/carousel, /generate/image, and idea
+ * generation). Only the niche-specific fields below vary.
+ */
+export interface ToolBenefit {
+  tool_name: string
+  benefit: string
+  time_saved: string
+  example_output: string
+}
+
+/** A before/after outcome shown on the /tools/[slug] pages. */
+export interface NicheResult {
+  metric: string
+  before: string
+  after: string
 }
 
 export interface ContentMistake {
@@ -67,6 +88,10 @@ export interface Niche {
   after_carouselabs: string
   time_to_first_post: string
   quick_wins: string[]
+  // ── /tools/[slug] page fields (merged in from tools-data.ts) ──
+  tool_benefits: ToolBenefit[]
+  use_cases: string[]
+  results: NicheResult[]
 }
 
 /**
@@ -87,6 +112,9 @@ type BaseNiche = Omit<
   | "after_carouselabs"
   | "time_to_first_post"
   | "quick_wins"
+  | "tool_benefits"
+  | "use_cases"
+  | "results"
 >
 
 const baseNiches: BaseNiche[] = [
@@ -12762,5 +12790,9 @@ export const niches: Niche[] = baseNiches.map((base) => {
   if (!howTo) {
     throw new Error(`Missing how-to content for niche "${base.slug}" in how-to-data.ts`)
   }
-  return { ...base, ...ideas, ...howTo }
+  const tools = toolsContent[base.slug]
+  if (!tools) {
+    throw new Error(`Missing tools content for niche "${base.slug}" in tools-data.ts`)
+  }
+  return { ...base, ...ideas, ...howTo, ...tools }
 })

@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ArrowRight, BookOpen, Lightbulb, Sparkles, Users } from "lucide-react"
+import { ArrowRight, BookOpen, Lightbulb, Sparkles, Users, Wrench } from "lucide-react"
 import {
   AnimatedSection,
   AnimatedFadeIn,
@@ -107,8 +107,8 @@ export default function NicheIndexPage() {
               Browse All {niches.length} Niches
             </h2>
             <p className="max-w-xl mx-auto text-[15px] text-[#6B7280] leading-[1.6]">
-              Each card links to the main niche page, its carousel ideas, and
-              its step-by-step guide.
+              Each card links to the main niche page, its carousel ideas, its
+              step-by-step guide, and its AI tools.
             </p>
           </AnimatedSection>
 
@@ -154,6 +154,13 @@ export default function NicheIndexPage() {
                     >
                       <BookOpen size={11} strokeWidth={2.4} />
                       Guide
+                    </Link>
+                    <Link
+                      href={`/tools/${niche.slug}`}
+                      className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-full text-[12px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
+                    >
+                      <Wrench size={11} strokeWidth={2.4} />
+                      Tools
                     </Link>
                   </div>
                 </li>

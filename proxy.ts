@@ -14,7 +14,7 @@ const isPublicRoute = createRouteMatcher([
   "/ideas(.*)", // 112 carousel-ideas pages
   "/how-to(.*)", // 112 step-by-step guide pages
   "/vs(.*)", // competitor comparison pages
-  "/tools(.*)", // reserved: future marketing tools pages
+  "/tools(.*)", // 112 per-niche AI tools pages
   "/strategy(.*)", // reserved: future strategy pages
   "/sitemap.xml",
   "/robots.txt",

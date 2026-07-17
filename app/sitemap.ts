@@ -43,6 +43,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }))
 
+  const toolsRoutes: MetadataRoute.Sitemap = niches.map((niche) => ({
+    url: `${BASE_URL}/tools/${niche.slug}`,
+    lastModified: new Date(),
+    changeFrequency: "monthly" as const,
+    priority: 0.8,
+  }))
+
   // High-intent buyer comparison pages — higher priority than niche pages.
   const versusRoutes: MetadataRoute.Sitemap = competitors.map((competitor) => ({
     url: `${BASE_URL}/vs/${competitor.slug}`,
@@ -57,6 +64,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...nicheRoutes,
     ...ideasRoutes,
     ...howToRoutes,
+    ...toolsRoutes,
     ...versusRoutes,
   ]
 }

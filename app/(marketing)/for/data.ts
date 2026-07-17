@@ -1,8 +1,18 @@
 import { ideasContent } from "./ideas-data"
+import { howToContent } from "./how-to-data"
 
 export interface CarouselExample {
   title: string
   slides: string[]
+}
+
+/** A single step in the /how-to/[slug] step-by-step guide. */
+export interface HowToStep {
+  step_number: number
+  title: string
+  description: string
+  time_required: string
+  carouselabs_tip: string
 }
 
 export interface ContentMistake {
@@ -51,6 +61,12 @@ export interface Niche {
   content_calendar: ContentWeek[]
   best_posting_times: string
   content_pillars: string[]
+  // ── /how-to/[slug] page fields (merged in from how-to-data.ts) ──
+  how_to_steps: HowToStep[]
+  before_carouselabs: string
+  after_carouselabs: string
+  time_to_first_post: string
+  quick_wins: string[]
 }
 
 /**
@@ -62,7 +78,15 @@ export interface Niche {
  */
 type BaseNiche = Omit<
   Niche,
-  "carousel_post_ideas" | "content_calendar" | "best_posting_times" | "content_pillars"
+  | "carousel_post_ideas"
+  | "content_calendar"
+  | "best_posting_times"
+  | "content_pillars"
+  | "how_to_steps"
+  | "before_carouselabs"
+  | "after_carouselabs"
+  | "time_to_first_post"
+  | "quick_wins"
 >
 
 const baseNiches: BaseNiche[] = [
@@ -12734,5 +12758,9 @@ export const niches: Niche[] = baseNiches.map((base) => {
   if (!ideas) {
     throw new Error(`Missing ideas content for niche "${base.slug}" in ideas-data.ts`)
   }
-  return { ...base, ...ideas }
+  const howTo = howToContent[base.slug]
+  if (!howTo) {
+    throw new Error(`Missing how-to content for niche "${base.slug}" in how-to-data.ts`)
+  }
+  return { ...base, ...ideas, ...howTo }
 })

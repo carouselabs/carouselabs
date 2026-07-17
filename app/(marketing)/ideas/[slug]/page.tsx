@@ -544,6 +544,31 @@ export default async function NicheIdeasPage({
           </div>
         </AnimatedSection>
       </section>
+
+      {/* ── CROSS-LINK — step-by-step how-to guide for this niche ── */}
+      <section className="px-6 pb-24 -mt-6">
+        <AnimatedSection className="max-w-4xl mx-auto">
+          <Link
+            href={`/how-to/${niche.slug}`}
+            className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-2xl border border-[#E5DEF7] bg-[#F3F0FF] hover:border-[#C4B5FD] transition-colors"
+          >
+            <span className="text-[16px] font-medium text-[#1F2937]">
+              Ready to create? &rarr;{" "}
+              <span className="font-semibold text-[#7C3AED]">
+                How to get started as a {niche.name}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 shrink-0 text-[14px] font-semibold text-[#7C3AED]">
+              Read the guide
+              <ArrowRight
+                size={16}
+                strokeWidth={2.2}
+                className="group-hover:translate-x-0.5 transition-transform"
+              />
+            </span>
+          </Link>
+        </AnimatedSection>
+      </section>
     </>
   )
 }

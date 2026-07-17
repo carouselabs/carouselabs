@@ -1,6 +1,7 @@
 import { ideasContent } from "./ideas-data"
 import { howToContent } from "./how-to-data"
 import { toolsContent } from "./tools-data"
+import { strategyContent } from "./strategy-data"
 
 export interface CarouselExample {
   title: string
@@ -34,6 +35,22 @@ export interface NicheResult {
   metric: string
   before: string
   after: string
+}
+
+/** One of the five content-strategy pillars on the /strategy/[slug] pages. */
+export interface StrategyPillar {
+  pillar: string
+  description: string
+  post_frequency: string
+  example_topic: string
+}
+
+/** One day in the 7-day posting schedule on the /strategy/[slug] pages. */
+export interface PostingDay {
+  day: string
+  content_type: string
+  topic_idea: string
+  format: string
 }
 
 export interface ContentMistake {
@@ -92,6 +109,12 @@ export interface Niche {
   tool_benefits: ToolBenefit[]
   use_cases: string[]
   results: NicheResult[]
+  // ── /strategy/[slug] page fields (merged in from strategy-data.ts) ──
+  strategy_pillars: StrategyPillar[]
+  posting_schedule: PostingDay[]
+  growth_tactics: string[]
+  common_strategy_mistakes: string[]
+  ideal_audience: string
 }
 
 /**
@@ -115,6 +138,11 @@ type BaseNiche = Omit<
   | "tool_benefits"
   | "use_cases"
   | "results"
+  | "strategy_pillars"
+  | "posting_schedule"
+  | "growth_tactics"
+  | "common_strategy_mistakes"
+  | "ideal_audience"
 >
 
 const baseNiches: BaseNiche[] = [
@@ -12794,5 +12822,9 @@ export const niches: Niche[] = baseNiches.map((base) => {
   if (!tools) {
     throw new Error(`Missing tools content for niche "${base.slug}" in tools-data.ts`)
   }
-  return { ...base, ...ideas, ...howTo, ...tools }
+  const strategy = strategyContent[base.slug]
+  if (!strategy) {
+    throw new Error(`Missing strategy content for niche "${base.slug}" in strategy-data.ts`)
+  }
+  return { ...base, ...ideas, ...howTo, ...tools, ...strategy }
 })

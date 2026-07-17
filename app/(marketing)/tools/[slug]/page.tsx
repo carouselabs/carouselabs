@@ -14,6 +14,7 @@ import {
   Lightbulb,
   PenLine,
   Sparkles,
+  Target,
   Users,
   X,
 } from "lucide-react"
@@ -520,6 +521,27 @@ export default async function NicheToolsPage({
               <span className="flex items-center gap-2.5 text-[15px] font-semibold text-[#7C3AED]">
                 <BookOpen size={16} strokeWidth={2.2} />
                 How-to guide for {niche.name}
+              </span>
+              <ArrowRight
+                size={16}
+                strokeWidth={2.2}
+                className="shrink-0 text-[#7C3AED] group-hover:translate-x-0.5 transition-transform"
+              />
+            </Link>
+          </AnimatedSection>
+
+          {/* Emphasized cross-link — full content strategy for this niche */}
+          <AnimatedSection>
+            <Link
+              href={`/strategy/${niche.slug}`}
+              className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-2xl border border-[#C4B5FD] bg-white hover:shadow-[0_12px_30px_rgba(124,58,237,0.12)] transition-all"
+            >
+              <span className="inline-flex items-center gap-2.5 text-[16px] font-medium text-[#1F2937]">
+                <Target size={17} strokeWidth={2.2} className="text-[#7C3AED]" />
+                See the full strategy &rarr;{" "}
+                <span className="font-semibold text-[#7C3AED]">
+                  the complete LinkedIn playbook for {niche.name}
+                </span>
               </span>
               <ArrowRight
                 size={16}

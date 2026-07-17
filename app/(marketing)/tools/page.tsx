@@ -1,32 +1,40 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ArrowRight, BookOpen, Lightbulb, Sparkles, Target, Users, Wrench } from "lucide-react"
+import {
+  ArrowRight,
+  BookOpen,
+  Lightbulb,
+  Sparkles,
+  Target,
+  Users,
+  Wrench,
+} from "lucide-react"
 import {
   AnimatedSection,
   AnimatedFadeIn,
 } from "@/components/marketing/AnimatedSection"
-import { niches } from "./data"
+import { niches } from "../for/data"
 
 const SIGNUP_URL = "https://carouselabs.com/signup"
 
-const TITLE = "CarouseLabs for Every Professional — Find Your Niche"
-const DESCRIPTION = `Browse all ${niches.length} professions using CarouseLabs to create LinkedIn carousels, captions and images. Each niche has a dedicated page, content ideas, and a step-by-step guide.`
+const TITLE = "AI Content Tools for Every Professional — Find Your Niche"
+const DESCRIPTION = `CarouseLabs gives every professional a complete AI content toolkit — caption writer, carousel creator, and image generator — tailored to your niche. Browse all ${niches.length} professions.`
 
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
-  alternates: { canonical: "https://carouselabs.com/for" },
+  alternates: { canonical: "https://carouselabs.com/tools" },
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
-    url: "https://carouselabs.com/for",
+    url: "https://carouselabs.com/tools",
     type: "website",
     images: [
       {
         url: "/images/carouselabs-landing.png",
         width: 1920,
         height: 957,
-        alt: "CarouseLabs — AI LinkedIn content studio for every profession",
+        alt: "CarouseLabs AI content tools for every profession",
       },
     ],
   },
@@ -38,7 +46,7 @@ export const metadata: Metadata = {
   },
 }
 
-export default function NicheIndexPage() {
+export default function ToolsIndexPage() {
   // Alphabetical so the index is scannable rather than in arbitrary data order.
   const sorted = [...niches].sort((a, b) => a.name.localeCompare(b.name))
 
@@ -51,8 +59,8 @@ export default function NicheIndexPage() {
     itemListElement: sorted.map((niche, i) => ({
       "@type": "ListItem",
       position: i + 1,
-      name: `CarouseLabs for ${niche.name}`,
-      url: `https://carouselabs.com/for/${niche.slug}`,
+      name: `AI Content Tools for ${niche.name}`,
+      url: `https://carouselabs.com/tools/${niche.slug}`,
     })),
   }
 
@@ -75,15 +83,15 @@ export default function NicheIndexPage() {
 
           <AnimatedSection delay={0.05}>
             <h1 className="text-[clamp(2.2rem,5.5vw,3.4rem)] font-extrabold leading-[1.08] tracking-[-0.03em] text-[#0A0A0A]">
-              CarouseLabs for Every Professional &mdash; Find Your Niche
+              AI Content Tools for Every Professional &mdash; Find Your Niche
             </h1>
           </AnimatedSection>
 
           <AnimatedSection delay={0.1}>
             <p className="max-w-2xl text-[18px] text-[#4B5563] leading-[1.6]">
-              Every profession has a different LinkedIn content problem. Find
-              yours below &mdash; each niche has a dedicated page, {" "}
-              10 carousel ideas, and a complete step-by-step guide.
+              CarouseLabs gives every professional a complete AI content toolkit
+              &mdash; caption writer, carousel creator, and image generator
+              &mdash; tailored to your specific niche.
             </p>
           </AnimatedSection>
 
@@ -96,30 +104,6 @@ export default function NicheIndexPage() {
               <ArrowRight size={16} strokeWidth={2.2} />
             </Link>
           </AnimatedSection>
-
-          {/* Hub navigation — cross-links to the other index pages */}
-          <AnimatedSection delay={0.2} className="flex flex-wrap justify-center gap-2.5">
-            <Link
-              href="/tools"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#6B7280] bg-white border border-[#E5E3DE] hover:text-[#7C3AED] hover:border-[#C4B5FD] transition-colors"
-            >
-              <Wrench size={12} strokeWidth={2.4} />
-              AI Tools by niche
-            </Link>
-            <Link
-              href="/strategy"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#6B7280] bg-white border border-[#E5E3DE] hover:text-[#7C3AED] hover:border-[#C4B5FD] transition-colors"
-            >
-              <Target size={12} strokeWidth={2.4} />
-              Content strategies
-            </Link>
-            <Link
-              href="/vs"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#6B7280] bg-white border border-[#E5E3DE] hover:text-[#7C3AED] hover:border-[#C4B5FD] transition-colors"
-            >
-              Compare alternatives
-            </Link>
-          </AnimatedSection>
         </div>
       </section>
 
@@ -128,11 +112,11 @@ export default function NicheIndexPage() {
         <div className="max-w-6xl mx-auto flex flex-col gap-10">
           <AnimatedSection className="text-center flex flex-col gap-3">
             <h2 className="text-[clamp(1.6rem,3.5vw,2.4rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
-              Browse All {niches.length} Niches
+              AI Tools for All {niches.length} Niches
             </h2>
             <p className="max-w-xl mx-auto text-[15px] text-[#6B7280] leading-[1.6]">
-              Each card links to the main niche page, its carousel ideas, its
-              step-by-step guide, its AI tools, and its content strategy.
+              Each card links to the full AI toolkit for that profession, plus
+              its niche page, content ideas, step-by-step guide, and strategy.
             </p>
           </AnimatedSection>
 
@@ -144,16 +128,29 @@ export default function NicheIndexPage() {
                   className="h-full flex flex-col gap-4 p-6 rounded-2xl border border-[#E5E3DE] bg-[#FFFDF8] hover:border-[#C4B5FD] hover:shadow-[0_12px_30px_rgba(124,58,237,0.10)] transition-all"
                 >
                   <Link
-                    href={`/for/${niche.slug}`}
+                    href={`/tools/${niche.slug}`}
                     className="group flex items-start justify-between gap-3"
                   >
-                    <span className="text-[16px] font-semibold text-[#0A0A0A] leading-snug">
+                    <h3 className="text-[16px] font-semibold text-[#0A0A0A] leading-snug">
                       {niche.name}
-                    </span>
+                    </h3>
                     <ArrowRight
                       size={15}
                       strokeWidth={2.2}
                       className="shrink-0 mt-1 text-[#7C3AED] group-hover:translate-x-0.5 transition-transform"
+                    />
+                  </Link>
+
+                  <Link
+                    href={`/tools/${niche.slug}`}
+                    className="group inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#7C3AED]"
+                  >
+                    <Wrench size={13} strokeWidth={2.4} />
+                    Explore the AI toolkit
+                    <ArrowRight
+                      size={13}
+                      strokeWidth={2.2}
+                      className="group-hover:translate-x-0.5 transition-transform"
                     />
                   </Link>
 
@@ -180,13 +177,6 @@ export default function NicheIndexPage() {
                       Guide
                     </Link>
                     <Link
-                      href={`/tools/${niche.slug}`}
-                      className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-full text-[12px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
-                    >
-                      <Wrench size={11} strokeWidth={2.4} />
-                      Tools
-                    </Link>
-                    <Link
                       href={`/strategy/${niche.slug}`}
                       className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-full text-[12px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
                     >
@@ -201,7 +191,7 @@ export default function NicheIndexPage() {
         </div>
       </section>
 
-      {/* ── CTA + COMPARISON HUB LINK ── */}
+      {/* ── CTA + HUB LINKS ── */}
       <section className="px-6 pb-24">
         <AnimatedSection className="relative max-w-4xl mx-auto rounded-3xl overflow-hidden px-8 py-16 text-center">
           <div
@@ -214,12 +204,11 @@ export default function NicheIndexPage() {
           />
           <div className="relative flex flex-col items-center gap-6">
             <h2 className="max-w-2xl text-[clamp(1.7rem,4vw,2.6rem)] font-bold leading-[1.1] tracking-[-0.025em] text-white">
-              Don&rsquo;t See Your Niche?
+              One Toolkit for Every Kind of Content
             </h2>
             <p className="max-w-xl text-[16px] text-white/85 leading-[1.65]">
-              CarouseLabs works for any profession. It learns your voice, your
-              audience, and your industry &mdash; then generates ideas,
-              carousels, captions, and images built around them.
+              Captions, carousels, and on-brand images &mdash; all generated in
+              minutes and tailored to your niche. Try the full toolkit free.
             </p>
             <Link
               href={SIGNUP_URL}
@@ -232,12 +221,19 @@ export default function NicheIndexPage() {
           </div>
         </AnimatedSection>
 
-        <AnimatedSection className="max-w-4xl mx-auto mt-6 flex justify-center">
+        <AnimatedSection className="max-w-4xl mx-auto mt-6 flex flex-wrap justify-center gap-3">
           <Link
-            href="/vs"
+            href="/for"
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#6B7280] bg-white border border-[#E5E3DE] hover:text-[#7C3AED] hover:border-[#C4B5FD] transition-colors"
           >
-            Compare CarouseLabs to every alternative
+            Browse all niches
+            <ArrowRight size={14} strokeWidth={2.2} />
+          </Link>
+          <Link
+            href="/strategy"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#6B7280] bg-white border border-[#E5E3DE] hover:text-[#7C3AED] hover:border-[#C4B5FD] transition-colors"
+          >
+            Content strategies for every niche
             <ArrowRight size={14} strokeWidth={2.2} />
           </Link>
         </AnimatedSection>

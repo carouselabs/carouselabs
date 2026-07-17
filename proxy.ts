@@ -15,7 +15,7 @@ const isPublicRoute = createRouteMatcher([
   "/how-to(.*)", // 112 step-by-step guide pages
   "/vs(.*)", // competitor comparison pages
   "/tools(.*)", // 112 per-niche AI tools pages
-  "/strategy(.*)", // reserved: future strategy pages
+  "/strategy(.*)", // 112 per-niche content-strategy playbook pages
   "/sitemap.xml",
   "/robots.txt",
   "/api/contact(.*)",

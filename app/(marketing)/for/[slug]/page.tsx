@@ -640,7 +640,7 @@ export default async function NicheForPage({
       </section>
 
       {/* ── CROSS-LINK — AI tools for this niche ── */}
-      <section className="px-6 pb-20">
+      <section className="px-6 pb-6">
         <AnimatedSection className="max-w-4xl mx-auto">
           <Link
             href={`/tools/${niche.slug}`}
@@ -654,6 +654,31 @@ export default async function NicheForPage({
             </span>
             <span className="inline-flex items-center gap-1.5 shrink-0 text-[14px] font-semibold text-[#7C3AED]">
               See the tools
+              <ArrowRight
+                size={16}
+                strokeWidth={2.2}
+                className="group-hover:translate-x-0.5 transition-transform"
+              />
+            </span>
+          </Link>
+        </AnimatedSection>
+      </section>
+
+      {/* ── CROSS-LINK — content strategy for this niche ── */}
+      <section className="px-6 pb-20">
+        <AnimatedSection className="max-w-4xl mx-auto">
+          <Link
+            href={`/strategy/${niche.slug}`}
+            className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-2xl border border-[#E5DEF7] bg-[#F3F0FF] hover:border-[#C4B5FD] transition-colors"
+          >
+            <span className="text-[16px] font-medium text-[#1F2937]">
+              Build your content strategy &rarr;{" "}
+              <span className="font-semibold text-[#7C3AED]">
+                the complete LinkedIn playbook for {niche.name}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 shrink-0 text-[14px] font-semibold text-[#7C3AED]">
+              See the playbook
               <ArrowRight
                 size={16}
                 strokeWidth={2.2}

@@ -46,6 +46,13 @@ export function Footer() {
             <ArrowRight size={13} strokeWidth={2.4} />
           </Link>
           <Link
+            href="/tools"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
+          >
+            AI Tools by Niche
+            <ArrowRight size={13} strokeWidth={2.4} />
+          </Link>
+          <Link
             href="/vs"
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
           >

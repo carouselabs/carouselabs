@@ -123,6 +123,12 @@ export default async function NicheHowToPage({
   const faqJsonLd = buildFaqJsonLd(niche)
   const singular = niche.name.toLowerCase().replace(/s$/, "")
 
+  // Related niches, used for how-to → how-to internal links (3 max).
+  const relatedHowTo = niche.related_niches
+    .map((s) => getNiche(s))
+    .filter((n): n is Niche => Boolean(n))
+    .slice(0, 3)
+
   return (
     <>
       {/* SECTION 12 — FAQ structured data */}
@@ -520,42 +526,105 @@ export default async function NicheHowToPage({
         </AnimatedSection>
       </section>
 
-      {/* ── CROSS-LINKS — sibling pages for this niche ── */}
+      {/* ── SECTION 13 — RELATED RESOURCES (internal linking hub) ── */}
       <section className="px-6 pb-24 -mt-6">
-        <AnimatedSection className="max-w-4xl mx-auto grid sm:grid-cols-2 gap-4">
-          <Link
-            href={`/ideas/${niche.slug}`}
-            className="group flex items-center justify-between gap-4 p-6 rounded-2xl border border-[#E5DEF7] bg-[#F3F0FF] hover:border-[#C4B5FD] transition-colors"
-          >
-            <span className="text-[15px] font-medium text-[#1F2937]">
-              Need ideas?{" "}
-              <span className="font-semibold text-[#7C3AED]">
-                10 carousel ideas for {niche.name}
-              </span>
-            </span>
-            <ArrowRight
-              size={16}
-              strokeWidth={2.2}
-              className="shrink-0 text-[#7C3AED] group-hover:translate-x-0.5 transition-transform"
-            />
-          </Link>
-          <Link
-            href={`/for/${niche.slug}`}
-            className="group flex items-center justify-between gap-4 p-6 rounded-2xl border border-[#E5DEF7] bg-[#F3F0FF] hover:border-[#C4B5FD] transition-colors"
-          >
-            <span className="text-[15px] font-medium text-[#1F2937]">
-              See the product{" "}
-              <span className="font-semibold text-[#7C3AED]">
+        <div className="max-w-5xl mx-auto flex flex-col gap-8">
+          <AnimatedSection className="text-center">
+            <h2 className="text-[clamp(1.5rem,3.2vw,2.1rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
+              Related Resources for {niche.name}
+            </h2>
+          </AnimatedSection>
+
+          {/* Same-niche siblings — completes the for ↔ ideas ↔ how-to triangle */}
+          <AnimatedSection className="grid sm:grid-cols-2 gap-4">
+            <Link
+              href={`/for/${niche.slug}`}
+              className="group flex items-center justify-between gap-4 p-6 rounded-2xl border border-[#E5DEF7] bg-[#F3F0FF] hover:border-[#C4B5FD] transition-colors"
+            >
+              <span className="text-[15px] font-semibold text-[#7C3AED]">
                 CarouseLabs for {niche.name}
               </span>
-            </span>
-            <ArrowRight
-              size={16}
-              strokeWidth={2.2}
-              className="shrink-0 text-[#7C3AED] group-hover:translate-x-0.5 transition-transform"
-            />
-          </Link>
-        </AnimatedSection>
+              <ArrowRight
+                size={16}
+                strokeWidth={2.2}
+                className="shrink-0 text-[#7C3AED] group-hover:translate-x-0.5 transition-transform"
+              />
+            </Link>
+            <Link
+              href={`/ideas/${niche.slug}`}
+              className="group flex items-center justify-between gap-4 p-6 rounded-2xl border border-[#E5DEF7] bg-[#F3F0FF] hover:border-[#C4B5FD] transition-colors"
+            >
+              <span className="text-[15px] font-semibold text-[#7C3AED]">
+                LinkedIn carousel ideas for {niche.name}
+              </span>
+              <ArrowRight
+                size={16}
+                strokeWidth={2.2}
+                className="shrink-0 text-[#7C3AED] group-hover:translate-x-0.5 transition-transform"
+              />
+            </Link>
+          </AnimatedSection>
+
+          {/* Related niches — same page type */}
+          {relatedHowTo.length > 0 && (
+            <div className="flex flex-col gap-4">
+              <AnimatedSection>
+                <p className="text-[13px] font-semibold text-[#6B7280] text-center">
+                  Guides for related niches
+                </p>
+              </AnimatedSection>
+              <div className="grid sm:grid-cols-3 gap-4">
+                {relatedHowTo.map((r, i) => (
+                  <AnimatedSection key={r.slug} delay={i * 0.05}>
+                    <Link
+                      href={`/how-to/${r.slug}`}
+                      className="group h-full flex flex-col justify-between gap-5 p-6 rounded-2xl border border-[#E5E3DE] bg-[#FFFDF8] hover:border-[#C4B5FD] hover:shadow-[0_12px_30px_rgba(124,58,237,0.12)] transition-all"
+                    >
+                      <span className="text-[15px] font-semibold text-[#0A0A0A] leading-snug">
+                        How to create LinkedIn content as a {r.name}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#7C3AED]">
+                        Read the guide
+                        <ArrowRight
+                          size={14}
+                          strokeWidth={2.2}
+                          className="group-hover:translate-x-0.5 transition-transform"
+                        />
+                      </span>
+                    </Link>
+                  </AnimatedSection>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Comparison pages */}
+          <AnimatedSection className="flex flex-col items-center gap-3 pt-2">
+            <p className="text-[13px] font-semibold text-[#6B7280]">
+              Choosing a tool?
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Link
+                href="/vs/taplio"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
+              >
+                See how CarouseLabs compares to Taplio
+              </Link>
+              <Link
+                href="/vs/canva"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
+              >
+                CarouseLabs vs Canva
+              </Link>
+              <Link
+                href="/for"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#6B7280] bg-white border border-[#E5E3DE] hover:text-[#7C3AED] hover:border-[#C4B5FD] transition-colors"
+              >
+                Browse all niches
+              </Link>
+            </div>
+          </AnimatedSection>
+        </div>
       </section>
     </>
   )

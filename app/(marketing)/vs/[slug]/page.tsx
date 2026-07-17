@@ -17,7 +17,8 @@ import {
   AnimatedSection,
   AnimatedFadeIn,
 } from "@/components/marketing/AnimatedSection"
-import { competitors, type Competitor } from "../data"
+import { competitors, getRelatedCompetitors, type Competitor } from "../data"
+import { niches } from "../../for/data"
 
 const SIGNUP_URL = "https://carouselabs.com/signup"
 
@@ -26,6 +27,37 @@ const bySlug = new Map<string, Competitor>(competitors.map((c) => [c.slug, c]))
 function getCompetitor(slug: string): Competitor | undefined {
   return bySlug.get(slug)
 }
+
+/**
+ * Resolve a niche slug to its `{ slug, name }` for internal linking. Throws at
+ * build time on an unknown slug so a typo can never ship as a broken link.
+ */
+function nicheLink(slug: string): { slug: string; name: string } {
+  const niche = niches.find((n) => n.slug === slug)
+  if (!niche) {
+    throw new Error(
+      `Unknown niche slug "${slug}" referenced in vs/[slug] internal links`,
+    )
+  }
+  return { slug: niche.slug, name: niche.name }
+}
+
+/** Top 6 niche pages surfaced from every comparison page. */
+const POPULAR_NICHES = [
+  "saas-founders",
+  "business-coaches",
+  "digital-marketers",
+  "content-creators",
+  "freelancers",
+  "startup-founders",
+].map(nicheLink)
+
+/** Top 3 how-to guides surfaced from every comparison page. */
+const POPULAR_GUIDES = [
+  "saas-founders",
+  "business-coaches",
+  "digital-marketers",
+].map(nicheLink)
 
 // Only the 20 slugs below are valid; any other /vs/* path 404s.
 export const dynamicParams = false
@@ -126,6 +158,9 @@ export default async function CompetitorVsPage({
   if (!competitor) notFound()
 
   const faqJsonLd = buildFaqJsonLd(competitor)
+
+  // Related comparisons for internal linking (same category, 3 max).
+  const relatedCompetitors = getRelatedCompetitors(slug, 3)
 
   // SECTION 2 quick stats
   const platformsStat = competitor.feature_comparison.some(
@@ -512,6 +547,122 @@ export default async function CompetitorVsPage({
             </p>
           </div>
         </AnimatedSection>
+      </section>
+
+      {/* ── WHO USES CAROUSELABS — internal linking into niche pages ── */}
+      <section className="px-6 pb-24 -mt-6">
+        <div className="max-w-5xl mx-auto flex flex-col gap-10">
+          <AnimatedSection className="text-center flex flex-col gap-3">
+            <h2 className="text-[clamp(1.5rem,3.2vw,2.1rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
+              Who Uses CarouseLabs?
+            </h2>
+            <p className="max-w-xl mx-auto text-[15px] text-[#6B7280] leading-[1.6]">
+              CarouseLabs is built for professionals who need consistent
+              LinkedIn content without hiring a designer or ghostwriter. See how
+              it works for your line of work.
+            </p>
+          </AnimatedSection>
+
+          {/* Top niche pages */}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {POPULAR_NICHES.map((n, i) => (
+              <AnimatedSection key={n.slug} delay={i * 0.04}>
+                <Link
+                  href={`/for/${n.slug}`}
+                  className="group h-full flex items-center justify-between gap-3 p-5 rounded-2xl border border-[#E5E3DE] bg-[#FFFDF8] hover:border-[#C4B5FD] hover:shadow-[0_12px_30px_rgba(124,58,237,0.12)] transition-all"
+                >
+                  <span className="text-[15px] font-semibold text-[#0A0A0A] leading-snug">
+                    CarouseLabs for {n.name}
+                  </span>
+                  <ArrowRight
+                    size={15}
+                    strokeWidth={2.2}
+                    className="shrink-0 text-[#7C3AED] group-hover:translate-x-0.5 transition-transform"
+                  />
+                </Link>
+              </AnimatedSection>
+            ))}
+          </div>
+
+          {/* Top how-to guides */}
+          <div className="flex flex-col gap-4">
+            <AnimatedSection>
+              <p className="text-[13px] font-semibold text-[#6B7280] text-center">
+                Step-by-step guides
+              </p>
+            </AnimatedSection>
+            <div className="grid sm:grid-cols-3 gap-4">
+              {POPULAR_GUIDES.map((n, i) => (
+                <AnimatedSection key={n.slug} delay={i * 0.05}>
+                  <Link
+                    href={`/how-to/${n.slug}`}
+                    className="group h-full flex flex-col justify-between gap-5 p-6 rounded-2xl border border-[#E5DEF7] bg-[#F3F0FF] hover:border-[#C4B5FD] transition-colors"
+                  >
+                    <span className="text-[15px] font-semibold text-[#0A0A0A] leading-snug">
+                      How to create LinkedIn content as a {n.name}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#7C3AED]">
+                      Read the guide
+                      <ArrowRight
+                        size={14}
+                        strokeWidth={2.2}
+                        className="group-hover:translate-x-0.5 transition-transform"
+                      />
+                    </span>
+                  </Link>
+                </AnimatedSection>
+              ))}
+            </div>
+          </div>
+
+          {/* Related comparisons */}
+          {relatedCompetitors.length > 0 && (
+            <div className="flex flex-col gap-4">
+              <AnimatedSection>
+                <p className="text-[13px] font-semibold text-[#6B7280] text-center">
+                  Other comparisons
+                </p>
+              </AnimatedSection>
+              <div className="grid sm:grid-cols-3 gap-4">
+                {relatedCompetitors.map((c, i) => (
+                  <AnimatedSection key={c.slug} delay={i * 0.05}>
+                    <Link
+                      href={`/vs/${c.slug}`}
+                      className="group h-full flex flex-col justify-between gap-5 p-6 rounded-2xl border border-[#E5E3DE] bg-[#FFFDF8] hover:border-[#C4B5FD] hover:shadow-[0_12px_30px_rgba(124,58,237,0.12)] transition-all"
+                    >
+                      <span className="text-[15px] font-semibold text-[#0A0A0A] leading-snug">
+                        CarouseLabs vs {c.name}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#7C3AED]">
+                        Compare
+                        <ArrowRight
+                          size={14}
+                          strokeWidth={2.2}
+                          className="group-hover:translate-x-0.5 transition-transform"
+                        />
+                      </span>
+                    </Link>
+                  </AnimatedSection>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <AnimatedSection className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <Link
+              href="/for"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#6B7280] bg-white border border-[#E5E3DE] hover:text-[#7C3AED] hover:border-[#C4B5FD] transition-colors"
+            >
+              Browse all 112 niches
+            </Link>
+            <Link
+              href="/vs"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#6B7280] bg-white border border-[#E5E3DE] hover:text-[#7C3AED] hover:border-[#C4B5FD] transition-colors"
+            >
+              Compare all tools
+            </Link>
+          </AnimatedSection>
+        </div>
       </section>
     </>
   )

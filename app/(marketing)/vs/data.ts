@@ -1691,3 +1691,56 @@ export const competitors: Competitor[] = baseCompetitors.map((base) => {
   }
   return { ...base, ...prose, deep_dive }
 })
+
+/**
+ * Competitor categories, used only to surface *related* comparisons for
+ * internal linking (e.g. /vs/taplio → supergrow, postnitro, predis-ai).
+ *
+ * Every category holds at least four members, so each competitor always has
+ * three same-category siblings and `getRelatedCompetitors` never has to fall
+ * back. The fallback below exists purely as a safety net if this map is edited.
+ */
+const COMPETITOR_CATEGORIES: Record<string, string> = {
+  // LinkedIn-native content tools — CarouseLabs' closest comparisons
+  taplio: "linkedin",
+  supergrow: "linkedin",
+  postnitro: "linkedin",
+  "predis-ai": "linkedin",
+  // Design & slide tools
+  canva: "design",
+  "adobe-express": "design",
+  figma: "design",
+  "beautiful-ai": "design",
+  slidesgo: "design",
+  // AI writing tools
+  chatgpt: "ai-writing",
+  jasper: "ai-writing",
+  "copy-ai": "ai-writing",
+  writesonic: "ai-writing",
+  "notion-ai": "ai-writing",
+  // Social scheduling & management suites
+  buffer: "social",
+  hootsuite: "social",
+  later: "social",
+  "sprout-social": "social",
+  loomly: "social",
+  planoly: "social",
+}
+
+/**
+ * Related competitor comparisons for a given slug — same category first, then
+ * topped up from other categories if a category is ever left with too few
+ * members. Always excludes the current slug.
+ */
+export function getRelatedCompetitors(slug: string, limit = 3): Competitor[] {
+  const category = COMPETITOR_CATEGORIES[slug]
+  const others = competitors.filter((c) => c.slug !== slug)
+
+  const sameCategory = others.filter(
+    (c) => category && COMPETITOR_CATEGORIES[c.slug] === category,
+  )
+  if (sameCategory.length >= limit) return sameCategory.slice(0, limit)
+
+  const rest = others.filter((c) => !sameCategory.includes(c))
+  return [...sameCategory, ...rest].slice(0, limit)
+}

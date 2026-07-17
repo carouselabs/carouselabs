@@ -15,6 +15,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${BASE_URL}/contact`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
   ]
 
+  // Hub/index pages — these link out to every niche and comparison page, so
+  // they carry higher priority than the individual pages they point to.
+  const hubRoutes: MetadataRoute.Sitemap = [
+    { url: `${BASE_URL}/for`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
+    { url: `${BASE_URL}/vs`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
+  ]
+
   const nicheRoutes: MetadataRoute.Sitemap = niches.map((niche) => ({
     url: `${BASE_URL}/for/${niche.slug}`,
     lastModified: new Date(),
@@ -46,6 +53,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   return [
     ...staticRoutes,
+    ...hubRoutes,
     ...nicheRoutes,
     ...ideasRoutes,
     ...howToRoutes,

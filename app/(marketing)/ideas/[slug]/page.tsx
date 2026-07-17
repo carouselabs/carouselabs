@@ -546,7 +546,7 @@ export default async function NicheIdeasPage({
       </section>
 
       {/* ── CROSS-LINK — step-by-step how-to guide for this niche ── */}
-      <section className="px-6 pb-24 -mt-6">
+      <section className="px-6 pb-6 -mt-6">
         <AnimatedSection className="max-w-4xl mx-auto">
           <Link
             href={`/how-to/${niche.slug}`}
@@ -567,6 +567,39 @@ export default async function NicheIdeasPage({
               />
             </span>
           </Link>
+        </AnimatedSection>
+      </section>
+
+      {/* ── CROSS-LINK — main niche page (completes for ↔ ideas ↔ how-to) ── */}
+      <section className="px-6 pb-24">
+        <AnimatedSection className="max-w-4xl mx-auto flex flex-col gap-4">
+          <Link
+            href={`/for/${niche.slug}`}
+            className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-2xl border border-[#E5DEF7] bg-[#F3F0FF] hover:border-[#C4B5FD] transition-colors"
+          >
+            <span className="text-[16px] font-medium text-[#1F2937]">
+              See the product &rarr;{" "}
+              <span className="font-semibold text-[#7C3AED]">
+                CarouseLabs for {niche.name}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 shrink-0 text-[14px] font-semibold text-[#7C3AED]">
+              View page
+              <ArrowRight
+                size={16}
+                strokeWidth={2.2}
+                className="group-hover:translate-x-0.5 transition-transform"
+              />
+            </span>
+          </Link>
+          <div className="flex justify-center">
+            <Link
+              href="/for"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#6B7280] bg-white border border-[#E5E3DE] hover:text-[#7C3AED] hover:border-[#C4B5FD] transition-colors"
+            >
+              Browse all 112 niches
+            </Link>
+          </div>
         </AnimatedSection>
       </section>
     </>

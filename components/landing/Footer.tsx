@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { ArrowRight } from "lucide-react"
 import { AnimatedFadeIn } from "@/components/marketing/AnimatedSection"
 
 const FOOTER_LINKS = [
@@ -34,6 +35,25 @@ export function Footer() {
   return (
     <footer className="py-12 px-6 border-t border-[#E5E3DE] bg-[#F9F7F2]">
       <AnimatedFadeIn className="max-w-6xl mx-auto flex flex-col gap-8">
+        {/* Hub links — reachable from every marketing page, so crawlers can
+            always get to the full niche and comparison indexes in one hop. */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pb-8 border-b border-[#E5E3DE]">
+          <Link
+            href="/for"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
+          >
+            Browse All Niches
+            <ArrowRight size={13} strokeWidth={2.4} />
+          </Link>
+          <Link
+            href="/vs"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
+          >
+            Compare Tools
+            <ArrowRight size={13} strokeWidth={2.4} />
+          </Link>
+        </div>
+
         <div className="flex flex-col items-center gap-4 pb-8 border-b border-[#E5E3DE]">
           <span className="text-[13px] font-semibold text-[#0A0A0A]">For Your Niche</span>
           <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
@@ -46,6 +66,12 @@ export function Footer() {
                 {link.label}
               </Link>
             ))}
+            <Link
+              href="/for"
+              className="text-[12px] font-semibold text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
+            >
+              View all {"→"}
+            </Link>
           </nav>
         </div>
 
@@ -61,6 +87,12 @@ export function Footer() {
                 {link.label}
               </Link>
             ))}
+            <Link
+              href="/vs"
+              className="text-[12px] font-semibold text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
+            >
+              View all {"→"}
+            </Link>
           </nav>
         </div>
 

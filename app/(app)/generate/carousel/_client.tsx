@@ -26,6 +26,7 @@ import { countWords } from "@/lib/wordCount"
 interface CarouselClientProps {
   ideaId: string
   ideaHook: string
+  hasGuidelines: boolean
 }
 
 type Step = 1 | 2 | 3 | 4
@@ -40,7 +41,7 @@ interface Slide {
 
 const SKELETON_WIDTHS = ["88%", "72%", "95%", "65%", "80%", "55%", "70%", "40%"]
 
-export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
+export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClientProps) {
   const router = useRouter()
   const [step, setStep] = useState<Step>(1)
 
@@ -633,7 +634,8 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
           {!caption && !isStreamingCaption && (
             <div className="flex flex-col gap-4">
               <VoiceGuidelinesToggle
-                checked={useVoiceGuidelines}
+                hasGuidelines={hasGuidelines}
+                value={useVoiceGuidelines}
                 onChange={setUseVoiceGuidelines}
               />
               <button
@@ -661,7 +663,8 @@ export function CarouselClient({ ideaId, ideaHook }: CarouselClientProps) {
                 </div>
               </div>
               <VoiceGuidelinesToggle
-                checked={useVoiceGuidelines}
+                hasGuidelines={hasGuidelines}
+                value={useVoiceGuidelines}
                 onChange={setUseVoiceGuidelines}
               />
               <div className="flex items-end gap-2">

@@ -16,9 +16,11 @@ export default async function CarouselPage({
 
   const user = await db.user.findUnique({
     where: { clerkId },
-    include: { subscription: true },
+    include: { subscription: true, profile: { select: { voiceGuidelines: true } } },
   })
   if (!user) redirect("/sign-in")
+
+  const hasGuidelines = !!user.profile?.voiceGuidelines?.trim()
 
   // Carousels are a Pro-only feature. Enforce it server-side so Free users can't
   // reach carousel generation by navigating to this URL directly (the
@@ -33,5 +35,5 @@ export default async function CarouselPage({
   if (!idea || idea.userId !== user.id) notFound()
   if (!idea.breakdowns[0]) redirect(`/idea/${ideaId}`)
 
-  return <CarouselClient ideaId={ideaId} ideaHook={idea.hook} />
+  return <CarouselClient ideaId={ideaId} ideaHook={idea.hook} hasGuidelines={hasGuidelines} />
 }

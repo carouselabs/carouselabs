@@ -18,6 +18,7 @@ import { countWords } from "@/lib/wordCount"
 interface ImageClientProps {
   ideaId: string
   ideaHook: string
+  hasGuidelines: boolean
 }
 
 type Step = 1 | 2 | 3 | 4
@@ -25,7 +26,7 @@ type ImageSize = "4:5" | "1:1"
 
 const SKELETON_WIDTHS = ["88%", "72%", "95%", "65%", "80%", "55%", "70%", "40%"]
 
-export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
+export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProps) {
   const [step, setStep] = useState<Step>(1)
 
   // Step 1
@@ -607,7 +608,8 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
           {!caption && !isStreamingCaption && (
             <div className="flex flex-col gap-4">
               <VoiceGuidelinesToggle
-                checked={useVoiceGuidelines}
+                hasGuidelines={hasGuidelines}
+                value={useVoiceGuidelines}
                 onChange={setUseVoiceGuidelines}
               />
               <button
@@ -635,7 +637,8 @@ export function ImageClient({ ideaId, ideaHook }: ImageClientProps) {
                 </div>
               </div>
               <VoiceGuidelinesToggle
-                checked={useVoiceGuidelines}
+                hasGuidelines={hasGuidelines}
+                value={useVoiceGuidelines}
                 onChange={setUseVoiceGuidelines}
               />
               <div className="flex items-end gap-2">

@@ -14,8 +14,13 @@ export default async function ImagePage({
   const { userId: clerkId } = await auth()
   if (!clerkId) redirect("/sign-in")
 
-  const user = await db.user.findUnique({ where: { clerkId } })
+  const user = await db.user.findUnique({
+    where: { clerkId },
+    include: { profile: { select: { voiceGuidelines: true } } },
+  })
   if (!user) redirect("/sign-in")
+
+  const hasGuidelines = !!user.profile?.voiceGuidelines?.trim()
 
   const idea = await db.idea.findUnique({
     where: { id: ideaId },
@@ -25,5 +30,5 @@ export default async function ImagePage({
   if (!idea || idea.userId !== user.id) notFound()
   if (!idea.breakdowns[0]) redirect(`/idea/${ideaId}`)
 
-  return <ImageClient ideaId={ideaId} ideaHook={idea.hook} />
+  return <ImageClient ideaId={ideaId} ideaHook={idea.hook} hasGuidelines={hasGuidelines} />
 }

@@ -16,6 +16,7 @@ import { friendlyGenerationError } from "@/lib/friendlyError"
 interface CaptionClientProps {
   ideaId: string
   ideaHook: string
+  hasGuidelines: boolean
 }
 
 const HOOKS_DELIM = "---HOOKS---"
@@ -43,7 +44,7 @@ function parseFullResponse(raw: string) {
   return { captionText, hooks }
 }
 
-export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
+export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClientProps) {
   const [caption, setCaption] = useState("")
   const [hooks, setHooks] = useState<string[]>([])
   const [tone, setTone] = useState<Tone | null>(null)
@@ -269,7 +270,11 @@ export function CaptionClient({ ideaId, ideaHook }: CaptionClientProps) {
 
       {/* Opt-in voice guidelines — only rendered if the user has saved some. Set
           BEFORE generating so the very first caption can honor the preference. */}
-      <VoiceGuidelinesToggle checked={useVoiceGuidelines} onChange={setUseVoiceGuidelines} />
+      <VoiceGuidelinesToggle
+        hasGuidelines={hasGuidelines}
+        value={useVoiceGuidelines}
+        onChange={setUseVoiceGuidelines}
+      />
 
       {/* First generation — no caption yet. Generates directly (not counted as a
           regeneration) so the toggle above can be set first. */}

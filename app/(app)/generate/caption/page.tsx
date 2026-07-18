@@ -15,8 +15,13 @@ export default async function CaptionPage({
   const { userId: clerkId } = await auth()
   if (!clerkId) redirect("/sign-in")
 
-  const user = await db.user.findUnique({ where: { clerkId } })
+  const user = await db.user.findUnique({
+    where: { clerkId },
+    include: { profile: { select: { voiceGuidelines: true } } },
+  })
   if (!user) redirect("/sign-in")
+
+  const hasGuidelines = !!user.profile?.voiceGuidelines?.trim()
 
   const idea = await db.idea.findUnique({
     where: { id: ideaId },
@@ -28,5 +33,5 @@ export default async function CaptionPage({
   // Must have a breakdown to generate a caption
   if (!idea.breakdowns[0]) redirect(`/idea/${ideaId}`)
 
-  return <CaptionClient ideaId={ideaId} ideaHook={idea.hook} />
+  return <CaptionClient ideaId={ideaId} ideaHook={idea.hook} hasGuidelines={hasGuidelines} />
 }

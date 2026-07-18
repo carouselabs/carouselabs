@@ -44,6 +44,8 @@ Every slide prompt should read like a premium creative brief written by a senior
 
 Please keep the section order consistent across every slide.
 
+For the STYLE REFERENCE section, write only a single short sentence such as "Match the shared reference style." The platform replaces this section with a standardized style specification after generation, so spend your detail budget on the remaining sections instead.
+
 For the Branding section: unless the user message explicitly provides a brand name to display, specify that the slide carries no logo, watermark, or brand text of any kind. The only text on a slide is the headline, supporting copy, and slide indicator described in the brief.
 
 Design direction

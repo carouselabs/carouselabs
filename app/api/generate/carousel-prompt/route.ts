@@ -42,6 +42,71 @@ interface Slide {
   prompt: string
 }
 
+// Fixed STYLE REFERENCE contract injected into every slide brief when a
+// reference image was uploaded. GPT-4o writes this section differently on every
+// run (and often generically); overwriting it server-side guarantees each slide
+// of every generation carries the identical style-extraction instructions.
+const STYLE_REFERENCE_SECTION = `Use the uploaded reference image ONLY as a style reference.
+
+Before generating the carousel, thoroughly analyze and reverse-engineer the reference image's visual design system.
+
+Extract ONLY:
+- Overall visual aesthetic and design philosophy
+- Typography style and treatment
+- Visual hierarchy
+- Layout philosophy
+- White-space usage
+- Composition principles
+- Illustration style and rendering technique
+- Color palette and color relationships
+- Lighting and shadow treatment
+- Texture and material finish
+- Shape language and geometric style
+- Card, container, and UI element styling (if present)
+- Decorative elements and graphic motifs
+- Line weight and stroke style
+- Iconography style (without copying specific icons)
+- Depth, perspective, and visual balance
+- Brand personality conveyed through the design
+- Overall creative direction and artistic language
+
+DO NOT copy:
+- Layout or arrangement
+- Composition
+- Illustrations or characters
+- Icons
+- Graphics
+- Text or typography content
+- Logos or branding
+- Workflow or diagrams
+- Marketing message
+- Positioning
+- Specific objects or scenes
+- Any identifiable visual element
+
+Your goal is to extract the underlying design language, not the content.
+
+The generated carousel should feel like it was designed by the same creative team that produced the reference image while remaining 100% original in concept, layout, illustrations, text, and composition.
+
+Preserve the artistic style, but create an entirely new visual experience tailored to the user's content.`
+
+// Replace the model-written ## STYLE REFERENCE section with the fixed contract.
+// The section spans from its heading to the next ## heading (or end of prompt).
+// If the model omitted the heading entirely, the block is inserted after the
+// "# CAROUSEL — SLIDE X" title line (or prepended as a fallback).
+function injectStyleReference(prompt: string): string {
+  const styleBlock = `## STYLE REFERENCE\n${STYLE_REFERENCE_SECTION}`
+  const sectionRe = /## STYLE REFERENCE[\s\S]*?(?=\n## |$)/
+  if (sectionRe.test(prompt)) {
+    return prompt.replace(sectionRe, styleBlock)
+  }
+  const titleMatch = prompt.match(/^# CAROUSEL[^\n]*\n/)
+  if (titleMatch) {
+    return prompt.replace(titleMatch[0], `${titleMatch[0]}${styleBlock}\n`)
+  }
+  return `${styleBlock}\n${prompt}`
+}
+
 // Targeted edit mode — apply ONLY the user's instruction to the existing slides,
 // touching as few slides as possible. Returns the same JSON shape the parser
 // expects (caption is unused by the client in this flow).
@@ -458,6 +523,15 @@ export async function POST(req: Request) {
 
   if (!parsed.slides.length) {
     return NextResponse.json({ error: "No slides found in AI response" }, { status: 502 })
+  }
+
+  // Standardize the STYLE REFERENCE section of every brief (reference uploads
+  // only — the block explicitly talks about the uploaded image).
+  if (referenceImageBase64) {
+    parsed.slides = parsed.slides.map((s) => ({
+      ...s,
+      prompt: injectStyleReference(s.prompt),
+    }))
   }
 
   console.log("[carousel-prompt] Final slide count:", parsed.slides.length)

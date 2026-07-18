@@ -38,6 +38,38 @@ const ROLE_TO_SLIDE_ROLE = {
   cta: "CTA",
 } as const
 
+// Appended to EVERY slide prompt when a reference image is attached. Each slide
+// is a separate gpt-image-2 call, so cross-slide consistency (especially
+// typography) depends on every call carrying this exact same style contract.
+const REFERENCE_STYLE_BLOCK = `Use the uploaded reference image ONLY as a style reference.
+
+Extract ONLY:
+- Premium editorial SaaS aesthetic
+- Typography treatment: match the reference's exact font style, weight, letter spacing, and casing — every slide in this carousel must use the same typography
+- Visual hierarchy
+- Spacious layout
+- White-space usage
+- Premium editorial illustration style
+- Soft lighting
+- Rounded corners
+- Subtle shadows
+- Premium product marketing quality
+- Color relationships exactly as seen in the reference, including lighter and darker shades of the same color family
+
+DO NOT copy:
+- Layout
+- Composition
+- Illustrations
+- Icons
+- Graphics
+- Text
+- Workflow
+- Marketing message
+- Positioning
+- Any identifiable visual element
+
+Everything must be completely original while maintaining the same premium editorial design language. Wherever the reference shows a logo, wordmark, watermark, or app name (typically in a corner), render clean empty background in that area instead — the finished slide contains zero logos and zero brand names. The only text on the slide is the text specified in this brief.`
+
 export async function POST(req: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -213,10 +245,10 @@ export async function POST(req: Request) {
         : cleanPrompt
 
       // images.edit transforms the reference too literally by default: it will
-      // copy text/logos it sees (e.g. a watermark) and drift from the brief.
-      // Spell out how the reference may be used — style and colors only.
+      // copy text/logos it sees and drift on typography between slides. The
+      // shared style block pins down exactly how the reference may be used.
       const finalPrompt = referenceFile
-        ? `${withInstruction}\n\nThe attached image is a style reference only. Match its color palette exactly as seen (including lighter and darker shades), along with its lighting, texture, and illustration style — but create a completely new composition for this brief. Important: the reference image contains branding that belongs to a different design. Wherever the reference shows a logo, wordmark, watermark, or app name (typically in a corner), the new slide must show clean empty background in that area instead. The finished slide contains zero logos and zero brand names — the only text on it is the text specified in this brief.`
+        ? `${withInstruction}\n\n${REFERENCE_STYLE_BLOCK}`
         : withInstruction
 
       // With a style reference, use images.edit so gpt-image-2 receives the

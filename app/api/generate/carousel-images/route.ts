@@ -208,9 +208,16 @@ export async function POST(req: Request) {
       // Layer the user's custom instruction on top of the slide prompt so a
       // single-slide regeneration applies the requested change (e.g. "make the
       // background darker") while keeping the rest of the slide intact.
-      const finalPrompt = userInstruction
+      const withInstruction = userInstruction
         ? `${cleanPrompt}\n\nADDITIONAL INSTRUCTION: ${userInstruction}`
         : cleanPrompt
+
+      // images.edit transforms the reference too literally by default: it will
+      // copy text/logos it sees (e.g. a watermark) and drift from the brief.
+      // Spell out how the reference may be used — style and colors only.
+      const finalPrompt = referenceFile
+        ? `${withInstruction}\n\nThe attached image is a style reference only. Match its color palette exactly as seen (including lighter and darker shades), along with its lighting, texture, and illustration style — but create a completely new composition for this brief. Do not copy any text, logos, watermarks, or brand names visible in the reference image. The only text on the slide is the text specified in this brief.`
+        : withInstruction
 
       // With a style reference, use images.edit so gpt-image-2 receives the
       // reference image itself alongside the prompt; otherwise plain generate.

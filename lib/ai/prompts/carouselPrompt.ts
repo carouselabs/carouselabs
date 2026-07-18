@@ -56,7 +56,7 @@ For color, infer the palette from the uploaded reference image and extract its c
 
 All slides belong to one carousel, so typography, spacing, lighting, illustration style, decorative elements, color relationships, and layout philosophy should stay visually consistent from the first slide to the last.
 
-Each slide brief should run approximately 900 to 1200 words, and no longer than 1200.
+Length matters: each slide brief must run between 500 and 600 words — treat 500 as a hard minimum, not a target to approximate. Reach it by writing every one of the sixteen sections in concrete detail: exact placement, proportions, specific color values, typography treatment, lighting behavior, and material descriptions, the way a senior art director specifies a real production brief. A brief that summarizes sections in one or two sentences is incomplete. This is deliberately a long-form task; a complete response containing 7 to 9 briefs of this length is the expected outcome.
 
 Output format
 
@@ -69,7 +69,7 @@ Return only valid JSON with the slide prompts. No explanations, no summaries, no
       "slideNumber": 1,
       "role": "hook",
       "headline": "[slide headline]",
-      "prompt": "[full 900-1200 word creative brief as a single escaped string — escape newlines as \\n and quotes as \\"]"
+      "prompt": "[full 500-600 word creative brief as a single escaped string — escape newlines as \\n and quotes as \\"]"
     }
   ]
 }

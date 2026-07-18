@@ -20,9 +20,9 @@ export const maxDuration = 300
 
 // Output budget for the slide-prompt generation, pinned to GPT-4o's hard output
 // ceiling (16,384 tokens — no gpt-4o snapshot supports more). The
-// 900-1200-words × 7-9-slide target (~14k tokens + JSON escaping overhead) runs
-// close to this ceiling — the near-ceiling warning below is the early signal
-// that prompts are being cut.
+// 500-600-words × 7-9-slide target (~7-8k tokens + JSON escaping overhead) fits
+// comfortably — the near-ceiling warning below is the early signal if output
+// ever grows toward truncation again.
 const MAX_TOKENS = 16384
 // Warn when output lands close enough to MAX_TOKENS that truncation is likely.
 const TOKEN_WARN_THRESHOLD = 15000

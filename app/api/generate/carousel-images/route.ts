@@ -216,7 +216,7 @@ export async function POST(req: Request) {
       // copy text/logos it sees (e.g. a watermark) and drift from the brief.
       // Spell out how the reference may be used — style and colors only.
       const finalPrompt = referenceFile
-        ? `${withInstruction}\n\nThe attached image is a style reference only. Match its color palette exactly as seen (including lighter and darker shades), along with its lighting, texture, and illustration style — but create a completely new composition for this brief. Do not copy any text, logos, watermarks, or brand names visible in the reference image. The only text on the slide is the text specified in this brief.`
+        ? `${withInstruction}\n\nThe attached image is a style reference only. Match its color palette exactly as seen (including lighter and darker shades), along with its lighting, texture, and illustration style — but create a completely new composition for this brief. Important: the reference image contains branding that belongs to a different design. Wherever the reference shows a logo, wordmark, watermark, or app name (typically in a corner), the new slide must show clean empty background in that area instead. The finished slide contains zero logos and zero brand names — the only text on it is the text specified in this brief.`
         : withInstruction
 
       // With a style reference, use images.edit so gpt-image-2 receives the

@@ -4,6 +4,7 @@ import { Ratelimit } from "@upstash/ratelimit"
 import { Redis } from "@upstash/redis"
 import { getCurrentUser } from "@/lib/auth"
 import OpenAI from "openai"
+import Anthropic from "@anthropic-ai/sdk"
 import { db } from "@/lib/db"
 import {
   CAROUSEL_MASTER_SYSTEM_PROMPT,
@@ -13,6 +14,7 @@ import { validateReferenceImage } from "@/lib/validateImage"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 // The structured multi-slide generation can run long; allow up to 300s so it
 // isn't cut off by the platform's shorter default function timeout.
@@ -89,6 +91,28 @@ Your goal is to extract the underlying design language, not the content.
 The generated carousel should feel like it was designed by the same creative team that produced the reference image while remaining 100% original in concept, layout, illustrations, text, and composition.
 
 Preserve the artistic style, but create an entirely new visual experience tailored to the user's content.`
+
+// GPT-4o sometimes refuses the carousel task outright instead of erroring.
+// A real generation is JSON starting with "{" — refusal prose shows up at the
+// very start of the response, so only the opening chunk is checked (a phrase
+// like "I can't" buried inside slide copy must not trigger a false positive).
+function isRefusal(text: string): boolean {
+  const refusalPhrases = [
+    "i'm sorry",
+    "i cannot",
+    "i can't assist",
+    "i'm not able",
+    "i won't",
+    "i am unable",
+    "i apologize",
+    "not able to help",
+    "can't help with",
+  ]
+  const opening = text.toLowerCase().trim().slice(0, 300)
+  return refusalPhrases.some(
+    (phrase) => opening.startsWith(phrase) || opening.includes(phrase),
+  )
+}
 
 // Replace the model-written ## STYLE REFERENCE section with the fixed contract.
 // The section spans from its heading to the next ## heading (or end of prompt).
@@ -430,7 +454,10 @@ export async function POST(req: Request) {
           userInstruction,
         )
 
-  let modelRaw: string
+  let modelRaw = ""
+  let usedFallback = false
+
+  // PRIMARY: GPT-4o. Any refusal or API error falls through to Claude below.
   try {
     const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
       ...(referenceImageBase64
@@ -476,37 +503,83 @@ export async function POST(req: Request) {
       console.warn("[carousel-prompt] WARNING: Near token ceiling:", completionTokens)
     }
 
-    modelRaw = response.choices[0]?.message?.content ?? ""
+    const gptRaw = response.choices[0]?.message?.content ?? ""
+
+    if (isRefusal(gptRaw)) {
+      console.warn("[carousel-prompt] GPT-4o refused request, falling back to Claude")
+      usedFallback = true
+    } else {
+      modelRaw = gptRaw
+    }
   } catch (err) {
-    // Map provider failures to friendly, actionable messages instead of a
-    // generic 502 — the client surfaces `error` directly to the user.
-    // Duck-typed on status/code rather than SDK error classes (OpenAI's
-    // APIError attaches a numeric `status`).
-    const e = err as { status?: number; code?: string; message?: string }
-    console.error("[carousel-prompt] GPT-4o API error:", e?.message ?? err)
-    if (e?.status === 429) {
-      return NextResponse.json(
-        { error: "Too many requests. Please wait a moment and try again." },
-        { status: 429 },
-      )
-    }
-    if (e?.status === 529 || e?.status === 503) {
-      return NextResponse.json(
-        { error: "The AI service is busy right now. Please try again in a minute." },
-        { status: 503 },
-      )
-    }
-    if (e?.status === 504 || e?.code === "ETIMEDOUT") {
-      return NextResponse.json(
-        { error: "Generation timed out. Please try again." },
-        { status: 504 },
-      )
-    }
-    return NextResponse.json(
-      { error: "Something went wrong generating the carousel. Please try again." },
-      { status: 500 },
+    const e = err as { message?: string }
+    console.warn(
+      "[carousel-prompt] GPT-4o error, falling back to Claude:",
+      e?.message ?? err,
     )
+    usedFallback = true
   }
+
+  // FALLBACK: Claude, fed the same system prompt and user message (as its
+  // native system param + message), so output format and rules are identical.
+  if (usedFallback) {
+    try {
+      const claudeMessages: Anthropic.MessageParam[] = referenceImageBase64
+        ? [
+            {
+              role: "user" as const,
+              content: [
+                {
+                  type: "image" as const,
+                  source: {
+                    type: "base64" as const,
+                    media_type: (referenceMediaType || "image/jpeg") as
+                      | "image/jpeg"
+                      | "image/png"
+                      | "image/webp",
+                    data: referenceImageBase64.replace(/^data:image\/\w+;base64,/, ""),
+                  },
+                },
+                {
+                  type: "text" as const,
+                  text: userText,
+                },
+              ],
+            },
+          ]
+        : [
+            {
+              role: "user" as const,
+              content: userText,
+            },
+          ]
+
+      const claudeResponse = await anthropic.messages.create({
+        model: "claude-sonnet-4-5",
+        max_tokens: MAX_TOKENS,
+        // Edit mode's prompt is self-contained — mirror the GPT-4o call, which
+        // only attaches the master system prompt for full generations.
+        ...(isEditMode ? {} : { system: CAROUSEL_MASTER_SYSTEM_PROMPT }),
+        messages: claudeMessages,
+      })
+
+      console.log("[carousel-prompt] Claude fallback stop_reason:", claudeResponse.stop_reason)
+
+      modelRaw = claudeResponse.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map((b) => b.text)
+        .join("")
+    } catch (err) {
+      const e = err as { message?: string }
+      console.error("[carousel-prompt] Claude fallback also failed:", e?.message ?? err)
+      return NextResponse.json(
+        { error: "Something went wrong generating the carousel. Please try again." },
+        { status: 500 },
+      )
+    }
+  }
+
+  console.log("[carousel-prompt] Model used:", usedFallback ? "Claude (fallback)" : "GPT-4o")
 
   if (!modelRaw.trimEnd().endsWith("}")) {
     console.warn("[generate/carousel-prompt] WARNING: Response may be truncated — does not end with }")

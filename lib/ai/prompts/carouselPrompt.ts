@@ -97,7 +97,7 @@ Deep Dive: ${deepDive}
 Canvas Size: ${sizeDesc}
 ${niche ? `Niche: ${niche}` : ""}
 ${userInstruction ? `\nSpecial Instruction: ${userInstruction}` : ""}
-${!hasReference ? "\nNo reference image provided. Invent a premium editorial color palette and design system from scratch that matches the content topic and niche." : ""}
+${!hasReference ? "\nNo reference image provided. Design the entire visual identity yourself: invent one striking, modern, premium design system that fits the content topic and niche — a bold editorial look that stops the scroll. Define it precisely (an exact color palette with specific color names or hex values, one typography treatment, one illustration style and rendering technique, one lighting and shadow treatment, one shape language) and then repeat that exact same system word-for-word in every slide's Color Palette and style-related sections, so all slides render as one visually identical set. Be adventurous with the aesthetic — rich gradients, dramatic contrast, unexpected color pairings, editorial-poster energy — while keeping the premium, uncluttered quality of high-end product marketing." : ""}
 
 Please generate the complete carousel prompt set following the master system instructions. Output ONLY valid JSON.`
 }

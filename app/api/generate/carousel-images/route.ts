@@ -247,9 +247,11 @@ export async function POST(req: Request) {
       // images.edit transforms the reference too literally by default: it will
       // copy text/logos it sees and drift on typography between slides. The
       // shared style block pins down exactly how the reference may be used.
+      // Without a reference there is no shared visual anchor at all, so a
+      // consistency reminder rides along with every slide instead.
       const finalPrompt = referenceFile
         ? `${withInstruction}\n\n${REFERENCE_STYLE_BLOCK}`
-        : withInstruction
+        : `${withInstruction}\n\nThis slide belongs to a multi-slide carousel that must read as one designed set. Follow the typography, color palette, illustration style, lighting, and layout treatment specified in this brief exactly — same fonts, same colors, same rendering style as every other slide in the set. Premium, modern, editorial design quality throughout. No logos, watermarks, or brand names; the only text on the slide is the text specified in this brief.`
 
       // With a style reference, use images.edit so gpt-image-2 receives the
       // reference image itself alongside the prompt; otherwise plain generate.

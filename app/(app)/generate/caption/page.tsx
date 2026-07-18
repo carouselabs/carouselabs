@@ -33,5 +33,7 @@ export default async function CaptionPage({
   // Must have a breakdown to generate a caption
   if (!idea.breakdowns[0]) redirect(`/idea/${ideaId}`)
 
-  return <CaptionClient ideaId={ideaId} ideaHook={idea.hook} hasGuidelines={hasGuidelines} />
+  // key={ideaId} forces a full remount when the idea changes, so per-idea client
+  // state can never leak between ideas when only the ?ideaId searchParam changes.
+  return <CaptionClient key={ideaId} ideaId={ideaId} ideaHook={idea.hook} hasGuidelines={hasGuidelines} />
 }

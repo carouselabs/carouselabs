@@ -3,10 +3,11 @@ import { NextResponse } from "next/server"
 import { Ratelimit } from "@upstash/ratelimit"
 import { Redis } from "@upstash/redis"
 import { getCurrentUser } from "@/lib/auth"
-import OpenAI from "openai"
+import OpenAI, { toFile } from "openai"
 import { db } from "@/lib/db"
 import { uploadToR2 } from "@/lib/r2"
 import { notifyFirstPostIfFirst } from "@/lib/email"
+import { validateReferenceImage } from "@/lib/validateImage"
 
 export const maxDuration = 300
 
@@ -65,6 +66,8 @@ export async function POST(req: Request) {
   let persist: boolean
   let persistOnly: boolean
   let userInstruction: string | undefined
+  let referenceImageBase64: string | undefined
+  let referenceMediaType: string
 
   try {
     const body = await req.json()
@@ -83,6 +86,12 @@ export async function POST(req: Request) {
       typeof body.userInstruction === "string" && body.userInstruction.trim()
         ? body.userInstruction.trim()
         : undefined
+    // Optional style reference — when present, slides are generated with
+    // images.edit so gpt-image-2 sees the reference alongside the prompt.
+    referenceImageBase64 =
+      typeof body.referenceImage === "string" ? body.referenceImage : undefined
+    referenceMediaType =
+      typeof body.referenceMediaType === "string" ? body.referenceMediaType : "image/jpeg"
     if (!ideaId) throw new Error("Missing ideaId")
     if (slides.length === 0) throw new Error("No slides provided")
   } catch (err) {
@@ -90,6 +99,17 @@ export async function POST(req: Request) {
       { error: err instanceof Error ? err.message : "Invalid request body" },
       { status: 400 },
     )
+  }
+
+  // Validate the reference image (size / type / magic bytes) before it reaches
+  // OpenAI. Replaces the client-supplied values with the cleaned, verified ones.
+  if (referenceImageBase64) {
+    const check = validateReferenceImage(referenceImageBase64, referenceMediaType)
+    if (!check.ok) {
+      return NextResponse.json({ error: check.error }, { status: 400 })
+    }
+    referenceImageBase64 = check.data
+    referenceMediaType = check.mediaType
   }
 
   const idea = await db.idea.findUnique({ where: { id: ideaId } })
@@ -157,13 +177,32 @@ export async function POST(req: Request) {
   }[] = []
 
   try {
+    // Build the reference file ONCE (not per slide) — every slide's edit call
+    // reuses the same uploaded style reference.
+    const referenceFile = referenceImageBase64
+      ? await toFile(
+          Buffer.from(
+            referenceImageBase64.replace(/^data:image\/\w+;base64,/, ""),
+            "base64",
+          ),
+          referenceMediaType === "image/png" ? "reference.png" : "reference.jpg",
+          { type: referenceMediaType || "image/jpeg" },
+        )
+      : null
+
     for (const slide of slides) {
-      // Safety net: slide prompts are authored as " || "-separated labeled
-      // segments (STYLE: || ... CANVAS: || ...). Strip the labels + separators so
-      // gpt-image-2 receives clean prose, not the structural scaffolding.
+      // Safety net: strip authoring scaffolding so gpt-image-2 receives clean
+      // prose. Handles both the newer markdown-structured prompts (## section
+      // headers, ━━━ separator lines, **bold**) and the legacy " || "-separated
+      // labeled segments (STYLE: || ... CANVAS: || ...).
       const cleanPrompt = (slide.prompt ?? "")
+        .replace(/^#+\s+.*$/gm, "") // remove ## Section headers
+        .replace(/^━+\s*$/gm, "") // remove separator lines
+        .replace(/\*\*/g, "") // remove bold markdown markers
+        .replace(/•\s*/g, "") // remove bullet points
         .replace(/\b[A-Z][A-Z\s]*:\s*\|\|\s*/g, "")
         .replace(/\s*\|\|\s*/g, " ")
+        .replace(/\n{3,}/g, "\n\n") // collapse excessive newlines
         .trim()
 
       // Layer the user's custom instruction on top of the slide prompt so a
@@ -173,13 +212,24 @@ export async function POST(req: Request) {
         ? `${cleanPrompt}\n\nADDITIONAL INSTRUCTION: ${userInstruction}`
         : cleanPrompt
 
-      const imageResponse = await openai.images.generate({
-        model: "gpt-image-2",
-        prompt: finalPrompt,
-        n: 1,
-        size: openaiSize,
-        quality: "medium", // medium quality keeps carousel generation cheaper/faster
-      })
+      // With a style reference, use images.edit so gpt-image-2 receives the
+      // reference image itself alongside the prompt; otherwise plain generate.
+      const imageResponse = referenceFile
+        ? await openai.images.edit({
+            model: "gpt-image-2",
+            image: referenceFile,
+            prompt: finalPrompt,
+            n: 1,
+            size: openaiSize,
+            quality: "medium",
+          })
+        : await openai.images.generate({
+            model: "gpt-image-2",
+            prompt: finalPrompt,
+            n: 1,
+            size: openaiSize,
+            quality: "medium", // medium quality keeps carousel generation cheaper/faster
+          })
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = (imageResponse as any).data as Array<{ b64_json?: string }> | undefined

@@ -30,5 +30,8 @@ export default async function ImagePage({
   if (!idea || idea.userId !== user.id) notFound()
   if (!idea.breakdowns[0]) redirect(`/idea/${ideaId}`)
 
-  return <ImageClient ideaId={ideaId} ideaHook={idea.hook} hasGuidelines={hasGuidelines} />
+  // key={ideaId} forces a full remount when the idea changes, so per-idea client
+  // state (reference image, caption, step) can never leak between ideas when only
+  // the ?ideaId searchParam changes.
+  return <ImageClient key={ideaId} ideaId={ideaId} ideaHook={idea.hook} hasGuidelines={hasGuidelines} />
 }

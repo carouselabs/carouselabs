@@ -23,6 +23,11 @@ import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regeneratio
 import { friendlyGenerationError } from "@/lib/friendlyError"
 import { countWords } from "@/lib/wordCount"
 
+// TEMP DEBUG — when true, generateCarouselFlow stops after slide prompts come
+// back and renders them as text instead of generating images (no OpenAI image
+// spend). Set back to false / remove to restore the full flow.
+const DEBUG_SKIP_IMAGE_GENERATION = true
+
 interface CarouselClientProps {
   ideaId: string
   ideaHook: string
@@ -342,6 +347,14 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
     }
     setIsGeneratingSlides(false)
 
+    // TEMP DEBUG — stop before image generation; the step-4 debug panel below
+    // renders the raw prompts instead.
+    if (DEBUG_SKIP_IMAGE_GENERATION) {
+      setGameStarted(false)
+      setLoadingMessage("")
+      return
+    }
+
     // Step 2 — generate images ONE BY ONE from the client. Each call generates a
     // single slide and does NOT persist (persist: false), so no junk Posts.
     setIsGeneratingImages(true)
@@ -360,6 +373,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
             size: size ?? "4:5",
             ideaId,
             persist: false,
+            referenceImage: referenceImage ?? undefined,
+            referenceMediaType: referenceImage ? referenceMediaType : undefined,
           }),
         })
         const imgData = await imgRes.json()
@@ -467,6 +482,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
           slides: [slide],
           persist: false,
           userInstruction,
+          referenceImage: referenceImage ?? undefined,
+          referenceMediaType: referenceImage ? referenceMediaType : undefined,
         }),
       })
       const data = await res.json()
@@ -879,6 +896,28 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
               >
                 Try Again
               </button>
+            </div>
+          )}
+
+          {/* TEMP DEBUG — prompts-only view when image generation is skipped */}
+          {DEBUG_SKIP_IMAGE_GENERATION && slides && slideImages.length === 0 && (
+            <div className="flex flex-col gap-4 p-4">
+              <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-700">
+                DEBUG MODE — prompts only, no images generated
+              </div>
+              {slides.map((slide) => (
+                <div
+                  key={slide.slideNumber}
+                  className="flex flex-col gap-2 p-4 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC]"
+                >
+                  <p className="text-[12px] font-semibold text-[#0A0A0A]">
+                    Slide {slide.slideNumber} ({slide.role}): {slide.headline}
+                  </p>
+                  <pre className="whitespace-pre-wrap text-[11px] text-[#374151] leading-relaxed font-sans">
+                    {slide.prompt}
+                  </pre>
+                </div>
+              ))}
             </div>
           )}
 

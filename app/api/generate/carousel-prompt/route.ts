@@ -1,18 +1,39 @@
 import { NextResponse } from "next/server"
+import { auth } from "@clerk/nextjs/server"
+import { Ratelimit } from "@upstash/ratelimit"
+import { Redis } from "@upstash/redis"
 import { getCurrentUser } from "@/lib/auth"
-import Anthropic from "@anthropic-ai/sdk"
+import OpenAI from "openai"
 import { db } from "@/lib/db"
-import { buildCarouselPrompt } from "@/lib/ai/prompts/carouselPrompt"
+import {
+  CAROUSEL_MASTER_SYSTEM_PROMPT,
+  buildCarouselUserMessage,
+} from "@/lib/ai/prompts/carouselPrompt"
 import { validateReferenceImage } from "@/lib/validateImage"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 // The structured multi-slide generation can run long; allow up to 300s so it
 // isn't cut off by the platform's shorter default function timeout.
 export const maxDuration = 300
 
-const CAPTION_GHOSTWRITER_INSTRUCTION = `Act as a top 0.1% LinkedIn ghostwriter for AI founders. Read the deep dive and identify every unique insight, strategic implication, supporting argument, and founder perspective. Rewrite it into a LinkedIn post that preserves all high-value information while removing fluff, repetition, and unnecessary exposition. Optimize for readability, engagement, and authority—not virality or clickbait. The writing should feel human, opinionated, and experience-driven, with natural transitions and varied sentence lengths. The first three lines should create curiosity without hiding the value, and the rest should progressively reveal deeper insights. Prioritize clarity over hype, include practical takeaways, and end with a question that invites thoughtful discussion rather than generic comments. If any important idea from the original is omitted, explicitly add it back so that no meaningful strategic insight is lost. The final post should sound like an experienced founder or investor sharing hard-earned lessons, not an AI summarizing an article.`
+// Output budget for the slide-prompt generation, pinned to GPT-4o's hard output
+// ceiling (16,384 tokens — no gpt-4o snapshot supports more). The
+// 900-1200-words × 7-9-slide target (~14k tokens + JSON escaping overhead) runs
+// close to this ceiling — the near-ceiling warning below is the early signal
+// that prompts are being cut.
+const MAX_TOKENS = 16384
+// Warn when output lands close enough to MAX_TOKENS that truncation is likely.
+const TOKEN_WARN_THRESHOLD = 15000
+
+// Each call generates 7-9 long slide prompts and is the entry point to the
+// expensive image-generation flow, so cap it per user like carousel-images.
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(20, "1 h"),
+  analytics: false,
+})
 
 interface Slide {
   slideNumber: number
@@ -86,6 +107,20 @@ function cleanLooseString(s: string): string {
     .trim()
 }
 
+// Like cleanLooseString but PRESERVES line breaks. Slide prompts carry markdown
+// structure (## section headers, ━━━ separators) that downstream stripping in
+// carousel-images matches with line-anchored regexes — flattening newlines here
+// would fuse headers into body text and defeat that stripping.
+function cleanLooseMultiline(s: string): string {
+  return s
+    .replace(/\\"/g, '"') // \" → "
+    .replace(/\\n/g, "\n") // escaped newline → real newline
+    .replace(/\\[tr]/g, " ") // escaped tab/CR → space
+    .replace(/[ \t]+/g, " ") // collapse runs of spaces, keep newlines
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
 // Per-slide recovery: split the candidate into one chunk per slide (at each
 // "slideNumber" key) and pull slideNumber/role/headline/prompt out of each chunk
 // with tolerant regexes. Because each slide is handled independently, one slide
@@ -108,7 +143,7 @@ function recoverSlides(candidate: string): { caption: string; slides: Slide[] } 
       slideNumber: Number(numMatch[1]),
       role: (roleMatch?.[1] as Slide["role"]) ?? "body",
       headline: cleanLooseString(headlineMatch[1]),
-      prompt: cleanLooseString(promptMatch[1]),
+      prompt: cleanLooseMultiline(promptMatch[1]),
     })
   }
 
@@ -116,9 +151,20 @@ function recoverSlides(candidate: string): { caption: string; slides: Slide[] } 
 }
 
 function parseCarouselResponse(raw: string): { caption: string; slides: Slide[] } {
+  // 0. Pre-sanitize: trim to the outermost { ... } block (drops chatter/fences
+  // around the JSON), replace literal tab characters (illegal inside JSON
+  // strings) with spaces, and remove null bytes. Strategies 1, 2, 5 and 6 run
+  // against this cleaned candidate; the fence strategies (3, 4) keep using the
+  // original raw, since the fences themselves live outside the braces.
+  const s0start = raw.indexOf("{")
+  const s0end = raw.lastIndexOf("}")
+  const sanitized = (s0start !== -1 && s0end > s0start ? raw.slice(s0start, s0end + 1) : raw)
+    .replace(/\t/g, " ")
+    .replace(/\x00/g, "")
+
   // 1. Direct JSON.parse
   try {
-    const parsed = JSON.parse(raw)
+    const parsed = JSON.parse(sanitized)
     if (typeof parsed.caption === "string" && isValidSlideArray(parsed.slides)) {
       console.log("[generate/carousel-prompt] Parsed via: direct JSON.parse")
       return { caption: parsed.caption, slides: parsed.slides }
@@ -163,8 +209,8 @@ function parseCarouselResponse(raw: string): { caption: string; slides: Slide[] 
   } catch {}
 
   // 5. Manual caption + slides array extraction
-  const caption = extractStringValue(raw, "caption") ?? ""
-  const slidesMatch = raw.match(/"slides"\s*:\s*(\[[\s\S]*?\])(?=\s*[,}])/)
+  const caption = extractStringValue(sanitized, "caption") ?? ""
+  const slidesMatch = sanitized.match(/"slides"\s*:\s*(\[[\s\S]*?\])(?=\s*[,}])/)
   if (slidesMatch) {
     try {
       const slides = JSON.parse(slidesMatch[1])
@@ -178,27 +224,34 @@ function parseCarouselResponse(raw: string): { caption: string; slides: Slide[] 
   // 6. Aggressive recovery — for long slide prompts with bad escaping or raw
   // newlines that break JSON.parse in strategies 1-5.
   try {
-    const start = raw.indexOf("{")
-    const end = raw.lastIndexOf("}")
-    if (start !== -1 && end !== -1 && end > start) {
-      const candidate = raw.slice(start, end + 1)
+    // 6a. Raw (unescaped) line breaks inside string values are illegal JSON
+    // and a common cause of breakage — replace them with spaces and retry a
+    // strict parse. (Escaped "\n" sequences are untouched.)
+    try {
+      const parsed = JSON.parse(sanitized.replace(/\r?\n/g, " "))
+      if (typeof parsed.caption === "string" && isValidSlideArray(parsed.slides)) {
+        console.log("[generate/carousel-prompt] Parsed via: newline sanitization")
+        return { caption: parsed.caption, slides: parsed.slides }
+      }
+    } catch {}
 
-      // 6a. Raw (unescaped) line breaks inside string values are illegal JSON
-      // and a common cause of breakage — replace them with spaces and retry a
-      // strict parse. (Escaped "\n" sequences are untouched.)
-      try {
-        const parsed = JSON.parse(candidate.replace(/\r?\n/g, " "))
-        if (typeof parsed.caption === "string" && isValidSlideArray(parsed.slides)) {
-          console.log("[generate/carousel-prompt] Parsed via: newline sanitization")
-          return { caption: parsed.caption, slides: parsed.slides }
-        }
-      } catch {}
+    // 6b. Per-slide regex recovery — resilient to unescaped quotes in one slide.
+    const recovered = recoverSlides(sanitized)
+    if (recovered) {
+      console.log("[generate/carousel-prompt] Parsed via: per-slide recovery")
+      return recovered
+    }
 
-      // 6b. Per-slide regex recovery — resilient to unescaped quotes in one slide.
-      const recovered = recoverSlides(candidate)
-      if (recovered) {
-        console.log("[generate/carousel-prompt] Parsed via: per-slide recovery")
-        return recovered
+    // 6c. Last resort — lenient slides-array extraction: isolate everything from
+    // "slides": [ to the last ] (greedy, so multi-line prompt fields full of
+    // ## headers, quotes, and brackets can't end the match early) and run the
+    // per-slide recovery on just that span.
+    const arrMatch = sanitized.match(/"slides"\s*:\s*\[([\s\S]*)\]/)
+    if (arrMatch) {
+      const recoveredArr = recoverSlides(arrMatch[1])
+      if (recoveredArr) {
+        console.log("[generate/carousel-prompt] Parsed via: lenient slides-array recovery")
+        return { caption, slides: recoveredArr.slides }
       }
     }
   } catch {}
@@ -209,6 +262,15 @@ function parseCarouselResponse(raw: string): { caption: string; slides: Slide[] 
 export async function POST(req: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const { userId: clerkId } = await auth()
+  const { success } = await ratelimit.limit(`generate:carousel-prompt:${clerkId}`)
+  if (!success) {
+    return NextResponse.json(
+      { error: "Rate limit reached. Please try again later." },
+      { status: 429 },
+    )
+  }
 
   // Carousels are Pro-only. Defense-in-depth: the carousel page and FormatPicker
   // already gate this, but block it at the API too.
@@ -245,7 +307,8 @@ export async function POST(req: Request) {
         ? body.currentSlides
         : undefined
     if (!ideaId) throw new Error("Missing ideaId")
-    console.log("[carousel-prompt] Reference image received:", !!referenceImageBase64)
+    // TEMP diagnostic — confirm in Vercel logs exactly what the client sent.
+    console.log("[ref-image] Reference image present:", !!referenceImageBase64, "length:", referenceImageBase64?.length ?? 0)
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Invalid request body" },
@@ -283,83 +346,113 @@ export async function POST(req: Request) {
   console.log(`[carousel] Profile used: industry=${niche}`)
 
   const breakdown = idea.breakdowns[0].outline as unknown as BreakdownOutline
+  const hasReference = !!referenceImageBase64
   // Targeted edit when the user gave an instruction AND we have the current
-  // slides to edit; otherwise full regeneration as before.
-  const prompt =
+  // slides to edit; otherwise full generation via the master prompt engine.
+  // The edit prompt is self-contained (carries its own instructions + JSON
+  // shape), so the master system prompt is only attached for full generations.
+  const isEditMode = !!(userInstruction && currentSlides)
+  const userText =
     userInstruction && currentSlides
       ? buildCarouselEditPrompt(currentSlides, userInstruction)
-      : `${CAPTION_GHOSTWRITER_INSTRUCTION}
+      : buildCarouselUserMessage(
+          breakdown.refinedHook,
+          breakdown.deepDive,
+          caption,
+          size,
+          hasReference,
+          niche,
+          userInstruction,
+        )
 
-${buildCarouselPrompt(
-    breakdown.refinedHook,
-    breakdown.deepDive,
-    caption,
-    size,
-    !!referenceImageBase64,
-    breakdown.keyTalkingPoints,
-    breakdown.strongEndingLine,
-    userInstruction,
-    niche,
-  )}`
-
-  let claudeRaw: string
+  let modelRaw: string
   try {
-    const messages = referenceImageBase64
-      ? [
-          {
-            role: "user" as const,
-            content: [
-              {
-                type: "image" as const,
-                source: {
-                  type: "base64" as const,
-                  media_type: (referenceMediaType || "image/jpeg") as
-                    | "image/jpeg"
-                    | "image/png",
-                  data: referenceImageBase64.replace(/^data:image\/\w+;base64,/, ""),
-                },
+    const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
+      ...(referenceImageBase64
+        ? [
+            {
+              type: "image_url" as const,
+              image_url: {
+                url: `data:${referenceMediaType || "image/jpeg"};base64,${referenceImageBase64.replace(/^data:image\/\w+;base64,/, "")}`,
+                detail: "high" as const,
               },
-              {
-                type: "text" as const,
-                text: prompt,
-              },
-            ],
-          },
-        ]
-      : [
-          {
-            role: "user" as const,
-            content: prompt,
-          },
-        ]
+            },
+          ]
+        : []),
+      {
+        type: "text" as const,
+        text: userText,
+      },
+    ]
 
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
-      max_tokens: 16000,
-      messages,
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      max_tokens: MAX_TOKENS,
+      messages: [
+        ...(isEditMode
+          ? []
+          : [{ role: "system" as const, content: CAROUSEL_MASTER_SYSTEM_PROMPT }]),
+        { role: "user" as const, content: userContent },
+      ],
     })
 
-    console.log("[carousel-prompt] Claude stop_reason:", response.stop_reason)
+    console.log("[carousel-prompt] GPT-4o finish_reason:", response.choices[0]?.finish_reason)
+    console.log(
+      "[carousel-prompt] GPT-4o tokens:",
+      response.usage?.completion_tokens,
+      "/",
+      MAX_TOKENS,
+    )
 
-    claudeRaw = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("")
+    // Near-ceiling warning — if output tokens approach MAX_TOKENS the response
+    // was probably truncated mid-slide.
+    const completionTokens = response.usage?.completion_tokens ?? 0
+    if (completionTokens > TOKEN_WARN_THRESHOLD) {
+      console.warn("[carousel-prompt] WARNING: Near token ceiling:", completionTokens)
+    }
+
+    modelRaw = response.choices[0]?.message?.content ?? ""
   } catch (err) {
-    console.error("[generate/carousel-prompt] Claude error:", err)
-    return NextResponse.json({ error: "Failed to generate content" }, { status: 502 })
+    // Map provider failures to friendly, actionable messages instead of a
+    // generic 502 — the client surfaces `error` directly to the user.
+    // Duck-typed on status/code rather than SDK error classes (OpenAI's
+    // APIError attaches a numeric `status`).
+    const e = err as { status?: number; code?: string; message?: string }
+    console.error("[carousel-prompt] GPT-4o API error:", e?.message ?? err)
+    if (e?.status === 429) {
+      return NextResponse.json(
+        { error: "Too many requests. Please wait a moment and try again." },
+        { status: 429 },
+      )
+    }
+    if (e?.status === 529 || e?.status === 503) {
+      return NextResponse.json(
+        { error: "The AI service is busy right now. Please try again in a minute." },
+        { status: 503 },
+      )
+    }
+    if (e?.status === 504 || e?.code === "ETIMEDOUT") {
+      return NextResponse.json(
+        { error: "Generation timed out. Please try again." },
+        { status: 504 },
+      )
+    }
+    return NextResponse.json(
+      { error: "Something went wrong generating the carousel. Please try again." },
+      { status: 500 },
+    )
   }
 
-  if (!claudeRaw.trimEnd().endsWith("}")) {
+  if (!modelRaw.trimEnd().endsWith("}")) {
     console.warn("[generate/carousel-prompt] WARNING: Response may be truncated — does not end with }")
-    console.log("[carousel-prompt] Raw response length:", claudeRaw.length, "/ max_tokens:", 16000)
+    console.log("[carousel-prompt] Raw response length:", modelRaw.length, "/ max_tokens:", MAX_TOKENS)
   }
 
   let parsed: { caption: string; slides: Slide[] }
   try {
-    parsed = parseCarouselResponse(claudeRaw)
+    parsed = parseCarouselResponse(modelRaw)
   } catch {
-    console.error("[generate/carousel-prompt] All parse strategies failed. Raw:\n", claudeRaw)
+    console.error("[generate/carousel-prompt] All parse strategies failed. Raw:\n", modelRaw)
     return NextResponse.json({ error: "Failed to parse AI response" }, { status: 502 })
   }
 
@@ -368,6 +461,14 @@ ${buildCarouselPrompt(
   }
 
   console.log("[carousel-prompt] Final slide count:", parsed.slides.length)
+
+  // Edit mode legitimately returns only the changed slides; a full generation
+  // returning fewer than 7 usually means truncation or a partial parse recovery.
+  if (!isEditMode && parsed.slides.length < 7) {
+    console.warn(
+      `[carousel-prompt] WARNING: Only ${parsed.slides.length} slides generated, expected 7-9`,
+    )
+  }
 
   return NextResponse.json({ caption: parsed.caption, slides: parsed.slides })
 }

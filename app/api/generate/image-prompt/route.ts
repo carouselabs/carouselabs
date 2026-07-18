@@ -143,6 +143,8 @@ export async function POST(req: Request) {
         ? body.currentImagePrompt
         : undefined
     if (!ideaId) throw new Error("Missing ideaId")
+    // TEMP diagnostic — confirm in Vercel logs exactly what the client sent.
+    console.log("[ref-image] Reference image present:", !!referenceImage, "length:", referenceImage?.length ?? 0)
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Invalid request body" },

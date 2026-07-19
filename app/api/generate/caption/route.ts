@@ -1,12 +1,36 @@
 // app/api/generate/caption/route.ts
 import { NextResponse } from "next/server"
+import { Ratelimit } from "@upstash/ratelimit"
+import { Redis } from "@upstash/redis"
 import { getCurrentUser } from "@/lib/auth"
 import Anthropic from "@anthropic-ai/sdk"
 import { db } from "@/lib/db"
-import { hasGenerationBalance } from "@/lib/credits"
+import { chargeCreditsForAction } from "@/lib/chargeCredits"
+import { refundCreditsForAction } from "@/lib/refundCredits"
+import type { CreditAction } from "@/lib/creditActions"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+// Caption generation costs real Claude money per call; cap abuse while leaving
+// room for legitimate use (first gens + regens across ideas).
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(30, "1 h"),
+  analytics: false,
+})
+
+// Which cost the first caption generation of each flow carries, charged here
+// server-side (V1 fix — clients no longer trigger credit consumption).
+// Every flow charges only the caption component (5) here — the bulk of the
+// image_caption price (image_first, 10) is charged by the image route and the
+// bulk of the carousel price (carousel_prompts, 35) by the carousel-prompt
+// route, so forged regen flags on this route can't dodge them.
+const FLOW_ACTIONS: Record<string, CreditAction> = {
+  caption_only: "caption_only",
+  image_caption: "caption_only",
+  carousel: "caption_only",
+}
 
 const CAPTION_GHOSTWRITER_INSTRUCTION = `You are the ghostwriter behind the top 0.1% of LinkedIn creators. You write captions that people cannot stop reading. Your secret is you write like a human telling a story to a friend — not like a marketer selling something.
 
@@ -173,17 +197,21 @@ export async function POST(req: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  // Defense-in-depth: credits are consumed via /api/credits/consume before the
-  // client calls this route — but a drained PRO balance is still blocked here.
-  if (!(await hasGenerationBalance(user.id))) {
-    return NextResponse.json({ error: "You're out of credits." }, { status: 402 })
+  const { success } = await ratelimit.limit(`generate:caption:${user.id}`)
+  if (!success) {
+    return NextResponse.json(
+      { error: "Rate limit reached. Please try again later." },
+      { status: 429 },
+    )
   }
 
   let ideaId: string,
     tone: string | undefined,
     userInstruction: string | undefined,
     currentCaption: string | undefined,
-    useVoiceGuidelines: boolean
+    useVoiceGuidelines: boolean,
+    flow: string,
+    isRegen: boolean
   try {
     const body = await req.json()
     ideaId = body.ideaId
@@ -197,6 +225,11 @@ export async function POST(req: Request) {
         ? body.currentCaption
         : undefined
     useVoiceGuidelines = body.useVoiceGuidelines === true
+    // Which flow this caption belongs to — decides the post-level charge.
+    // Unknown/missing values fall back to caption_only (the cheapest post, but
+    // callers of the pricier flows are our own clients which always send it).
+    flow = typeof body.flow === "string" && body.flow in FLOW_ACTIONS ? body.flow : "caption_only"
+    isRegen = body.isRegen === true
     if (!ideaId) throw new Error("Missing ideaId")
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
@@ -220,6 +253,38 @@ export async function POST(req: Request) {
       { error: "No breakdown found. Generate a breakdown first." },
       { status: 400 },
     )
+  }
+
+  // ── Server-side credit charge (V1 fix) ──
+  // First generation charges the whole post at the flow's price; regenerations
+  // charge 1 credit. A regen claim must carry evidence (the current caption
+  // text) so a first generation can't masquerade as a 1-credit regen.
+  const plan = user.subscription?.plan ?? "FREE"
+
+  // Carousels are Pro-only — enforce at the charge point too.
+  if (flow === "carousel" && plan === "FREE") {
+    return NextResponse.json(
+      { error: "Carousel generation requires Pro plan", requiresUpgrade: true },
+      { status: 403 },
+    )
+  }
+
+  const isRegenEffective = isRegen && !!currentCaption
+  // FREE users' regenerations stay free (session-capped in the UI); everything
+  // else — FREE first posts and all PRO actions — goes through the charge.
+  // chargedAction is kept so a failed generation can refund exactly what it
+  // charged (see the stream catch below).
+  let chargedAction: CreditAction | null = null
+  if (!(plan === "FREE" && isRegenEffective)) {
+    const action: CreditAction = isRegenEffective ? "text_regen" : FLOW_ACTIONS[flow]
+    const charge = await chargeCreditsForAction(user, action)
+    if (!charge.ok) {
+      return NextResponse.json(
+        { error: "Insufficient credits", requiresUpgrade: charge.requiresUpgrade },
+        { status: 402 },
+      )
+    }
+    chargedAction = action
   }
 
   const breakdown = idea.breakdowns[0].outline as unknown as BreakdownOutline
@@ -277,6 +342,10 @@ export async function POST(req: Request) {
         }
       } catch (err) {
         console.error("[generate/caption] Claude stream error:", err)
+        // Generation failed after the charge — give the credits back.
+        if (chargedAction) {
+          await refundCreditsForAction(user.id, chargedAction)
+        }
         controller.enqueue(encoder.encode("\n\n[Generation failed — please try again]"))
       } finally {
         controller.close()

@@ -9,6 +9,8 @@ import { db } from "@/lib/db"
 import { uploadToR2 } from "@/lib/r2"
 import { notifyFirstPostIfFirst } from "@/lib/email"
 import { hasGenerationBalance } from "@/lib/credits"
+import { chargeCreditsForAction } from "@/lib/chargeCredits"
+import { refundCreditsForAction } from "@/lib/refundCredits"
 import { validateReferenceImage } from "@/lib/validateImage"
 import type { Prisma } from "@prisma/client"
 
@@ -61,12 +63,14 @@ export async function POST(req: Request) {
   let size: string
   let referenceImageBase64: string | undefined
   let referenceMediaType: string
+  let isRegen: boolean
 
   try {
     const body = await req.json()
     ideaId = body.ideaId
     imagePrompt = body.imagePrompt
     caption = body.caption ?? ""
+    isRegen = body.isRegen === true
     // Only 4:5 and 1:1 are offered; default to 4:5 (LinkedIn feed) for restored
     // sessions where the client may not re-send the size.
     size = body.size === "1:1" ? "1:1" : "4:5"
@@ -95,6 +99,38 @@ export async function POST(req: Request) {
   const idea = await db.idea.findUnique({ where: { id: ideaId } })
   if (!idea || idea.userId !== user.id) {
     return NextResponse.json({ error: "Idea not found" }, { status: 404 })
+  }
+
+  // ── Server-side credit charge (V1 fix) ──
+  // The image component is charged HERE, independently of the caption route:
+  // first image for an idea → image_first (10), which combined with the 5 the
+  // caption route charged totals the 15-credit image_caption price; further
+  // images → image_regen (8). The client's isRegen claim is overridden by
+  // server evidence: an existing SINGLE_IMAGE Post for this idea means the
+  // first image already happened, so this is a regen no matter what the
+  // request says. Charging here means forged flags at the caption route can't
+  // dodge the image cost.
+  const priorPost = await db.post.findFirst({
+    where: { userId: user.id, ideaId, format: "SINGLE_IMAGE" },
+    select: { id: true },
+  })
+  const isRegenEffective = isRegen || !!priorPost
+  const plan = user.subscription?.plan ?? "FREE"
+  // FREE users pay with their single lifetime post at the caption route, and
+  // their regenerations stay free (session-capped in the UI) — so only PRO is
+  // charged here. chargedAction lets every failure path refund exactly what
+  // was taken.
+  let chargedAction: "image_first" | "image_regen" | null = null
+  if (plan === "PRO") {
+    const action = isRegenEffective ? "image_regen" : "image_first"
+    const charge = await chargeCreditsForAction(user, action)
+    if (!charge.ok) {
+      return NextResponse.json(
+        { error: "Insufficient credits", requiresUpgrade: charge.requiresUpgrade },
+        { status: 402 },
+      )
+    }
+    chargedAction = action
   }
 
   // Call OpenAI gpt-image-1. gpt-image-1 returns base64 (b64_json), never a URL,
@@ -142,6 +178,7 @@ export async function POST(req: Request) {
     imageB64 = b64
   } catch (err) {
     console.error("[generate/image] OpenAI error:", err)
+    if (chargedAction) await refundCreditsForAction(user.id, chargedAction)
     return NextResponse.json({ error: "Failed to generate image" }, { status: 502 })
   }
 
@@ -157,6 +194,7 @@ export async function POST(req: Request) {
     cleanedB64 = cleanedBuffer.toString("base64")
   } catch (err) {
     console.error("[generate/image] sharp re-encode error:", err)
+    if (chargedAction) await refundCreditsForAction(user.id, chargedAction)
     return NextResponse.json({ error: "Failed to process image" }, { status: 502 })
   }
 
@@ -167,6 +205,7 @@ export async function POST(req: Request) {
     imageUrl = await uploadToR2(cleanedB64, filename)
   } catch (err) {
     console.error("[generate/image] R2 upload error:", err)
+    if (chargedAction) await refundCreditsForAction(user.id, chargedAction)
     return NextResponse.json({ error: "Failed to store image" }, { status: 502 })
   }
 

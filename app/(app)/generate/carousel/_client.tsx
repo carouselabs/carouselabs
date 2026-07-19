@@ -22,7 +22,6 @@ import { trackHistory } from "@/lib/hooks/useHistory"
 import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
 import { friendlyGenerationError } from "@/lib/friendlyError"
 import { countWords } from "@/lib/wordCount"
-import { consumeCreditsClient, type CreditAction } from "@/lib/creditActions"
 
 interface CarouselClientProps {
   ideaId: string
@@ -93,6 +92,9 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
 
   const abortRef = useRef<AbortController | null>(null)
   const didInit = useRef(false)
+  // Guards against rapid double-clicks firing two simultaneous generations
+  // (each of which would be charged server-side).
+  const isChargingRef = useRef(false)
 
   // Regeneration limit + version history (per idea, per session).
   // Select the stable parent objects and derive per-idea values outside the
@@ -179,7 +181,9 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
     // their preference before the first caption is generated.
   }
 
-  async function streamCaption(userInstruction?: string, currentCaption?: string) {
+  async function streamCaption(userInstruction?: string, currentCaption?: string, isRegen = false) {
+    if (isChargingRef.current) return
+    isChargingRef.current = true
     setIsStreamingCaption(true)
     setCaptionReady(false)
     setCaption("")
@@ -193,7 +197,16 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
       const res = await fetch("/api/generate/caption", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId, userInstruction, currentCaption, useVoiceGuidelines }),
+        body: JSON.stringify({
+          ideaId,
+          userInstruction,
+          currentCaption,
+          useVoiceGuidelines,
+          // Server-side charging flags: first generation charges the whole
+          // Carousel post (40); regens carry the caption as evidence.
+          flow: "carousel",
+          isRegen,
+        }),
         signal: controller.signal,
       })
 
@@ -223,6 +236,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
       if ((err as Error).name === "AbortError") return
       setError(err instanceof Error ? err.message : "Something went wrong")
     } finally {
+      isChargingRef.current = false
       setIsStreamingCaption(false)
     }
   }
@@ -399,29 +413,6 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
     }
   }
 
-  // Charge the weighted credit cost before a chargeable generation. Returns
-  // false (and shows a toast) when the balance can't cover it — callers must
-  // block the generation in that case.
-  async function chargeCredits(action: CreditAction): Promise<boolean> {
-    const res = await consumeCreditsClient(action)
-    if (!res.ok) {
-      setToastMsg(
-        res.requiresUpgrade
-          ? "You're out of credits — upgrade to Pro to continue"
-          : "You're out of credits — top up extra credits in Billing",
-      )
-      setTimeout(() => setToastMsg(null), 5000)
-    }
-    return res.ok
-  }
-
-  // First generation in the Carousel flow — charges the post cost (breakdown +
-  // caption + slide prompts + all slide images included), then streams the caption.
-  async function handleFirstGenerate() {
-    if (!(await chargeCredits("carousel"))) return
-    await streamCaption()
-  }
-
   // Step-1 "Regenerate caption" — was calling streamCaption() directly and
   // bypassing the limit. Now gated through the same 2-per-session budget.
   async function handleRegenerateCaption() {
@@ -432,17 +423,17 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
       setTimeout(() => setToastMsg(null), 5000)
       return
     }
-    // Text regenerations cost 1 credit on top of the post cost.
-    if (!(await chargeCredits("text_regen"))) return
     if (caption) addVersion(ideaId, caption)
-    // Capture the instruction + current caption, then clear the input. Sending
-    // the current caption lets the API do a targeted edit instead of a rewrite.
+    // Capture the instruction + current caption, then clear the input. The
+    // current caption is always sent on regens: it lets the API do a targeted
+    // edit when an instruction is present AND serves as the server-side
+    // evidence that this is a 1-credit regeneration.
     const userInstruction = captionInstruction.trim() || undefined
-    const currentCaption = userInstruction ? caption : undefined
+    const currentCaption = caption || undefined
     setCaptionInstruction("")
     increment(ideaId)
     try {
-      await streamCaption(userInstruction, currentCaption)
+      await streamCaption(userInstruction, currentCaption, true)
       const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
       if (newCount >= MAX_REGENERATIONS) {
         setToastMsg("You've used both regenerations for this session")
@@ -497,6 +488,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
           userInstruction,
           referenceImage: referenceImage ?? undefined,
           referenceMediaType: referenceImage ? referenceMediaType : undefined,
+          isRegen: true, // server charges slide_regen (8) per slide
         }),
       })
       const data = await res.json()
@@ -532,8 +524,6 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
       setTimeout(() => setToastMsg(null), 5000)
       return
     }
-    // Slide image regenerations cost 8 credits on top of the post cost.
-    if (!(await chargeCredits("slide_regen"))) return
     increment(ideaId)
     try {
       await generateOneSlideImage(slideNumber)
@@ -671,7 +661,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
                 onChange={setUseVoiceGuidelines}
               />
               <button
-                onClick={() => void handleFirstGenerate()}
+                onClick={() => void streamCaption()}
                 className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
               >
                 <Sparkles size={14} strokeWidth={2} />

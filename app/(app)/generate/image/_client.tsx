@@ -14,7 +14,6 @@ import { trackHistory } from "@/lib/hooks/useHistory"
 import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
 import { friendlyGenerationError } from "@/lib/friendlyError"
 import { countWords } from "@/lib/wordCount"
-import { consumeCreditsClient, type CreditAction } from "@/lib/creditActions"
 
 interface ImageClientProps {
   ideaId: string
@@ -69,6 +68,9 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
 
   const abortRef = useRef<AbortController | null>(null)
   const didInit = useRef(false)
+  // Guards against rapid double-clicks firing two simultaneous generations
+  // (each of which would be charged server-side).
+  const isChargingRef = useRef(false)
 
   // Regeneration limit + version history (per idea, per session).
   // Select the stable parent objects and derive per-idea values outside the
@@ -144,7 +146,9 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
     // their preference before the first caption is generated.
   }
 
-  async function streamCaption(userInstruction?: string, currentCaption?: string) {
+  async function streamCaption(userInstruction?: string, currentCaption?: string, isRegen = false) {
+    if (isChargingRef.current) return
+    isChargingRef.current = true
     setIsStreamingCaption(true)
     setCaptionReady(false)
     setCaption("")
@@ -158,7 +162,16 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
       const res = await fetch("/api/generate/caption", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId, userInstruction, currentCaption, useVoiceGuidelines }),
+        body: JSON.stringify({
+          ideaId,
+          userInstruction,
+          currentCaption,
+          useVoiceGuidelines,
+          // Server-side charging flags: first generation charges the whole
+          // Image + Caption post (15); regens carry the caption as evidence.
+          flow: "image_caption",
+          isRegen,
+        }),
         signal: controller.signal,
       })
 
@@ -188,6 +201,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
       if ((err as Error).name === "AbortError") return
       setError(err instanceof Error ? err.message : "Something went wrong")
     } finally {
+      isChargingRef.current = false
       setIsStreamingCaption(false)
     }
   }
@@ -253,7 +267,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
   // Single-button flow: silently generate the image prompt, then immediately use
   // it to generate the image. Only the final image is shown. The prompt is still
   // kept in state + localStorage so Regenerate Image keeps working.
-  async function generateImageFlow(userInstruction?: string) {
+  async function generateImageFlow(userInstruction?: string, isRegen = false) {
     setIsGeneratingImage(true)
     setGameStarted(true) // keep the game visible from now on
     setError(null)
@@ -302,6 +316,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
           size,
           referenceImage: referenceImage ?? undefined,
           referenceMediaType: referenceImage ? referenceMediaType : undefined,
+          isRegen, // server charges image_regen (8) for regenerations
         }),
       })
       const imgData = await imgRes.json()
@@ -324,29 +339,6 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
     }
   }
 
-  // Charge the weighted credit cost before a chargeable generation. Returns
-  // false (and shows a toast) when the balance can't cover it — callers must
-  // block the generation in that case.
-  async function chargeCredits(action: CreditAction): Promise<boolean> {
-    const res = await consumeCreditsClient(action)
-    if (!res.ok) {
-      setToastMsg(
-        res.requiresUpgrade
-          ? "You're out of credits — upgrade to Pro to continue"
-          : "You're out of credits — top up extra credits in Billing",
-      )
-      setTimeout(() => setToastMsg(null), 5000)
-    }
-    return res.ok
-  }
-
-  // First generation in the Image + Caption flow — charges the post cost
-  // (breakdown + caption + image included), then streams the caption.
-  async function handleFirstGenerate() {
-    if (!(await chargeCredits("image_caption"))) return
-    await streamCaption()
-  }
-
   // Step-1 "Regenerate caption" — was calling streamCaption() directly and
   // bypassing the limit. Now gated through the same 2-per-session budget.
   async function handleRegenerateCaption() {
@@ -357,17 +349,17 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
       setTimeout(() => setToastMsg(null), 5000)
       return
     }
-    // Text regenerations cost 1 credit on top of the post cost.
-    if (!(await chargeCredits("text_regen"))) return
     if (caption) addVersion(ideaId, caption)
-    // Capture the instruction + current caption, then clear the input. Sending
-    // the current caption lets the API do a targeted edit instead of a rewrite.
+    // Capture the instruction + current caption, then clear the input. The
+    // current caption is always sent on regens: it lets the API do a targeted
+    // edit when an instruction is present AND serves as the server-side
+    // evidence that this is a 1-credit regeneration.
     const userInstruction = captionInstruction.trim() || undefined
-    const currentCaption = userInstruction ? caption : undefined
+    const currentCaption = caption || undefined
     setCaptionInstruction("")
     increment(ideaId)
     try {
-      await streamCaption(userInstruction, currentCaption)
+      await streamCaption(userInstruction, currentCaption, true)
       const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
       if (newCount >= MAX_REGENERATIONS) {
         setToastMsg("You've used both regenerations for this session")
@@ -378,7 +370,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
     }
   }
 
-  async function generateImage() {
+  async function generateImage(isRegen = false) {
     if (!imagePrompt) return
     setIsGeneratingImage(true)
     setGameStarted(true) // keep the game visible from now on
@@ -397,6 +389,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
           size,
           referenceImage: referenceImage ?? undefined,
           referenceMediaType: referenceImage ? referenceMediaType : undefined,
+          isRegen, // server charges image_regen (8) for regenerations
         }),
       })
 
@@ -429,19 +422,18 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
       setTimeout(() => setToastMsg(null), 5000)
       return
     }
-    // Image regenerations cost 8 credits on top of the post cost.
-    if (!(await chargeCredits("image_regen"))) return
     // Reserve the slot synchronously BEFORE generating so rapid clicks can't
     // read a stale count and slip past the limit.
     increment(ideaId)
     try {
       // With a custom instruction, re-run the full flow so the prompt is edited
       // first; without one, just re-render the image from the existing prompt.
+      // Both paths flag isRegen so the server charges image_regen (8).
       const userInstruction = imageInstruction.trim() || undefined
       if (userInstruction) {
-        await generateImageFlow(userInstruction)
+        await generateImageFlow(userInstruction, true)
       } else {
-        await generateImage()
+        await generateImage(true)
       }
       const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
       if (newCount >= MAX_REGENERATIONS) {
@@ -655,7 +647,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
                 onChange={setUseVoiceGuidelines}
               />
               <button
-                onClick={() => void handleFirstGenerate()}
+                onClick={() => void streamCaption()}
                 className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
               >
                 <Sparkles size={14} strokeWidth={2} />

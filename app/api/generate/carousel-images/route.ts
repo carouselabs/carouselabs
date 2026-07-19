@@ -8,16 +8,20 @@ import { db } from "@/lib/db"
 import { uploadToR2 } from "@/lib/r2"
 import { notifyFirstPostIfFirst } from "@/lib/email"
 import { hasGenerationBalance } from "@/lib/credits"
+import { chargeCreditsForAction } from "@/lib/chargeCredits"
+import { refundCreditsForAction } from "@/lib/refundCredits"
 import { validateReferenceImage } from "@/lib/validateImage"
 
 export const maxDuration = 300
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-// Carousel image generation doesn't consume a credit but costs real OpenAI
-// money per slide, so cap regenerations at 20/hour per user.
+const redis = Redis.fromEnv()
+
+// Carousel image generation costs real OpenAI money per slide, so cap
+// regenerations at 20/hour per user.
 const ratelimit = new Ratelimit({
-  redis: Redis.fromEnv(),
+  redis,
   limiter: Ratelimit.slidingWindow(20, "1 h"),
   analytics: false,
 })
@@ -108,12 +112,14 @@ export async function POST(req: Request) {
   let ideaId: string
   let persist: boolean
   let persistOnly: boolean
+  let isRegen: boolean
   let userInstruction: string | undefined
   let referenceImageBase64: string | undefined
   let referenceMediaType: string
 
   try {
     const body = await req.json()
+    isRegen = body.isRegen === true
     slides = Array.isArray(body.slides) ? body.slides : []
     ideaId = body.ideaId
     // Only 4:5 and 1:1 are offered; default to 4:5 (LinkedIn feed).
@@ -158,6 +164,57 @@ export async function POST(req: Request) {
   const idea = await db.idea.findUnique({ where: { id: ideaId } })
   if (!idea || idea.userId !== user.id) {
     return NextResponse.json({ error: "Idea not found" }, { status: 404 })
+  }
+
+  // ── Server-side credit charge (V1 fix) ──
+  // The initial slide-by-slide generation is covered by the 35-credit
+  // carousel_prompts charge, proven by a Redis GRANT that carousel-prompt sets
+  // on every paid full generation. Renders without a grant — including forged
+  // "first generation" calls — are charged slide_regen (8) per slide, same as
+  // regenerations. persistOnly saves already-generated images and never
+  // charges. (Route is Pro-only.) chargedSlideRegens / grantConsumed are
+  // tracked so a failed generation refunds exactly what was taken.
+  const grantKey = `carousel_grant:${user.id}:${ideaId}`
+  let chargedSlideRegens = 0
+  let grantConsumed = 0
+  if (!persistOnly) {
+    let mustCharge = isRegen
+    if (!isRegen) {
+      // Atomically take the needed renders from the grant. decrby-first (not
+      // get-then-decrby) so concurrent requests can't both pass on the same
+      // grant balance. A missing key decrements to negative — restore and
+      // fall through to charging. Redis failure also falls through (fail
+      // closed: charge rather than render free).
+      try {
+        const remainingAfter = await redis.decrby(grantKey, slides.length)
+        if (remainingAfter < 0) {
+          await redis.incrby(grantKey, slides.length)
+          await redis.expire(grantKey, 3600)
+          mustCharge = true
+        } else {
+          grantConsumed = slides.length
+        }
+      } catch (err) {
+        console.error("[generate/carousel-images] grant check failed:", err)
+        mustCharge = true
+      }
+    }
+    if (mustCharge) {
+      for (let i = 0; i < slides.length; i++) {
+        const charge = await chargeCreditsForAction(user, "slide_regen")
+        if (!charge.ok) {
+          // Refund the slides already charged in this request before bailing.
+          if (chargedSlideRegens > 0) {
+            await refundCreditsForAction(user.id, "slide_regen", chargedSlideRegens)
+          }
+          return NextResponse.json(
+            { error: "Insufficient credits", requiresUpgrade: charge.requiresUpgrade },
+            { status: 402 },
+          )
+        }
+        chargedSlideRegens++
+      }
+    }
   }
 
   // persistOnly mode — no image generation. Create one Post + child Slides from
@@ -301,6 +358,19 @@ export async function POST(req: Request) {
     }
   } catch (err) {
     console.error("[generate/carousel-images] error:", err)
+    // Generation failed — give back whatever was taken: charged credits, or
+    // consumed grant units (so a 502 doesn't burn the user's paid allowance).
+    if (chargedSlideRegens > 0) {
+      await refundCreditsForAction(user.id, "slide_regen", chargedSlideRegens)
+    }
+    if (grantConsumed > 0) {
+      try {
+        await redis.incrby(grantKey, grantConsumed)
+        await redis.expire(grantKey, 3600)
+      } catch (grantErr) {
+        console.error("[generate/carousel-images] grant restore failed:", grantErr)
+      }
+    }
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to generate slide images" },
       { status: 502 },

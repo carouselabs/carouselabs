@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server"
+import { Ratelimit } from "@upstash/ratelimit"
+import { Redis } from "@upstash/redis"
 import { getCurrentUser } from "@/lib/auth"
 import Anthropic from "@anthropic-ai/sdk"
 import OpenAI from "openai"
@@ -10,6 +12,15 @@ import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+// Prompt generation costs real GPT-4o/Claude money per call. This route itself
+// charges no credits (the post cost is charged by the caption route; image
+// regens are charged by the image route), so the rate limit is the spend cap.
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(20, "1 h"),
+  analytics: false,
+})
 
 // Reference-image vision + a long image prompt can run past the platform's
 // shorter default function timeout; allow up to 300s (matches the other routes).
@@ -195,8 +206,16 @@ export async function POST(req: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  // Defense-in-depth: credits are consumed via /api/credits/consume before the
-  // client calls this route — but a drained PRO balance is still blocked here.
+  const { success } = await ratelimit.limit(`generate:image-prompt:${user.id}`)
+  if (!success) {
+    return NextResponse.json(
+      { error: "Rate limit reached. Please try again later." },
+      { status: 429 },
+    )
+  }
+
+  // Defense-in-depth: a drained PRO balance is blocked here even though this
+  // route itself doesn't charge (see the rate limiter comment above).
   if (!(await hasGenerationBalance(user.id))) {
     return NextResponse.json({ error: "You're out of credits." }, { status: 402 })
   }

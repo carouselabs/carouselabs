@@ -3,10 +3,19 @@
 // generation clients, and UI cost badges. First generations are charged at the
 // post level (the whole flow is included); regenerations are charged on top.
 
+// Post-level totals (caption_only / image_caption / carousel) are what the UI
+// displays. The pricier flows are SPLIT server-side so forging regen flags at
+// the caption route can never dodge the bulk of a post's cost:
+//   image_caption (15) = caption_only (5) at the caption route
+//                      + image_first (10) at the image route
+//   carousel (40)      = caption_only (5) at the caption route
+//                      + carousel_prompts (35) at the carousel-prompt route
 export const CREDIT_COSTS = {
   caption_only: 5,
   image_caption: 15,
+  image_first: 10,
   carousel: 40,
+  carousel_prompts: 35,
   image_regen: 8,
   slide_regen: 8,
   text_regen: 1,
@@ -19,23 +28,19 @@ export function isPostAction(action: CreditAction): boolean {
   return action === "caption_only" || action === "image_caption" || action === "carousel"
 }
 
-export interface ConsumeResult {
+export interface CreditBalance {
   ok: boolean
   remainingCredits: number
   requiresUpgrade: boolean
 }
 
-// Client-side helper — call before starting a chargeable generation and block
-// the flow when `ok` is false. Fails closed on network errors so a flaky
-// connection can't produce uncharged generations.
-export async function consumeCreditsClient(action: CreditAction): Promise<ConsumeResult> {
+// Client-side helper — READ-ONLY balance lookup for UI display. Deduction
+// happens server-side inside the generation routes; clients never trigger a
+// charge directly.
+export async function fetchCreditBalance(): Promise<CreditBalance> {
   try {
-    const res = await fetch("/api/credits/consume", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
-    })
-    const data = (await res.json().catch(() => ({}))) as Partial<ConsumeResult>
+    const res = await fetch("/api/credits/consume", { method: "POST" })
+    const data = (await res.json().catch(() => ({}))) as Partial<CreditBalance>
     return {
       ok: data.ok === true,
       remainingCredits: typeof data.remainingCredits === "number" ? data.remainingCredits : 0,

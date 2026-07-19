@@ -12,6 +12,9 @@ import {
 } from "@/lib/ai/prompts/carouselPrompt"
 import { validateReferenceImage } from "@/lib/validateImage"
 import { hasGenerationBalance } from "@/lib/credits"
+import { chargeCreditsForAction } from "@/lib/chargeCredits"
+import { refundCreditsForAction } from "@/lib/refundCredits"
+import type { CreditAction } from "@/lib/creditActions"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -30,10 +33,12 @@ const MAX_TOKENS = 16384
 // Warn when output lands close enough to MAX_TOKENS that truncation is likely.
 const TOKEN_WARN_THRESHOLD = 15000
 
+const redis = Redis.fromEnv()
+
 // Each call generates 7-9 long slide prompts and is the entry point to the
 // expensive image-generation flow, so cap it per user like carousel-images.
 const ratelimit = new Ratelimit({
-  redis: Redis.fromEnv(),
+  redis,
   limiter: Ratelimit.slidingWindow(20, "1 h"),
   analytics: false,
 })
@@ -454,6 +459,24 @@ export async function POST(req: Request) {
   // The edit prompt is self-contained (carries its own instructions + JSON
   // shape), so the master system prompt is only attached for full generations.
   const isEditMode = !!(userInstruction && currentSlides)
+
+  // ── Server-side credit charge (V1 fix) ──
+  // Full generation charges carousel_prompts (35) HERE — combined with the 5
+  // the caption route charges, a carousel totals 40. Charging at this route
+  // means forged flow/isRegen flags on the caption route can never dodge the
+  // bulk of the carousel price. Targeted edits charge text_regen (1).
+  // FREE users can't reach this route at all (Pro gate above).
+  const chargedAction: CreditAction = isEditMode ? "text_regen" : "carousel_prompts"
+  {
+    const charge = await chargeCreditsForAction(user, chargedAction)
+    if (!charge.ok) {
+      return NextResponse.json(
+        { error: "Insufficient credits", requiresUpgrade: charge.requiresUpgrade },
+        { status: 402 },
+      )
+    }
+  }
+
   const userText =
     userInstruction && currentSlides
       ? buildCarouselEditPrompt(currentSlides, userInstruction)
@@ -585,6 +608,8 @@ export async function POST(req: Request) {
     } catch (err) {
       const e = err as { message?: string }
       console.error("[carousel-prompt] Claude fallback also failed:", e?.message ?? err)
+      // Both providers failed after the charge — give the credits back.
+      await refundCreditsForAction(user.id, chargedAction)
       return NextResponse.json(
         { error: "Something went wrong generating the carousel. Please try again." },
         { status: 500 },
@@ -604,10 +629,12 @@ export async function POST(req: Request) {
     parsed = parseCarouselResponse(modelRaw)
   } catch {
     console.error("[generate/carousel-prompt] All parse strategies failed. Raw:\n", modelRaw)
+    await refundCreditsForAction(user.id, chargedAction)
     return NextResponse.json({ error: "Failed to parse AI response" }, { status: 502 })
   }
 
   if (!parsed.slides.length) {
+    await refundCreditsForAction(user.id, chargedAction)
     return NextResponse.json({ error: "No slides found in AI response" }, { status: 502 })
   }
 
@@ -628,6 +655,22 @@ export async function POST(req: Request) {
     console.warn(
       `[carousel-prompt] WARNING: Only ${parsed.slides.length} slides generated, expected 7-9`,
     )
+  }
+
+  // Generation grant: the carousel_prompts charge above covers rendering these
+  // slides, so grant carousel-images that many free renders for this idea.
+  // Scripted calls to carousel-images WITHOUT this grant get charged per slide
+  // — closing the edit-mode forge path (fabricated slides rendered for free).
+  // 1h TTL comfortably covers the client's slide-by-slide render loop.
+  if (!isEditMode) {
+    try {
+      await redis.set(`carousel_grant:${user.id}:${ideaId}`, parsed.slides.length, {
+        ex: 3600,
+      })
+    } catch (err) {
+      // Best-effort: a missing grant only means slides get charged individually.
+      console.error("[carousel-prompt] grant set failed:", err)
+    }
   }
 
   return NextResponse.json({ caption: parsed.caption, slides: parsed.slides })

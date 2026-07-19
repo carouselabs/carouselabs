@@ -12,7 +12,6 @@ import { VersionHistory } from "@/components/generate/VersionHistory"
 import { trackHistory } from "@/lib/hooks/useHistory"
 import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
 import { friendlyGenerationError } from "@/lib/friendlyError"
-import { consumeCreditsClient, type CreditAction } from "@/lib/creditActions"
 
 interface CaptionClientProps {
   ideaId: string
@@ -58,6 +57,9 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
   const [useVoiceGuidelines, setUseVoiceGuidelines] = useState(false)
   const bufferRef = useRef("")
   const didInit = useRef(false)
+  // Guards against rapid double-clicks firing two simultaneous generations
+  // (each of which would be charged server-side).
+  const isChargingRef = useRef(false)
 
   // Regeneration limit + version history (per idea, per session).
   // Select the stable parent objects and derive per-idea values outside the
@@ -99,29 +101,6 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
     // preference first, then clicks "Generate Caption" (see the button below).
   }
 
-  // Charge the weighted credit cost before a chargeable generation. Returns
-  // false (and shows a toast) when the balance can't cover it — callers must
-  // block the generation in that case.
-  async function chargeCredits(action: CreditAction): Promise<boolean> {
-    const res = await consumeCreditsClient(action)
-    if (!res.ok) {
-      setToastMsg(
-        res.requiresUpgrade
-          ? "You're out of credits — upgrade to Pro to continue"
-          : "You're out of credits — top up extra credits in Billing",
-      )
-      setTimeout(() => setToastMsg(null), 5000)
-    }
-    return res.ok
-  }
-
-  // First generation — charges the Caption Only post cost (breakdown included),
-  // then generates.
-  async function handleFirstGenerate() {
-    if (!(await chargeCredits("caption_only"))) return
-    await generate(tone).catch(() => {})
-  }
-
   // Persist the generated caption so it survives a page revisit.
   async function saveCaption(text: string) {
     try {
@@ -139,7 +118,10 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
     activeTone: Tone | null,
     userInstruction?: string,
     currentCaption?: string,
+    isRegen = false,
   ) {
+    if (isChargingRef.current) return
+    isChargingRef.current = true
     setIsGenerating(true)
     setRestored(false)
     setCaption("")
@@ -157,6 +139,10 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
           userInstruction,
           currentCaption,
           useVoiceGuidelines,
+          // Server-side charging flags: this flow's post cost is caption_only;
+          // regens carry the current caption as evidence and cost 1 credit.
+          flow: "caption_only",
+          isRegen,
         }),
       })
 
@@ -192,6 +178,7 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
       setError(err instanceof Error ? err.message : "Something went wrong")
       throw err // let callers (handleRegenerate) know it failed
     } finally {
+      isChargingRef.current = false
       setIsGenerating(false)
     }
   }
@@ -208,19 +195,19 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
       setTimeout(() => setToastMsg(null), 5000)
       return
     }
-    // Text regenerations cost 1 credit on top of the post cost.
-    if (!(await chargeCredits("text_regen"))) return
     if (caption) addVersion(ideaId, caption)
-    // Capture the instruction + current caption, then clear the input. Sending
-    // the current caption lets the API do a targeted edit instead of a rewrite.
+    // Capture the instruction + current caption, then clear the input. The
+    // current caption is always sent on regens: it lets the API do a targeted
+    // edit when an instruction is present AND serves as the server-side
+    // evidence that this is a 1-credit regeneration, not a first generation.
     const userInstruction = instruction.trim() || undefined
-    const currentCaption = userInstruction ? caption : undefined
+    const currentCaption = caption || undefined
     setInstruction("")
     // Reserve the slot synchronously BEFORE generating, so a second call can't
     // read a stale count and slip past the limit.
     increment(ideaId)
     try {
-      await generate(activeTone, userInstruction, currentCaption)
+      await generate(activeTone, userInstruction, currentCaption, true)
       const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
       if (newCount >= MAX_REGENERATIONS) {
         setToastMsg("You've used both regenerations for this session")
@@ -306,7 +293,7 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
           regeneration) so the toggle above can be set first. */}
       {!caption && !isGenerating && (
         <button
-          onClick={() => void handleFirstGenerate()}
+          onClick={() => void generate(tone).catch(() => {})}
           className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
         >
           <Sparkles size={14} strokeWidth={2} />

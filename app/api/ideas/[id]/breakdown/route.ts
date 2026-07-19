@@ -1,5 +1,7 @@
 // app/api/ideas/[id]/breakdown/route.ts
 import { NextResponse } from "next/server"
+import { Ratelimit } from "@upstash/ratelimit"
+import { Redis } from "@upstash/redis"
 import { getCurrentUser } from "@/lib/auth"
 import Anthropic from "@anthropic-ai/sdk"
 import { db } from "@/lib/db"
@@ -8,6 +10,14 @@ import type { BreakdownOutline } from "@/lib/types/breakdown"
 import type { Prisma } from "@prisma/client"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+// Breakdowns are free (included in the post-level charge) but each NEW one is
+// a real Claude call — cap generation per user. Cached reads aren't limited.
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(10, "1 h"),
+  analytics: false,
+})
 
 function buildBreakdownPrompt(hook: string, profileContext: string): string {
   return `You are a world-class LinkedIn content strategist and ghostwriter. Your ONLY job is to take a post idea and BUILD the actual content — not explain it, not summarize it, but fully create it.
@@ -182,6 +192,16 @@ export async function POST(
         breakdown: idea.breakdowns[0].outline as unknown as BreakdownOutline,
         cached: true,
       })
+    }
+
+    // Rate-limit only NEW breakdown generation (cached returns above are free
+    // DB reads and shouldn't count against the budget).
+    const { success } = await ratelimit.limit(`generate:breakdown:${user.id}`)
+    if (!success) {
+      return NextResponse.json(
+        { error: "Rate limit reached. Please try again later." },
+        { status: 429 },
+      )
     }
 
     // Keep CarouseLabs to social-media content — reject general-assistant misuse

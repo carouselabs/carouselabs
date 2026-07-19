@@ -71,6 +71,11 @@ Extract ONLY:
 - Depth, perspective, and visual balance
 - Brand personality conveyed through the design
 - Overall creative direction and artistic language
+TYPOGRAPHY AND COLOR FIDELITY (critical):
+- Use the same font style as the reference: match its font family character (condensed or wide, geometric or humanist, serif or sans-serif), font weight, casing, and letter spacing as closely as possible — if the reference uses bold condensed uppercase headlines, the generated image uses bold condensed uppercase headlines
+- Use the same text colors as the reference: if headlines are near-black with a single accent-colored word or phrase, reproduce exactly that treatment — never recolor all of the text with the accent color
+- Use the same background treatment as the reference: if the background is white or light with colored accents, keep it white or light — never flood the whole design with the accent color
+- Use accent colors in the same proportion as the reference: as highlights on key words, icons, and details, not as the dominant color of the design
 DO NOT copy:
 - Layout or arrangement
 - Composition

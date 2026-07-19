@@ -229,7 +229,7 @@ model Subscription {
   cancelAtPeriodEnd    Boolean            @default(false)
   // ── Credits ──
   creditsUsed          Int                @default(0)
-  creditsTotal         Int                @default(30)
+  creditsTotal         Int                @default(1000)
   extraCredits         Int                @default(0)
   extraCreditsExpiry   DateTime?
   createdAt            DateTime           @default(now())

@@ -4,7 +4,6 @@ import { NextResponse } from "next/server"
 import { Ratelimit } from "@upstash/ratelimit"
 import { Redis } from "@upstash/redis"
 import { getCurrentUser } from "@/lib/auth"
-import { consumeCredit } from "@/lib/credits"
 import Anthropic from "@anthropic-ai/sdk"
 import { db } from "@/lib/db"
 import { validateContentTopic } from "@/lib/validateTopic"
@@ -172,17 +171,9 @@ export async function POST(req: Request) {
       )
     }
 
-    // Generating a deep-dive breakdown costs one credit — same gate as the
-    // standard breakdown route. Charged after input validation (above) so a
-    // request that 400s on a bad topic/profile never burns a credit, and before
-    // any Claude API call so it can't be bypassed for free generation.
-    const credit = await consumeCredit(user.id)
-    if (!credit.ok) {
-      return NextResponse.json(
-        { error: "No credits", requiresUpgrade: credit.requiresUpgrade },
-        { status: 402 },
-      )
-    }
+    // Breakdowns are free under the weighted credit system — the charge happens
+    // at the post level (caption/image/carousel first generation) via
+    // /api/credits/consume. Rate limiting above still caps abuse.
 
     // Generate the breakdown with web search enabled so it's grounded in real,
     // current facts.

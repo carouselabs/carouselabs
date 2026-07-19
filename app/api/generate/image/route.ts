@@ -8,6 +8,7 @@ import sharp from "sharp"
 import { db } from "@/lib/db"
 import { uploadToR2 } from "@/lib/r2"
 import { notifyFirstPostIfFirst } from "@/lib/email"
+import { hasGenerationBalance } from "@/lib/credits"
 import { validateReferenceImage } from "@/lib/validateImage"
 import type { Prisma } from "@prisma/client"
 
@@ -46,6 +47,12 @@ export async function POST(req: Request) {
       { error: "Rate limit reached. Please try again later." },
       { status: 429 },
     )
+  }
+
+  // Defense-in-depth: credits are consumed via /api/credits/consume before the
+  // client calls this route — but a drained PRO balance is still blocked here.
+  if (!(await hasGenerationBalance(user.id))) {
+    return NextResponse.json({ error: "You're out of credits." }, { status: 402 })
   }
 
   let ideaId: string

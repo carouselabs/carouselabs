@@ -76,7 +76,7 @@ export function CaptionEditor({
           <button
             onClick={onRegenerate}
             disabled={isGenerating || regenerateDisabled}
-            title="Regenerate"
+            title="Regenerate — 1 credit"
             className="flex items-center gap-1.5 h-[30px] px-2.5 rounded-lg border border-[#E5E3DE] text-[12px] font-medium text-[#6B7280] hover:border-[#DEDBD4] hover:text-[#4B5563] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isGenerating ? (
@@ -84,7 +84,7 @@ export function CaptionEditor({
             ) : (
               <RefreshCw size={12} strokeWidth={2.2} />
             )}
-            Regenerate
+            Regenerate — 1 credit
           </button>
 
           {/* Copy */}

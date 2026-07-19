@@ -22,6 +22,7 @@ import { trackHistory } from "@/lib/hooks/useHistory"
 import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
 import { friendlyGenerationError } from "@/lib/friendlyError"
 import { countWords } from "@/lib/wordCount"
+import { consumeCreditsClient, type CreditAction } from "@/lib/creditActions"
 
 interface CarouselClientProps {
   ideaId: string
@@ -398,6 +399,29 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
     }
   }
 
+  // Charge the weighted credit cost before a chargeable generation. Returns
+  // false (and shows a toast) when the balance can't cover it — callers must
+  // block the generation in that case.
+  async function chargeCredits(action: CreditAction): Promise<boolean> {
+    const res = await consumeCreditsClient(action)
+    if (!res.ok) {
+      setToastMsg(
+        res.requiresUpgrade
+          ? "You're out of credits — upgrade to Pro to continue"
+          : "You're out of credits — top up extra credits in Billing",
+      )
+      setTimeout(() => setToastMsg(null), 5000)
+    }
+    return res.ok
+  }
+
+  // First generation in the Carousel flow — charges the post cost (breakdown +
+  // caption + slide prompts + all slide images included), then streams the caption.
+  async function handleFirstGenerate() {
+    if (!(await chargeCredits("carousel"))) return
+    await streamCaption()
+  }
+
   // Step-1 "Regenerate caption" — was calling streamCaption() directly and
   // bypassing the limit. Now gated through the same 2-per-session budget.
   async function handleRegenerateCaption() {
@@ -408,6 +432,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
       setTimeout(() => setToastMsg(null), 5000)
       return
     }
+    // Text regenerations cost 1 credit on top of the post cost.
+    if (!(await chargeCredits("text_regen"))) return
     if (caption) addVersion(ideaId, caption)
     // Capture the instruction + current caption, then clear the input. Sending
     // the current caption lets the API do a targeted edit instead of a rewrite.
@@ -506,6 +532,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
       setTimeout(() => setToastMsg(null), 5000)
       return
     }
+    // Slide image regenerations cost 8 credits on top of the post cost.
+    if (!(await chargeCredits("slide_regen"))) return
     increment(ideaId)
     try {
       await generateOneSlideImage(slideNumber)
@@ -643,7 +671,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
                 onChange={setUseVoiceGuidelines}
               />
               <button
-                onClick={() => void streamCaption()}
+                onClick={() => void handleFirstGenerate()}
                 className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
               >
                 <Sparkles size={14} strokeWidth={2} />
@@ -685,7 +713,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
                   disabled={isStreamingCaption || atLimit}
                   className="flex-shrink-0 px-3.5 py-2 rounded-lg bg-[rgba(26,26,26,0.1)] hover:bg-[rgba(26,26,26,0.18)] border border-[rgba(26,26,26,0.2)] text-[12px] font-medium text-[#1A1A1A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Regenerate caption
+                  Regenerate caption — 1 credit
                 </button>
               </div>
             </>

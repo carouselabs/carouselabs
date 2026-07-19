@@ -7,6 +7,7 @@ import OpenAI, { toFile } from "openai"
 import { db } from "@/lib/db"
 import { uploadToR2 } from "@/lib/r2"
 import { notifyFirstPostIfFirst } from "@/lib/email"
+import { hasGenerationBalance } from "@/lib/credits"
 import { validateReferenceImage } from "@/lib/validateImage"
 
 export const maxDuration = 300
@@ -94,6 +95,12 @@ export async function POST(req: Request) {
       { error: "Carousel generation requires Pro plan", requiresUpgrade: true },
       { status: 403 },
     )
+  }
+
+  // Defense-in-depth: credits are consumed via /api/credits/consume before the
+  // client calls this route — but a drained PRO balance is still blocked here.
+  if (!(await hasGenerationBalance(user.id))) {
+    return NextResponse.json({ error: "You're out of credits." }, { status: 402 })
   }
 
   let slides: SlideInput[]

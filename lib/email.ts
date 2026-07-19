@@ -52,7 +52,7 @@ export async function sendUpgradedToProEmail(email: string, name: string, credit
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: "Welcome to Pro! You have 30 credits ready 🚀",
+    subject: `Welcome to Pro! You have ${credits} credits ready 🚀`,
     html: await render(UpgradedToProEmail({ name, credits })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
@@ -62,7 +62,7 @@ export async function sendCreditsLowEmail(email: string, name: string, creditsLe
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: "You have 5 credits left this month ⚠️",
+    subject: `You have ${creditsLeft} credits left this month ⚠️`,
     html: await render(CreditsLowEmail({ name, creditsLeft })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
@@ -97,7 +97,7 @@ export async function sendMonthlyResetEmail(email: string, name: string, credits
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: "Your 30 credits have been reset 🔄",
+    subject: `Your ${credits} credits have been reset 🔄`,
     html: await render(MonthlyResetEmail({ name, credits })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)

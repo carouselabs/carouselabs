@@ -12,6 +12,7 @@ import { VersionHistory } from "@/components/generate/VersionHistory"
 import { trackHistory } from "@/lib/hooks/useHistory"
 import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
 import { friendlyGenerationError } from "@/lib/friendlyError"
+import { consumeCreditsClient, type CreditAction } from "@/lib/creditActions"
 
 interface CaptionClientProps {
   ideaId: string
@@ -96,6 +97,29 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
     }
     // No auto-generation on mount: the user picks their voice-guidelines
     // preference first, then clicks "Generate Caption" (see the button below).
+  }
+
+  // Charge the weighted credit cost before a chargeable generation. Returns
+  // false (and shows a toast) when the balance can't cover it — callers must
+  // block the generation in that case.
+  async function chargeCredits(action: CreditAction): Promise<boolean> {
+    const res = await consumeCreditsClient(action)
+    if (!res.ok) {
+      setToastMsg(
+        res.requiresUpgrade
+          ? "You're out of credits — upgrade to Pro to continue"
+          : "You're out of credits — top up extra credits in Billing",
+      )
+      setTimeout(() => setToastMsg(null), 5000)
+    }
+    return res.ok
+  }
+
+  // First generation — charges the Caption Only post cost (breakdown included),
+  // then generates.
+  async function handleFirstGenerate() {
+    if (!(await chargeCredits("caption_only"))) return
+    await generate(tone).catch(() => {})
   }
 
   // Persist the generated caption so it survives a page revisit.
@@ -184,6 +208,8 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
       setTimeout(() => setToastMsg(null), 5000)
       return
     }
+    // Text regenerations cost 1 credit on top of the post cost.
+    if (!(await chargeCredits("text_regen"))) return
     if (caption) addVersion(ideaId, caption)
     // Capture the instruction + current caption, then clear the input. Sending
     // the current caption lets the API do a targeted edit instead of a rewrite.
@@ -280,7 +306,7 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
           regeneration) so the toggle above can be set first. */}
       {!caption && !isGenerating && (
         <button
-          onClick={() => void generate(tone).catch(() => {})}
+          onClick={() => void handleFirstGenerate()}
           className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
         >
           <Sparkles size={14} strokeWidth={2} />

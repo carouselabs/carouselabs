@@ -24,7 +24,7 @@ export default async function BillingPage() {
   const creditSub = {
     plan,
     creditsUsed: sub?.creditsUsed ?? 0,
-    creditsTotal: sub?.creditsTotal ?? 30,
+    creditsTotal: sub?.creditsTotal ?? 1000,
     extraCredits: sub?.extraCredits ?? 0,
     extraCreditsExpiry: sub?.extraCreditsExpiry ?? null,
   }

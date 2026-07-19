@@ -226,7 +226,7 @@ export function CarouselImageGrid({
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[rgba(26,26,26,0.2)] bg-[rgba(26,26,26,0.08)] hover:bg-[rgba(26,26,26,0.16)] text-[11px] font-medium text-[#1A1A1A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <RefreshCw size={11} strokeWidth={2.2} />
-                  Regenerate Slide {slide.slideNumber}
+                  Regenerate Slide {slide.slideNumber} — 8 credits
                 </button>
                 <button
                   onClick={() => downloadSlide(slide)}

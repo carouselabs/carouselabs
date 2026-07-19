@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { FileText, Image, LayoutTemplate, Check, Lock } from "lucide-react"
 import { trackHistory, type HistoryStatus } from "@/lib/hooks/useHistory"
+import { CREDIT_COSTS } from "@/lib/creditActions"
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,7 @@ interface Format {
   id: string
   label: string
   description: string
+  credits: number
   icon: React.ElementType
   status: HistoryStatus
   href: (ideaId: string) => string
@@ -27,6 +29,7 @@ const FORMATS: Format[] = [
     id: "caption",
     label: "Caption Only",
     description: "A scroll-stopping LinkedIn caption, ready to post",
+    credits: CREDIT_COSTS.caption_only,
     icon: FileText,
     status: "CAPTION",
     href: (id) => `/generate/caption?ideaId=${id}`,
@@ -35,6 +38,7 @@ const FORMATS: Format[] = [
     id: "image_caption",
     label: "Image + Caption",
     description: "Caption and a single AI-generated visual",
+    credits: CREDIT_COSTS.image_caption,
     icon: Image,
     status: "IMAGE",
     href: (id) => `/generate/image?ideaId=${id}`,
@@ -43,6 +47,7 @@ const FORMATS: Format[] = [
     id: "slides",
     label: "Caption + Slides",
     description: "Caption and a full 7–8 slide LinkedIn carousel",
+    credits: CREDIT_COSTS.carousel,
     icon: LayoutTemplate,
     status: "CAROUSEL",
     href: (id) => `/generate/carousel?ideaId=${id}`,
@@ -179,6 +184,9 @@ export function FormatPicker({ ideaId, plan, disabled = false }: FormatPickerPro
                 </span>
                 <span className="text-[12px] text-[#9CA3AF] leading-[1.4]">
                   {format.description}
+                </span>
+                <span className="mt-1 self-start inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold text-[#4B5563] bg-[rgba(26,26,26,0.07)] border border-[rgba(26,26,26,0.12)]">
+                  {format.credits} credits
                 </span>
                 {isLocked && (
                   <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-[#9CA3AF]">

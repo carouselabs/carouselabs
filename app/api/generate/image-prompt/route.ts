@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 import { db } from "@/lib/db"
 import { buildImagePrompt } from "@/lib/ai/prompts/imagePrompt"
+import { hasGenerationBalance } from "@/lib/credits"
 import { validateReferenceImage } from "@/lib/validateImage"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 
@@ -193,6 +194,12 @@ function parseJsonResponse(raw: string): { caption: string; imagePrompt: string 
 export async function POST(req: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  // Defense-in-depth: credits are consumed via /api/credits/consume before the
+  // client calls this route — but a drained PRO balance is still blocked here.
+  if (!(await hasGenerationBalance(user.id))) {
+    return NextResponse.json({ error: "You're out of credits." }, { status: 402 })
+  }
 
   let ideaId: string
   let caption: string

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import Anthropic from "@anthropic-ai/sdk"
 import { db } from "@/lib/db"
+import { hasGenerationBalance } from "@/lib/credits"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -171,6 +172,12 @@ function formatProfile(profile: {
 export async function POST(req: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  // Defense-in-depth: credits are consumed via /api/credits/consume before the
+  // client calls this route — but a drained PRO balance is still blocked here.
+  if (!(await hasGenerationBalance(user.id))) {
+    return NextResponse.json({ error: "You're out of credits." }, { status: 402 })
+  }
 
   let ideaId: string,
     tone: string | undefined,

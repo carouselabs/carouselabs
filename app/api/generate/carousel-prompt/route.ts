@@ -11,6 +11,7 @@ import {
   buildCarouselUserMessage,
 } from "@/lib/ai/prompts/carouselPrompt"
 import { validateReferenceImage } from "@/lib/validateImage"
+import { hasGenerationBalance } from "@/lib/credits"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -374,6 +375,12 @@ export async function POST(req: Request) {
       { error: "Carousel generation requires Pro plan", requiresUpgrade: true },
       { status: 403 },
     )
+  }
+
+  // Defense-in-depth: credits are consumed via /api/credits/consume before the
+  // client calls this route — but a drained PRO balance is still blocked here.
+  if (!(await hasGenerationBalance(user.id))) {
+    return NextResponse.json({ error: "You're out of credits." }, { status: 402 })
   }
 
   let ideaId: string

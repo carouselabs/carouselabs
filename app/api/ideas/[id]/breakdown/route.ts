@@ -3,8 +3,6 @@ import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import Anthropic from "@anthropic-ai/sdk"
 import { db } from "@/lib/db"
-import { consumeCredit } from "@/lib/credits"
-import { sendCreditsLowEmail, sendCreditsExhaustedEmail } from "@/lib/email"
 import { validateContentTopic } from "@/lib/validateTopic"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 import type { Prisma } from "@prisma/client"
@@ -196,31 +194,9 @@ export async function POST(
       )
     }
 
-    // Generating a NEW breakdown costs one credit. Free users get 1 lifetime
-    // post; Pro users spend monthly, then extra credits.
-    const credit = await consumeCredit(user.id)
-    if (!credit.ok) {
-      return NextResponse.json(
-        { error: "No credits", requiresUpgrade: credit.requiresUpgrade },
-        { status: 402 },
-      )
-    }
-
-    // Low-balance / exhausted notifications. These emails are about the monthly
-    // Pro allowance, so they only make sense for Pro users (FREE users hit 0 on
-    // their single lifetime post). Best-effort — never block the breakdown.
-    if (user.subscription?.plan === "PRO") {
-      const recipientName = user.profile?.name ?? ""
-      try {
-        if (credit.remaining === 5) {
-          await sendCreditsLowEmail(user.email, recipientName, 5)
-        } else if (credit.remaining === 0) {
-          await sendCreditsExhaustedEmail(user.email, recipientName)
-        }
-      } catch (err) {
-        console.error("[breakdown] credit-balance email failed:", err)
-      }
-    }
+    // Breakdowns are free under the weighted credit system — the charge happens
+    // at the post level (caption/image/carousel first generation) via
+    // /api/credits/consume, and the breakdown is included in that cost.
 
     // Call Claude — single call, no web search, no tools.
     const profileContext = formatProfile(user.profile)

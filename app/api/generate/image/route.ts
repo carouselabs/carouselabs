@@ -3,11 +3,12 @@ import { NextResponse } from "next/server"
 import { Ratelimit } from "@upstash/ratelimit"
 import { Redis } from "@upstash/redis"
 import { getCurrentUser } from "@/lib/auth"
-import OpenAI from "openai"
+import OpenAI, { toFile } from "openai"
 import sharp from "sharp"
 import { db } from "@/lib/db"
 import { uploadToR2 } from "@/lib/r2"
 import { notifyFirstPostIfFirst } from "@/lib/email"
+import { validateReferenceImage } from "@/lib/validateImage"
 import type { Prisma } from "@prisma/client"
 
 export const maxDuration = 300
@@ -21,6 +22,18 @@ const ratelimit = new Ratelimit({
   limiter: Ratelimit.slidingWindow(20, "1 h"),
   analytics: false,
 })
+
+// Strip authoring scaffolding (## headers, separator lines, markdown emphasis,
+// bullets) so gpt-image-2 receives clean prose — same treatment as the
+// carousel-images route.
+const cleanPrompt = (prompt: string) =>
+  prompt
+    .replace(/^#+\s+.*$/gm, "") // remove ## headers
+    .replace(/^━+\s*$/gm, "") // remove separator lines
+    .replace(/\*\*/g, "") // remove bold markdown
+    .replace(/•\s*/g, "") // remove bullets
+    .replace(/\n{3,}/g, "\n\n") // collapse newlines
+    .trim()
 
 export async function POST(req: Request) {
   const user = await getCurrentUser()
@@ -39,6 +52,8 @@ export async function POST(req: Request) {
   let imagePrompt: string
   let caption: string
   let size: string
+  let referenceImageBase64: string | undefined
+  let referenceMediaType: string
 
   try {
     const body = await req.json()
@@ -48,9 +63,26 @@ export async function POST(req: Request) {
     // Only 4:5 and 1:1 are offered; default to 4:5 (LinkedIn feed) for restored
     // sessions where the client may not re-send the size.
     size = body.size === "1:1" ? "1:1" : "4:5"
+    // Optional style reference — when present, the image is generated with
+    // images.edit so gpt-image-2 sees the reference alongside the prompt.
+    referenceImageBase64 =
+      typeof body.referenceImage === "string" ? body.referenceImage : undefined
+    referenceMediaType =
+      typeof body.referenceMediaType === "string" ? body.referenceMediaType : "image/jpeg"
     if (!ideaId || !imagePrompt) throw new Error("Missing ideaId or imagePrompt")
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
+  }
+
+  // Validate the reference image (size / type / magic bytes) before it reaches
+  // OpenAI. Replaces the client-supplied values with the cleaned, verified ones.
+  if (referenceImageBase64) {
+    const check = validateReferenceImage(referenceImageBase64, referenceMediaType)
+    if (!check.ok) {
+      return NextResponse.json({ error: check.error }, { status: 400 })
+    }
+    referenceImageBase64 = check.data
+    referenceMediaType = check.mediaType
   }
 
   const idea = await db.idea.findUnique({ where: { id: ideaId } })
@@ -64,13 +96,33 @@ export async function POST(req: Request) {
     size === "4:5" ? "1024x1280" : "1024x1024"
   let imageB64: string
   try {
-    const imageResponse = await openai.images.generate({
-      model: "gpt-image-2",
-      prompt: imagePrompt,
-      n: 1,
-      size: openaiSize,
-      quality: "medium",
-    })
+    const finalPrompt = cleanPrompt(imagePrompt)
+
+    // With a style reference, use images.edit so gpt-image-2 receives the
+    // reference image itself alongside the prompt; otherwise plain generate.
+    const imageResponse = referenceImageBase64
+      ? await openai.images.edit({
+          model: "gpt-image-2",
+          image: await toFile(
+            Buffer.from(
+              referenceImageBase64.replace(/^data:image\/\w+;base64,/, ""),
+              "base64",
+            ),
+            referenceMediaType === "image/png" ? "reference.png" : "reference.jpg",
+            { type: referenceMediaType || "image/jpeg" },
+          ),
+          prompt: finalPrompt,
+          n: 1,
+          size: openaiSize,
+          quality: "medium",
+        })
+      : await openai.images.generate({
+          model: "gpt-image-2",
+          prompt: finalPrompt,
+          n: 1,
+          size: openaiSize,
+          quality: "medium",
+        })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = (imageResponse as any).data as Array<{ b64_json?: string }> | undefined
     const b64 = data?.[0]?.b64_json

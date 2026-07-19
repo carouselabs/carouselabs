@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import Anthropic from "@anthropic-ai/sdk"
+import OpenAI from "openai"
 import { db } from "@/lib/db"
 import { buildImagePrompt } from "@/lib/ai/prompts/imagePrompt"
 import { validateReferenceImage } from "@/lib/validateImage"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 // Reference-image vision + a long image prompt can run past the platform's
 // shorter default function timeout; allow up to 300s (matches the other routes).
@@ -21,6 +23,65 @@ CRITICAL — REFERENCE IMAGE USAGE:
 If a reference image is provided, use it ONLY for visual style — colors, typography style, layout structure, illustration style, mood, and composition. NEVER copy or reuse any text, words, or headlines visible in the reference image. All text content in the generated image must come EXCLUSIVELY from the breakdown's refinedHook and the user's actual content provided below. The reference image's text content should be completely ignored.`
 
 const CAPTION_GHOSTWRITER_INSTRUCTION = `Act as a top 0.1% LinkedIn ghostwriter for AI founders. Read the deep dive and identify every unique insight, strategic implication, supporting argument, and founder perspective. Rewrite it into a LinkedIn post that preserves all high-value information while removing fluff, repetition, and unnecessary exposition. Optimize for readability, engagement, and authority—not virality or clickbait. The writing should feel human, opinionated, and experience-driven, with natural transitions and varied sentence lengths. The first three lines should create curiosity without hiding the value, and the rest should progressively reveal deeper insights. Prioritize clarity over hype, include practical takeaways, and end with a question that invites thoughtful discussion rather than generic comments. If any important idea from the original is omitted, explicitly add it back so that no meaningful strategic insight is lost. The final post should sound like an experienced founder or investor sharing hard-earned lessons, not an AI summarizing an article.`
+
+// GPT-4o sometimes refuses the task outright instead of erroring. A real
+// generation is JSON starting with "{" — refusal prose shows up at the very
+// start of the response, so only the opening chunk is checked (a phrase like
+// "I can't" inside generated copy must not trigger a false positive).
+function isRefusal(text: string): boolean {
+  const refusalPhrases = [
+    "i'm sorry",
+    "i cannot",
+    "i can't assist",
+    "i'm not able",
+    "i won't",
+    "i am unable",
+    "i apologize",
+    "not able to help",
+    "can't help with",
+  ]
+  const opening = text.toLowerCase().trim().slice(0, 300)
+  return refusalPhrases.some(
+    (phrase) => opening.startsWith(phrase) || opening.includes(phrase),
+  )
+}
+
+// Fixed style contract prepended to the generated image prompt when a reference
+// image was uploaded — the model writes style notes inconsistently, so the
+// contract is standardized server-side (mirrors the carousel flow).
+const STYLE_REFERENCE_BLOCK = `## STYLE REFERENCE
+Use the uploaded reference image ONLY as a style reference.
+Before generating the image, thoroughly analyze and reverse-engineer the reference image's visual design system.
+Extract ONLY:
+- Overall visual aesthetic and design philosophy
+- Typography style and treatment
+- Visual hierarchy
+- Layout philosophy
+- White-space usage
+- Composition principles
+- Illustration style and rendering technique
+- Color palette and color relationships
+- Lighting and shadow treatment
+- Texture and material finish
+- Shape language and geometric style
+- Card, container, and UI element styling (if present)
+- Decorative elements and graphic motifs
+- Line weight and stroke style
+- Iconography style (without copying specific icons)
+- Depth, perspective, and visual balance
+- Brand personality conveyed through the design
+- Overall creative direction and artistic language
+DO NOT copy:
+- Layout or arrangement
+- Composition
+- Illustrations or characters
+- Icons
+- Graphics
+- Text or typography content
+- Logos or branding
+- Any identifiable visual element
+Your goal is to extract the underlying design language, not the content.
+The generated image should feel like it was designed by the same creative team that produced the reference image while remaining 100% original in concept, layout, illustrations, text, and composition.`
 
 // Targeted edit mode — apply ONLY the user's instruction to the existing image
 // prompt, changing as little as possible. Returns the same JSON shape the
@@ -191,55 +252,114 @@ export async function POST(req: Request) {
 
 ${buildImagePrompt(breakdown.refinedHook, breakdown.deepDive, caption, size, userInstruction, niche)}`
 
-  console.log("[image-prompt] Full prompt sent to Claude:\n", prompt)
+  console.log("[image-prompt] Full prompt sent to model:\n", prompt)
 
-  let claudeRaw: string
+  // Same text both providers see: the reference-usage instruction rides along
+  // only when a reference image is attached (unchanged from before).
+  const promptText = referenceImage ? prompt + REFERENCE_IMAGE_INSTRUCTION : prompt
+
+  let modelRaw = ""
+  let usedFallback = false
+
+  // PRIMARY: GPT-4o. Any refusal or API error falls through to Claude below.
   try {
-    const messageContent: Anthropic.MessageParam["content"] = referenceImage
-      ? [
-          {
-            type: "image",
-            source: {
-              type: "base64",
-              media_type: referenceMediaType as
-                | "image/jpeg"
-                | "image/png"
-                | "image/gif"
-                | "image/webp",
-              data: referenceImage,
+    const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
+      ...(referenceImage
+        ? [
+            {
+              type: "image_url" as const,
+              image_url: {
+                url: `data:${referenceMediaType || "image/jpeg"};base64,${referenceImage}`,
+                detail: "high" as const,
+              },
             },
-          },
-          { type: "text", text: prompt + REFERENCE_IMAGE_INSTRUCTION },
-        ]
-      : prompt
+          ]
+        : []),
+      { type: "text" as const, text: promptText },
+    ]
 
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
       max_tokens: 4096,
-      messages: [{ role: "user", content: messageContent }],
+      messages: [{ role: "user" as const, content: userContent }],
     })
 
-    claudeRaw = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("")
+    console.log("[image-prompt] GPT-4o finish_reason:", response.choices[0]?.finish_reason)
+
+    const gptRaw = response.choices[0]?.message?.content ?? ""
+
+    if (isRefusal(gptRaw)) {
+      console.warn("[image-prompt] GPT-4o refused request, falling back to Claude")
+      usedFallback = true
+    } else {
+      modelRaw = gptRaw
+    }
   } catch (err) {
-    console.error("[generate/image-prompt] Claude error:", err)
-    return NextResponse.json({ error: "Failed to generate content" }, { status: 502 })
+    const e = err as { message?: string }
+    console.warn("[image-prompt] GPT-4o error, falling back to Claude:", e?.message ?? err)
+    usedFallback = true
   }
 
-  console.log("[generate/image-prompt] Raw Claude response:\n", claudeRaw)
+  // FALLBACK: Claude — the previous implementation, unchanged.
+  if (usedFallback) {
+    try {
+      const messageContent: Anthropic.MessageParam["content"] = referenceImage
+        ? [
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: referenceMediaType as
+                  | "image/jpeg"
+                  | "image/png"
+                  | "image/gif"
+                  | "image/webp",
+                data: referenceImage,
+              },
+            },
+            { type: "text", text: promptText },
+          ]
+        : prompt
+
+      const response = await anthropic.messages.create({
+        model: "claude-sonnet-4-5",
+        max_tokens: 4096,
+        messages: [{ role: "user", content: messageContent }],
+      })
+
+      console.log("[image-prompt] Claude fallback stop_reason:", response.stop_reason)
+
+      modelRaw = response.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map((b) => b.text)
+        .join("")
+    } catch (err) {
+      const e = err as { message?: string }
+      console.error("[image-prompt] Claude fallback also failed:", e?.message ?? err)
+      return NextResponse.json({ error: "Failed to generate content" }, { status: 502 })
+    }
+  }
+
+  console.log("[image-prompt] Model used:", usedFallback ? "Claude (fallback)" : "GPT-4o")
+  console.log("[generate/image-prompt] Raw model response:\n", modelRaw)
 
   let parsed: { caption: string; imagePrompt: string }
   try {
-    parsed = parseJsonResponse(claudeRaw)
+    parsed = parseJsonResponse(modelRaw)
   } catch {
-    console.error("[generate/image-prompt] All parse strategies failed. Raw:\n", claudeRaw)
+    console.error("[generate/image-prompt] All parse strategies failed. Raw:\n", modelRaw)
     return NextResponse.json({ error: "Failed to parse AI response" }, { status: 502 })
   }
 
   if (!parsed.imagePrompt) {
     return NextResponse.json({ error: "Image prompt was empty in AI response" }, { status: 502 })
+  }
+
+  // Inject the fixed style contract at the start of the prompt (reference
+  // uploads only). Guarded so edit-mode round-trips — where the client sends a
+  // prompt that already carries the block — don't stack duplicates.
+  if (referenceImage && !parsed.imagePrompt.includes("## STYLE REFERENCE")) {
+    parsed.imagePrompt = `${STYLE_REFERENCE_BLOCK}\n\n${parsed.imagePrompt}`
   }
 
   return NextResponse.json({ caption: parsed.caption, imagePrompt: parsed.imagePrompt })

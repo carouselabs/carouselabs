@@ -15,6 +15,11 @@ import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regeneratio
 import { friendlyGenerationError } from "@/lib/friendlyError"
 import { countWords } from "@/lib/wordCount"
 
+// TEMP DEBUG — when true, generateImageFlow stops after the image prompt comes
+// back and renders it as text instead of generating the image (no OpenAI image
+// spend). Set back to false / remove to restore the full flow.
+const DEBUG_SKIP_IMAGE_GENERATION = true
+
 interface ImageClientProps {
   ideaId: string
   ideaHook: string
@@ -62,6 +67,8 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
   // Shown when changing the reference image invalidates an already-generated
   // image (the old style is baked into its prompt).
   const [referenceNotice, setReferenceNotice] = useState<string | null>(null)
+  // TEMP DEBUG — holds the generated image prompt when image generation is skipped.
+  const [debugPrompt, setDebugPrompt] = useState<string | null>(null)
   // Once image generation has started at least once, keep the 2-column layout
   // (with the LoadingGame) so the user can keep playing even after the image loads.
   const [gameStarted, setGameStarted] = useState(false)
@@ -259,6 +266,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
     setReferenceNotice(null)
     setImageUrl(null)
     setPostId(null)
+    setDebugPrompt(null)
 
     try {
       // 1) Generate the image prompt silently (no UI update). When the user gave
@@ -290,11 +298,27 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
       }
       trackHistory(ideaId, "IMAGE_DONE")
 
+      // TEMP DEBUG — stop before image generation; the step-4 debug panel
+      // renders the raw prompt instead.
+      if (DEBUG_SKIP_IMAGE_GENERATION) {
+        setIsGeneratingImage(false)
+        setGameStarted(false)
+        setDebugPrompt(newPrompt)
+        return
+      }
+
       // 2) Immediately generate the image from that prompt.
       const imgRes = await fetch("/api/generate/image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId, imagePrompt: newPrompt, caption, size }),
+        body: JSON.stringify({
+          ideaId,
+          imagePrompt: newPrompt,
+          caption,
+          size,
+          referenceImage: referenceImage ?? undefined,
+          referenceMediaType: referenceImage ? referenceMediaType : undefined,
+        }),
       })
       const imgData = await imgRes.json()
       if (!imgRes.ok) {
@@ -357,7 +381,14 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
       const res = await fetch("/api/generate/image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId, imagePrompt, caption, size }),
+        body: JSON.stringify({
+          ideaId,
+          imagePrompt,
+          caption,
+          size,
+          referenceImage: referenceImage ?? undefined,
+          referenceMediaType: referenceImage ? referenceMediaType : undefined,
+        }),
       })
 
       const data = await res.json()
@@ -853,6 +884,18 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
               >
                 Try Again
               </button>
+            </div>
+          )}
+
+          {/* TEMP DEBUG — prompt-only view when image generation is skipped */}
+          {DEBUG_SKIP_IMAGE_GENERATION && debugPrompt && (
+            <div className="flex flex-col gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50">
+              <p className="text-[12px] font-semibold text-amber-700">
+                DEBUG MODE — prompt only, no image generated
+              </p>
+              <pre className="whitespace-pre-wrap text-[11px] text-[#374151] leading-relaxed font-sans">
+                {debugPrompt}
+              </pre>
             </div>
           )}
 

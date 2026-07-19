@@ -98,6 +98,11 @@ export async function POST(req: Request) {
   try {
     const finalPrompt = cleanPrompt(imagePrompt)
 
+    // Style guard appended at the image stage (mirrors carousel-images):
+    // phrased as conditionals on what the reference actually shows, so it works
+    // for any reference the user uploads — nothing brand- or color-specific.
+    const editPrompt = `${finalPrompt}\n\nThe attached image is a style reference only. Keep the same background tone as the reference — a light reference background stays light, a dark one stays dark; never flood the design with the accent color. Keep the same headline text color, the same font style (weight, width, casing), and the same accent color proportions as the reference. Match its illustration and rendering style. Create a completely new composition; do not copy its content, layout, or text. Wherever the reference shows a logo, wordmark, or watermark, render clean empty background instead — zero logos and zero brand names on the finished image; the only text is the text specified in this prompt.`
+
     // With a style reference, use images.edit so gpt-image-2 receives the
     // reference image itself alongside the prompt; otherwise plain generate.
     const imageResponse = referenceImageBase64
@@ -111,7 +116,7 @@ export async function POST(req: Request) {
             referenceMediaType === "image/png" ? "reference.png" : "reference.jpg",
             { type: referenceMediaType || "image/jpeg" },
           ),
-          prompt: finalPrompt,
+          prompt: editPrompt,
           n: 1,
           size: openaiSize,
           quality: "medium",

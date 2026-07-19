@@ -47,7 +47,9 @@ Extract ONLY:
 - Premium editorial SaaS aesthetic
 - Typography treatment: match the reference's exact font style, weight, letter spacing, and casing — every slide in this carousel must use the same typography as the reference (if the reference uses bold condensed uppercase headlines, so does every slide)
 - Text colors exactly as in the reference: if headlines are near-black with one accent-colored word, reproduce that exact treatment — never recolor all text with the accent color
+- Headline emphasis technique exactly as in the reference: highlighter swipe, color block, underline, or colored word — same technique, same color as the reference
 - Background treatment exactly as in the reference: if it is white or light with colored accents, keep it white or light — never flood the slide with the accent color; accents stay accents
+- If any color value written in this brief differs from the reference image's actual palette, follow the reference image — sample background tone, text colors, and accent colors directly from it
 - Visual hierarchy
 - Spacious layout
 - White-space usage

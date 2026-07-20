@@ -166,7 +166,7 @@ export default async function BillingPage() {
       {/* Plan comparison */}
       <div className="flex flex-col gap-5">
         <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Compare plans</h2>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-5 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-5 items-stretch">
           <PlanCard
             plan={FREE_PLAN}
             isCurrent={!isPro}

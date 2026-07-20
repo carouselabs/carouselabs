@@ -64,16 +64,16 @@ export function Pricing() {
           </p>
         </AnimatedSection>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-5 items-start">
-          <AnimatedSection delay={0}>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-5 items-stretch">
+          <AnimatedSection delay={0} className="h-full">
             <PlanCard plan={FREE_PLAN} cta={<FreeCTA />} />
           </AnimatedSection>
 
-          <AnimatedSection delay={0.1}>
+          <AnimatedSection delay={0.1} className="h-full">
             <PlanCard plan={PRO_PLAN} cta={<CheckoutCTA label="Start Creating" variant="purple" />} />
           </AnimatedSection>
 
-          <AnimatedSection delay={0.2}>
+          <AnimatedSection delay={0.2} className="h-full">
             <PlanCard plan={GROWTH_PLAN} cta={<CheckoutCTA label="Go Growth" variant="amber" />} />
           </AnimatedSection>
         </div>

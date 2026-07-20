@@ -19,9 +19,12 @@ export function PlanCard({
   const isPro = plan.highlighted
 
   return (
-    <div className={isPro ? "relative pt-4 lg:scale-[1.04]" : "relative"}>
+    // No pt-4/scale spacer here — every card must end up the same height, so
+    // the "Most Popular" badge floats via a negative top offset instead of
+    // reserving layout space that would shrink just this card.
+    <div className="relative h-full">
       {plan.badge && (
-        <div className="absolute -top-0 left-1/2 -translate-x-1/2 z-10">
+        <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
           <span className="inline-flex items-center px-4 py-1.5 rounded-full bg-gradient-to-r from-[#7C3AED] to-[#A78BFA] text-[11px] font-semibold text-white uppercase tracking-wide shadow-[0_4px_20px_rgba(124,58,237,0.4)]">
             ⭐ {plan.badge}
           </span>
@@ -103,9 +106,6 @@ export function PlanCard({
                   ].join(" ")}
                 >
                   {f.label}
-                  {f.hint && (
-                    <span className={isDark ? "text-[#6B7280]" : "text-[#9CA3AF]"}> · {f.hint}</span>
-                  )}
                 </span>
               </li>
             )

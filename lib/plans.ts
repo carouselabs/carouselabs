@@ -10,7 +10,6 @@
 
 export type PlanFeature = {
   label: string
-  hint?: string
   included?: boolean // defaults to true; set false for Free's "No X" rows
 }
 
@@ -63,16 +62,14 @@ export const PRO_PLAN: PlanDef = {
   features: [
     { label: "Everything in Free" },
     { label: "1,000 credits per month" },
-    { label: "Caption Only", hint: "5 credits" },
-    { label: "Image + Caption", hint: "15 credits" },
-    { label: "Carousel — 7-8 slides", hint: "40 credits" },
+    { label: "Caption Only" },
+    { label: "Image + Caption" },
+    { label: "Carousel — 7-8 slides" },
     { label: "LinkedIn one-click posting" },
     { label: "Reference image style matching" },
     { label: "Voice guidelines & presets" },
     { label: "AI trending post ideas daily" },
-    { label: "Caption regeneration", hint: "1 credit" },
-    { label: "Image regeneration", hint: "8 credits" },
-    { label: "Slide regeneration", hint: "8 credits" },
+    { label: "Caption, image & slide regeneration" },
     { label: "Priority support" },
   ],
 }

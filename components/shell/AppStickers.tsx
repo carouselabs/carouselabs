@@ -3,7 +3,10 @@
 import { usePathname } from "next/navigation"
 import { Stickers } from "@/components/shared/Stickers"
 
-function variantFor(path: string): string {
+function variantFor(path: string): string | null {
+  // Billing has real financial content (plans, prices) — floating stickers
+  // read as noise there, so it opts out entirely.
+  if (path.startsWith("/settings/billing")) return null
   if (path.startsWith("/generate/image")) return "image"
   if (path.startsWith("/generate/carousel")) return "carousel"
   if (path.startsWith("/generate/caption")) return "caption"
@@ -17,5 +20,7 @@ function variantFor(path: string): string {
 
 export function AppStickers() {
   const pathname = usePathname()
-  return <Stickers variant={variantFor(pathname)} />
+  const variant = variantFor(pathname)
+  if (!variant) return null
+  return <Stickers variant={variant} />
 }

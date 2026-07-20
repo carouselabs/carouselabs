@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { availableCredits, FREE_LIFETIME_POSTS } from "@/lib/credits"
+import { isAdminEmail } from "@/lib/adminAuth"
 
 export async function GET() {
   const { userId } = await auth()
@@ -34,5 +35,6 @@ export async function GET() {
     creditsRemaining,
     freeLimit: FREE_LIFETIME_POSTS,
     onboardingDone: user.profile?.onboardingDone ?? false,
+    isAdmin: isAdminEmail(user.email),
   })
 }

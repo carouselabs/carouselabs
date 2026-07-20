@@ -13,6 +13,7 @@ export interface CurrentUser {
   creditsRemaining: number
   freeLimit: number
   onboardingDone: boolean
+  isAdmin?: boolean
 }
 
 export function useCurrentUser() {

@@ -74,12 +74,15 @@ enum HistoryStatus {
 // ── Models ───────────────────────────────────────────────────────
 
 model User {
-  id        String    @id @default(cuid())
-  clerkId   String    @unique
-  email     String    @unique
-  deletedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  clerkId     String    @unique
+  email       String    @unique
+  deletedAt   DateTime?
+  // ── Admin panel ──
+  adminNote   String?   @db.Text
+  suspendedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   profile      Profile?
   ideas        Idea[]
@@ -271,6 +274,14 @@ model UsageCounter {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// App-level settings editable from the admin panel (plan price, feature
+// flags, maintenance mode). One row per key, Json value.
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
 }
 
 // Tracks webhook deliveries we've already handled so a provider redelivery

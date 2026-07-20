@@ -1,6 +1,8 @@
 "use client"
 
 import { usePathname } from "next/navigation"
+import Link from "next/link"
+import { ShieldCheck } from "lucide-react"
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser"
 import { useIdeaSessionStore } from "@/lib/store/ideaSessionStore"
 import { useCreditStore } from "@/lib/store/creditStore"
@@ -32,6 +34,15 @@ export function Topbar() {
       <span className="text-[14px] font-semibold text-[#0A0A0A] tracking-[-0.2px]">{title}</span>
 
       <div className="flex items-center gap-4">
+        {user?.isAdmin && (
+          <Link
+            href="/admin"
+            className="inline-flex items-center gap-1 rounded-full bg-[#7C3AED]/10 px-2.5 py-1 text-[11px] font-semibold text-[#7C3AED] hover:bg-[#7C3AED]/15 transition-colors"
+          >
+            <ShieldCheck className="h-3 w-3" />
+            Admin
+          </Link>
+        )}
         {user &&
           (() => {
             const left = liveCredits ?? user.creditsRemaining ?? 0

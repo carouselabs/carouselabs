@@ -5,10 +5,33 @@ import { ArrowLeft } from "lucide-react"
 import { db } from "@/lib/db"
 import { availableCredits } from "@/lib/credits"
 import { postCreditCost } from "@/lib/adminStats"
-import { PlanBadge, StatCard, fmtDate, fmtDateTime, tableCls } from "@/components/admin/ui"
+import { PlanBadge, StatCard, tableCls } from "@/components/admin/ui"
 import { UserAdminActions } from "@/components/admin/UserAdminActions"
 
 export const dynamic = "force-dynamic"
+
+// fmtDate/fmtDateTime live in components/admin/ui.tsx, which is a "use
+// client" module — every export of a client module becomes a client
+// reference, so calling them as plain functions from this server component
+// throws. Kept as local, dependency-free formatters instead.
+function formatDate(date: Date | string | null | undefined): string {
+  if (!date) return "Never"
+  return new Date(date).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
+
+function formatDateTime(date: Date | string | null | undefined): string {
+  if (!date) return "Never"
+  return new Date(date).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
+}
 
 export default async function AdminUserDetailPage({
   params,
@@ -73,7 +96,8 @@ export default async function AdminUserDetailPage({
             )}
           </div>
           <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">
-            {user.email} · joined {fmtDate(user.createdAt)} · last active {fmtDate(user.updatedAt)}
+            {user.email} · joined {formatDate(user.createdAt)} · last active{" "}
+            {formatDate(user.updatedAt)}
             {user.profile?.headline ? ` · ${user.profile.headline}` : ""}
           </p>
         </div>
@@ -92,7 +116,7 @@ export default async function AdminUserDetailPage({
         />
         <StatCard
           label="Renewal"
-          value={sub?.currentPeriodEnd ? fmtDate(sub.currentPeriodEnd) : "—"}
+          value={sub?.currentPeriodEnd ? formatDate(sub.currentPeriodEnd) : "—"}
           hint={sub?.cancelAtPeriodEnd ? "cancels at period end" : sub?.status ?? undefined}
         />
         <StatCard
@@ -148,7 +172,7 @@ export default async function AdminUserDetailPage({
                     {p.idea?.hook ?? p.idea?.title ?? "—"}
                   </td>
                   <td className={`${tableCls.td} tabular-nums`}>{postCreditCost(p.format)}</td>
-                  <td className={tableCls.td}>{fmtDateTime(p.createdAt)}</td>
+                  <td className={tableCls.td}>{formatDateTime(p.createdAt)}</td>
                 </tr>
               ))}
             </tbody>

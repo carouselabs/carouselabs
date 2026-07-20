@@ -1,9 +1,22 @@
 // /admin/subscriptions — billing overview (server-rendered from Prisma).
 import Link from "next/link"
 import { db } from "@/lib/db"
-import { PlanBadge, StatCard, fmtDate, tableCls } from "@/components/admin/ui"
+import { PlanBadge, StatCard, tableCls } from "@/components/admin/ui"
 
 export const dynamic = "force-dynamic"
+
+// fmtDate lives in components/admin/ui.tsx, which is a "use client" module —
+// every export of a client module becomes a client reference, so calling it
+// as a plain function from this server component throws. Kept as a local,
+// dependency-free formatter instead.
+function formatDate(date: Date | string | null | undefined): string {
+  if (!date) return "Never"
+  return new Date(date).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
 
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE: "text-emerald-400 bg-emerald-500/10",
@@ -76,7 +89,7 @@ export default async function AdminSubscriptionsPage() {
                   {s.creditsUsed} / {s.creditsTotal}
                   {s.extraCredits > 0 && <span className="text-[#A78BFA]"> +{s.extraCredits}</span>}
                 </td>
-                <td className={tableCls.td}>{fmtDate(s.currentPeriodEnd)}</td>
+                <td className={tableCls.td}>{formatDate(s.currentPeriodEnd)}</td>
                 <td className={tableCls.td}>{s.cancelAtPeriodEnd ? "Yes" : "—"}</td>
                 <td className={`${tableCls.td} text-[#6A6A6A]`}>
                   {s.lsSubscriptionId ?? s.razorpaySubId ?? "—"}

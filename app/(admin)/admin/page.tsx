@@ -12,10 +12,33 @@ import {
   DollarSign,
 } from "lucide-react"
 import { getOverviewStats } from "@/lib/adminStats"
-import { StatCard, PlanBadge, fmtDate, fmtDateTime, tableCls } from "@/components/admin/ui"
+import { StatCard, PlanBadge, tableCls } from "@/components/admin/ui"
 import { QuickActions } from "@/components/admin/QuickActions"
 
 export const dynamic = "force-dynamic"
+
+// fmtDate/fmtDateTime live in components/admin/ui.tsx, which is a "use
+// client" module — every export of a client module becomes a client
+// reference, so calling them as plain functions from this server component
+// throws. Kept as local, dependency-free formatters instead.
+function formatDate(date: Date | string | null | undefined): string {
+  if (!date) return "Never"
+  return new Date(date).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
+
+function formatDateTime(date: Date | string | null | undefined): string {
+  if (!date) return "Never"
+  return new Date(date).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
+}
 
 export default async function AdminOverviewPage() {
   const s = await getOverviewStats()
@@ -80,7 +103,7 @@ export default async function AdminOverviewPage() {
                     <td className={tableCls.td}>
                       <PlanBadge plan={u.plan} />
                     </td>
-                    <td className={tableCls.td}>{fmtDate(u.createdAt)}</td>
+                    <td className={tableCls.td}>{formatDate(u.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -113,7 +136,7 @@ export default async function AdminOverviewPage() {
                     <td className={tableCls.td}>
                       <span className="text-[#B0B0B0]">{p.format.replace("_", " ")}</span>
                     </td>
-                    <td className={tableCls.td}>{fmtDateTime(p.createdAt)}</td>
+                    <td className={tableCls.td}>{formatDateTime(p.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>

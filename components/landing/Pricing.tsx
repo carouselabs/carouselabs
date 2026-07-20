@@ -1,30 +1,59 @@
 import Link from "next/link"
-import { Check } from "lucide-react"
+import { ArrowRight } from "lucide-react"
 import { AnimatedSection } from "@/components/marketing/AnimatedSection"
+import { PlanCard } from "@/components/marketing/PlanCard"
+import { FREE_PLAN, PRO_PLAN, GROWTH_PLAN, CREDIT_COST_LINES, PRICING_FAQ } from "@/lib/plans"
 
-const FREE_FEATURES = [
-  "1 post lifetime",
-  "10 idea generations",
-  "Post breakdown",
-  "Caption generation",
-]
+// Same checkout variant for Pro and Growth for now — Growth doesn't have its
+// own Lemon Squeezy product yet.
+// TODO: add Growth plan checkout URL once a dedicated Lemon Squeezy variant exists.
+const CHECKOUT_URL = process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL
 
-const PRO_FEATURES = [
-  "Publish consistently every day",
-  "Idea generation",
-  "Post breakdown",
-  "Caption generation",
-  "AI carousel builder",
-  "PDF export",
-  "Priority support",
-]
+function FreeCTA() {
+  return (
+    <Link
+      href="/sign-up"
+      className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-[#E5E3DE] bg-white hover:bg-[#F9F7F2] text-[13.5px] font-semibold text-[#0A0A0A] transition-colors"
+    >
+      Get Started Free
+    </Link>
+  )
+}
+
+function CheckoutCTA({ label, variant }: { label: string; variant: "purple" | "amber" }) {
+  if (!CHECKOUT_URL) {
+    return (
+      <Link
+        href="/sign-up"
+        className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-[13.5px] font-semibold text-white transition-colors"
+      >
+        {label}
+        <ArrowRight size={14} strokeWidth={2.5} />
+      </Link>
+    )
+  }
+  return (
+    <a
+      href={CHECKOUT_URL}
+      className={[
+        "w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[13.5px] font-semibold text-white transition-all",
+        variant === "purple"
+          ? "bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_8px_30px_rgba(124,58,237,0.35)]"
+          : "bg-[#F59E0B] hover:bg-[#D97706] shadow-[0_8px_30px_rgba(245,158,11,0.25)]",
+      ].join(" ")}
+    >
+      {label}
+      <ArrowRight size={14} strokeWidth={2.5} />
+    </a>
+  )
+}
 
 export function Pricing() {
   return (
     <section id="pricing" className="py-24 px-6">
-      <div className="max-w-4xl mx-auto flex flex-col gap-16">
+      <div className="max-w-6xl mx-auto flex flex-col gap-16">
         <AnimatedSection className="flex flex-col gap-4 text-center">
-          <p className="text-[11px] font-semibold text-[#1A1A1A] uppercase tracking-widest">
+          <p className="text-[11px] font-semibold text-[#7C3AED] uppercase tracking-widest">
             Pricing
           </p>
           <h2 className="text-[clamp(1.75rem,4vw,2.75rem)] font-bold tracking-[-0.02em] text-[#0A0A0A]">
@@ -35,77 +64,46 @@ export function Pricing() {
           </p>
         </AnimatedSection>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
-          {/* Free */}
-          <AnimatedSection
-            delay={0}
-            className="flex flex-col gap-7 p-7 rounded-2xl border border-[#E5E3DE] bg-[#FFFDF8]"
-          >
-            <div className="flex flex-col gap-1">
-              <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest">
-                Free
-              </p>
-              <div className="flex items-end gap-1.5 mt-2">
-                <span className="text-[2.6rem] font-bold text-[#0A0A0A] leading-none">$0</span>
-                <span className="text-[13px] text-[#6B7280] pb-1.5">forever</span>
-              </div>
-            </div>
-
-            <ul className="flex flex-col gap-3">
-              {FREE_FEATURES.map((f) => (
-                <li key={f} className="flex items-start gap-2.5">
-                  <Check size={13} className="text-[#9CA3AF] mt-0.5 flex-shrink-0" strokeWidth={2.5} />
-                  <span className="text-[13px] text-[#374151]">{f}</span>
-                </li>
-              ))}
-            </ul>
-
-            <Link
-              href="/sign-up"
-              className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl border border-[#E5E3DE] bg-[#FFFDF8] hover:bg-[#F3F1EB] text-[13px] font-semibold text-[#0A0A0A] transition-colors"
-            >
-              Get started free
-            </Link>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-5 items-start">
+          <AnimatedSection delay={0}>
+            <PlanCard plan={FREE_PLAN} cta={<FreeCTA />} />
           </AnimatedSection>
 
-          {/* Pro */}
-          <AnimatedSection
-            delay={0.1}
-            className="relative flex flex-col gap-7 p-7 rounded-2xl border-2 border-[#1A1A1A] bg-[#FFFDF8] shadow-[0_12px_40px_rgba(0,0,0,0.10)]"
-          >
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <p className="text-[11px] font-semibold text-[#1A1A1A] uppercase tracking-widest">
-                  Pro
-                </p>
-                <span className="px-2 py-0.5 rounded-full bg-[#1A1A1A] text-[10px] font-semibold text-white">
-                  Popular
-                </span>
-              </div>
-              <div className="flex items-end gap-1.5 mt-2">
-                <span className="text-[2.6rem] font-bold text-[#0A0A0A] leading-none">$24.99</span>
-                <span className="text-[13px] text-[#6B7280] pb-1.5">/ month</span>
-              </div>
-              <p className="text-[11px] text-[#9CA3AF] mt-0.5">Billed monthly · cancel anytime</p>
-            </div>
+          <AnimatedSection delay={0.1}>
+            <PlanCard plan={PRO_PLAN} cta={<CheckoutCTA label="Start Creating" variant="purple" />} />
+          </AnimatedSection>
 
-            <ul className="flex flex-col gap-3">
-              {PRO_FEATURES.map((f) => (
-                <li key={f} className="flex items-start gap-2.5">
-                  <Check size={13} className="text-[#1A1A1A] mt-0.5 flex-shrink-0" strokeWidth={2.5} />
-                  <span className="text-[13px] text-[#374151]">{f}</span>
-                </li>
-              ))}
-            </ul>
-
-            <Link
-              href="/sign-up"
-              className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-[#1A1A1A] hover:bg-black text-[13px] font-semibold text-white transition-colors shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
-            >
-              Start with Pro
-            </Link>
+          <AnimatedSection delay={0.2}>
+            <PlanCard plan={GROWTH_PLAN} cta={<CheckoutCTA label="Go Growth" variant="amber" />} />
           </AnimatedSection>
         </div>
+
+        {/* How credits work */}
+        <AnimatedSection className="max-w-2xl mx-auto w-full text-center flex flex-col gap-2 p-6 rounded-2xl bg-[#F4F2EC] border border-[#E9E7E1]">
+          <p className="text-[12px] font-semibold text-[#0A0A0A] uppercase tracking-wide">
+            How credits work
+          </p>
+          {CREDIT_COST_LINES.map((line) => (
+            <p key={line} className="text-[12.5px] text-[#6B7280] leading-relaxed">
+              {line}
+            </p>
+          ))}
+        </AnimatedSection>
+
+        {/* FAQ */}
+        <AnimatedSection className="max-w-2xl mx-auto w-full flex flex-col gap-6">
+          <h3 className="text-[15px] font-bold text-[#0A0A0A] text-center">
+            Pricing questions, answered
+          </h3>
+          <div className="flex flex-col gap-4">
+            {PRICING_FAQ.map((item) => (
+              <div key={item.question} className="p-5 rounded-xl bg-white border border-[#E5E3DE]">
+                <p className="text-[13.5px] font-semibold text-[#0A0A0A] mb-1.5">{item.question}</p>
+                <p className="text-[13px] text-[#6B7280] leading-relaxed">{item.answer}</p>
+              </div>
+            ))}
+          </div>
+        </AnimatedSection>
       </div>
     </section>
   )

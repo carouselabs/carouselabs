@@ -16,7 +16,15 @@ declare global {
   }
 }
 
-export function LemonSqueezyButton({ email }: { email?: string }) {
+export function LemonSqueezyButton({
+  email,
+  label = "Upgrade to Pro · $24.99/mo",
+  variant = "purple",
+}: {
+  email?: string
+  label?: string
+  variant?: "purple" | "amber"
+}) {
   const router = useRouter()
   const [ready, setReady] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -69,14 +77,19 @@ export function LemonSqueezyButton({ email }: { email?: string }) {
       <button
         onClick={handleUpgrade}
         disabled={loading}
-        className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all disabled:opacity-60"
+        className={[
+          "self-start inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all disabled:opacity-60 w-full",
+          variant === "amber"
+            ? "bg-[#F59E0B] hover:bg-[#D97706] shadow-[0_0_24px_rgba(245,158,11,0.25)]"
+            : "bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.3)]",
+        ].join(" ")}
       >
         {loading ? (
           <Loader2 size={14} className="animate-spin" />
         ) : (
           <Sparkles size={14} strokeWidth={2} />
         )}
-        Upgrade to Pro · $24.99/mo
+        {label}
       </button>
       {error && <p className="text-[12px] text-[rgba(239,68,68,0.9)]">{error}</p>}
     </div>

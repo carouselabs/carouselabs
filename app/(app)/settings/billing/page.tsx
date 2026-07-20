@@ -1,11 +1,43 @@
 // app/(app)/settings/billing/page.tsx
+import type { ReactNode } from "react"
 import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 import { db } from "@/lib/db"
-import { availableCredits } from "@/lib/credits"
+import { availableCredits, FREE_LIFETIME_POSTS, MONTHLY_CREDITS } from "@/lib/credits"
 import { SettingsTabs } from "@/components/settings/SettingsTabs"
 import { LemonSqueezyButton } from "@/components/billing/LemonSqueezyButton"
 import { CancelSubscriptionButton } from "@/components/billing/CancelSubscriptionButton"
+import { PlanCard } from "@/components/marketing/PlanCard"
+import { FREE_PLAN, PRO_PLAN, GROWTH_PLAN } from "@/lib/plans"
+
+function CreditsProgressBar({ percentUsed, low }: { percentUsed: number; low: boolean }) {
+  return (
+    <div className="h-2 w-full rounded-full bg-[#ECEAE4] overflow-hidden">
+      <div
+        className={`h-full rounded-full transition-all duration-500 ${low ? "bg-[#D97706]" : "bg-[#7C3AED]"}`}
+        style={{ width: `${Math.min(100, Math.max(0, percentUsed))}%` }}
+      />
+    </div>
+  )
+}
+
+// Static "you're already here" state for the plan card CTA slot, so the
+// comparison grid keeps the same button height across all 3 cards.
+function CurrentPlanCTA() {
+  return (
+    <div className="w-full inline-flex items-center justify-center px-5 py-3 rounded-xl border border-[#7C3AED]/30 bg-[#7C3AED]/5 text-[13.5px] font-semibold text-[#7C3AED]">
+      Your Current Plan
+    </div>
+  )
+}
+
+function NoteCTA({ children }: { children: ReactNode }) {
+  return (
+    <div className="w-full inline-flex items-center justify-center px-5 py-3 rounded-xl border border-dashed border-[#E5E3DE] text-[12.5px] text-[#9CA3AF] text-center">
+      {children}
+    </div>
+  )
+}
 
 export default async function BillingPage() {
   const { userId: clerkId } = await auth()
@@ -24,7 +56,7 @@ export default async function BillingPage() {
   const creditSub = {
     plan,
     creditsUsed: sub?.creditsUsed ?? 0,
-    creditsTotal: sub?.creditsTotal ?? 1000,
+    creditsTotal: sub?.creditsTotal ?? MONTHLY_CREDITS,
     extraCredits: sub?.extraCredits ?? 0,
     extraCreditsExpiry: sub?.extraCreditsExpiry ?? null,
   }
@@ -38,74 +70,87 @@ export default async function BillingPage() {
       })
     : null
 
+  // Free plan has no real "credits" concept — its progress bar tracks the
+  // single lifetime post instead of a monthly allowance.
+  const effectiveTotal = isPro ? creditSub.creditsTotal : FREE_LIFETIME_POSTS
+  const percentUsed = effectiveTotal > 0 ? (creditSub.creditsUsed / effectiveTotal) * 100 : 0
+
   return (
-    <div className="max-w-2xl mx-auto flex flex-col gap-8">
+    <div className="max-w-5xl mx-auto flex flex-col gap-10">
       <SettingsTabs />
 
-      {/* Current plan */}
+      {/* Current plan summary */}
       <div className="flex flex-col gap-3">
         <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Plan &amp; credits</h2>
-        <div className="rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] divide-y divide-[#E9E7E1]">
-          <div className="flex items-center justify-between gap-4 px-4 py-3.5">
-            <span className="text-[13px] text-[#6B7280]">Current plan</span>
-            <span
-              className={[
-                "text-[11px] font-semibold px-2.5 py-1 rounded-full tracking-wide",
-                isPro
-                  ? "text-[#1A1A1A] bg-[rgba(26,26,26,0.14)] border border-[rgba(26,26,26,0.3)]"
-                  : "text-[#4B5563] bg-[#ECEAE4] border border-[#E5E3DE]",
-              ].join(" ")}
-            >
-              {isPro ? "Pro" : "Free"}
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-4 px-4 py-3.5">
-            <span className="text-[13px] text-[#6B7280]">Credits remaining</span>
-            <span
-              className={[
-                "text-[15px] font-semibold tabular-nums",
-                lowCredits ? "text-[#D97706]" : "text-[#0A0A0A]",
-              ].join(" ")}
-            >
-              {remaining}
-              {isPro && <span className="text-[#9CA3AF] font-normal"> / {creditSub.creditsTotal}{creditSub.extraCredits > 0 ? ` +${creditSub.extraCredits} extra` : ""}</span>}
-            </span>
-          </div>
-          {renewal && (
-            <div className="flex items-center justify-between gap-4 px-4 py-3.5">
-              <span className="text-[13px] text-[#6B7280]">
-                {sub?.cancelAtPeriodEnd ? "Access ends" : "Next renewal"}
+        <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5 flex flex-col gap-5">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <span
+                className={[
+                  "text-[12px] font-bold px-3 py-1 rounded-full tracking-wide uppercase",
+                  isPro
+                    ? "text-white bg-gradient-to-r from-[#7C3AED] to-[#A78BFA]"
+                    : "text-[#4B5563] bg-[#ECEAE4] border border-[#E5E3DE]",
+                ].join(" ")}
+              >
+                {isPro ? "Pro" : "Free"} plan
               </span>
-              <span className="text-[13px] text-[#0A0A0A]">{renewal}</span>
+              {renewal && (
+                <span className="text-[12.5px] text-[#6B7280]">
+                  {sub?.cancelAtPeriodEnd ? "Access ends" : "Renews"} {renewal}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <div className="flex items-end justify-between gap-4">
+              <span className="text-[13px] text-[#6B7280]">Credits remaining</span>
+              <span
+                className={[
+                  "text-[20px] font-bold tabular-nums leading-none",
+                  lowCredits ? "text-[#D97706]" : "text-[#0A0A0A]",
+                ].join(" ")}
+              >
+                {remaining}
+                {isPro && (
+                  <span className="text-[13px] text-[#9CA3AF] font-normal">
+                    {" "}
+                    / {creditSub.creditsTotal}
+                    {creditSub.extraCredits > 0 ? ` +${creditSub.extraCredits} extra` : ""}
+                  </span>
+                )}
+              </span>
+            </div>
+            <CreditsProgressBar percentUsed={percentUsed} low={lowCredits} />
+          </div>
+
+          {lowCredits && (
+            <div className="px-4 py-3 rounded-xl bg-[rgba(252,211,77,0.08)] border border-[rgba(252,211,77,0.22)] text-[13px] text-[#D97706]">
+              {remaining === 0
+                ? "You're out of credits. " +
+                  (isPro ? "Buy extra credits to keep creating." : "Upgrade to Pro for 1,000 monthly credits.")
+                : `Only ${remaining} credit${remaining === 1 ? "" : "s"} left.`}
             </div>
           )}
         </div>
-
-        {lowCredits && (
-          <div className="px-4 py-3 rounded-xl bg-[rgba(252,211,77,0.08)] border border-[rgba(252,211,77,0.22)] text-[13px] text-[#D97706]">
-            {remaining === 0
-              ? "You're out of credits. " + (isPro ? "Buy extra credits to keep creating." : "Upgrade to Pro for 1,000 monthly credits.")
-              : `Only ${remaining} credit${remaining === 1 ? "" : "s"} left.`}
-          </div>
-        )}
       </div>
 
-      {/* Free → upgrade */}
-      {!isPro && (
+      {/* Upgrade / manage */}
+      {!isPro ? (
         <div className="flex flex-col gap-3">
           <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Upgrade to Pro</h2>
-          <div className="flex flex-col gap-3 p-4 rounded-xl border border-[rgba(26,26,26,0.2)] bg-[rgba(26,26,26,0.05)]">
+          <div className="flex flex-col gap-3 p-5 rounded-2xl border border-[#7C3AED]/20 bg-[#7C3AED]/5">
             <p className="text-[13px] text-[#374151] leading-[1.6]">
               <strong className="text-[#0A0A0A]">$24.99/month</strong> — 1,000 content credits every month,
               unlimited ideas, full image &amp; carousel generation, and PDF downloads.
             </p>
-            <LemonSqueezyButton email={user.email} />
+            <div className="max-w-xs">
+              <LemonSqueezyButton email={user.email} />
+            </div>
           </div>
         </div>
-      )}
-
-      {/* Pro → manage subscription */}
-      {isPro && (
+      ) : (
         <div className="flex flex-col gap-3">
           <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Manage subscription</h2>
           {sub?.cancelAtPeriodEnd ? (
@@ -117,6 +162,37 @@ export default async function BillingPage() {
           )}
         </div>
       )}
+
+      {/* Plan comparison */}
+      <div className="flex flex-col gap-5">
+        <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Compare plans</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-5 items-start">
+          <PlanCard
+            plan={FREE_PLAN}
+            isCurrent={!isPro}
+            cta={!isPro ? <CurrentPlanCTA /> : <NoteCTA>Manage via Cancel Subscription above</NoteCTA>}
+          />
+          <PlanCard
+            plan={PRO_PLAN}
+            isCurrent={isPro}
+            cta={
+              isPro ? (
+                <CurrentPlanCTA />
+              ) : (
+                <LemonSqueezyButton email={user.email} label="Start Creating" />
+              )
+            }
+          />
+          <PlanCard
+            plan={GROWTH_PLAN}
+            cta={<LemonSqueezyButton email={user.email} label="Go Growth" variant="amber" />}
+          />
+        </div>
+        <p className="text-[11px] text-[#9CA3AF] text-center">
+          Growth uses the same checkout as Pro for now — it&apos;ll get its own plan once billing
+          supports it.
+        </p>
+      </div>
     </div>
   )
 }

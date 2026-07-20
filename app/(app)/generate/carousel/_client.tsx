@@ -22,6 +22,7 @@ import { trackHistory } from "@/lib/hooks/useHistory"
 import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
 import { friendlyGenerationError } from "@/lib/friendlyError"
 import { countWords } from "@/lib/wordCount"
+import { useCreditStore } from "@/lib/store/creditStore"
 
 interface CarouselClientProps {
   ideaId: string
@@ -232,6 +233,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
       setCaption(finalCaption)
       setCaptionReady(true)
       persistCaption(finalCaption)
+      // Credits were charged server-side — refresh the Topbar balance.
+      void useCreditStore.getState().refresh()
     } catch (err) {
       if ((err as Error).name === "AbortError") return
       setError(err instanceof Error ? err.message : "Something went wrong")
@@ -391,6 +394,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
 
     setIsGeneratingImages(false)
     persistImages(generatedImages)
+    // The carousel_prompts charge landed during this flow — refresh the balance.
+    void useCreditStore.getState().refresh()
 
     // After ALL slides are generated, persist the whole carousel to the DB in one
     // call. generatedImages already carry slideNumber/role/headline/imageUrl, so
@@ -527,6 +532,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
     increment(ideaId)
     try {
       await generateOneSlideImage(slideNumber)
+      // The slide_regen charge landed — refresh the Topbar balance.
+      void useCreditStore.getState().refresh()
       const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
       if (newCount >= MAX_REGENERATIONS) {
         setToastMsg("You've used both regenerations for this session")

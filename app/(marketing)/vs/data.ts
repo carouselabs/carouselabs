@@ -46,7 +46,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Taplio",
     tagline: "LinkedIn growth platform with AI writing and scheduling",
     price: "$65/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2021",
     best_for: "LinkedIn power users who need scheduling and analytics",
     seo_title: "CarouseLabs vs Taplio — Which LinkedIn Tool is Better in 2026?",
@@ -73,7 +73,7 @@ const baseCompetitors: BaseCompetitor[] = [
       "Reference image style matching — your brand colors and style automatically",
       "Single image generation for Instagram and Twitter/X",
       "Multi-platform support — LinkedIn, Instagram, Twitter/X",
-      "62% cheaper — $24/month vs $65/month",
+      "62% cheaper — $24.99/month vs $65/month",
       "Voice guidelines — train the AI on your exact writing style",
     ],
     feature_comparison: [
@@ -88,7 +88,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "Reference Image Style Matching", carouselabs: true, competitor: false },
       { feature: "Voice Guidelines Training", carouselabs: true, competitor: false },
       { feature: "Trending News Ideas", carouselabs: true, competitor: false },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$65/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$65/month" },
     ],
     who_should_choose_competitor:
       "Choose Taplio if you primarily need LinkedIn scheduling, post analytics, and a CRM for lead tracking — and image creation is not a priority for your content strategy.",
@@ -105,7 +105,7 @@ const baseCompetitors: BaseCompetitor[] = [
       {
         question: "Is CarouseLabs cheaper than Taplio?",
         answer:
-          "Yes — CarouseLabs Pro is $24/month compared to Taplio's $65/month, making it 62% cheaper. CarouseLabs also offers a free tier which Taplio does not.",
+          "Yes — CarouseLabs Pro is $24.99/month compared to Taplio's $65/month, making it 62% cheaper. CarouseLabs also offers a free tier which Taplio does not.",
       },
       {
         question: "Which tool creates better carousels?",
@@ -119,7 +119,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Supergrow",
     tagline: "Affordable AI content tool for LinkedIn creators",
     price: "$19/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2023",
     best_for: "Solo creators who want cheap AI-assisted LinkedIn text posts",
     seo_title: "CarouseLabs vs Supergrow — Best LinkedIn AI Tool in 2026?",
@@ -162,7 +162,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "Voice Guidelines Training", carouselabs: true, competitor: "Basic" },
       { feature: "Trending News Ideas", carouselabs: true, competitor: false },
       { feature: "Free Tier", carouselabs: true, competitor: true },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$19/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$19/month" },
     ],
     who_should_choose_competitor:
       "Choose Supergrow if you're a solo creator on a tight budget who mainly writes text posts for LinkedIn, wants built-in scheduling, and doesn't need AI-generated visual carousels or multi-platform support.",
@@ -174,7 +174,7 @@ const baseCompetitors: BaseCompetitor[] = [
       {
         question: "Is CarouseLabs or Supergrow cheaper?",
         answer:
-          "Supergrow is slightly cheaper at $19/month versus CarouseLabs at $24/month, and both offer a free tier. The $5 difference buys you AI-generated visual carousels, reference image style matching, multi-platform support, and a daily trending-idea feed — features Supergrow's text-first approach doesn't include.",
+          "Supergrow is slightly cheaper at $19/month versus CarouseLabs at $24.99/month, and both offer a free tier. The $5 difference buys you AI-generated visual carousels, reference image style matching, multi-platform support, and a daily trending-idea feed — features Supergrow's text-first approach doesn't include.",
       },
       {
         question: "Does Supergrow make visual carousels?",
@@ -193,7 +193,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "PostNitro",
     tagline: "Budget-friendly AI carousel generator",
     price: "$10/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2023",
     best_for: "Creators who want cheap, fast carousel generation",
     seo_title: "CarouseLabs vs PostNitro — Best AI Carousel Tool in 2026?",
@@ -235,7 +235,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "Instagram Support", carouselabs: true, competitor: true },
       { feature: "Twitter/X Support", carouselabs: true, competitor: false },
       { feature: "Template Library Size", carouselabs: "Focused", competitor: "Large" },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$10/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$10/month" },
     ],
     who_should_choose_competitor:
       "Choose PostNitro if your priority is the lowest possible price and fast, high-volume carousel generation from templates — and you're comfortable writing your own captions and posting manually.",
@@ -247,7 +247,7 @@ const baseCompetitors: BaseCompetitor[] = [
       {
         question: "Is PostNitro cheaper than CarouseLabs?",
         answer:
-          "Yes — PostNitro starts at $10/month, making it cheaper than CarouseLabs at $24/month. PostNitro focuses narrowly on generating carousels from templates. CarouseLabs costs more because it also writes captions in your voice, matches your brand style, suggests trending ideas daily, and posts for you.",
+          "Yes — PostNitro starts at $10/month, making it cheaper than CarouseLabs at $24.99/month. PostNitro focuses narrowly on generating carousels from templates. CarouseLabs costs more because it also writes captions in your voice, matches your brand style, suggests trending ideas daily, and posts for you.",
       },
       {
         question: "Which carousel tool is more on-brand?",
@@ -266,7 +266,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Canva",
     tagline: "All-purpose design tool with drag-and-drop templates",
     price: "$15/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2013",
     best_for: "Designers who want full manual control over every visual",
     seo_title: "CarouseLabs vs Canva — Which Is Better for LinkedIn Carousels in 2026?",
@@ -311,7 +311,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "General Design (decks, flyers, video)", carouselabs: false, competitor: true },
       { feature: "Manual Design Control", carouselabs: "Limited", competitor: "Full" },
       { feature: "Time to a Finished Post", carouselabs: "~15 minutes", competitor: "1-2 hours" },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$15/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$15/month" },
     ],
     who_should_choose_competitor:
       "Choose Canva if you enjoy designing manually, need complete creative control, already have a design workflow, or want one tool for everything from presentations to flyers — not just social carousels.",
@@ -323,7 +323,7 @@ const baseCompetitors: BaseCompetitor[] = [
       {
         question: "Is CarouseLabs cheaper than Canva?",
         answer:
-          "No — Canva is cheaper. Canva Pro is $15/month and has a strong free tier, while CarouseLabs Pro is $24/month. The trade-off is what you're paying for: Canva gives you a blank editor and templates, while CarouseLabs does the ideation, caption writing, and carousel design for you. You're paying for saved time and automation, not just a design canvas.",
+          "No — Canva is cheaper. Canva Pro is $15/month and has a strong free tier, while CarouseLabs Pro is $24.99/month. The trade-off is what you're paying for: Canva gives you a blank editor and templates, while CarouseLabs does the ideation, caption writing, and carousel design for you. You're paying for saved time and automation, not just a design canvas.",
       },
       {
         question: "Do I still need Canva if I use CarouseLabs?",
@@ -342,7 +342,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "ChatGPT",
     tagline: "General-purpose AI assistant from OpenAI",
     price: "$20/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2022",
     best_for: "General writing, brainstorming, and research across any topic",
     seo_title: "CarouseLabs vs ChatGPT — Can ChatGPT Make LinkedIn Carousels in 2026?",
@@ -385,7 +385,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "One-Click LinkedIn Posting", carouselabs: true, competitor: false },
       { feature: "Multi-Platform (IG, X)", carouselabs: true, competitor: false },
       { feature: "General-Purpose Use", carouselabs: false, competitor: true },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$20/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$20/month" },
     ],
     who_should_choose_competitor:
       "Choose ChatGPT if you want one flexible assistant for everything — writing, research, coding, and brainstorming — and you're happy to manually turn its output into finished posts, or you enjoy crafting your own prompts.",
@@ -402,7 +402,7 @@ const baseCompetitors: BaseCompetitor[] = [
       {
         question: "Is CarouseLabs worth it if I already pay for ChatGPT?",
         answer:
-          "If your goal is consistent, on-brand social content, yes. ChatGPT at $20/month is a great general assistant, but you'll spend real time prompting, formatting, and designing every post. CarouseLabs at $24/month is purpose-built: it suggests ideas, writes in your saved voice, generates the full carousel, and posts it — removing the manual steps ChatGPT leaves you with.",
+          "If your goal is consistent, on-brand social content, yes. ChatGPT at $20/month is a great general assistant, but you'll spend real time prompting, formatting, and designing every post. CarouseLabs at $24.99/month is purpose-built: it suggests ideas, writes in your saved voice, generates the full carousel, and posts it — removing the manual steps ChatGPT leaves you with.",
       },
       {
         question: "Which produces more on-brand content?",
@@ -416,7 +416,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Buffer",
     tagline: "Simple, affordable social media scheduling",
     price: "$5/month per channel",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2010",
     best_for: "Scheduling and publishing across multiple social accounts",
     seo_title: "CarouseLabs vs Buffer — Content Creation vs Scheduling in 2026",
@@ -458,7 +458,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "Analytics", carouselabs: false, competitor: true },
       { feature: "LinkedIn Posting", carouselabs: true, competitor: true },
       { feature: "Free Tier", carouselabs: true, competitor: true },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$5/month per channel" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$5/month per channel" },
     ],
     who_should_choose_competitor:
       "Choose Buffer if you already have your content and just need a reliable, affordable way to schedule and publish it across multiple platforms with basic analytics.",
@@ -480,7 +480,7 @@ const baseCompetitors: BaseCompetitor[] = [
       {
         question: "Which is cheaper, Buffer or CarouseLabs?",
         answer:
-          "Buffer's per-channel pricing starts lower (around $5/month per channel, with a free plan), but the cost grows with each channel you add. CarouseLabs is a flat $24/month. They also do different jobs, so the better comparison is creation versus scheduling rather than price alone.",
+          "Buffer's per-channel pricing starts lower (around $5/month per channel, with a free plan), but the cost grows with each channel you add. CarouseLabs is a flat $24.99/month. They also do different jobs, so the better comparison is creation versus scheduling rather than price alone.",
       },
     ],
   },
@@ -489,7 +489,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Hootsuite",
     tagline: "Enterprise social media management suite",
     price: "$99/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2008",
     best_for: "Teams managing many accounts with deep analytics and approvals",
     seo_title: "CarouseLabs vs Hootsuite — Which Do You Actually Need in 2026?",
@@ -531,7 +531,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "Team Approval Workflows", carouselabs: false, competitor: true },
       { feature: "Social Listening", carouselabs: false, competitor: true },
       { feature: "Ease of Use", carouselabs: "Simple", competitor: "Complex" },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$99/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$99/month" },
     ],
     who_should_choose_competitor:
       "Choose Hootsuite if you're a larger team or agency managing many accounts and need advanced analytics, social listening, and approval workflows — and you already handle content creation elsewhere.",
@@ -562,7 +562,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Later",
     tagline: "Visual-first scheduling built around Instagram",
     price: "$25/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2014",
     best_for: "Instagram-focused visual planning and scheduling",
     seo_title: "CarouseLabs vs Later — Create vs Schedule Visual Content in 2026",
@@ -604,7 +604,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "LinkedIn Focus", carouselabs: true, competitor: "Instagram-first" },
       { feature: "Reference Image Style Matching", carouselabs: true, competitor: false },
       { feature: "Instagram Support", carouselabs: true, competitor: true },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$25/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$25/month" },
     ],
     who_should_choose_competitor:
       "Choose Later if you're Instagram-focused and your main need is visually planning your feed and scheduling posts you've already created, with link-in-bio tools to drive traffic.",
@@ -635,7 +635,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Sprout Social",
     tagline: "Premium enterprise social suite with analytics and CRM",
     price: "$249/month per seat",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2010",
     best_for: "Large teams needing deep analytics, listening, and engagement",
     seo_title: "CarouseLabs vs Sprout Social — Which Do You Need in 2026?",
@@ -677,7 +677,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "Team Approval Workflows", carouselabs: false, competitor: true },
       { feature: "Reference Image Style Matching", carouselabs: true, competitor: false },
       { feature: "Ease of Use", carouselabs: "Simple", competitor: "Complex" },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$249/month per seat" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$249/month per seat" },
     ],
     who_should_choose_competitor:
       "Choose Sprout Social if you're a larger organization that needs deep analytics, social listening, an engagement inbox, and CRM features across a team — and content creation is handled separately.",
@@ -694,7 +694,7 @@ const baseCompetitors: BaseCompetitor[] = [
       {
         question: "Why is Sprout Social so much more expensive?",
         answer:
-          "Sprout Social is priced for enterprise teams, starting around $249/month per seat, because it bundles advanced analytics, social listening, an engagement inbox, and CRM tools. CarouseLabs focuses narrowly on content creation, so it can offer that at $24/month.",
+          "Sprout Social is priced for enterprise teams, starting around $249/month per seat, because it bundles advanced analytics, social listening, an engagement inbox, and CRM tools. CarouseLabs focuses narrowly on content creation, so it can offer that at $24.99/month.",
       },
       {
         question: "Which is better for a small business or creator?",
@@ -708,7 +708,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Jasper",
     tagline: "AI writing platform for marketing teams",
     price: "$49/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2021",
     best_for: "Long-form marketing copy and brand-consistent writing at scale",
     seo_title: "CarouseLabs vs Jasper — AI Carousels vs AI Copywriting in 2026",
@@ -737,7 +737,7 @@ const baseCompetitors: BaseCompetitor[] = [
       "10 trending post ideas daily tied to your industry",
       "One-click posting to LinkedIn built in",
       "Voice guidelines for consistent social captions",
-      "Half the price at $24/month",
+      "Half the price at $24.99/month",
     ],
     feature_comparison: [
       { feature: "AI Caption / Copy Writing", carouselabs: true, competitor: true },
@@ -749,7 +749,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "Long-Form Marketing Copy", carouselabs: false, competitor: true },
       { feature: "Brand Voice for Writing", carouselabs: true, competitor: true },
       { feature: "Multi-Platform Social (IG, X)", carouselabs: true, competitor: false },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$49/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$49/month" },
     ],
     who_should_choose_competitor:
       "Choose Jasper if your main need is versatile long-form marketing copy — blog posts, ads, emails, and landing pages — with brand voice controls across a team.",
@@ -766,7 +766,7 @@ const baseCompetitors: BaseCompetitor[] = [
       {
         question: "Is CarouseLabs cheaper than Jasper?",
         answer:
-          "Yes — CarouseLabs is $24/month versus Jasper at around $49/month. Jasper's higher price reflects its broad marketing-copy capabilities, while CarouseLabs focuses specifically on producing and posting social carousels.",
+          "Yes — CarouseLabs is $24.99/month versus Jasper at around $49/month. Jasper's higher price reflects its broad marketing-copy capabilities, while CarouseLabs focuses specifically on producing and posting social carousels.",
       },
       {
         question: "Which should a LinkedIn creator choose?",
@@ -780,7 +780,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Copy.ai",
     tagline: "AI content and go-to-market copy generation",
     price: "$49/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2020",
     best_for: "Marketing and sales copy, workflows, and GTM automation",
     seo_title: "CarouseLabs vs Copy.ai — Carousels vs Copywriting in 2026",
@@ -809,7 +809,7 @@ const baseCompetitors: BaseCompetitor[] = [
       "10 trending post ideas daily from real industry news",
       "One-click LinkedIn posting built in",
       "Voice guidelines for captions that sound like you",
-      "Half the price at $24/month",
+      "Half the price at $24.99/month",
     ],
     feature_comparison: [
       { feature: "AI Caption / Copy Writing", carouselabs: true, competitor: true },
@@ -821,7 +821,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "GTM / Sales Copy Workflows", carouselabs: false, competitor: true },
       { feature: "Free Tier", carouselabs: true, competitor: true },
       { feature: "Multi-Platform Social (IG, X)", carouselabs: true, competitor: false },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$49/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$49/month" },
     ],
     who_should_choose_competitor:
       "Choose Copy.ai if you need broad marketing and sales copy, go-to-market workflows, and content automation across formats — and visuals aren't part of your requirement.",
@@ -838,7 +838,7 @@ const baseCompetitors: BaseCompetitor[] = [
       {
         question: "Is CarouseLabs cheaper than Copy.ai?",
         answer:
-          "Yes — CarouseLabs is $24/month versus Copy.ai's pro plans around $49/month, though Copy.ai also has a free tier. Copy.ai is broader for copywriting; CarouseLabs is focused on producing and posting social carousels.",
+          "Yes — CarouseLabs is $24.99/month versus Copy.ai's pro plans around $49/month, though Copy.ai also has a free tier. Copy.ai is broader for copywriting; CarouseLabs is focused on producing and posting social carousels.",
       },
       {
         question: "Which is better for LinkedIn carousels?",
@@ -852,7 +852,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Writesonic",
     tagline: "All-in-one AI writing and SEO platform",
     price: "$20/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2021",
     best_for: "SEO articles, blog content, and marketing copy",
     seo_title: "CarouseLabs vs Writesonic — Carousels vs SEO Writing in 2026",
@@ -893,7 +893,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "One-Click LinkedIn Posting", carouselabs: true, competitor: false },
       { feature: "Multi-Platform Social (IG, X)", carouselabs: true, competitor: false },
       { feature: "Voice Guidelines Training", carouselabs: true, competitor: "Basic" },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$20/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$20/month" },
     ],
     who_should_choose_competitor:
       "Choose Writesonic if your priority is SEO content, blog articles, and long-form marketing copy, and you want research and chatbot features at an affordable price.",
@@ -910,7 +910,7 @@ const baseCompetitors: BaseCompetitor[] = [
       {
         question: "Is CarouseLabs or Writesonic cheaper?",
         answer:
-          "Writesonic starts slightly cheaper at around $20/month versus CarouseLabs at $24/month. They serve different goals, though — Writesonic for SEO and articles, CarouseLabs for finished social carousels — so the better question is which job you need done.",
+          "Writesonic starts slightly cheaper at around $20/month versus CarouseLabs at $24.99/month. They serve different goals, though — Writesonic for SEO and articles, CarouseLabs for finished social carousels — so the better question is which job you need done.",
       },
       {
         question: "Which is better for social media?",
@@ -924,7 +924,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Notion AI",
     tagline: "AI writing inside the Notion workspace",
     price: "$10/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2016",
     best_for: "Writing, notes, and docs inside your existing Notion workspace",
     seo_title: "CarouseLabs vs Notion AI — Social Carousels vs Workspace Writing",
@@ -965,7 +965,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "In-Workspace Docs & Notes", carouselabs: false, competitor: true },
       { feature: "Multi-Platform Social (IG, X)", carouselabs: true, competitor: false },
       { feature: "Voice Guidelines Training", carouselabs: true, competitor: false },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$10/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$10/month" },
     ],
     who_should_choose_competitor:
       "Choose Notion AI if you live in Notion and mainly want AI to help with writing, summarizing, and organizing docs and notes inside your existing workspace.",
@@ -982,7 +982,7 @@ const baseCompetitors: BaseCompetitor[] = [
       {
         question: "Is Notion AI cheaper than CarouseLabs?",
         answer:
-          "Yes — Notion AI is around $10/month as a workspace add-on, versus CarouseLabs at $24/month. They do very different jobs, though: Notion AI for in-document writing, CarouseLabs for finished social carousels and posting.",
+          "Yes — Notion AI is around $10/month as a workspace add-on, versus CarouseLabs at $24.99/month. They do very different jobs, though: Notion AI for in-document writing, CarouseLabs for finished social carousels and posting.",
       },
       {
         question: "Which should I use for LinkedIn content?",
@@ -996,7 +996,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Adobe Express",
     tagline: "Quick design tool with templates and Adobe assets",
     price: "$10/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2021",
     best_for: "Fast manual design with premium templates and stock assets",
     seo_title: "CarouseLabs vs Adobe Express — Carousels: Auto vs Manual in 2026",
@@ -1037,7 +1037,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "One-Click LinkedIn Posting", carouselabs: true, competitor: false },
       { feature: "General Design Templates", carouselabs: false, competitor: true },
       { feature: "Free Tier", carouselabs: true, competitor: true },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$10/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$10/month" },
     ],
     who_should_choose_competitor:
       "Choose Adobe Express if you want an affordable, flexible manual design tool with premium templates and stock assets for a wide range of design needs, not just social carousels.",
@@ -1049,7 +1049,7 @@ const baseCompetitors: BaseCompetitor[] = [
       {
         question: "Is Adobe Express cheaper than CarouseLabs?",
         answer:
-          "Yes — Adobe Express Premium is around $10/month with a free tier, versus CarouseLabs at $24/month. Adobe Express is a manual design tool; CarouseLabs costs more because it automates ideation, caption writing, and carousel creation, and posts for you.",
+          "Yes — Adobe Express Premium is around $10/month with a free tier, versus CarouseLabs at $24.99/month. Adobe Express is a manual design tool; CarouseLabs costs more because it automates ideation, caption writing, and carousel creation, and posts for you.",
       },
       {
         question: "Does Adobe Express suggest what to post?",
@@ -1068,7 +1068,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Figma",
     tagline: "Professional collaborative design tool",
     price: "$15/month per editor",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2016",
     best_for: "Professional designers building custom, pixel-perfect visuals",
     seo_title: "CarouseLabs vs Figma — Which for LinkedIn Carousels in 2026?",
@@ -1109,7 +1109,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "Design Systems & Components", carouselabs: false, competitor: true },
       { feature: "Learning Curve", carouselabs: "Minimal", competitor: "Steep" },
       { feature: "Time to a Finished Post", carouselabs: "~15 minutes", competitor: "Hours" },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$15/month per editor" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$15/month per editor" },
     ],
     who_should_choose_competitor:
       "Choose Figma if you're a designer who wants full, professional control over custom visuals and design systems — and you're comfortable building each carousel manually.",
@@ -1140,7 +1140,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Beautiful.ai",
     tagline: "AI-powered presentation maker",
     price: "$12/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2018",
     best_for: "Creating polished business presentations quickly",
     seo_title: "CarouseLabs vs Beautiful.ai — Social Carousels vs Presentations",
@@ -1181,7 +1181,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "Business Presentations", carouselabs: false, competitor: true },
       { feature: "Reference Image Style Matching", carouselabs: true, competitor: false },
       { feature: "Multi-Platform Social (IG, X)", carouselabs: true, competitor: false },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$12/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$12/month" },
     ],
     who_should_choose_competitor:
       "Choose Beautiful.ai if your main need is creating polished business presentations and decks quickly, with smart formatting and templates for pitches and reports.",
@@ -1198,7 +1198,7 @@ const baseCompetitors: BaseCompetitor[] = [
       {
         question: "Is Beautiful.ai cheaper than CarouseLabs?",
         answer:
-          "Yes — Beautiful.ai is around $12/month versus CarouseLabs at $24/month. They serve different purposes, though: Beautiful.ai for business presentations, CarouseLabs for finished social carousels with captions and posting.",
+          "Yes — Beautiful.ai is around $12/month versus CarouseLabs at $24.99/month. They serve different purposes, though: Beautiful.ai for business presentations, CarouseLabs for finished social carousels with captions and posting.",
       },
       {
         question: "Which is better for social media?",
@@ -1212,7 +1212,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Slidesgo",
     tagline: "Library of presentation templates",
     price: "$8/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2019",
     best_for: "Ready-made presentation and slide templates",
     seo_title: "CarouseLabs vs Slidesgo — Social Carousels vs Slide Templates",
@@ -1253,7 +1253,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "Presentation Templates", carouselabs: false, competitor: true },
       { feature: "Reference Image Style Matching", carouselabs: true, competitor: false },
       { feature: "Free Tier", carouselabs: true, competitor: true },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$8/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$8/month" },
     ],
     who_should_choose_competitor:
       "Choose Slidesgo if you want inexpensive, ready-made presentation templates for Google Slides or PowerPoint and are happy to edit them manually for your needs.",
@@ -1270,7 +1270,7 @@ const baseCompetitors: BaseCompetitor[] = [
       {
         question: "Is Slidesgo cheaper than CarouseLabs?",
         answer:
-          "Yes — Slidesgo is around $8/month with many free templates, versus CarouseLabs at $24/month. Slidesgo gives you templates to edit yourself; CarouseLabs generates finished carousels and captions and posts them for you.",
+          "Yes — Slidesgo is around $8/month with many free templates, versus CarouseLabs at $24.99/month. Slidesgo gives you templates to edit yourself; CarouseLabs generates finished carousels and captions and posts them for you.",
       },
       {
         question: "Which should I use for LinkedIn?",
@@ -1284,7 +1284,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Loomly",
     tagline: "Social media calendar and collaboration tool",
     price: "$42/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2016",
     best_for: "Teams planning and approving social posts on a shared calendar",
     seo_title: "CarouseLabs vs Loomly — Create vs Plan Social Content in 2026",
@@ -1313,7 +1313,7 @@ const baseCompetitors: BaseCompetitor[] = [
       "10 trending post ideas daily tied to your industry",
       "Voice guidelines for captions that sound like you",
       "Reference image style matching for consistent visuals",
-      "More affordable at $24/month",
+      "More affordable at $24.99/month",
     ],
     feature_comparison: [
       { feature: "AI Carousel Creation", carouselabs: true, competitor: false },
@@ -1325,7 +1325,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "Approval Workflows", carouselabs: false, competitor: true },
       { feature: "Post Scheduling", carouselabs: false, competitor: true },
       { feature: "LinkedIn Posting", carouselabs: true, competitor: true },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$42/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$42/month" },
     ],
     who_should_choose_competitor:
       "Choose Loomly if your team needs a shared content calendar, approval workflows, and multi-platform scheduling — and you handle content creation with other tools.",
@@ -1342,7 +1342,7 @@ const baseCompetitors: BaseCompetitor[] = [
       {
         question: "Is CarouseLabs cheaper than Loomly?",
         answer:
-          "Yes — CarouseLabs is $24/month versus Loomly at around $42/month. They also do different jobs: Loomly focuses on calendars and approvals, CarouseLabs on creating the actual content.",
+          "Yes — CarouseLabs is $24.99/month versus Loomly at around $42/month. They also do different jobs: Loomly focuses on calendars and approvals, CarouseLabs on creating the actual content.",
       },
       {
         question: "Can I use both together?",
@@ -1356,7 +1356,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Planoly",
     tagline: "Visual planner for Instagram and Pinterest",
     price: "$16/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2016",
     best_for: "Visually planning and scheduling Instagram and Pinterest feeds",
     seo_title: "CarouseLabs vs Planoly — Create vs Plan Visual Content in 2026",
@@ -1397,7 +1397,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "Link-in-Bio", carouselabs: false, competitor: true },
       { feature: "LinkedIn Focus", carouselabs: true, competitor: "Instagram/Pinterest" },
       { feature: "Reference Image Style Matching", carouselabs: true, competitor: false },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$16/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$16/month" },
     ],
     who_should_choose_competitor:
       "Choose Planoly if you're focused on Instagram or Pinterest and mainly want to plan a cohesive visual feed and schedule posts you've already created.",
@@ -1428,7 +1428,7 @@ const baseCompetitors: BaseCompetitor[] = [
     name: "Predis.ai",
     tagline: "AI social media content generator with scheduling",
     price: "$29/month",
-    our_price: "$24/month",
+    our_price: "$24.99/month",
     founded: "2021",
     best_for: "Automated multi-platform social content and scheduling",
     seo_title: "CarouseLabs vs Predis.ai — Best AI Social Content Tool in 2026?",
@@ -1457,7 +1457,7 @@ const baseCompetitors: BaseCompetitor[] = [
       "10 trending post ideas daily from real industry news",
       "LinkedIn-first carousels optimized for that feed",
       "Higher-quality captions paired with each carousel",
-      "Slightly cheaper at $24/month",
+      "Slightly cheaper at $24.99/month",
     ],
     feature_comparison: [
       { feature: "AI Carousel Creation", carouselabs: "Brand-matched", competitor: "Template-based" },
@@ -1470,7 +1470,7 @@ const baseCompetitors: BaseCompetitor[] = [
       { feature: "Competitor Analysis", carouselabs: false, competitor: true },
       { feature: "LinkedIn-First Optimization", carouselabs: true, competitor: false },
       { feature: "Free Tier", carouselabs: true, competitor: true },
-      { feature: "Monthly Price", carouselabs: "$24/month", competitor: "$29/month" },
+      { feature: "Monthly Price", carouselabs: "$24.99/month", competitor: "$29/month" },
     ],
     who_should_choose_competitor:
       "Choose Predis.ai if you want the broadest feature set — including short-form video generation, scheduling, and competitor analysis — across many platforms, and you value breadth over per-format polish.",
@@ -1492,7 +1492,7 @@ const baseCompetitors: BaseCompetitor[] = [
       {
         question: "Which is cheaper?",
         answer:
-          "CarouseLabs is slightly cheaper at $24/month versus Predis.ai around $29/month, and both offer a free tier. The choice is less about price and more about whether you want focused carousel quality or broader multi-format coverage.",
+          "CarouseLabs is slightly cheaper at $24.99/month versus Predis.ai around $29/month, and both offer a free tier. The choice is less about price and more about whether you want focused carousel quality or broader multi-format coverage.",
       },
     ],
   },
@@ -1558,13 +1558,13 @@ const competitorDeepDive: Record<string, string> = {
 const competitorProse: Record<string, CompetitorProse> = {
   taplio: {
     overview:
-      "Taplio, launched in 2021, is one of the most established LinkedIn growth platforms on the market. It combines an AI writing assistant, a post scheduler, LinkedIn analytics, a viral-post inspiration library, and lightweight CRM features into a single dashboard aimed at people serious about growing on LinkedIn. If your daily workflow revolves around planning a week of posts in advance, tracking how each one performs, and managing inbound leads, Taplio is genuinely strong — that's the job it was built for.\n\nCarouseLabs approaches the same audience from a different angle. Instead of scheduling and analytics, it focuses on creating the content itself — turning a trending idea into a finished visual carousel, a caption written in your voice, and brand-matched images, then posting to LinkedIn in one click. It also extends beyond LinkedIn to Instagram and Twitter/X. So the real question in a CarouseLabs vs Taplio comparison isn't which is better in the abstract — it's whether your bottleneck is distributing content you already have, or producing standout visual content in the first place, and whether the gap between $65 and $24 a month matches the value you'll actually use.",
+      "Taplio, launched in 2021, is one of the most established LinkedIn growth platforms on the market. It combines an AI writing assistant, a post scheduler, LinkedIn analytics, a viral-post inspiration library, and lightweight CRM features into a single dashboard aimed at people serious about growing on LinkedIn. If your daily workflow revolves around planning a week of posts in advance, tracking how each one performs, and managing inbound leads, Taplio is genuinely strong — that's the job it was built for.\n\nCarouseLabs approaches the same audience from a different angle. Instead of scheduling and analytics, it focuses on creating the content itself — turning a trending idea into a finished visual carousel, a caption written in your voice, and brand-matched images, then posting to LinkedIn in one click. It also extends beyond LinkedIn to Instagram and Twitter/X. So the real question in a CarouseLabs vs Taplio comparison isn't which is better in the abstract — it's whether your bottleneck is distributing content you already have, or producing standout visual content in the first place, and whether the gap between $65 and $24.99 a month matches the value you'll actually use.",
     bottom_line:
       "If scheduling posts in advance and studying LinkedIn analytics are central to how you work, Taplio earns its higher price. But if you keep getting stuck on actually creating scroll-stopping carousels — and you'd like multi-platform reach and brand-matched visuals for less than half the cost — CarouseLabs is the more practical choice. Many creators find that content creation, not scheduling, is their true constraint, which is exactly where CarouseLabs is strongest. Try the free tier first and see which problem it solves for you.",
   },
   supergrow: {
     overview:
-      "Supergrow launched in 2023 as an affordable, LinkedIn-first AI writing tool. For $19 a month with a free tier, it gives solo creators a fast way to draft posts, pull from a large library of hooks and templates, schedule to LinkedIn, and assemble simple text-based carousels. For someone who mainly writes text updates and wants an inexpensive assistant to keep them posting consistently, it does the core job well.\n\nCarouseLabs overlaps with Supergrow on AI writing but diverges sharply on visuals and reach. Rather than template-based text carousels, it generates genuine visual carousels with AI imagery matched to your brand through a reference image, writes captions against saved voice guidelines, surfaces ten trending ideas a day from real industry news, and produces content for Instagram and Twitter/X as well as LinkedIn. At $24 a month it's only $5 more than Supergrow, so the comparison comes down to whether you value the lower price and built-in scheduling, or the stronger visual output, brand matching, and multi-platform range.",
+      "Supergrow launched in 2023 as an affordable, LinkedIn-first AI writing tool. For $19 a month with a free tier, it gives solo creators a fast way to draft posts, pull from a large library of hooks and templates, schedule to LinkedIn, and assemble simple text-based carousels. For someone who mainly writes text updates and wants an inexpensive assistant to keep them posting consistently, it does the core job well.\n\nCarouseLabs overlaps with Supergrow on AI writing but diverges sharply on visuals and reach. Rather than template-based text carousels, it generates genuine visual carousels with AI imagery matched to your brand through a reference image, writes captions against saved voice guidelines, surfaces ten trending ideas a day from real industry news, and produces content for Instagram and Twitter/X as well as LinkedIn. At $24.99 a month it's only $5 more than Supergrow, so the comparison comes down to whether you value the lower price and built-in scheduling, or the stronger visual output, brand matching, and multi-platform range.",
     bottom_line:
       "Supergrow is a smart pick if you're budget-conscious, LinkedIn-only, and mostly posting text — and you want scheduling baked in. CarouseLabs is the better fit if you want carousels that actually look designed and on-brand, plus the option to repurpose across platforms, for just a few dollars more. Since both offer a free tier, the low-risk move is to trial each and see whose output you'd genuinely be proud to post.",
   },
@@ -1606,7 +1606,7 @@ const competitorProse: Record<string, CompetitorProse> = {
   },
   "sprout-social": {
     overview:
-      "Sprout Social, founded in 2010, is a premium enterprise platform renowned for best-in-class analytics, social listening, a unified engagement inbox, and CRM-style customer care. Large teams that need deep reporting and to manage conversations at scale get real value from it — but that value comes at roughly $249 a month per seat, with the complexity and onboarding to match.\n\nCarouseLabs is built for the opposite end of the spectrum: fast, affordable content creation. Instead of measuring and managing social at enterprise scale, it generates on-brand carousels, images, and captions, suggests trending ideas daily, and posts to LinkedIn — for $24 a month with no enterprise overhead. So comparing CarouseLabs and Sprout Social is really about whether you need an analytics-and-engagement powerhouse for a team, or a focused creation tool for an individual or small business. Very different jobs, very different budgets.",
+      "Sprout Social, founded in 2010, is a premium enterprise platform renowned for best-in-class analytics, social listening, a unified engagement inbox, and CRM-style customer care. Large teams that need deep reporting and to manage conversations at scale get real value from it — but that value comes at roughly $249 a month per seat, with the complexity and onboarding to match.\n\nCarouseLabs is built for the opposite end of the spectrum: fast, affordable content creation. Instead of measuring and managing social at enterprise scale, it generates on-brand carousels, images, and captions, suggests trending ideas daily, and posts to LinkedIn — for $24.99 a month with no enterprise overhead. So comparing CarouseLabs and Sprout Social is really about whether you need an analytics-and-engagement powerhouse for a team, or a focused creation tool for an individual or small business. Very different jobs, very different budgets.",
     bottom_line:
       "If you're an organization that lives in analytics, social listening, and team engagement, Sprout Social is a serious tool worth its price. If your goal is simply to create strong content consistently, its enterprise feature set — and per-seat cost — is far more than you need. For creators and small teams, CarouseLabs delivers the part that actually matters to them at a tiny fraction of the price.",
   },
@@ -1618,7 +1618,7 @@ const competitorProse: Record<string, CompetitorProse> = {
   },
   "copy-ai": {
     overview:
-      "Copy.ai, founded in 2020, is a capable AI copywriting and go-to-market tool. It's good at marketing and sales copy across many formats, offers workflow automation for GTM use cases, includes a free tier, and adds team features — useful if you're generating a lot of written content and automating outbound. At around $49 a month for pro features, its strength is versatile text.\n\nCarouseLabs doesn't try to be a broad copywriter; it's built to produce finished social carousels. It generates the visuals, the images, and captions written against your saved voice, matches your brand via a reference image, serves trending ideas daily, and posts to LinkedIn — for $24 a month. So a CarouseLabs vs Copy.ai comparison comes down to output type: Copy.ai gives you text and workflows you then turn into posts, while CarouseLabs gives you ready-to-publish visual carousels. If visuals and posting are part of your requirement, that difference is decisive.",
+      "Copy.ai, founded in 2020, is a capable AI copywriting and go-to-market tool. It's good at marketing and sales copy across many formats, offers workflow automation for GTM use cases, includes a free tier, and adds team features — useful if you're generating a lot of written content and automating outbound. At around $49 a month for pro features, its strength is versatile text.\n\nCarouseLabs doesn't try to be a broad copywriter; it's built to produce finished social carousels. It generates the visuals, the images, and captions written against your saved voice, matches your brand via a reference image, serves trending ideas daily, and posts to LinkedIn — for $24.99 a month. So a CarouseLabs vs Copy.ai comparison comes down to output type: Copy.ai gives you text and workflows you then turn into posts, while CarouseLabs gives you ready-to-publish visual carousels. If visuals and posting are part of your requirement, that difference is decisive.",
     bottom_line:
       "Copy.ai is a strong choice if you need wide-ranging marketing and sales copy plus GTM automation, and visuals aren't essential. If you specifically want on-brand carousels with captions and images ready to post, CarouseLabs delivers that finished output for half the price. For social-first creators, the visual, end-to-end workflow is usually the deciding factor.",
   },

@@ -161,7 +161,7 @@ export const toolsContent: Record<string, ToolsContent> = {
     results: [
       { metric: "Time to produce one carousel", before: "2 hours", after: "15 minutes" },
       { metric: "Pipeline activity between deals", before: "Goes cold after each closing", after: "Stays warm — feed runs while you close" },
-      { metric: "Monthly content cost", before: "$300+ for a social media VA", after: "$24/month" },
+      { metric: "Monthly content cost", before: "$300+ for a social media VA", after: "$24.99/month" },
     ],
   },
   "startup-founders": {
@@ -257,7 +257,7 @@ export const toolsContent: Record<string, ToolsContent> = {
     results: [
       { metric: "Time to produce one carousel", before: "2.5 hours", after: "15 minutes" },
       { metric: "Marketing during client sprints", before: "Stops completely", after: "Runs on autopilot — batched" },
-      { metric: "Monthly content cost", before: "$400+ for a VA or ghostwriter", after: "$24/month" },
+      { metric: "Monthly content cost", before: "$400+ for a VA or ghostwriter", after: "$24.99/month" },
     ],
   },
   "agency-owners": {
@@ -305,7 +305,7 @@ export const toolsContent: Record<string, ToolsContent> = {
     results: [
       { metric: "Time to produce one case-study carousel", before: "4 hours (nobody had them)", after: "20 minutes" },
       { metric: "Own-agency marketing", before: "Only between projects", after: "Weekly — batched and scheduled" },
-      { metric: "Cost to produce your own content", before: "Billable hours diverted from clients", after: "$24/month" },
+      { metric: "Cost to produce your own content", before: "Billable hours diverted from clients", after: "$24.99/month" },
     ],
   },
   "freelancers": {
@@ -353,7 +353,7 @@ export const toolsContent: Record<string, ToolsContent> = {
     results: [
       { metric: "Time to produce one carousel", before: "2.5 hours", after: "15 minutes" },
       { metric: "Marketing during a big project", before: "Stops — then you scramble", after: "Runs in the background — batched" },
-      { metric: "Cost per post", before: "Unbillable hours you can't afford", after: "$24/month, all-in" },
+      { metric: "Cost per post", before: "Unbillable hours you can't afford", after: "$24.99/month, all-in" },
     ],
   },
   "ecommerce-founders": {
@@ -497,7 +497,7 @@ export const toolsContent: Record<string, ToolsContent> = {
     results: [
       { metric: "Your time per week on content", before: "An hour a day you never found", after: "20 minutes of raw input" },
       { metric: "Posts published per month", before: "1 ghostwritten, says nothing", after: "12 in your own voice" },
-      { metric: "Cost per month", before: "$2,000+ ghostwriter retainer", after: "$24/month" },
+      { metric: "Cost per month", before: "$2,000+ ghostwriter retainer", after: "$24.99/month" },
     ],
   },
   "serial-entrepreneurs": {
@@ -785,7 +785,7 @@ export const toolsContent: Record<string, ToolsContent> = {
     results: [
       { metric: "Time to produce one carousel", before: "2.5 hours", after: "15 minutes" },
       { metric: "Visibility during full coaching weeks", before: "Goes quiet", after: "Held — batched in 60 min" },
-      { metric: "Monthly content cost", before: "$500+ for a ghostwriter", after: "$24/month" },
+      { metric: "Monthly content cost", before: "$500+ for a ghostwriter", after: "$24.99/month" },
     ],
   },
   "life-coaches": {

@@ -18,10 +18,12 @@ export const maxDuration = 300
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-// Image generation doesn't consume a credit but does cost real OpenAI money per
-// call, so cap regenerations at 20/hour per user.
+const redis = Redis.fromEnv()
+
+// Image generation costs real OpenAI money per call, so cap regenerations at
+// 20/hour per user.
 const ratelimit = new Ratelimit({
-  redis: Redis.fromEnv(),
+  redis,
   limiter: Ratelimit.slidingWindow(20, "1 h"),
   analytics: false,
 })
@@ -120,17 +122,48 @@ export async function POST(req: Request) {
   // their regenerations stay free (session-capped in the UI) — so only PRO is
   // charged here. chargedAction lets every failure path refund exactly what
   // was taken.
+  //
+  // image_first is IDEMPOTENT per idea via a Redis marker: the Post only
+  // exists after a fully successful run, so without the marker a retry after a
+  // client abort / function timeout (no refund catch runs) would see "no Post
+  // yet" and charge another 10 — the double-charge bug. With the marker, a
+  // repeat pre-Post call is a free retry of an already-paid first image.
+  const firstChargeKey = `image_first_charged:${user.id}:${ideaId}`
   let chargedAction: "image_first" | "image_regen" | null = null
   if (plan === "PRO") {
-    const action = isRegenEffective ? "image_regen" : "image_first"
-    const charge = await chargeCreditsForAction(user, action)
-    if (!charge.ok) {
-      return NextResponse.json(
-        { error: "Insufficient credits", requiresUpgrade: charge.requiresUpgrade },
-        { status: 402 },
-      )
+    if (isRegenEffective) {
+      const charge = await chargeCreditsForAction(user, "image_regen")
+      if (!charge.ok) {
+        return NextResponse.json(
+          { error: "Insufficient credits", requiresUpgrade: charge.requiresUpgrade },
+          { status: 402 },
+        )
+      }
+      chargedAction = "image_regen"
+    } else {
+      let alreadyPaid = false
+      try {
+        alreadyPaid = (await redis.get(firstChargeKey)) !== null
+      } catch (err) {
+        console.error("[generate/image] first-charge marker read failed:", err)
+      }
+      if (!alreadyPaid) {
+        const charge = await chargeCreditsForAction(user, "image_first")
+        if (!charge.ok) {
+          return NextResponse.json(
+            { error: "Insufficient credits", requiresUpgrade: charge.requiresUpgrade },
+            { status: 402 },
+          )
+        }
+        chargedAction = "image_first"
+        try {
+          await redis.set(firstChargeKey, 1, { ex: 86400 })
+        } catch (err) {
+          console.error("[generate/image] first-charge marker set failed:", err)
+        }
+      }
+      // alreadyPaid → free retry of an already-charged first image
     }
-    chargedAction = action
   }
 
   // Call OpenAI gpt-image-1. gpt-image-1 returns base64 (b64_json), never a URL,
@@ -178,7 +211,18 @@ export async function POST(req: Request) {
     imageB64 = b64
   } catch (err) {
     console.error("[generate/image] OpenAI error:", err)
-    if (chargedAction) await refundCreditsForAction(user.id, chargedAction)
+    if (chargedAction) {
+      await refundCreditsForAction(user.id, chargedAction)
+      // A refunded first-image charge must clear the paid marker, or the next
+      // attempt would ride the marker for free.
+      if (chargedAction === "image_first") {
+        try {
+          await redis.del(firstChargeKey)
+        } catch {
+          // best-effort — worst case the retry is free, matching the refund
+        }
+      }
+    }
     return NextResponse.json({ error: "Failed to generate image" }, { status: 502 })
   }
 
@@ -194,7 +238,18 @@ export async function POST(req: Request) {
     cleanedB64 = cleanedBuffer.toString("base64")
   } catch (err) {
     console.error("[generate/image] sharp re-encode error:", err)
-    if (chargedAction) await refundCreditsForAction(user.id, chargedAction)
+    if (chargedAction) {
+      await refundCreditsForAction(user.id, chargedAction)
+      // A refunded first-image charge must clear the paid marker, or the next
+      // attempt would ride the marker for free.
+      if (chargedAction === "image_first") {
+        try {
+          await redis.del(firstChargeKey)
+        } catch {
+          // best-effort — worst case the retry is free, matching the refund
+        }
+      }
+    }
     return NextResponse.json({ error: "Failed to process image" }, { status: 502 })
   }
 
@@ -205,7 +260,18 @@ export async function POST(req: Request) {
     imageUrl = await uploadToR2(cleanedB64, filename)
   } catch (err) {
     console.error("[generate/image] R2 upload error:", err)
-    if (chargedAction) await refundCreditsForAction(user.id, chargedAction)
+    if (chargedAction) {
+      await refundCreditsForAction(user.id, chargedAction)
+      // A refunded first-image charge must clear the paid marker, or the next
+      // attempt would ride the marker for free.
+      if (chargedAction === "image_first") {
+        try {
+          await redis.del(firstChargeKey)
+        } catch {
+          // best-effort — worst case the retry is free, matching the refund
+        }
+      }
+    }
     return NextResponse.json({ error: "Failed to store image" }, { status: 502 })
   }
 

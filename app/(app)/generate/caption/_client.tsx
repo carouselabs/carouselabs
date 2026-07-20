@@ -12,6 +12,7 @@ import { VersionHistory } from "@/components/generate/VersionHistory"
 import { trackHistory } from "@/lib/hooks/useHistory"
 import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
 import { friendlyGenerationError } from "@/lib/friendlyError"
+import { useCreditStore } from "@/lib/store/creditStore"
 
 interface CaptionClientProps {
   ideaId: string
@@ -174,6 +175,8 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
       setHooks(parsed.hooks)
       trackHistory(ideaId, "CAPTION_DONE")
       saveCaption(parsed.captionText)
+      // Credits were charged server-side — refresh the Topbar balance.
+      void useCreditStore.getState().refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
       throw err // let callers (handleRegenerate) know it failed

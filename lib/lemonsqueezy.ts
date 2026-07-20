@@ -12,6 +12,6 @@ export function initLemonSqueezy() {
 
 export const PRO_MONTHLY_CREDITS = 1000
 
-// Pro plan price in USD cents ($24/month). Used for display/email copy only —
+// Pro plan price in USD cents ($24.99/month). Used for display/email copy only —
 // the authoritative amount lives in the Lemon Squeezy product configuration.
-export const PRO_MONTHLY_PRICE_CENTS = 2400
+export const PRO_MONTHLY_PRICE_CENTS = 2499

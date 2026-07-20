@@ -70,7 +70,7 @@ export default function TermsPage() {
       <LegalSection heading="4. Subscriptions and payments">
         <p>
           CarouseLabs offers a free plan and a paid <span className="text-[#0A0A0A] font-medium">Pro</span>{" "}
-          plan priced at <span className="text-[#0A0A0A] font-medium">$24 per month (USD)</span>. Pro is
+          plan priced at <span className="text-[#0A0A0A] font-medium">$24.99 per month (USD)</span>. Pro is
           billed in advance on a recurring monthly basis and renews automatically until cancelled. By
           subscribing, you authorize us and our payment processor to charge your payment method for
           each billing cycle, including applicable taxes.

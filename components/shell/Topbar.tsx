@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation"
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser"
 import { useIdeaSessionStore } from "@/lib/store/ideaSessionStore"
+import { useCreditStore } from "@/lib/store/creditStore"
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Generate",
@@ -19,6 +20,9 @@ function getTitle(pathname: string): string {
 export function Topbar() {
   const pathname = usePathname()
   const { user } = useCurrentUser()
+  // Live balance — updated by generation clients after each charge, so the
+  // count refreshes without a page reload. Falls back to the initial fetch.
+  const liveCredits = useCreditStore((s) => s.creditsRemaining)
   const reset = useIdeaSessionStore((s) => s.reset)
   const title = getTitle(pathname)
   const isDashboard = pathname === "/dashboard"
@@ -30,7 +34,7 @@ export function Topbar() {
       <div className="flex items-center gap-4">
         {user &&
           (() => {
-            const left = user.creditsRemaining ?? 0
+            const left = liveCredits ?? user.creditsRemaining ?? 0
             const limit = user.freeLimit ?? 1
             return (
               <span className="text-[11px] text-[#9CA3AF] tabular-nums">

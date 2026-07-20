@@ -29,7 +29,7 @@ export default async function BillingPage() {
     extraCreditsExpiry: sub?.extraCreditsExpiry ?? null,
   }
   const remaining = availableCredits(creditSub)
-  const lowCredits = remaining <= 5
+  const lowCredits = remaining <= 100
   const renewal = sub?.currentPeriodEnd
     ? new Date(sub.currentPeriodEnd).toLocaleDateString("en-US", {
         day: "numeric",
@@ -84,7 +84,7 @@ export default async function BillingPage() {
         {lowCredits && (
           <div className="px-4 py-3 rounded-xl bg-[rgba(252,211,77,0.08)] border border-[rgba(252,211,77,0.22)] text-[13px] text-[#D97706]">
             {remaining === 0
-              ? "You're out of credits. " + (isPro ? "Buy extra credits to keep creating." : "Upgrade to Pro for 30 monthly credits.")
+              ? "You're out of credits. " + (isPro ? "Buy extra credits to keep creating." : "Upgrade to Pro for 1,000 monthly credits.")
               : `Only ${remaining} credit${remaining === 1 ? "" : "s"} left.`}
           </div>
         )}
@@ -96,7 +96,7 @@ export default async function BillingPage() {
           <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Upgrade to Pro</h2>
           <div className="flex flex-col gap-3 p-4 rounded-xl border border-[rgba(26,26,26,0.2)] bg-[rgba(26,26,26,0.05)]">
             <p className="text-[13px] text-[#374151] leading-[1.6]">
-              <strong className="text-[#0A0A0A]">$24/month</strong> — 30 content credits every month,
+              <strong className="text-[#0A0A0A]">$24.99/month</strong> — 1,000 content credits every month,
               unlimited ideas, full image &amp; carousel generation, and PDF downloads.
             </p>
             <LemonSqueezyButton email={user.email} />

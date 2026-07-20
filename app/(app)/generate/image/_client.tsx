@@ -14,6 +14,7 @@ import { trackHistory } from "@/lib/hooks/useHistory"
 import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
 import { friendlyGenerationError } from "@/lib/friendlyError"
 import { countWords } from "@/lib/wordCount"
+import { useCreditStore } from "@/lib/store/creditStore"
 
 interface ImageClientProps {
   ideaId: string
@@ -197,6 +198,8 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
       setCaption(finalCaption)
       setCaptionReady(true)
       persistCaption(finalCaption)
+      // Credits were charged server-side — refresh the Topbar balance.
+      void useCreditStore.getState().refresh()
     } catch (err) {
       if ((err as Error).name === "AbortError") return
       setError(err instanceof Error ? err.message : "Something went wrong")
@@ -331,6 +334,8 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
       } catch {
         // best-effort
       }
+      // Credits were charged server-side — refresh the Topbar balance.
+      void useCreditStore.getState().refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
       throw err // let handleRegenerateImage refund the reserved slot on failure
@@ -403,6 +408,8 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines }: ImageClientProp
       } catch {
         // best-effort
       }
+      // Credits were charged server-side — refresh the Topbar balance.
+      void useCreditStore.getState().refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
       throw err // let handleRegenerateImage refund the reserved slot on failure

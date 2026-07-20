@@ -9,16 +9,19 @@ export async function GET(req: Request) {
   const admin = await getAdminUser()
   if (!admin) return adminForbidden()
 
-  // ?email= narrows to one exact (case-insensitive) match — used by the
-  // overview quick actions to resolve an email to a userId.
+  // ?email= narrows to a partial, case-insensitive match — used by the
+  // quick-action email lookups (exact string, first result) and by global
+  // search (incremental typing). Exact matches are sorted first so lookups
+  // that expect a single result still resolve to the right user.
   const email = new URL(req.url).searchParams.get("email")?.trim()
 
   const users = await db.user.findMany({
     where: {
       deletedAt: null,
-      ...(email ? { email: { equals: email, mode: "insensitive" as const } } : {}),
+      ...(email ? { email: { contains: email, mode: "insensitive" as const } } : {}),
     },
     orderBy: { createdAt: "desc" },
+    ...(email ? { take: 20 } : {}),
     include: {
       profile: { select: { name: true } },
       subscription: true,
@@ -26,6 +29,11 @@ export async function GET(req: Request) {
       _count: { select: { posts: true } },
     },
   })
+
+  if (email) {
+    const q = email.toLowerCase()
+    users.sort((a, b) => Number(b.email.toLowerCase() === q) - Number(a.email.toLowerCase() === q))
+  }
 
   return NextResponse.json({
     users: users.map((u) => {

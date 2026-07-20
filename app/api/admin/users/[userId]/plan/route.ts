@@ -6,6 +6,7 @@ import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
 import { MONTHLY_CREDITS } from "@/lib/credits"
+import { logAdminAction, getRequestIp } from "@/lib/auditLog"
 
 export async function POST(req: Request, { params }: { params: Promise<{ userId: string }> }) {
   const admin = await getAdminUser()
@@ -21,7 +22,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
     return NextResponse.json({ error: "Expected { plan: FREE|PRO }" }, { status: 400 })
   }
 
-  const sub = await db.subscription.findUnique({ where: { userId } })
+  const sub = await db.subscription.findUnique({ where: { userId }, include: { user: true } })
   if (!sub) return NextResponse.json({ error: "User has no subscription row" }, { status: 404 })
 
   const updated = await db.subscription.update({
@@ -31,5 +32,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
         ? { plan, status: "ACTIVE", creditsUsed: 0, creditsTotal: MONTHLY_CREDITS }
         : { plan, creditsUsed: 0 },
   })
+
+  await logAdminAction({
+    adminEmail: admin.email,
+    action: "CHANGE_PLAN",
+    targetUserId: userId,
+    targetEmail: sub.user.email,
+    details: `Changed plan from ${sub.plan} to ${plan}`,
+    ipAddress: getRequestIp(req),
+  })
+
   return NextResponse.json({ ok: true, plan: updated.plan })
 }

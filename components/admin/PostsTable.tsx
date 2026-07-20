@@ -4,7 +4,9 @@
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
+import { Download } from "lucide-react"
 import { AdminButton, AdminInput, AdminSelect, Spinner, fmtDateTime, tableCls } from "@/components/admin/ui"
+import { exportToCSV } from "@/lib/adminExport"
 import { useToast } from "@/components/admin/Toast"
 
 type PostRow = {
@@ -37,6 +39,7 @@ export function PostsTable() {
   const [page, setPage] = useState(1)
   const [data, setData] = useState<PostsResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -61,6 +64,43 @@ export function PostsTable() {
     const t = setTimeout(load, search ? 300 : 0)
     return () => clearTimeout(t)
   }, [load, search])
+
+  // Exports every post matching the current filters, not just the visible
+  // page — pages through the same endpoint before building the CSV.
+  const exportAll = async () => {
+    setExporting(true)
+    try {
+      const params = new URLSearchParams({ page: "1" })
+      if (search.trim()) params.set("search", search.trim())
+      if (type) params.set("type", type)
+      if (from) params.set("from", from)
+      if (to) params.set("to", to)
+      const first = await fetch(`/api/admin/posts?${params}`)
+      if (!first.ok) throw new Error()
+      const firstData: PostsResponse = await first.json()
+      const all = [...firstData.posts]
+      for (let p = 2; p <= firstData.totalPages; p++) {
+        params.set("page", String(p))
+        const r = await fetch(`/api/admin/posts?${params}`)
+        if (r.ok) all.push(...((await r.json()) as PostsResponse).posts)
+      }
+      exportToCSV(
+        all.map((p) => ({
+          UserEmail: p.email,
+          Type: p.format,
+          Status: p.status,
+          IdeaHook: p.ideaHook ?? p.title,
+          CreatedAt: new Date(p.createdAt).toISOString(),
+          CreditsCost: p.creditsCost,
+        })),
+        "carouselabs-posts",
+      )
+    } catch {
+      toast("Export failed", "error")
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const dateInputCls =
     "h-9 rounded-lg border border-[#2A2A2A] bg-[#141414] px-3 text-[13px] text-white outline-none focus:border-[#7C3AED] [color-scheme:dark]"
@@ -110,6 +150,12 @@ export function PostsTable() {
           className={dateInputCls}
         />
         {data && <span className="text-[12px] text-[#6A6A6A]">{data.total} posts</span>}
+        <div className="ml-auto">
+          <AdminButton variant="secondary" onClick={exportAll} loading={exporting}>
+            <Download className="h-3.5 w-3.5" />
+            Export CSV
+          </AdminButton>
+        </div>
       </div>
 
       {/* Table */}

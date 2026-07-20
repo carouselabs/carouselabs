@@ -3,6 +3,7 @@
 import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
+import { logAdminAction, getRequestIp } from "@/lib/auditLog"
 
 export async function POST(req: Request, { params }: { params: Promise<{ userId: string }> }) {
   const admin = await getAdminUser()
@@ -28,6 +29,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
       where: { id: userId },
       data: { suspendedAt: suspend ? new Date() : null },
     })
+
+    await logAdminAction({
+      adminEmail: admin.email,
+      action: suspend ? "SUSPEND_USER" : "UNSUSPEND_USER",
+      targetUserId: userId,
+      targetEmail: updated.email,
+      details: suspend ? "Account suspended" : "Account unsuspended",
+      ipAddress: getRequestIp(req),
+    })
+
     return NextResponse.json({ ok: true, suspendedAt: updated.suspendedAt })
   } catch {
     return NextResponse.json({ error: "User not found" }, { status: 404 })

@@ -7,6 +7,7 @@ import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
 import { MONTHLY_CREDITS } from "@/lib/credits"
+import { logAdminAction, getRequestIp } from "@/lib/auditLog"
 
 export async function POST(req: Request, { params }: { params: Promise<{ userId: string }> }) {
   const admin = await getAdminUser()
@@ -30,7 +31,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
     )
   }
 
-  const sub = await db.subscription.findUnique({ where: { userId } })
+  const sub = await db.subscription.findUnique({ where: { userId }, include: { user: true } })
   if (!sub) return NextResponse.json({ error: "User has no subscription row" }, { status: 404 })
 
   const data =
@@ -41,6 +42,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
         : { creditsUsed: 0, creditsTotal: MONTHLY_CREDITS }
 
   const updated = await db.subscription.update({ where: { userId }, data })
+
+  const auditAction = action === "grant" ? "GRANT_CREDITS" : action === "set" ? "SET_CREDITS" : "RESET_CREDITS"
+  const details =
+    action === "grant"
+      ? `Granted ${Math.round(amount)} extra credits`
+      : action === "set"
+        ? `Set monthly allowance to ${Math.round(amount)}`
+        : `Reset credits to 0 / ${MONTHLY_CREDITS}`
+  await logAdminAction({
+    adminEmail: admin.email,
+    action: auditAction,
+    targetUserId: userId,
+    targetEmail: sub.user.email,
+    details,
+    ipAddress: getRequestIp(req),
+  })
+
   return NextResponse.json({
     ok: true,
     creditsUsed: updated.creditsUsed,

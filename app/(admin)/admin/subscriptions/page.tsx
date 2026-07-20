@@ -2,6 +2,7 @@
 import Link from "next/link"
 import { db } from "@/lib/db"
 import { PlanBadge, StatCard, tableCls } from "@/components/admin/ui"
+import { SubscriptionsExportButton } from "@/components/admin/SubscriptionsExportButton"
 
 export const dynamic = "force-dynamic"
 
@@ -45,6 +46,22 @@ export default async function AdminSubscriptionsPage() {
         <StatCard label="Active" value={active.length} />
         <StatCard label="Cancelling at period end" value={cancelling.length} />
         <StatCard label="Past Due" value={pastDue.length} />
+      </div>
+
+      <div className="flex justify-end">
+        <SubscriptionsExportButton
+          rows={subs.map((s) => ({
+            email: s.user.email,
+            plan: s.plan,
+            status: s.status,
+            creditsUsed: s.creditsUsed,
+            creditsTotal: s.creditsTotal,
+            extraCredits: s.extraCredits,
+            currentPeriodEnd: s.currentPeriodEnd ? s.currentPeriodEnd.toISOString() : null,
+            cancelAtPeriodEnd: s.cancelAtPeriodEnd,
+            providerId: s.lsSubscriptionId ?? s.razorpaySubId ?? null,
+          }))}
+        />
       </div>
 
       <div className={tableCls.wrap}>

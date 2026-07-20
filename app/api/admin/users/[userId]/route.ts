@@ -4,6 +4,7 @@ import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
 import { availableCredits } from "@/lib/credits"
+import { logAdminAction, getRequestIp } from "@/lib/auditLog"
 
 export async function GET(_req: Request, { params }: { params: Promise<{ userId: string }> }) {
   const admin = await getAdminUser()
@@ -88,7 +89,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ userId
   }
 
   try {
-    await db.user.update({ where: { id: userId }, data: { adminNote } })
+    const updated = await db.user.update({ where: { id: userId }, data: { adminNote } })
+    await logAdminAction({
+      adminEmail: admin.email,
+      action: "UPDATE_NOTE",
+      targetUserId: userId,
+      targetEmail: updated.email,
+      details: adminNote ? `Note updated: "${adminNote.slice(0, 200)}"` : "Note cleared",
+      ipAddress: getRequestIp(req),
+    })
   } catch {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }

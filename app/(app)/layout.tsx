@@ -6,6 +6,8 @@ import { getCurrentUser } from "@/lib/auth"
 import { Sidebar } from "@/components/shell/Sidebar"
 import { Topbar } from "@/components/shell/Topbar"
 import { AppStickers } from "@/components/shell/AppStickers"
+import { MaintenanceBanner } from "@/components/shared/MaintenanceBanner"
+import { getAppSettings } from "@/lib/appSettings"
 
 const font = Onest({
   subsets: ["latin"],
@@ -26,19 +28,25 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     redirect("/onboarding")
   }
 
+  const settings = await getAppSettings()
+
   return (
-    <div
-      className={`${font.className} h-screen overflow-hidden flex flex-col md:grid md:grid-cols-[230px_1fr] md:grid-rows-[56px_1fr] bg-[#F9F7F2] text-[#0A0A0A]`}
-    >
+    <div className={`${font.className} h-screen overflow-hidden flex flex-col bg-[#F9F7F2] text-[#0A0A0A]`}>
       {/* The root layout sets a dark body background; keep the app on cream. */}
       <style>{`body{background-color:#F9F7F2;color:#0A0A0A}`}</style>
-      <Sidebar />
-      <Topbar />
-      <main className="relative flex-1 min-h-0 overflow-y-auto bg-[#F9F7F2] px-6 py-8 md:px-10 pb-24 md:pb-10">
-        {/* Page-aware floating stickers in the cream margins, behind content */}
-        <AppStickers />
-        <div className="relative z-10 h-full">{children}</div>
-      </main>
+      {settings.maintenanceMode && <MaintenanceBanner />}
+      {/* Grid lives in its own flex-1 wrapper (rather than h-screen directly)
+          so the banner above can take its own height without breaking the
+          56px-topbar/1fr-main row template. */}
+      <div className="flex-1 min-h-0 flex flex-col md:grid md:grid-cols-[230px_1fr] md:grid-rows-[56px_1fr]">
+        <Sidebar />
+        <Topbar />
+        <main className="relative flex-1 min-h-0 overflow-y-auto bg-[#F9F7F2] px-6 py-8 md:px-10 pb-24 md:pb-10">
+          {/* Page-aware floating stickers in the cream margins, behind content */}
+          <AppStickers />
+          <div className="relative z-10 h-full">{children}</div>
+        </main>
+      </div>
     </div>
   )
 }

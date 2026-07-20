@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { getAppSettings, saveAppSettings } from "@/lib/appSettings"
+import { logAdminAction, getRequestIp } from "@/lib/auditLog"
 
 const SettingsSchema = z.object({
   planPrice: z.number().positive().max(10000),
@@ -31,5 +32,13 @@ export async function PUT(req: Request) {
   }
 
   await saveAppSettings(parsed)
+
+  await logAdminAction({
+    adminEmail: admin.email,
+    action: "UPDATE_SETTINGS",
+    details: JSON.stringify(parsed),
+    ipAddress: getRequestIp(req),
+  })
+
   return NextResponse.json({ ok: true, settings: parsed })
 }

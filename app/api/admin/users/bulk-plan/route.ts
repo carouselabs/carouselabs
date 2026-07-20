@@ -1,8 +1,11 @@
-// POST /api/admin/credits/bulk — grant extra credits to multiple users.
-// body: { userIds: string[], amount: number }
+// POST /api/admin/users/bulk-plan — change plan for multiple users at once.
+// body: { userIds: string[], plan: "FREE" | "PRO" }
+// Same per-user effect as the single-user plan route: upgrading to PRO
+// starts a fresh monthly allowance; downgrading to FREE resets creditsUsed.
 import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
+import { MONTHLY_CREDITS } from "@/lib/credits"
 import { logAdminAction, getRequestIp } from "@/lib/auditLog"
 
 export async function POST(req: Request) {
@@ -10,38 +13,39 @@ export async function POST(req: Request) {
   if (!admin) return adminForbidden()
 
   let userIds: string[]
-  let amount: number
+  let plan: "FREE" | "PRO"
   try {
     const body = await req.json()
     userIds = body.userIds
-    amount = Number(body.amount)
+    plan = body.plan
     if (
       !Array.isArray(userIds) ||
       userIds.length === 0 ||
       userIds.length > 500 ||
       userIds.some((id) => typeof id !== "string") ||
-      !Number.isFinite(amount) ||
-      amount <= 0 ||
-      amount > 1_000_000
+      (plan !== "FREE" && plan !== "PRO")
     ) {
       throw new Error()
     }
   } catch {
     return NextResponse.json(
-      { error: "Expected { userIds: string[], amount: positive number }" },
+      { error: "Expected { userIds: string[], plan: FREE|PRO }" },
       { status: 400 },
     )
   }
 
   const res = await db.subscription.updateMany({
     where: { userId: { in: userIds } },
-    data: { extraCredits: { increment: Math.round(amount) }, extraCreditsExpiry: null },
+    data:
+      plan === "PRO"
+        ? { plan, status: "ACTIVE", creditsUsed: 0, creditsTotal: MONTHLY_CREDITS }
+        : { plan, creditsUsed: 0 },
   })
 
   await logAdminAction({
     adminEmail: admin.email,
-    action: "BULK_GRANT_CREDITS",
-    details: `Granted ${Math.round(amount)} extra credits to ${res.count} users (${userIds.length} requested)`,
+    action: "BULK_CHANGE_PLAN",
+    details: `Changed ${res.count} users to ${plan} (${userIds.length} requested)`,
     ipAddress: getRequestIp(req),
   })
 

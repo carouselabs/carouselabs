@@ -1,8 +1,8 @@
-// /admin/analytics — usage stats and charts.
-import { AnalyticsCharts } from "@/components/admin/AnalyticsCharts"
+// /admin/analytics — usage stats, charts, and cohort retention.
+import { AnalyticsTabs } from "@/components/admin/AnalyticsTabs"
 
 export const dynamic = "force-dynamic"
 
 export default function AdminAnalyticsPage() {
-  return <AnalyticsCharts />
+  return <AnalyticsTabs />
 }

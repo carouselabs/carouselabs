@@ -1,17 +1,21 @@
 import { Onest } from "next/font/google"
 import { Navbar } from "@/components/landing/Navbar"
 import { Footer } from "@/components/landing/Footer"
+import { MaintenanceBanner } from "@/components/shared/MaintenanceBanner"
+import { getAppSettings } from "@/lib/appSettings"
 
 const font = Onest({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],
 })
 
-export default function MarketingLayout({
+export default async function MarketingLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const settings = await getAppSettings()
+
   return (
     <div
       className={`${font.className} min-h-screen bg-[#F9F7F2] text-[#0A0A0A] overflow-x-hidden flex flex-col`}
@@ -21,6 +25,7 @@ export default function MarketingLayout({
           scrollbars stay on-theme. Server-rendered (no flash); reverts on
           navigation into the app. */}
       <style>{`body{background-color:#F9F7F2;color:#0A0A0A}`}</style>
+      {settings.maintenanceMode && <MaintenanceBanner />}
       <Navbar />
       <main className="flex-1 pt-16">{children}</main>
       <Footer />

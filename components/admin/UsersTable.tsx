@@ -31,6 +31,7 @@ import {
   fmtDate,
   tableCls,
 } from "@/components/admin/ui"
+import { exportToCSV } from "@/lib/adminExport"
 import { useToast } from "@/components/admin/Toast"
 
 export type AdminUserRow = {
@@ -72,28 +73,20 @@ const COLUMNS: { key: SortKey; label: string }[] = [
 ]
 
 function exportCsv(rows: AdminUserRow[]) {
-  const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`
-  const header = "Email,Name,Plan,Credits Used,Credits Remaining,Posts,Signed Up,Last Active,Suspended"
-  const lines = rows.map((r) =>
-    [
-      esc(r.email),
-      esc(r.name),
-      r.plan,
-      r.creditsUsed,
-      r.creditsRemaining,
-      r.postsCount,
-      new Date(r.createdAt).toISOString(),
-      new Date(r.lastActive).toISOString(),
-      r.suspendedAt ? "yes" : "no",
-    ].join(","),
+  exportToCSV(
+    rows.map((r) => ({
+      Email: r.email,
+      Name: r.name ?? "",
+      Plan: r.plan,
+      CreditsUsed: r.creditsUsed,
+      CreditsRemaining: r.creditsRemaining,
+      Posts: r.postsCount,
+      SignedUp: new Date(r.createdAt).toISOString(),
+      LastActive: new Date(r.lastActive).toISOString(),
+      Suspended: r.suspendedAt ? "yes" : "no",
+    })),
+    "carouselabs-users",
   )
-  const blob = new Blob([[header, ...lines].join("\n")], { type: "text/csv" })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url
-  a.download = `carouselabs-users-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
 }
 
 export function UsersTable() {
@@ -113,6 +106,12 @@ export function UsersTable() {
   const [action, setAction] = useState<{ type: string; user: AdminUserRow } | null>(null)
   const [input, setInput] = useState("")
   const [busy, setBusy] = useState(false)
+
+  // Bulk selection + action state
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkAmount, setBulkAmount] = useState("100")
+  const [bulkBusy, setBulkBusy] = useState<string | null>(null)
+  const [bulkConfirm, setBulkConfirm] = useState<"plan-pro" | "plan-free" | "suspend" | null>(null)
 
   const load = async () => {
     try {
@@ -193,6 +192,68 @@ export function UsersTable() {
       body: JSON.stringify(body),
     })
 
+  const toggleSelected = (id: string) =>
+    setSelected((s) => {
+      const next = new Set(s)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const pageRowIds = pageRows.map((r) => r.id)
+  const allPageSelected = pageRowIds.length > 0 && pageRowIds.every((id) => selected.has(id))
+  const toggleSelectAllOnPage = () =>
+    setSelected((s) => {
+      const next = new Set(s)
+      if (allPageSelected) pageRowIds.forEach((id) => next.delete(id))
+      else pageRowIds.forEach((id) => next.add(id))
+      return next
+    })
+
+  const runBulkAction = async (key: string, fn: () => Promise<Response>, successMsg: (n: number) => string) => {
+    setBulkBusy(key)
+    try {
+      const res = await fn()
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error)
+      toast(successMsg(data.updated ?? selected.size), "success")
+      setBulkConfirm(null)
+      setSelected(new Set())
+      await load()
+    } catch (e) {
+      toast(e instanceof Error && e.message ? e.message : "Bulk action failed", "error")
+    } finally {
+      setBulkBusy(null)
+    }
+  }
+
+  const bulkGrantCredits = () => {
+    const amount = Number(bulkAmount)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast("Enter a positive credit amount", "error")
+      return
+    }
+    void runBulkAction(
+      "grant",
+      () => post("/api/admin/credits/bulk", { userIds: [...selected], amount }),
+      (n) => `Granted ${amount} credits to ${n} users`,
+    )
+  }
+
+  const bulkChangePlan = (plan: "FREE" | "PRO") =>
+    runBulkAction(
+      "plan",
+      () => post("/api/admin/users/bulk-plan", { userIds: [...selected], plan }),
+      (n) => `Changed ${n} users to ${plan}`,
+    )
+
+  const bulkSuspend = () =>
+    runBulkAction(
+      "suspend",
+      () => post("/api/admin/users/bulk-suspend", { userIds: [...selected], suspend: true }),
+      (n) => `Suspended ${n} users`,
+    )
+
   if (rows === null) return <Spinner label="Loading users…" />
 
   const u = action?.user
@@ -232,12 +293,65 @@ export function UsersTable() {
         </div>
       </div>
 
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#7C3AED]/30 bg-[#7C3AED]/10 px-4 py-3">
+          <span className="text-[12.5px] font-semibold text-white">{selected.size} selected</span>
+          <button
+            onClick={() => setSelected(new Set())}
+            className="text-[12px] text-[#A78BFA] hover:underline"
+          >
+            Clear selection
+          </button>
+          <div className="h-5 w-px bg-[#2A2A2A]" />
+          <div className="flex items-center gap-2">
+            <AdminInput
+              type="number"
+              min={1}
+              value={bulkAmount}
+              onChange={(e) => setBulkAmount(e.target.value)}
+              className="w-24"
+            />
+            <AdminButton variant="secondary" loading={bulkBusy === "grant"} onClick={bulkGrantCredits}>
+              <Coins className="h-3.5 w-3.5" />
+              Grant credits to selected
+            </AdminButton>
+          </div>
+          <AdminButton variant="secondary" onClick={() => setBulkConfirm("plan-pro")}>
+            <Crown className="h-3.5 w-3.5" />
+            Change plan to Pro
+          </AdminButton>
+          <AdminButton variant="secondary" onClick={() => setBulkConfirm("plan-free")}>
+            Change plan to Free
+          </AdminButton>
+          <AdminButton variant="danger" onClick={() => setBulkConfirm("suspend")}>
+            <Ban className="h-3.5 w-3.5" />
+            Suspend selected
+          </AdminButton>
+          <AdminButton
+            variant="secondary"
+            onClick={() => exportCsv(rows.filter((r) => selected.has(r.id)))}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export selected
+          </AdminButton>
+        </div>
+      )}
+
       {/* Table */}
       <div className={tableCls.wrap}>
         <table className={tableCls.table}>
           <thead>
             <tr>
-              <th className={tableCls.th}></th>
+              <th className={tableCls.th}>
+                <input
+                  type="checkbox"
+                  checked={allPageSelected}
+                  onChange={toggleSelectAllOnPage}
+                  className="h-4 w-4 accent-[#7C3AED]"
+                  aria-label="Select all users on this page"
+                />
+              </th>
               {COLUMNS.map((c) => (
                 <th key={c.key} className={tableCls.th}>
                   <button
@@ -269,16 +383,25 @@ export function UsersTable() {
               </tr>
             )}
             {pageRows.map((r) => (
-              <tr key={r.id} className={tableCls.row}>
+              <tr key={r.id} className={`${tableCls.row} ${selected.has(r.id) ? "bg-[#7C3AED]/[0.06]" : ""}`}>
                 <td className={tableCls.td}>
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[11px] font-bold text-[#A78BFA]">
-                    {(r.name ?? r.email)[0]?.toUpperCase()}
-                  </div>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(r.id)}
+                    onChange={() => toggleSelected(r.id)}
+                    className="h-4 w-4 accent-[#7C3AED]"
+                    aria-label={`Select ${r.email}`}
+                  />
                 </td>
                 <td className={tableCls.td}>
-                  <Link href={`/admin/users/${r.id}`} className="text-[#A78BFA] hover:underline">
-                    {r.email}
-                  </Link>
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[11px] font-bold text-[#A78BFA]">
+                      {(r.name ?? r.email)[0]?.toUpperCase()}
+                    </div>
+                    <Link href={`/admin/users/${r.id}`} className="text-[#A78BFA] hover:underline">
+                      {r.email}
+                    </Link>
+                  </div>
                   {r.suspendedAt && (
                     <span className="ml-2 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">
                       SUSPENDED
@@ -524,6 +647,35 @@ export function UsersTable() {
             u.suspendedAt ? "Account unsuspended" : "Account suspended",
           )
         }
+      />
+
+      {/* Bulk confirmations */}
+      <ConfirmModal
+        open={bulkConfirm === "plan-pro"}
+        onClose={() => setBulkConfirm(null)}
+        loading={bulkBusy === "plan"}
+        title={`Change ${selected.size} users to Pro?`}
+        body="Each user gets a fresh 1000-credit monthly allowance."
+        confirmLabel="Change to Pro"
+        onConfirm={() => bulkChangePlan("PRO")}
+      />
+      <ConfirmModal
+        open={bulkConfirm === "plan-free"}
+        onClose={() => setBulkConfirm(null)}
+        loading={bulkBusy === "plan"}
+        title={`Change ${selected.size} users to Free?`}
+        body="Each user loses Pro access and their credits used counter resets."
+        confirmLabel="Change to Free"
+        onConfirm={() => bulkChangePlan("FREE")}
+      />
+      <ConfirmModal
+        open={bulkConfirm === "suspend"}
+        onClose={() => setBulkConfirm(null)}
+        loading={bulkBusy === "suspend"}
+        title={`Suspend ${selected.size} users?`}
+        body="Suspended accounts are flagged and lose access. Your own account is skipped if selected."
+        confirmLabel="Suspend"
+        onConfirm={bulkSuspend}
       />
     </div>
   )

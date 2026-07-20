@@ -284,6 +284,23 @@ model AppSetting {
   updatedAt DateTime @updatedAt
 }
 
+// Immutable record of every mutating admin-panel action (credits, plan,
+// suspend, notes, settings, broadcasts) — who did what, to whom, when.
+model AuditLog {
+  id           String   @id @default(cuid())
+  adminEmail   String
+  action       String
+  targetUserId String?
+  targetEmail  String?
+  details      String   @db.Text
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+
+  @@index([action])
+  @@index([targetEmail])
+  @@index([createdAt])
+}
+
 // Tracks webhook deliveries we've already handled so a provider redelivery
 // (retry after a timeout/non-2xx) can't be processed twice — preventing
 // duplicate emails and double credit grants/resets.

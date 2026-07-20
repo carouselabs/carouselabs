@@ -16,7 +16,11 @@ import {
   PanelLeftOpen,
   ArrowLeft,
   ShieldCheck,
+  ScrollText,
+  Megaphone,
+  Search,
 } from "lucide-react"
+import { GlobalSearch } from "@/components/admin/GlobalSearch"
 
 const NAV = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -25,6 +29,8 @@ const NAV = [
   { href: "/admin/posts", label: "Posts", icon: FileText },
   { href: "/admin/credits", label: "Credits", icon: Coins },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone },
+  { href: "/admin/audit-logs", label: "Audit Logs", icon: ScrollText },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ]
 
@@ -113,10 +119,23 @@ export function AdminShell({ email, children }: { email: string; children: React
               Admin
             </span>
           </div>
-          <span className="text-[12px] text-[#6A6A6A]">{email}</span>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => window.dispatchEvent(new Event("admin:open-search"))}
+              className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-[12px] text-[#8A8A8A] transition-colors hover:border-[#3A3A3A] hover:text-white"
+            >
+              <Search className="h-3.5 w-3.5" />
+              Search
+              <kbd className="rounded border border-[#2A2A2A] bg-[#1F1F1F] px-1.5 py-0.5 text-[10px] text-[#6A6A6A]">
+                ⌘K
+              </kbd>
+            </button>
+            <span className="text-[12px] text-[#6A6A6A]">{email}</span>
+          </div>
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto px-6 py-6 md:px-8">{children}</main>
       </div>
+      <GlobalSearch />
     </div>
   )
 }

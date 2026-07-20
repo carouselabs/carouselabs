@@ -4,7 +4,7 @@
 import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
-import { postCreditCost } from "@/lib/adminStats"
+import { postCreditCost, getCohortAnalysis } from "@/lib/adminStats"
 
 const DAYS = 30
 
@@ -20,7 +20,7 @@ export async function GET() {
   since.setDate(since.getDate() - (DAYS - 1))
   since.setHours(0, 0, 0, 0)
 
-  const [recentPosts, allUsers, proSubs, formatCounts] = await Promise.all([
+  const [recentPosts, allUsers, proSubs, formatCounts, cohorts] = await Promise.all([
     db.post.findMany({
       where: { createdAt: { gte: since } },
       select: { createdAt: true, format: true },
@@ -28,6 +28,7 @@ export async function GET() {
     db.user.findMany({ where: { deletedAt: null }, select: { createdAt: true } }),
     db.subscription.findMany({ where: { plan: "PRO" }, select: { createdAt: true } }),
     db.post.groupBy({ by: ["format"], _count: { _all: true } }),
+    getCohortAnalysis(),
   ])
 
   // Seed every day in range so charts have no gaps.
@@ -68,5 +69,6 @@ export async function GET() {
     daily: days.map((k) => byDay.get(k)),
     growth,
     postsByType: formatCounts.map((f) => ({ format: f.format, count: f._count._all })),
+    cohorts,
   })
 }

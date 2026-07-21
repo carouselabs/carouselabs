@@ -1,10 +1,10 @@
 // app/api/cron/renewal-reminder/route.ts
-// Daily cron (see vercel.json): emails Pro users ~3 days before their
+// Daily cron (see vercel.json): emails Pro/Growth users ~3 days before their
 // subscription renews. Fires from a schedule, not user action.
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { sendRenewalReminderEmail } from "@/lib/email"
-import { PRO_MONTHLY_PRICE_CENTS } from "@/lib/lemonsqueezy"
+import { PRO_MONTHLY_PRICE_CENTS, GROWTH_MONTHLY_PRICE_CENTS } from "@/lib/lemonsqueezy"
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -26,7 +26,7 @@ export async function GET(req: Request) {
 
   const subs = await db.subscription.findMany({
     where: {
-      plan: "PRO",
+      plan: { in: ["PRO", "GROWTH"] },
       status: "ACTIVE",
       // Skip subscriptions already set to cancel — they won't renew.
       cancelAtPeriodEnd: false,
@@ -35,12 +35,14 @@ export async function GET(req: Request) {
     include: { user: { include: { profile: true } } },
   })
 
-  const amount = `$${(PRO_MONTHLY_PRICE_CENTS / 100).toFixed(2)}` // "$24.99"
-
   let sent = 0
   for (const sub of subs) {
     const user = sub.user
     if (!user?.email || user.deletedAt || !sub.currentPeriodEnd) continue
+
+    const planName = sub.plan === "GROWTH" ? "Growth" : "Pro"
+    const priceCents = sub.plan === "GROWTH" ? GROWTH_MONTHLY_PRICE_CENTS : PRO_MONTHLY_PRICE_CENTS
+    const amount = `$${(priceCents / 100).toFixed(2)}` // "$24.99" or "$45.99"
 
     const name = user.profile?.name ?? ""
     const renewalDate = sub.currentPeriodEnd.toLocaleDateString("en-US", {
@@ -50,7 +52,7 @@ export async function GET(req: Request) {
     })
 
     try {
-      await sendRenewalReminderEmail(user.email, name, renewalDate, amount)
+      await sendRenewalReminderEmail(user.email, name, renewalDate, amount, planName)
       sent++
     } catch (err) {
       console.error(`[cron/renewal-reminder] send failed for ${user.email}:`, err)

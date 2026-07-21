@@ -17,7 +17,7 @@ export async function POST() {
   }
 
   const remaining = availableCredits({
-    plan: sub.plan as "FREE" | "PRO",
+    plan: sub.plan,
     creditsUsed: sub.creditsUsed,
     creditsTotal: sub.creditsTotal,
     extraCredits: sub.extraCredits,

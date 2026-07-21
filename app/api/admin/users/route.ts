@@ -48,7 +48,7 @@ export async function GET(req: Request) {
         creditsTotal: sub?.creditsTotal ?? 0,
         creditsRemaining: sub
           ? availableCredits({
-              plan: plan as "FREE" | "PRO",
+              plan,
               creditsUsed: sub.creditsUsed,
               creditsTotal: sub.creditsTotal,
               extraCredits: sub.extraCredits,

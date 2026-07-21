@@ -3,16 +3,24 @@ import { Heading, Text } from "@react-email/components"
 import { APP_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
 
 // Subject: "Welcome to Pro! You have 30 credits ready 🚀"
-export function UpgradedToProEmail({ name, credits }: { name?: string; credits: number }) {
+export function UpgradedToProEmail({
+  name,
+  credits,
+  planName = "Pro",
+}: {
+  name?: string
+  credits: number
+  planName?: "Pro" | "Growth"
+}) {
   const greeting = name?.trim() ? name : "there"
   return (
-    <EmailLayout preview={`Welcome to Pro — ${credits} credits are ready to use.`}>
-      <Heading style={emailStyles.heading}>Welcome to Pro 🚀</Heading>
+    <EmailLayout preview={`Welcome to ${planName} — ${credits} credits are ready to use.`}>
+      <Heading style={emailStyles.heading}>Welcome to {planName} 🚀</Heading>
       <Text style={emailStyles.text}>
-        You&apos;re in, {greeting}! Your Pro plan is active and{" "}
+        You&apos;re in, {greeting}! Your {planName} plan is active and{" "}
         <strong>{credits} credits</strong> are ready to use right now.
       </Text>
-      <Text style={emailStyles.text}>With Pro you get:</Text>
+      <Text style={emailStyles.text}>With {planName} you get:</Text>
       <ul style={emailStyles.list}>
         <li>{credits} content credits every month</li>
         <li>Unlimited post idea generation</li>

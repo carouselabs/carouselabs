@@ -4,10 +4,8 @@ import { AnimatedSection } from "@/components/marketing/AnimatedSection"
 import { PlanCard } from "@/components/marketing/PlanCard"
 import { FREE_PLAN, PRO_PLAN, GROWTH_PLAN, CREDIT_COST_LINES, PRICING_FAQ } from "@/lib/plans"
 
-// Same checkout variant for Pro and Growth for now — Growth doesn't have its
-// own Lemon Squeezy product yet.
-// TODO: add Growth plan checkout URL once a dedicated Lemon Squeezy variant exists.
-const CHECKOUT_URL = process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL
+const PRO_CHECKOUT_URL = process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL
+const GROWTH_CHECKOUT_URL = process.env.NEXT_PUBLIC_LEMONSQUEEZY_GROWTH_CHECKOUT_URL
 
 function FreeCTA() {
   return (
@@ -20,8 +18,16 @@ function FreeCTA() {
   )
 }
 
-function CheckoutCTA({ label, variant }: { label: string; variant: "purple" | "amber" }) {
-  if (!CHECKOUT_URL) {
+function CheckoutCTA({
+  label,
+  variant,
+  url,
+}: {
+  label: string
+  variant: "purple" | "amber"
+  url: string | undefined
+}) {
+  if (!url) {
     return (
       <Link
         href="/sign-up"
@@ -34,7 +40,7 @@ function CheckoutCTA({ label, variant }: { label: string; variant: "purple" | "a
   }
   return (
     <a
-      href={CHECKOUT_URL}
+      href={url}
       className={[
         "w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[13.5px] font-semibold text-white transition-all",
         variant === "purple"
@@ -70,11 +76,17 @@ export function Pricing() {
           </AnimatedSection>
 
           <AnimatedSection delay={0.1} className="h-full">
-            <PlanCard plan={PRO_PLAN} cta={<CheckoutCTA label="Start Creating" variant="purple" />} />
+            <PlanCard
+              plan={PRO_PLAN}
+              cta={<CheckoutCTA label="Start Creating" variant="purple" url={PRO_CHECKOUT_URL} />}
+            />
           </AnimatedSection>
 
           <AnimatedSection delay={0.2} className="h-full">
-            <PlanCard plan={GROWTH_PLAN} cta={<CheckoutCTA label="Go Growth" variant="amber" />} />
+            <PlanCard
+              plan={GROWTH_PLAN}
+              cta={<CheckoutCTA label="Go Growth" variant="amber" url={GROWTH_CHECKOUT_URL} />}
+            />
           </AnimatedSection>
         </div>
 

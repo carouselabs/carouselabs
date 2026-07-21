@@ -41,7 +41,7 @@ export default async function IdeaPage({
 
   const rawCategory = dbEnumsToRawCategory(idea.mode, idea.category)
   const categoryStyle = CATEGORY_COLORS[rawCategory]
-  const plan = (user.subscription?.plan ?? "FREE") as "FREE" | "PRO"
+  const plan = user.subscription?.plan ?? "FREE"
   const cachedBreakdown = (idea.breakdowns[0]?.outline ?? null) as unknown as BreakdownOutline | null
 
   return (

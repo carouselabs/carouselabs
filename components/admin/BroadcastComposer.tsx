@@ -18,7 +18,7 @@ import {
 import { renderBroadcastEmailHtml } from "@/lib/broadcastRender"
 import { useToast } from "@/components/admin/Toast"
 
-type Audience = "all" | "pro" | "free" | "custom"
+type Audience = "all" | "pro" | "growth" | "free" | "custom"
 
 type AuditLogRow = {
   id: string
@@ -137,6 +137,7 @@ export function BroadcastComposer() {
             <AdminSelect value={audience} onChange={(e) => setAudience(e.target.value as Audience)} className="w-full">
               <option value="all">All Users</option>
               <option value="pro">Pro Users</option>
+              <option value="growth">Growth Users</option>
               <option value="free">Free Users</option>
               <option value="custom">Custom List</option>
             </AdminSelect>

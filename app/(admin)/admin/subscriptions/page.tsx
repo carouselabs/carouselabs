@@ -35,14 +35,17 @@ export default async function AdminSubscriptionsPage() {
   })
 
   const pro = subs.filter((s) => s.plan === "PRO")
-  const active = pro.filter((s) => s.status === "ACTIVE")
-  const cancelling = pro.filter((s) => s.cancelAtPeriodEnd)
-  const pastDue = pro.filter((s) => s.status === "PAST_DUE")
+  const growth = subs.filter((s) => s.plan === "GROWTH")
+  const paid = subs.filter((s) => s.plan !== "FREE")
+  const active = paid.filter((s) => s.status === "ACTIVE")
+  const cancelling = paid.filter((s) => s.cancelAtPeriodEnd)
+  const pastDue = paid.filter((s) => s.status === "PAST_DUE")
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <StatCard label="Pro Subscriptions" value={pro.length} />
+        <StatCard label="Growth Subscriptions" value={growth.length} />
         <StatCard label="Active" value={active.length} />
         <StatCard label="Cancelling at period end" value={cancelling.length} />
         <StatCard label="Past Due" value={pastDue.length} />

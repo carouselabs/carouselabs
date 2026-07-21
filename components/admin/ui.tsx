@@ -185,6 +185,13 @@ export function ConfirmModal({
 }
 
 export function PlanBadge({ plan }: { plan: string }) {
+  if (plan === "GROWTH") {
+    return (
+      <span className="inline-flex rounded-full bg-gradient-to-r from-[#D97706]/20 to-[#F59E0B]/20 px-2 py-0.5 text-[11px] font-semibold text-[#F59E0B]">
+        GROWTH
+      </span>
+    )
+  }
   return plan === "PRO" ? (
     <span className="inline-flex rounded-full bg-[#7C3AED]/15 px-2 py-0.5 text-[11px] font-semibold text-[#A78BFA]">
       PRO

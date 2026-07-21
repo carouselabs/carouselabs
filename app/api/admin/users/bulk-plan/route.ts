@@ -1,11 +1,11 @@
 // POST /api/admin/users/bulk-plan — change plan for multiple users at once.
-// body: { userIds: string[], plan: "FREE" | "PRO" }
-// Same per-user effect as the single-user plan route: upgrading to PRO
-// starts a fresh monthly allowance; downgrading to FREE resets creditsUsed.
+// body: { userIds: string[], plan: "FREE" | "PRO" | "GROWTH" }
+// Same per-user effect as the single-user plan route: upgrading to a paid
+// plan starts a fresh monthly allowance; downgrading to FREE resets creditsUsed.
 import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
-import { MONTHLY_CREDITS } from "@/lib/credits"
+import { creditsForPlan } from "@/lib/lemonsqueezy"
 import { logAdminAction, getRequestIp } from "@/lib/auditLog"
 
 export async function POST(req: Request) {
@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   if (!admin) return adminForbidden()
 
   let userIds: string[]
-  let plan: "FREE" | "PRO"
+  let plan: "FREE" | "PRO" | "GROWTH"
   try {
     const body = await req.json()
     userIds = body.userIds
@@ -23,13 +23,13 @@ export async function POST(req: Request) {
       userIds.length === 0 ||
       userIds.length > 500 ||
       userIds.some((id) => typeof id !== "string") ||
-      (plan !== "FREE" && plan !== "PRO")
+      (plan !== "FREE" && plan !== "PRO" && plan !== "GROWTH")
     ) {
       throw new Error()
     }
   } catch {
     return NextResponse.json(
-      { error: "Expected { userIds: string[], plan: FREE|PRO }" },
+      { error: "Expected { userIds: string[], plan: FREE|PRO|GROWTH }" },
       { status: 400 },
     )
   }
@@ -37,9 +37,9 @@ export async function POST(req: Request) {
   const res = await db.subscription.updateMany({
     where: { userId: { in: userIds } },
     data:
-      plan === "PRO"
-        ? { plan, status: "ACTIVE", creditsUsed: 0, creditsTotal: MONTHLY_CREDITS }
-        : { plan, creditsUsed: 0 },
+      plan === "FREE"
+        ? { plan, creditsUsed: 0 }
+        : { plan, status: "ACTIVE", creditsUsed: 0, creditsTotal: creditsForPlan(plan) },
   })
 
   await logAdminAction({

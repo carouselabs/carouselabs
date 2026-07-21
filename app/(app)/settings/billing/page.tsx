@@ -51,7 +51,10 @@ export default async function BillingPage() {
 
   const sub = user.subscription
   const plan = sub?.plan ?? "FREE"
+  const isPaid = plan === "PRO" || plan === "GROWTH"
   const isPro = plan === "PRO"
+  const isGrowth = plan === "GROWTH"
+  const planLabel = isGrowth ? "Growth" : isPro ? "Pro" : "Free"
 
   const creditSub = {
     plan,
@@ -72,8 +75,10 @@ export default async function BillingPage() {
 
   // Free plan has no real "credits" concept — its progress bar tracks the
   // single lifetime post instead of a monthly allowance.
-  const effectiveTotal = isPro ? creditSub.creditsTotal : FREE_LIFETIME_POSTS
+  const effectiveTotal = isPaid ? creditSub.creditsTotal : FREE_LIFETIME_POSTS
   const percentUsed = effectiveTotal > 0 ? (creditSub.creditsUsed / effectiveTotal) * 100 : 0
+
+  const growthCheckoutUrl = process.env.NEXT_PUBLIC_LEMONSQUEEZY_GROWTH_CHECKOUT_URL
 
   return (
     <div className="max-w-5xl mx-auto flex flex-col gap-10">
@@ -88,12 +93,14 @@ export default async function BillingPage() {
               <span
                 className={[
                   "text-[12px] font-bold px-3 py-1 rounded-full tracking-wide uppercase",
-                  isPro
-                    ? "text-white bg-gradient-to-r from-[#7C3AED] to-[#A78BFA]"
-                    : "text-[#4B5563] bg-[#ECEAE4] border border-[#E5E3DE]",
+                  isGrowth
+                    ? "text-white bg-gradient-to-r from-[#D97706] to-[#F59E0B]"
+                    : isPro
+                      ? "text-white bg-gradient-to-r from-[#7C3AED] to-[#A78BFA]"
+                      : "text-[#4B5563] bg-[#ECEAE4] border border-[#E5E3DE]",
                 ].join(" ")}
               >
-                {isPro ? "Pro" : "Free"} plan
+                {planLabel} plan
               </span>
               {renewal && (
                 <span className="text-[12.5px] text-[#6B7280]">
@@ -113,7 +120,7 @@ export default async function BillingPage() {
                 ].join(" ")}
               >
                 {remaining}
-                {isPro && (
+                {isPaid && (
                   <span className="text-[13px] text-[#9CA3AF] font-normal">
                     {" "}
                     / {creditSub.creditsTotal}
@@ -129,7 +136,7 @@ export default async function BillingPage() {
             <div className="px-4 py-3 rounded-xl bg-[rgba(252,211,77,0.08)] border border-[rgba(252,211,77,0.22)] text-[13px] text-[#D97706]">
               {remaining === 0
                 ? "You're out of credits. " +
-                  (isPro ? "Buy extra credits to keep creating." : "Upgrade to Pro for 1,000 monthly credits.")
+                  (isPaid ? "Buy extra credits to keep creating." : "Upgrade to Pro for 1,000 monthly credits.")
                 : `Only ${remaining} credit${remaining === 1 ? "" : "s"} left.`}
             </div>
           )}
@@ -137,7 +144,7 @@ export default async function BillingPage() {
       </div>
 
       {/* Upgrade / manage */}
-      {!isPro ? (
+      {!isPaid ? (
         <div className="flex flex-col gap-3">
           <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Upgrade to Pro</h2>
           <div className="flex flex-col gap-3 p-5 rounded-2xl border border-[#7C3AED]/20 bg-[#7C3AED]/5">
@@ -169,8 +176,14 @@ export default async function BillingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-5 items-stretch">
           <PlanCard
             plan={FREE_PLAN}
-            isCurrent={!isPro}
-            cta={!isPro ? <CurrentPlanCTA /> : <NoteCTA>Manage via Cancel Subscription above</NoteCTA>}
+            isCurrent={plan === "FREE"}
+            cta={
+              plan === "FREE" ? (
+                <CurrentPlanCTA />
+              ) : (
+                <NoteCTA>Manage via Cancel Subscription above</NoteCTA>
+              )
+            }
           />
           <PlanCard
             plan={PRO_PLAN}
@@ -185,13 +198,21 @@ export default async function BillingPage() {
           />
           <PlanCard
             plan={GROWTH_PLAN}
-            cta={<LemonSqueezyButton email={user.email} label="Go Growth" variant="amber" />}
+            isCurrent={isGrowth}
+            cta={
+              isGrowth ? (
+                <CurrentPlanCTA />
+              ) : (
+                <LemonSqueezyButton
+                  email={user.email}
+                  label="Go Growth"
+                  variant="amber"
+                  checkoutUrl={growthCheckoutUrl}
+                />
+              )
+            }
           />
         </div>
-        <p className="text-[11px] text-[#9CA3AF] text-center">
-          Growth uses the same checkout as Pro for now — it&apos;ll get its own plan once billing
-          supports it.
-        </p>
       </div>
     </div>
   )

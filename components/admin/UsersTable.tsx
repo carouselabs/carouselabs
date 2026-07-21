@@ -38,7 +38,7 @@ export type AdminUserRow = {
   id: string
   email: string
   name: string | null
-  plan: "FREE" | "PRO"
+  plan: "FREE" | "PRO" | "GROWTH"
   creditsUsed: number
   creditsTotal: number
   creditsRemaining: number
@@ -96,7 +96,7 @@ export function UsersTable() {
 
   const [rows, setRows] = useState<AdminUserRow[] | null>(null)
   const [query, setQuery] = useState(initialQuery)
-  const [planFilter, setPlanFilter] = useState<"ALL" | "FREE" | "PRO">("ALL")
+  const [planFilter, setPlanFilter] = useState<"ALL" | "FREE" | "PRO" | "GROWTH">("ALL")
   const [sortKey, setSortKey] = useState<SortKey>("createdAt")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
   const [page, setPage] = useState(1)
@@ -111,7 +111,9 @@ export function UsersTable() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkAmount, setBulkAmount] = useState("100")
   const [bulkBusy, setBulkBusy] = useState<string | null>(null)
-  const [bulkConfirm, setBulkConfirm] = useState<"plan-pro" | "plan-free" | "suspend" | null>(null)
+  const [bulkConfirm, setBulkConfirm] = useState<
+    "plan-pro" | "plan-free" | "plan-growth" | "suspend" | null
+  >(null)
 
   const load = async () => {
     try {
@@ -240,7 +242,7 @@ export function UsersTable() {
     )
   }
 
-  const bulkChangePlan = (plan: "FREE" | "PRO") =>
+  const bulkChangePlan = (plan: "FREE" | "PRO" | "GROWTH") =>
     runBulkAction(
       "plan",
       () => post("/api/admin/users/bulk-plan", { userIds: [...selected], plan }),
@@ -281,6 +283,7 @@ export function UsersTable() {
           <option value="ALL">All plans</option>
           <option value="FREE">Free</option>
           <option value="PRO">Pro</option>
+          <option value="GROWTH">Growth</option>
         </AdminSelect>
         <span className="text-[12px] text-[#6A6A6A]">
           {filtered.length} user{filtered.length === 1 ? "" : "s"}
@@ -320,6 +323,10 @@ export function UsersTable() {
           <AdminButton variant="secondary" onClick={() => setBulkConfirm("plan-pro")}>
             <Crown className="h-3.5 w-3.5" />
             Change plan to Pro
+          </AdminButton>
+          <AdminButton variant="secondary" onClick={() => setBulkConfirm("plan-growth")}>
+            <Crown className="h-3.5 w-3.5" />
+            Change plan to Growth
           </AdminButton>
           <AdminButton variant="secondary" onClick={() => setBulkConfirm("plan-free")}>
             Change plan to Free
@@ -446,14 +453,36 @@ export function UsersTable() {
                             setInput("100")
                           },
                         },
-                        {
-                          icon: Crown,
-                          label: r.plan === "PRO" ? "Downgrade to Free" : "Upgrade to Pro",
-                          onClick: () => setAction({ type: "plan", user: r }),
-                        },
+                        ...(r.plan !== "PRO"
+                          ? [
+                              {
+                                icon: Crown,
+                                label: "Set to Pro",
+                                onClick: () => setAction({ type: "plan-pro", user: r }),
+                              },
+                            ]
+                          : []),
+                        ...(r.plan !== "GROWTH"
+                          ? [
+                              {
+                                icon: Crown,
+                                label: "Set to Growth",
+                                onClick: () => setAction({ type: "plan-growth", user: r }),
+                              },
+                            ]
+                          : []),
+                        ...(r.plan !== "FREE"
+                          ? [
+                              {
+                                icon: Crown,
+                                label: "Downgrade to Free",
+                                onClick: () => setAction({ type: "plan-free", user: r }),
+                              },
+                            ]
+                          : []),
                         {
                           icon: RotateCcw,
-                          label: "Reset Credits (1000)",
+                          label: "Reset Credits",
                           onClick: () => setAction({ type: "reset", user: r }),
                         },
                         {
@@ -598,23 +627,36 @@ export function UsersTable() {
 
       {/* Confirmations */}
       <ConfirmModal
-        open={action?.type === "plan"}
+        open={action?.type === "plan-pro"}
         onClose={() => setAction(null)}
         loading={busy}
-        title={u?.plan === "PRO" ? "Downgrade to Free?" : "Upgrade to Pro?"}
-        body={
-          u?.plan === "PRO"
-            ? `${u?.email} will lose Pro access and go back to the free plan.`
-            : `${u?.email} will get Pro with a fresh 1000-credit monthly allowance.`
-        }
-        confirmLabel={u?.plan === "PRO" ? "Downgrade" : "Upgrade"}
+        title="Set plan to Pro?"
+        body={`${u?.email} will get Pro with a fresh 1000-credit monthly allowance.`}
+        confirmLabel="Set to Pro"
         onConfirm={() =>
-          u &&
-          runAction(
-            () =>
-              post(`/api/admin/users/${u.id}/plan`, { plan: u.plan === "PRO" ? "FREE" : "PRO" }),
-            "Plan updated",
-          )
+          u && runAction(() => post(`/api/admin/users/${u.id}/plan`, { plan: "PRO" }), "Plan updated")
+        }
+      />
+      <ConfirmModal
+        open={action?.type === "plan-growth"}
+        onClose={() => setAction(null)}
+        loading={busy}
+        title="Set plan to Growth?"
+        body={`${u?.email} will get Growth with a fresh 2000-credit monthly allowance.`}
+        confirmLabel="Set to Growth"
+        onConfirm={() =>
+          u && runAction(() => post(`/api/admin/users/${u.id}/plan`, { plan: "GROWTH" }), "Plan updated")
+        }
+      />
+      <ConfirmModal
+        open={action?.type === "plan-free"}
+        onClose={() => setAction(null)}
+        loading={busy}
+        title="Downgrade to Free?"
+        body={`${u?.email} will lose paid-plan access and go back to the free plan.`}
+        confirmLabel="Downgrade"
+        onConfirm={() =>
+          u && runAction(() => post(`/api/admin/users/${u.id}/plan`, { plan: "FREE" }), "Plan updated")
         }
       />
       <ConfirmModal
@@ -622,7 +664,7 @@ export function UsersTable() {
         onClose={() => setAction(null)}
         loading={busy}
         title="Reset credits?"
-        body={`${u?.email} will be reset to 0 used / 1000 total monthly credits.`}
+        body={`${u?.email} will be reset to 0 used against their plan's monthly allowance.`}
         confirmLabel="Reset"
         onConfirm={() =>
           u &&
@@ -660,11 +702,20 @@ export function UsersTable() {
         onConfirm={() => bulkChangePlan("PRO")}
       />
       <ConfirmModal
+        open={bulkConfirm === "plan-growth"}
+        onClose={() => setBulkConfirm(null)}
+        loading={bulkBusy === "plan"}
+        title={`Change ${selected.size} users to Growth?`}
+        body="Each user gets a fresh 2000-credit monthly allowance."
+        confirmLabel="Change to Growth"
+        onConfirm={() => bulkChangePlan("GROWTH")}
+      />
+      <ConfirmModal
         open={bulkConfirm === "plan-free"}
         onClose={() => setBulkConfirm(null)}
         loading={bulkBusy === "plan"}
         title={`Change ${selected.size} users to Free?`}
-        body="Each user loses Pro access and their credits used counter resets."
+        body="Each user loses paid-plan access and their credits used counter resets."
         confirmLabel="Change to Free"
         onConfirm={() => bulkChangePlan("FREE")}
       />

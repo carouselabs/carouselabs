@@ -20,10 +20,14 @@ export function LemonSqueezyButton({
   email,
   label = "Upgrade to Pro · $24.99/mo",
   variant = "purple",
+  checkoutUrl,
 }: {
   email?: string
   label?: string
   variant?: "purple" | "amber"
+  // Defaults to the Pro checkout; pass NEXT_PUBLIC_LEMONSQUEEZY_GROWTH_CHECKOUT_URL
+  // to point this same button at the Growth variant instead.
+  checkoutUrl?: string
 }) {
   const router = useRouter()
   const [ready, setReady] = useState(false)
@@ -31,7 +35,7 @@ export function LemonSqueezyButton({
   const [error, setError] = useState<string | null>(null)
 
   function buildCheckoutUrl(): string {
-    const base = process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL
+    const base = checkoutUrl ?? process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL
     if (!base) throw new Error("Payments are not configured")
     // embed=1 → overlay; media=0&logo=0 → minimal chrome.
     let url = `${base}?embed=1&media=0&logo=0`
@@ -64,7 +68,7 @@ export function LemonSqueezyButton({
           window.LemonSqueezy?.Setup({
             eventHandler: (event) => {
               if (event.event === "Checkout.Success") {
-                // Webhook flips the plan to PRO; refresh to reflect it.
+                // Webhook flips the plan to PRO/GROWTH; refresh to reflect it.
                 setTimeout(() => router.refresh(), 1500)
                 setLoading(false)
               }

@@ -107,7 +107,7 @@ export interface ProfileData {
   voicePresets: VoicePreset[]
   voiceGuidelines: string
   email: string
-  plan: "FREE" | "PRO"
+  plan: "FREE" | "PRO" | "GROWTH"
 }
 
 export function toneLabel(id: string): string {

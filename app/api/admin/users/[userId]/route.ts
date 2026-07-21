@@ -51,7 +51,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
           creditsTotal: sub.creditsTotal,
           extraCredits: sub.extraCredits,
           creditsRemaining: availableCredits({
-            plan: plan as "FREE" | "PRO",
+            plan,
             creditsUsed: sub.creditsUsed,
             creditsTotal: sub.creditsTotal,
             extraCredits: sub.extraCredits,

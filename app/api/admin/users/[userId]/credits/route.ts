@@ -2,11 +2,12 @@
 // body: { action: "grant" | "set" | "reset", amount?: number }
 //   grant → adds `amount` extra credits (no expiry — admin grants don't lapse)
 //   set   → sets the monthly allowance (creditsTotal) to `amount`
-//   reset → creditsUsed back to 0 and creditsTotal back to 1000
+//   reset → creditsUsed back to 0, creditsTotal back to the plan's default
+//           (1000 for PRO, 2000 for GROWTH; FREE has no monthly total)
 import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
-import { MONTHLY_CREDITS } from "@/lib/credits"
+import { creditsForPlan } from "@/lib/lemonsqueezy"
 import { logAdminAction, getRequestIp } from "@/lib/auditLog"
 
 export async function POST(req: Request, { params }: { params: Promise<{ userId: string }> }) {
@@ -34,12 +35,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
   const sub = await db.subscription.findUnique({ where: { userId }, include: { user: true } })
   if (!sub) return NextResponse.json({ error: "User has no subscription row" }, { status: 404 })
 
+  const resetTotal = sub.plan === "FREE" ? sub.creditsTotal : creditsForPlan(sub.plan)
   const data =
     action === "grant"
       ? { extraCredits: { increment: Math.round(amount) }, extraCreditsExpiry: null }
       : action === "set"
         ? { creditsTotal: Math.round(amount) }
-        : { creditsUsed: 0, creditsTotal: MONTHLY_CREDITS }
+        : { creditsUsed: 0, creditsTotal: resetTotal }
 
   const updated = await db.subscription.update({ where: { userId }, data })
 
@@ -49,7 +51,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
       ? `Granted ${Math.round(amount)} extra credits`
       : action === "set"
         ? `Set monthly allowance to ${Math.round(amount)}`
-        : `Reset credits to 0 / ${MONTHLY_CREDITS}`
+        : `Reset credits to 0 / ${resetTotal}`
   await logAdminAction({
     adminEmail: admin.email,
     action: auditAction,

@@ -54,11 +54,11 @@ export function CreditsManager() {
   useEffect(() => void load(), [load])
 
   // FREE rows use creditsUsed as a 0/1 lifetime-post counter, so credit
-  // alerts only make sense for PRO users.
-  const pro = useMemo(() => (users ?? []).filter((u) => u.plan === "PRO"), [users])
-  const low = pro.filter((u) => u.creditsRemaining > 0 && u.creditsRemaining < LOW_THRESHOLD)
-  const zero = pro.filter((u) => u.creditsRemaining === 0)
-  const topSpenders = [...pro].sort((a, b) => b.creditsUsed - a.creditsUsed).slice(0, 10)
+  // alerts only make sense for paid (PRO/GROWTH) users.
+  const paid = useMemo(() => (users ?? []).filter((u) => u.plan !== "FREE"), [users])
+  const low = paid.filter((u) => u.creditsRemaining > 0 && u.creditsRemaining < LOW_THRESHOLD)
+  const zero = paid.filter((u) => u.creditsRemaining === 0)
+  const topSpenders = [...paid].sort((a, b) => b.creditsUsed - a.creditsUsed).slice(0, 10)
 
   const toggle = (id: string) =>
     setSelected((s) => {
@@ -130,7 +130,7 @@ export function CreditsManager() {
       const res = await fetch("/api/admin/credits/reset-pro", { method: "POST" })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error)
-      toast(`Reset ${data.updated} Pro users to 0 / 1000`, "success")
+      toast(`Reset ${data.updated} Pro/Growth users' credits`, "success")
       setConfirmReset(false)
       await load()
     } catch {
@@ -179,13 +179,13 @@ export function CreditsManager() {
           title={`Low credits (< ${LOW_THRESHOLD}) — ${low.length}`}
           actions={<AlertTriangle className="h-4 w-4 text-amber-500" />}
         >
-          {alertList(low, "No Pro users are running low.")}
+          {alertList(low, "No Pro/Growth users are running low.")}
         </AdminCard>
         <AdminCard
           title={`Out of credits — ${zero.length}`}
           actions={<AlertTriangle className="h-4 w-4 text-red-400" />}
         >
-          {alertList(zero, "No Pro users are at zero.")}
+          {alertList(zero, "No Pro/Growth users are at zero.")}
         </AdminCard>
       </div>
 
@@ -229,7 +229,7 @@ export function CreditsManager() {
                 {topSpenders.length === 0 && (
                   <tr>
                     <td className={tableCls.td} colSpan={4}>
-                      No Pro users yet
+                      No Pro/Growth users yet
                     </td>
                   </tr>
                 )}
@@ -285,7 +285,7 @@ export function CreditsManager() {
             </label>
             <div>
               <AdminButton variant="danger" loading={busy === "reset"} onClick={() => setConfirmReset(true)}>
-                Reset ALL Pro users to 0 / 1000
+                Reset ALL Pro/Growth users&apos; credits
               </AdminButton>
             </div>
           </div>
@@ -296,8 +296,8 @@ export function CreditsManager() {
         open={confirmReset}
         onClose={() => setConfirmReset(false)}
         loading={busy === "reset"}
-        title="Reset every Pro user's credits?"
-        body={`This sets creditsUsed to 0 and creditsTotal to 1000 for all ${pro.length} Pro subscriptions. It cannot be undone.`}
+        title="Reset every Pro/Growth user's credits?"
+        body={`This resets creditsUsed to 0 and creditsTotal to each plan's default (1000 for Pro, 2000 for Growth) for all ${paid.length} paid subscriptions. It cannot be undone.`}
         confirmLabel="Yes, reset all"
         onConfirm={resetAllPro}
       />

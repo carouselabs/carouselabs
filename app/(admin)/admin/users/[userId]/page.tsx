@@ -56,7 +56,7 @@ export default async function AdminUserDetailPage({
   const plan = sub?.plan ?? "FREE"
   const creditsRemaining = sub
     ? availableCredits({
-        plan: plan as "FREE" | "PRO",
+        plan,
         creditsUsed: sub.creditsUsed,
         creditsTotal: sub.creditsTotal,
         extraCredits: sub.extraCredits,
@@ -135,7 +135,7 @@ export default async function AdminUserDetailPage({
       <UserAdminActions
         userId={user.id}
         email={user.email}
-        plan={plan as "FREE" | "PRO"}
+        plan={plan}
         suspended={!!user.suspendedAt}
         adminNote={user.adminNote}
       />

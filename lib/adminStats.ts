@@ -16,6 +16,7 @@ export async function getOverviewStats() {
   const [
     totalUsers,
     proUsers,
+    growthUsers,
     totalPosts,
     totalCarousels,
     totalImages,
@@ -25,12 +26,16 @@ export async function getOverviewStats() {
   ] = await Promise.all([
     db.user.count({ where: { deletedAt: null } }),
     db.subscription.count({ where: { plan: "PRO", user: { deletedAt: null } } }),
+    db.subscription.count({ where: { plan: "GROWTH", user: { deletedAt: null } } }),
     db.post.count(),
     db.post.count({ where: { format: "CAROUSEL" } }),
     db.post.count({ where: { format: "SINGLE_IMAGE" } }),
-    // FREE rows track lifetime posts (0/1) in creditsUsed, so only PRO rows
-    // represent real weighted credits.
-    db.subscription.aggregate({ where: { plan: "PRO" }, _sum: { creditsUsed: true } }),
+    // FREE rows track lifetime posts (0/1) in creditsUsed, so only paid-plan
+    // rows represent real weighted credits.
+    db.subscription.aggregate({
+      where: { plan: { in: ["PRO", "GROWTH"] } },
+      _sum: { creditsUsed: true },
+    }),
     db.user.findMany({
       where: { deletedAt: null },
       orderBy: { createdAt: "desc" },
@@ -49,7 +54,8 @@ export async function getOverviewStats() {
   return {
     totalUsers,
     proUsers,
-    freeUsers: totalUsers - proUsers,
+    growthUsers,
+    freeUsers: totalUsers - proUsers - growthUsers,
     totalPosts,
     totalCarousels,
     totalImages,
@@ -90,9 +96,10 @@ export type CohortRow = {
 // Weekly signup cohorts over the last 8 weeks. "Week 1"/"week 2" are relative
 // to each user's OWN signup date (not the calendar week), which is the
 // standard cohort-retention definition. "Converted to Pro" reflects CURRENT
-// plan status, not a true 30-day-window conversion — Subscription.createdAt
-// is set once at signup bootstrap and never moves on upgrade (there's no
-// upgradedAt column), so it can't answer "converted within 30 days".
+// plan status (PRO or GROWTH), not a true 30-day-window conversion —
+// Subscription.createdAt is set once at signup bootstrap and never moves on
+// upgrade (there's no upgradedAt column), so it can't answer "converted
+// within 30 days".
 export async function getCohortAnalysis(): Promise<CohortRow[]> {
   const now = new Date()
   const start = new Date(now)
@@ -145,7 +152,7 @@ export async function getCohortAnalysis(): Promise<CohortRow[]> {
       w2End.setDate(w2End.getDate() + 14)
       if (userPosts.some((d) => d >= u.createdAt && d < w1End)) postedWeek1++
       if (userPosts.some((d) => d >= w1End && d < w2End)) postedWeek2++
-      if (u.subscription?.plan === "PRO") convertedToPro++
+      if (u.subscription?.plan === "PRO" || u.subscription?.plan === "GROWTH") convertedToPro++
     }
     const newUsers = cohortUsers.length
     return {

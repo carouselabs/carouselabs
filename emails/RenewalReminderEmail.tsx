@@ -7,18 +7,20 @@ export function RenewalReminderEmail({
   name,
   renewalDate,
   amount,
+  planName = "Pro",
 }: {
   name?: string
   renewalDate: string
   amount: string
+  planName?: "Pro" | "Growth"
 }) {
   const greeting = name?.trim() ? name : "there"
   return (
-    <EmailLayout preview={`Your Pro plan renews on ${renewalDate}.`}>
-      <Heading style={emailStyles.heading}>Your Pro plan renews soon</Heading>
+    <EmailLayout preview={`Your ${planName} plan renews on ${renewalDate}.`}>
+      <Heading style={emailStyles.heading}>Your {planName} plan renews soon</Heading>
       <Text style={emailStyles.text}>
-        Hi {greeting}, this is a friendly reminder that your CarouseLabs Pro subscription renews in
-        3 days.
+        Hi {greeting}, this is a friendly reminder that your CarouseLabs {planName} subscription
+        renews in 3 days.
       </Text>
       <ul style={emailStyles.list}>
         <li>

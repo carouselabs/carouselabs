@@ -1,7 +1,7 @@
 // app/api/webhooks/lemonsqueezy/route.ts
 import crypto from "node:crypto"
 import { db } from "@/lib/db"
-import { PRO_MONTHLY_CREDITS } from "@/lib/lemonsqueezy"
+import { planForVariantId, creditsForPlan } from "@/lib/lemonsqueezy"
 import {
   sendUpgradedToProEmail,
   sendSubscriptionCancelledEmail,
@@ -109,14 +109,19 @@ export async function POST(req: Request) {
   try {
     switch (eventName) {
       case "subscription_created": {
+        // The webhook payload only tells us which variant was bought, not
+        // which product tier that maps to — resolve it explicitly rather
+        // than assuming every subscription is Pro.
+        const plan = planForVariantId(attrs.variant_id)
+        const credits = creditsForPlan(plan)
         await db.subscription.update({
           where: { userId: user.id },
           data: {
-            plan: "PRO",
+            plan,
             status: "ACTIVE",
             cancelAtPeriodEnd: false,
             creditsUsed: 0,
-            creditsTotal: PRO_MONTHLY_CREDITS,
+            creditsTotal: credits,
             lsSubscriptionId: payload.data.id,
             lsCustomerId: attrs.customer_id != null ? String(attrs.customer_id) : null,
             lsVariantId: attrs.variant_id != null ? String(attrs.variant_id) : null,
@@ -124,7 +129,9 @@ export async function POST(req: Request) {
             currentPeriodEnd: attrs.renews_at ? new Date(attrs.renews_at) : null,
           },
         })
-        await safeEmail(() => sendUpgradedToProEmail(user.email, name, PRO_MONTHLY_CREDITS))
+        await safeEmail(() =>
+          sendUpgradedToProEmail(user.email, name, credits, plan === "GROWTH" ? "Growth" : "Pro"),
+        )
         break
       }
 
@@ -140,7 +147,8 @@ export async function POST(req: Request) {
       }
 
       case "subscription_cancelled": {
-        // Cancel at period end — user keeps Pro until currentPeriodEnd.
+        // Cancel at period end — user keeps their plan until currentPeriodEnd.
+        const cancelledPlan = planForVariantId(attrs.variant_id)
         await db.subscription.update({
           where: { userId: user.id },
           data: {
@@ -149,21 +157,32 @@ export async function POST(req: Request) {
             currentPeriodEnd: attrs.ends_at ? new Date(attrs.ends_at) : undefined,
           },
         })
-        await safeEmail(() => sendSubscriptionCancelledEmail(user.email, name))
+        await safeEmail(() =>
+          sendSubscriptionCancelledEmail(
+            user.email,
+            name,
+            cancelledPlan === "GROWTH" ? "Growth" : "Pro",
+          ),
+        )
         break
       }
 
       case "subscription_payment_success": {
-        // Monthly renewal succeeded — reset the credit allowance.
+        // Monthly renewal succeeded — reset the credit allowance. Re-derive
+        // the plan from the variant on this event (not the stored row) so a
+        // renewal always resets to the correct tier's allowance.
+        const plan = planForVariantId(attrs.variant_id)
+        const credits = creditsForPlan(plan)
         await db.subscription.update({
           where: { userId: user.id },
           data: {
+            plan,
             creditsUsed: 0,
-            creditsTotal: PRO_MONTHLY_CREDITS,
+            creditsTotal: credits,
             currentPeriodEnd: attrs.renews_at ? new Date(attrs.renews_at) : undefined,
           },
         })
-        await safeEmail(() => sendMonthlyResetEmail(user.email, name, PRO_MONTHLY_CREDITS))
+        await safeEmail(() => sendMonthlyResetEmail(user.email, name, credits))
         break
       }
 

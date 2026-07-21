@@ -130,7 +130,7 @@ export async function POST(req: Request) {
   // repeat pre-Post call is a free retry of an already-paid first image.
   const firstChargeKey = `image_first_charged:${user.id}:${ideaId}`
   let chargedAction: "image_first" | "image_regen" | null = null
-  if (plan === "PRO") {
+  if (plan === "PRO" || plan === "GROWTH") {
     if (isRegenEffective) {
       const charge = await chargeCreditsForAction(user, "image_regen")
       if (!charge.ok) {

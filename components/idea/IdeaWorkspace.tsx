@@ -8,7 +8,7 @@ import type { BreakdownOutline } from "@/lib/types/breakdown"
 interface IdeaWorkspaceProps {
   ideaId: string
   initialBreakdown: BreakdownOutline | null
-  plan: "FREE" | "PRO"
+  plan: "FREE" | "PRO" | "GROWTH"
 }
 
 // Holds the shared "is the breakdown still generating?" state so the format

@@ -1,5 +1,5 @@
-// POST /api/admin/broadcasts — send an email to all/pro/free users or a
-// custom list. body: { subject, body, recipients, test?, dryRun? }
+// POST /api/admin/broadcasts — send an email to all/pro/growth/free users or
+// a custom list. body: { subject, body, recipients, test?, dryRun? }
 //   dryRun: true  → resolve + count recipients only, nothing is sent/logged
 //   test:   true  → send ONLY to the admin's own email, bypasses the rate
 //                   limit and isn't written to the audit log (so it never
@@ -44,12 +44,13 @@ export async function POST(req: Request) {
     const validRecipients =
       recipients === "all" ||
       recipients === "pro" ||
+      recipients === "growth" ||
       recipients === "free" ||
       (Array.isArray(recipients) && recipients.every((e) => typeof e === "string"))
     if (!subject || !body || !validRecipients) throw new Error()
   } catch {
     return NextResponse.json(
-      { error: "Expected { subject, body, recipients: all|pro|free|string[] }" },
+      { error: "Expected { subject, body, recipients: all|pro|growth|free|string[] }" },
       { status: 400 },
     )
   }

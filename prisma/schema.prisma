@@ -13,6 +13,7 @@ datasource db {
 enum Plan {
   FREE
   PRO
+  GROWTH
 }
 
 enum IdeaMode {

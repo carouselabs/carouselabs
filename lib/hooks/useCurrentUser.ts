@@ -7,7 +7,7 @@ export interface CurrentUser {
   id: string
   email: string
   name: string | null
-  plan: "FREE" | "PRO"
+  plan: "FREE" | "PRO" | "GROWTH"
   postsToday: number
   postsTotal: number
   creditsRemaining: number

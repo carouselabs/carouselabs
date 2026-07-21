@@ -31,7 +31,7 @@ export default function AccountSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [email, setEmail] = useState("")
-  const [plan, setPlan] = useState<"FREE" | "PRO">("FREE")
+  const [plan, setPlan] = useState<"FREE" | "PRO" | "GROWTH">("FREE")
 
   const [exporting, setExporting] = useState(false)
 
@@ -149,12 +149,14 @@ export default function AccountSettingsPage() {
                 <span
                   className={[
                     "text-[11px] font-semibold px-2.5 py-1 rounded-full tracking-wide",
-                    plan === "PRO"
-                      ? "text-[#1A1A1A] bg-[rgba(26,26,26,0.14)] border border-[rgba(26,26,26,0.3)]"
-                      : "text-[#4B5563] bg-[#ECEAE4] border border-[#E5E3DE]",
+                    plan === "GROWTH"
+                      ? "text-white bg-gradient-to-r from-[#D97706] to-[#F59E0B]"
+                      : plan === "PRO"
+                        ? "text-[#1A1A1A] bg-[rgba(26,26,26,0.14)] border border-[rgba(26,26,26,0.3)]"
+                        : "text-[#4B5563] bg-[#ECEAE4] border border-[#E5E3DE]",
                   ].join(" ")}
                 >
-                  {plan === "PRO" ? "Pro" : "Free"}
+                  {plan === "GROWTH" ? "Growth" : plan === "PRO" ? "Pro" : "Free"}
                 </span>
               </div>
             </div>

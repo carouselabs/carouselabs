@@ -4,6 +4,7 @@ import Link from "next/link"
 import {
   Users,
   Crown,
+  Gem,
   UserRound,
   FileText,
   GalleryHorizontalEnd,
@@ -46,6 +47,7 @@ export default async function AdminOverviewPage() {
   const stats = [
     { label: "Total Users", value: s.totalUsers, icon: <Users className="h-4 w-4" /> },
     { label: "Pro Users", value: s.proUsers, icon: <Crown className="h-4 w-4" /> },
+    { label: "Growth Users", value: s.growthUsers, icon: <Gem className="h-4 w-4" /> },
     { label: "Free Users", value: s.freeUsers, icon: <UserRound className="h-4 w-4" /> },
     { label: "Total Posts", value: s.totalPosts, icon: <FileText className="h-4 w-4" /> },
     { label: "Carousels", value: s.totalCarousels, icon: <GalleryHorizontalEnd className="h-4 w-4" /> },

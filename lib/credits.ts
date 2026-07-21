@@ -5,7 +5,7 @@ const FREE_LIFETIME_POSTS = 1
 const MONTHLY_CREDITS = 1000
 
 type CreditSub = {
-  plan: "FREE" | "PRO"
+  plan: "FREE" | "PRO" | "GROWTH"
   creditsUsed: number
   creditsTotal: number
   extraCredits: number
@@ -27,10 +27,11 @@ export function availableCredits(sub: CreditSub): number {
   return monthly + extra
 }
 
-// Defense-in-depth check for generation routes: a PRO user whose balance is
-// fully drained is blocked server-side even if the client skipped the consume
-// call. FREE users aren't blocked here — their single lifetime post is enforced
-// at consumption time and their regenerations are free by design.
+// Defense-in-depth check for generation routes: a PRO/GROWTH user whose
+// balance is fully drained is blocked server-side even if the client skipped
+// the consume call. FREE users aren't blocked here — their single lifetime
+// post is enforced at consumption time and their regenerations are free by
+// design.
 export async function hasGenerationBalance(userId: string): Promise<boolean> {
   const sub = await db.subscription.findUnique({ where: { userId } })
   if (!sub) return false
@@ -44,7 +45,7 @@ export async function hasGenerationBalance(userId: string): Promise<boolean> {
 // FREE users don't have weighted credits: any chargeable action consumes their
 // single lifetime post, whatever `amount` was requested.
 //
-// PRO users spend their monthly allowance first, then valid extra credits.
+// PRO/GROWTH users spend their monthly allowance first, then valid extra credits.
 // Deduction is atomic via conditional updateMany guards so concurrent requests
 // can't overdraw; when the amount must be split across monthly + extras, the
 // two steps run in a transaction with optimistic guards and fall through to a
@@ -78,8 +79,8 @@ export async function consumeCredits(
     }
   }
 
-  // PRO — 1) try the whole amount from the monthly allowance. The conditional
-  // where clause makes check-and-decrement atomic.
+  // PRO/GROWTH — 1) try the whole amount from the monthly allowance. The
+  // conditional where clause makes check-and-decrement atomic.
   const monthlyRes = await db.subscription.updateMany({
     where: { userId, creditsUsed: { lte: sub.creditsTotal - amount } },
     data: { creditsUsed: { increment: amount } },
@@ -144,7 +145,7 @@ export async function consumeCredits(
     }
   }
 
-  // Pro user can't cover the amount — they buy extra credits, not "upgrade".
+  // Pro/Growth user can't cover the amount — they buy extra credits, not "upgrade".
   return { ok: false, requiresUpgrade: false, remaining: availableCredits(sub) }
 }
 

@@ -19,7 +19,7 @@ export function QuickActions() {
   const router = useRouter()
   const { toast } = useToast()
   const [search, setSearch] = useState("")
-  const [modal, setModal] = useState<"credits" | "pro" | null>(null)
+  const [modal, setModal] = useState<"credits" | "pro" | "growth" | null>(null)
   const [email, setEmail] = useState("")
   const [amount, setAmount] = useState("100")
   const [busy, setBusy] = useState(false)
@@ -69,7 +69,7 @@ export function QuickActions() {
     }
   }
 
-  const onMakePro = async () => {
+  const onMakePlan = async (targetPlan: "PRO" | "GROWTH") => {
     if (!email.trim()) {
       toast("Enter an email", "error")
       return
@@ -84,10 +84,10 @@ export function QuickActions() {
       const res = await fetch(`/api/admin/users/${id}/plan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: "PRO" }),
+        body: JSON.stringify({ plan: targetPlan }),
       })
       if (!res.ok) throw new Error()
-      toast(`${email.trim()} is now PRO`, "success")
+      toast(`${email.trim()} is now ${targetPlan}`, "success")
       closeModal()
       router.refresh()
     } catch {
@@ -121,6 +121,10 @@ export function QuickActions() {
         <AdminButton variant="secondary" onClick={() => setModal("pro")}>
           <Crown className="h-3.5 w-3.5" />
           Make User Pro
+        </AdminButton>
+        <AdminButton variant="secondary" onClick={() => setModal("growth")}>
+          <Crown className="h-3.5 w-3.5" />
+          Make User Growth
         </AdminButton>
       </div>
 
@@ -169,8 +173,30 @@ export function QuickActions() {
             <AdminButton variant="secondary" onClick={closeModal}>
               Cancel
             </AdminButton>
-            <AdminButton onClick={onMakePro} loading={busy}>
+            <AdminButton onClick={() => onMakePlan("PRO")} loading={busy}>
               Make Pro
+            </AdminButton>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={modal === "growth"} onClose={closeModal} title="Make User Growth">
+        <div className="space-y-3">
+          <AdminInput
+            placeholder="user@email.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full"
+          />
+          <p className="text-[11px] text-[#6A6A6A]">
+            Sets plan to GROWTH with a fresh 2000-credit monthly allowance.
+          </p>
+          <div className="flex justify-end gap-2 pt-1">
+            <AdminButton variant="secondary" onClick={closeModal}>
+              Cancel
+            </AdminButton>
+            <AdminButton onClick={() => onMakePlan("GROWTH")} loading={busy}>
+              Make Growth
             </AdminButton>
           </div>
         </div>

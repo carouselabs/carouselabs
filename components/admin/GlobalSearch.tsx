@@ -13,7 +13,7 @@ type UserResult = {
   id: string
   email: string
   name: string | null
-  plan: "FREE" | "PRO"
+  plan: "FREE" | "PRO" | "GROWTH"
 }
 
 type ActionResult = {
@@ -84,7 +84,7 @@ export function GlobalSearch() {
         ])
         const users: Result[] = usersRes.ok
           ? ((await usersRes.json()).users ?? []).slice(0, 8).map(
-              (u: { id: string; email: string; name: string | null; plan: "FREE" | "PRO" }) => ({
+              (u: { id: string; email: string; name: string | null; plan: "FREE" | "PRO" | "GROWTH" }) => ({
                 type: "user" as const,
                 id: u.id,
                 email: u.email,

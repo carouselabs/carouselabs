@@ -2,11 +2,9 @@
 // Shared pricing data for the marketing pricing section and the in-app
 // billing page, so both stay in sync instead of duplicating feature lists.
 //
-// NOTE: "Growth" is a pricing-page tier only right now — the Prisma `Plan`
-// enum has just FREE/PRO, and Growth checkout uses the same Lemon Squeezy
-// variant as Pro (see NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL usage below).
-// There is no way to distinguish a "Growth" subscriber from a "Pro" one in
-// the database yet.
+// Growth is a full plan tier: Prisma's `Plan` enum has FREE/PRO/GROWTH, and
+// it checks out through its own Lemon Squeezy variant — see
+// NEXT_PUBLIC_LEMONSQUEEZY_GROWTH_CHECKOUT_URL / LEMONSQUEEZY_GROWTH_VARIANT_ID.
 
 export type PlanFeature = {
   label: string

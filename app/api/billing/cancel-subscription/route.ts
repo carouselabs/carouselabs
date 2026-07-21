@@ -5,9 +5,9 @@ import { cancelSubscription } from "@lemonsqueezy/lemonsqueezy.js"
 import { db } from "@/lib/db"
 import { initLemonSqueezy } from "@/lib/lemonsqueezy"
 
-// Cancels the user's Pro subscription at the end of the current billing cycle.
-// The plan downgrade + email is finalised via the subscription_cancelled
-// webhook when Lemon Squeezy confirms.
+// Cancels the user's active subscription (Pro or Growth) at the end of the
+// current billing cycle. The plan downgrade + email is finalised via the
+// subscription_cancelled webhook when Lemon Squeezy confirms.
 export async function POST() {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

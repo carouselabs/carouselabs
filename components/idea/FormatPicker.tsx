@@ -56,7 +56,7 @@ const FORMATS: Format[] = [
 
 interface FormatPickerProps {
   ideaId: string
-  plan: "FREE" | "PRO"
+  plan: "FREE" | "PRO" | "GROWTH"
   // While true (breakdown still generating), all options are visible but
   // disabled so the user can't pick a format before the breakdown is ready.
   disabled?: boolean

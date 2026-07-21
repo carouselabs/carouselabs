@@ -49,7 +49,7 @@ export function Topbar() {
             const limit = user.freeLimit ?? 1
             return (
               <span className="text-[11px] text-[#9CA3AF] tabular-nums">
-                {user.plan === "PRO" ? (
+                {user.plan !== "FREE" ? (
                   <>{left} credits left</>
                 ) : (
                   <span className={left === 0 ? "text-[#D97706]" : undefined}>

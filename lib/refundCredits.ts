@@ -25,7 +25,7 @@ export async function refundCreditsForAction(
       where: { userId, creditsUsed: { gte: amount } },
       data: { creditsUsed: { decrement: amount } },
     })
-    if (res.count === 0 && sub.plan === "PRO") {
+    if (res.count === 0 && sub.plan !== "FREE") {
       // The charge (or part of it) came out of extra credits — return it there.
       await db.subscription.updateMany({
         where: { userId },

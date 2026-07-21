@@ -48,12 +48,17 @@ export async function sendFirstPostEmail(email: string, name: string) {
   if (error) throw new Error(`Resend: ${error.message}`)
 }
 
-export async function sendUpgradedToProEmail(email: string, name: string, credits: number) {
+export async function sendUpgradedToProEmail(
+  email: string,
+  name: string,
+  credits: number,
+  planName: "Pro" | "Growth" = "Pro",
+) {
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: `Welcome to Pro! You have ${credits} credits ready 🚀`,
-    html: await render(UpgradedToProEmail({ name, credits })),
+    subject: `Welcome to ${planName}! You have ${credits} credits ready 🚀`,
+    html: await render(UpgradedToProEmail({ name, credits, planName })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
 }
@@ -108,22 +113,27 @@ export async function sendRenewalReminderEmail(
   name: string,
   renewalDate: string,
   amount: string,
+  planName: "Pro" | "Growth" = "Pro",
 ) {
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: "Your Pro subscription renews in 3 days",
-    html: await render(RenewalReminderEmail({ name, renewalDate, amount })),
+    subject: `Your ${planName} subscription renews in 3 days`,
+    html: await render(RenewalReminderEmail({ name, renewalDate, amount, planName })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
 }
 
-export async function sendSubscriptionCancelledEmail(email: string, name: string) {
+export async function sendSubscriptionCancelledEmail(
+  email: string,
+  name: string,
+  planName: "Pro" | "Growth" = "Pro",
+) {
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: "Your Pro subscription has been cancelled",
-    html: await render(SubscriptionCancelledEmail({ name })),
+    subject: `Your ${planName} subscription has been cancelled`,
+    html: await render(SubscriptionCancelledEmail({ name, planName })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
 }

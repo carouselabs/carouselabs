@@ -84,7 +84,7 @@ export async function GET() {
     voicePresets: (p?.voicePresets as unknown as VoicePreset[]) ?? [],
     voiceGuidelines: p?.voiceGuidelines ?? "",
     email: user.email,
-    plan: (user.subscription?.plan ?? "FREE") as "FREE" | "PRO",
+    plan: user.subscription?.plan ?? "FREE",
   }
 
   return NextResponse.json({ profile })

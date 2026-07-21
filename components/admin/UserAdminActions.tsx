@@ -17,7 +17,7 @@ export function UserAdminActions({
 }: {
   userId: string
   email: string
-  plan: "FREE" | "PRO"
+  plan: "FREE" | "PRO" | "GROWTH"
   suspended: boolean
   adminNote: string | null
 }) {
@@ -25,7 +25,7 @@ export function UserAdminActions({
   const { toast } = useToast()
   const [grantAmount, setGrantAmount] = useState("100")
   const [setTotal, setSetTotal] = useState("1000")
-  const [planSel, setPlanSel] = useState<"FREE" | "PRO">(plan)
+  const [planSel, setPlanSel] = useState<"FREE" | "PRO" | "GROWTH">(plan)
   const [note, setNote] = useState(adminNote ?? "")
   const [busy, setBusy] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<"reset" | "suspend" | "plan" | null>(null)
@@ -126,9 +126,13 @@ export function UserAdminActions({
             Plan
           </label>
           <div className="flex gap-2">
-            <AdminSelect value={planSel} onChange={(e) => setPlanSel(e.target.value as "FREE" | "PRO")}>
+            <AdminSelect
+              value={planSel}
+              onChange={(e) => setPlanSel(e.target.value as "FREE" | "PRO" | "GROWTH")}
+            >
               <option value="FREE">FREE</option>
               <option value="PRO">PRO</option>
+              <option value="GROWTH">GROWTH</option>
             </AdminSelect>
             <AdminButton
               variant="secondary"
@@ -148,7 +152,7 @@ export function UserAdminActions({
           </label>
           <div>
             <AdminButton variant="secondary" loading={busy === "reset"} onClick={() => setConfirm("reset")}>
-              Reset to 0 / 1000
+              Reset to plan default
             </AdminButton>
           </div>
         </div>
@@ -199,7 +203,9 @@ export function UserAdminActions({
         body={
           planSel === "PRO"
             ? `${email} gets PRO with a fresh 1000-credit allowance.`
-            : `${email} is downgraded to the free plan.`
+            : planSel === "GROWTH"
+              ? `${email} gets GROWTH with a fresh 2000-credit allowance.`
+              : `${email} is downgraded to the free plan.`
         }
         confirmLabel="Change Plan"
         onConfirm={() => call("plan", `${base}/plan`, { plan: planSel }, "Plan updated")}
@@ -209,7 +215,7 @@ export function UserAdminActions({
         onClose={() => setConfirm(null)}
         loading={busy === "reset"}
         title="Reset monthly credits?"
-        body={`${email} goes back to 0 used / 1000 total.`}
+        body={`${email} goes back to 0 used against their plan's monthly allowance.`}
         confirmLabel="Reset"
         onConfirm={() => call("reset", `${base}/credits`, { action: "reset" }, "Credits reset")}
       />

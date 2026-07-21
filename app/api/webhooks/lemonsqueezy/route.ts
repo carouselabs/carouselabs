@@ -140,22 +140,24 @@ export async function POST(req: Request) {
         const expiry = new Date()
         expiry.setMonth(expiry.getMonth() + 2)
 
-        // updateMany instead of update: a user without a Subscription row
-        // (pre-backfill account) must not throw and put Lemon Squeezy into a
-        // permanent retry loop — log it for manual credit instead.
-        const granted = await db.subscription.updateMany({
+        // Upsert: a user without a Subscription row (pre-backfill account)
+        // gets one created so their paid credits are never dropped.
+        await db.subscription.upsert({
           where: { userId: user.id },
-          data: {
+          create: {
+            userId: user.id,
+            plan: "FREE",
+            status: "ACTIVE",
+            creditsTotal: 0,
+            creditsUsed: 0,
+            extraCredits: creditsToGrant,
+            extraCreditsExpiry: expiry,
+          },
+          update: {
             extraCredits: { increment: creditsToGrant },
             extraCreditsExpiry: expiry,
           },
         })
-        if (granted.count === 0) {
-          console.error(
-            `[webhooks/lemonsqueezy] top-up: no subscription row for user ${user.id} — paid ${creditsToGrant} credits NOT granted, needs manual review`,
-          )
-          break
-        }
 
         console.log(
           `[webhooks/lemonsqueezy] top-up: granted ${creditsToGrant} credits to user ${user.id}, expires ${expiry.toISOString()}`,

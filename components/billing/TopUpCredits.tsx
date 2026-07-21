@@ -1,7 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { Zap } from "lucide-react"
+import { useRouter } from "next/navigation"
+import Script from "next/script"
+import { Loader2, Zap } from "lucide-react"
 
 const MIN_CREDITS = 100
 const MAX_CREDITS = 5000
@@ -15,10 +17,12 @@ function validate(credits: number): string | null {
   return null
 }
 
-// Credit top-up purchase via the Lemon Squeezy "Pay What You Want" product.
-// The chosen amount pre-fills the checkout's suggested price; the webhook
-// derives the credits to grant from the amount actually paid, so the checkout
-// price — not this UI — is authoritative.
+// Credit top-up purchase via the Lemon Squeezy "Pay What You Want" product,
+// opened as an overlay modal (same lemon.js pattern as LemonSqueezyButton —
+// the window.LemonSqueezy global is declared there). The chosen amount
+// pre-fills the checkout's suggested price; the webhook derives the credits
+// to grant from the amount actually paid, so the checkout price — not this
+// UI — is authoritative.
 export function TopUpCredits({
   extraCredits,
   extraCreditsExpiry,
@@ -30,7 +34,11 @@ export function TopUpCredits({
   userId: string
   plan: "FREE" | "PRO" | "GROWTH"
 }) {
+  const router = useRouter()
   const [input, setInput] = useState("500")
+  const [ready, setReady] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
 
   // Top-ups only make sense on top of a paid monthly allowance.
   if (plan !== "PRO" && plan !== "GROWTH") return null
@@ -49,18 +57,48 @@ export function TopUpCredits({
 
   function handleTopUp() {
     if (!isValid) return
-    const priceInCents = (credits / 100) * DOLLARS_PER_100 * 100
+    setCheckoutError(null)
     const base = process.env.NEXT_PUBLIC_LEMONSQUEEZY_TOPUP_CHECKOUT_URL
     if (!base) {
-      console.error("[TopUpCredits] NEXT_PUBLIC_LEMONSQUEEZY_TOPUP_CHECKOUT_URL is not set")
+      setCheckoutError("Payments are not configured")
       return
     }
-    const checkoutUrl = `${base}?checkout[custom][user_id]=${userId}&checkout[suggested_price]=${priceInCents}`
-    window.open(checkoutUrl, "_blank")
+    const ls = window.LemonSqueezy
+    if (!ready || !ls) {
+      setCheckoutError("Checkout is still loading, try again")
+      return
+    }
+    const priceInCents = (credits / 100) * DOLLARS_PER_100 * 100
+    // embed=1 → overlay; media=0&logo=0 → minimal chrome.
+    const checkoutUrl = `${base}?embed=1&media=0&logo=0&checkout[custom][user_id]=${userId}&checkout[suggested_price]=${priceInCents}`
+    setLoading(true)
+    ls.Url.Open(checkoutUrl)
   }
 
   return (
     <div className="flex flex-col gap-3">
+      <Script
+        src="https://assets.lemonsqueezy.com/lemon.js"
+        strategy="afterInteractive"
+        onLoad={() => {
+          window.createLemonSqueezy?.()
+          window.LemonSqueezy?.Setup({
+            eventHandler: (event) => {
+              if (event.event === "Checkout.Success") {
+                // Give the order_created webhook a moment to grant the
+                // credits before re-fetching the balance.
+                setTimeout(() => router.refresh(), 1500)
+                setLoading(false)
+              }
+              if (event.event === "Checkout.Closed") {
+                setLoading(false)
+                router.refresh()
+              }
+            },
+          })
+          setReady(true)
+        }}
+      />
       <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Top Up Credits</h2>
       <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5 flex flex-col gap-4">
         <p className="text-[12.5px] text-[#6B7280]">
@@ -119,15 +157,18 @@ export function TopUpCredits({
 
         <button
           onClick={handleTopUp}
-          disabled={!isValid}
+          disabled={!isValid || loading}
           className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Zap size={14} />
+          {loading ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
           Top Up Now
         </button>
+        {checkoutError && (
+          <p className="text-[12px] text-[rgba(239,68,68,0.9)]">{checkoutError}</p>
+        )}
         <p className="text-[11px] text-[#9CA3AF] leading-snug">
-          You&apos;ll be taken to a secure Lemon Squeezy checkout with your amount pre-filled.
-          Credits are added to your account automatically after payment.
+          Checkout opens right here — credits are added to your account automatically after
+          payment.
         </p>
       </div>
     </div>

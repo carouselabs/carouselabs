@@ -23,8 +23,12 @@ export async function POST() {
   }
 
   const subId = sub.lsSubscriptionId
+  console.log("[billing/upgrade] lsSubscriptionId:", subId)
   if (!subId) {
-    return NextResponse.json({ error: "No active subscription" }, { status: 400 })
+    return NextResponse.json(
+      { error: "No active subscription found. Please contact support." },
+      { status: 400 },
+    )
   }
 
   const growthVariantId = process.env.LEMONSQUEEZY_GROWTH_VARIANT_ID

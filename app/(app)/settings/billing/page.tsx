@@ -13,6 +13,12 @@ import { BillingRefresher } from "@/components/billing/BillingRefresher"
 import { PlanCard } from "@/components/marketing/PlanCard"
 import { FREE_PLAN, PRO_PLAN, GROWTH_PLAN } from "@/lib/plans"
 
+// Always fetch fresh data — credit balances change out-of-band (top-up
+// webhooks land while the user is on the Lemon Squeezy checkout tab), so a
+// cached render would show a stale balance when BillingRefresher refreshes.
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
 function CreditsProgressBar({ percentUsed, low }: { percentUsed: number; low: boolean }) {
   return (
     <div className="h-2 w-full rounded-full bg-[#ECEAE4] overflow-hidden">

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Script from "next/script"
 import { Loader2, Zap } from "lucide-react"
@@ -39,6 +39,53 @@ export function TopUpCredits({
   const [ready, setReady] = useState(false)
   const [loading, setLoading] = useState(false)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
+
+  // The credits actually granted arrive via the order_created webhook, which
+  // can land seconds after lemon.js fires Checkout.Success. A single delayed
+  // router.refresh() races the webhook and loses whenever delivery is slow,
+  // leaving a stale balance on screen. Instead, poll /api/me until the extra
+  // balance changes from what this page rendered, then refresh once.
+  //
+  // Baseline lives in a ref (not the Setup() closure) so repeat top-ups in
+  // one session compare against the latest rendered balance, normalized with
+  // the same expiry rule /api/me applies so the values are comparable.
+  const validExtras =
+    extraCreditsExpiry && new Date(extraCreditsExpiry).getTime() <= Date.now() ? 0 : extraCredits
+  const baselineExtras = useRef(validExtras)
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    baselineExtras.current = validExtras
+  }, [validExtras])
+  useEffect(
+    () => () => {
+      if (pollTimer.current) clearTimeout(pollTimer.current)
+    },
+    []
+  )
+
+  function pollForGrantedCredits(attempt = 0) {
+    const MAX_ATTEMPTS = 15 // ~30s of polling before giving up
+    fetch("/api/me", { cache: "no-store" })
+      .then((res) => (res.ok ? (res.json() as Promise<{ extraCredits: number }>) : null))
+      .then((me) => {
+        if (me && me.extraCredits !== baselineExtras.current) {
+          router.refresh()
+          return
+        }
+        if (attempt >= MAX_ATTEMPTS) {
+          // Webhook never showed up in time — refresh anyway so at least any
+          // other server-side changes appear.
+          router.refresh()
+          return
+        }
+        pollTimer.current = setTimeout(() => pollForGrantedCredits(attempt + 1), 2000)
+      })
+      .catch(() => {
+        if (attempt < MAX_ATTEMPTS) {
+          pollTimer.current = setTimeout(() => pollForGrantedCredits(attempt + 1), 2000)
+        }
+      })
+  }
 
   // Top-ups only make sense on top of a paid monthly allowance.
   if (plan !== "PRO" && plan !== "GROWTH") return null
@@ -85,10 +132,8 @@ export function TopUpCredits({
           window.LemonSqueezy?.Setup({
             eventHandler: (event) => {
               if (event.event === "Checkout.Success") {
-                // Give the order_created webhook a moment to grant the
-                // credits before re-fetching the balance.
-                setTimeout(() => router.refresh(), 1500)
                 setLoading(false)
+                pollForGrantedCredits()
               }
               if (event.event === "Checkout.Closed") {
                 setLoading(false)

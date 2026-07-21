@@ -85,88 +85,40 @@ export async function POST(req: Request) {
 
   const eventName = payload.meta?.event_name
   const attrs = payload.data?.attributes ?? {}
-  const customerEmail = attrs.user_email
-
-  if (!customerEmail) {
-    console.error("[webhooks/lemonsqueezy] no user_email on event:", eventName)
-    return new Response("OK", { status: 200 })
-  }
-
-  const user = await db.user.findFirst({
-    where: { email: customerEmail },
-    include: { profile: true },
-  })
-  if (!user) {
-    // Unknown email (e.g. test purchase) — ack so Lemon Squeezy stops retrying.
-    console.error("[webhooks/lemonsqueezy] no user for email:", customerEmail)
-    return new Response("OK", { status: 200 })
-  }
-
-  // User.name lives on Profile in this schema.
-  const name = user.profile?.name ?? ""
 
   try {
+    // Top-up grants resolve the buyer from meta.custom_data.user_id (stamped
+    // from the authenticated session when the overlay checkout was opened)
+    // instead of the checkout email — the Lemon Squeezy form lets buyers type
+    // any email, which could route the credits to a different account or,
+    // with an unknown email, drop them entirely. Handled before the
+    // email-keyed subscription flow below so that flow's guards can't
+    // short-circuit it.
+    if (eventName === "order_created") {
+      await handleTopUpOrder(payload, attrs)
+      return new Response("OK", { status: 200 })
+    }
+
+    const customerEmail = attrs.user_email
+    if (!customerEmail) {
+      console.error("[webhooks/lemonsqueezy] no user_email on event:", eventName)
+      return new Response("OK", { status: 200 })
+    }
+
+    const user = await db.user.findFirst({
+      where: { email: customerEmail },
+      include: { profile: true },
+    })
+    if (!user) {
+      // Unknown email (e.g. test purchase) — ack so Lemon Squeezy stops retrying.
+      console.error("[webhooks/lemonsqueezy] no user for email:", customerEmail)
+      return new Response("OK", { status: 200 })
+    }
+
+    // User.name lives on Profile in this schema.
+    const name = user.profile?.name ?? ""
+
     switch (eventName) {
-      case "order_created": {
-        // Fires for every purchase, including new subscriptions — only orders
-        // for the top-up variant grant extra credits.
-        const topupVariantId = parseInt(process.env.LEMONSQUEEZY_TOPUP_VARIANT_ID ?? "0", 10)
-        const orderVariantId = attrs.first_order_item?.variant_id
-
-        if (!topupVariantId || orderVariantId !== topupVariantId) {
-          console.log(
-            "[webhooks/lemonsqueezy] order_created: not a top-up order, skipping:",
-            payload.data.id,
-          )
-          break
-        }
-
-        // $2 per 100 credits, exact multiples of 100 only. Use the pre-tax
-        // subtotal — `total` includes sales tax where Lemon Squeezy collects
-        // it, which would inflate (or push out of range) the credit count.
-        const amountPaidCents = attrs.subtotal ?? attrs.total ?? 0
-        const amountPaidDollars = amountPaidCents / 100
-        const creditsToGrant = Math.floor(amountPaidDollars / 2) * 100
-
-        if (creditsToGrant < 100 || creditsToGrant > 5000 || creditsToGrant % 100 !== 0) {
-          console.error(
-            `[webhooks/lemonsqueezy] top-up: invalid credit amount ${creditsToGrant} from $${amountPaidDollars} (order ${payload.data.id}, user ${user.id}) — needs manual review`,
-          )
-          break
-        }
-
-        // Extra credits expire 2 months from purchase. Stacking a new top-up
-        // onto unexpired extras extends the whole balance to the new expiry.
-        const expiry = new Date()
-        expiry.setMonth(expiry.getMonth() + 2)
-
-        // Upsert: a user without a Subscription row (pre-backfill account)
-        // gets one created so their paid credits are never dropped.
-        await db.subscription.upsert({
-          where: { userId: user.id },
-          create: {
-            userId: user.id,
-            plan: "FREE",
-            status: "ACTIVE",
-            creditsTotal: 0,
-            creditsUsed: 0,
-            extraCredits: creditsToGrant,
-            extraCreditsExpiry: expiry,
-          },
-          update: {
-            extraCredits: { increment: creditsToGrant },
-            extraCreditsExpiry: expiry,
-          },
-        })
-
-        console.log(
-          `[webhooks/lemonsqueezy] top-up: granted ${creditsToGrant} credits to user ${user.id}, expires ${expiry.toISOString()}`,
-        )
-
-        await safeEmail(() => sendTopUpEmail(user.email, name, creditsToGrant, expiry))
-        break
-      }
-
       case "subscription_created": {
         // The webhook payload only tells us which variant was bought, not
         // which product tier that maps to — resolve it explicitly rather
@@ -351,4 +303,86 @@ async function safeEmail(fn: () => Promise<unknown>) {
   } catch (err) {
     console.error("[webhooks/lemonsqueezy] email failed:", err)
   }
+}
+
+// order_created fires for every purchase, including new subscriptions — only
+// orders for the top-up variant grant extra credits. The buyer is identified
+// by meta.custom_data.user_id, never by the order's email (see caller).
+// Returning without granting acks the event so Lemon Squeezy stops retrying;
+// anything flagged "needs manual review" is unrecoverable by retry.
+async function handleTopUpOrder(payload: LsWebhook, attrs: LsWebhook["data"]["attributes"]) {
+  const topupVariantId = parseInt(process.env.LEMONSQUEEZY_TOPUP_VARIANT_ID ?? "0", 10)
+  const orderVariantId = attrs.first_order_item?.variant_id
+
+  if (!topupVariantId || orderVariantId !== topupVariantId) {
+    console.log(
+      "[webhooks/lemonsqueezy] order_created: not a top-up order, skipping:",
+      payload.data.id,
+    )
+    return
+  }
+
+  const customUserId = payload.meta?.custom_data?.user_id
+  if (typeof customUserId !== "string" || customUserId === "") {
+    console.error(
+      `[webhooks/lemonsqueezy] top-up: no custom user_id on order ${payload.data.id} — cannot identify buyer, needs manual review`,
+    )
+    return
+  }
+
+  const user = await db.user.findUnique({
+    where: { id: customUserId },
+    include: { profile: true },
+  })
+  if (!user) {
+    console.error(
+      `[webhooks/lemonsqueezy] top-up: no user for custom user_id ${customUserId} (order ${payload.data.id}) — needs manual review`,
+    )
+    return
+  }
+
+  // $2 per 100 credits, exact multiples of 100 only. Use the pre-tax
+  // subtotal — `total` includes sales tax where Lemon Squeezy collects
+  // it, which would inflate (or push out of range) the credit count.
+  const amountPaidCents = attrs.subtotal ?? attrs.total ?? 0
+  const amountPaidDollars = amountPaidCents / 100
+  const creditsToGrant = Math.floor(amountPaidDollars / 2) * 100
+
+  if (creditsToGrant < 100 || creditsToGrant > 5000 || creditsToGrant % 100 !== 0) {
+    console.error(
+      `[webhooks/lemonsqueezy] top-up: invalid credit amount ${creditsToGrant} from $${amountPaidDollars} (order ${payload.data.id}, user ${user.id}) — needs manual review`,
+    )
+    return
+  }
+
+  // Extra credits expire 2 months from purchase. Stacking a new top-up
+  // onto unexpired extras extends the whole balance to the new expiry.
+  const expiry = new Date()
+  expiry.setMonth(expiry.getMonth() + 2)
+
+  // Upsert: a user without a Subscription row (pre-backfill account)
+  // gets one created so their paid credits are never dropped.
+  await db.subscription.upsert({
+    where: { userId: user.id },
+    create: {
+      userId: user.id,
+      plan: "FREE",
+      status: "ACTIVE",
+      creditsTotal: 0,
+      creditsUsed: 0,
+      extraCredits: creditsToGrant,
+      extraCreditsExpiry: expiry,
+    },
+    update: {
+      extraCredits: { increment: creditsToGrant },
+      extraCreditsExpiry: expiry,
+    },
+  })
+
+  console.log(
+    `[webhooks/lemonsqueezy] top-up: granted ${creditsToGrant} credits to user ${user.id}, expires ${expiry.toISOString()}`,
+  )
+
+  const name = user.profile?.name ?? ""
+  await safeEmail(() => sendTopUpEmail(user.email, name, creditsToGrant, expiry))
 }

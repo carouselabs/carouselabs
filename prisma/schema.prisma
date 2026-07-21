@@ -231,6 +231,9 @@ model Subscription {
   currentPeriodStart   DateTime?
   currentPeriodEnd     DateTime?
   cancelAtPeriodEnd    Boolean            @default(false)
+  // Pro → Growth upgrade scheduled to take effect at next renewal (no charge
+  // or credit change until then).
+  upgradeScheduled     Boolean            @default(false)
   // ── Credits ──
   creditsUsed          Int                @default(0)
   creditsTotal         Int                @default(1000)

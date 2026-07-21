@@ -47,10 +47,22 @@ export function Topbar() {
           (() => {
             const left = liveCredits ?? user.creditsRemaining ?? 0
             const limit = user.freeLimit ?? 1
+            // Purchased top-up credits (already inside `left`). The breakdown
+            // is only trustworthy while the balance matches the initial fetch —
+            // after a live charge we only know the combined total, since spends
+            // may have come out of the extras.
+            const extra = user.extraCredits ?? 0
+            const showExtraBreakdown = extra > 0 && left === user.creditsRemaining
             return (
               <span className="text-[11px] text-[#9CA3AF] tabular-nums">
                 {user.plan !== "FREE" ? (
-                  <>{left} credits left</>
+                  showExtraBreakdown ? (
+                    <>
+                      {left - extra} credits + {extra} extra
+                    </>
+                  ) : (
+                    <>{left} credits left</>
+                  )
                 ) : (
                   <span className={left === 0 ? "text-[#D97706]" : undefined}>
                     {left} / {limit} free post{limit === 1 ? "" : "s"} left

@@ -11,6 +11,8 @@ export interface CurrentUser {
   postsToday: number
   postsTotal: number
   creditsRemaining: number
+  // Unexpired purchased top-up credits, already included in creditsRemaining.
+  extraCredits?: number
   freeLimit: number
   onboardingDone: boolean
   isAdmin?: boolean

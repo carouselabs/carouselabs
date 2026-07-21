@@ -7,6 +7,8 @@ import { availableCredits, FREE_LIFETIME_POSTS, MONTHLY_CREDITS } from "@/lib/cr
 import { SettingsTabs } from "@/components/settings/SettingsTabs"
 import { LemonSqueezyButton } from "@/components/billing/LemonSqueezyButton"
 import { CancelSubscriptionButton } from "@/components/billing/CancelSubscriptionButton"
+import { UpgradeToGrowthButton } from "@/components/billing/UpgradeToGrowthButton"
+import { TopUpCredits } from "@/components/billing/TopUpCredits"
 import { PlanCard } from "@/components/marketing/PlanCard"
 import { FREE_PLAN, PRO_PLAN, GROWTH_PLAN } from "@/lib/plans"
 
@@ -35,6 +37,36 @@ function NoteCTA({ children }: { children: ReactNode }) {
   return (
     <div className="w-full inline-flex items-center justify-center px-5 py-3 rounded-xl border border-dashed border-[#E5E3DE] text-[12.5px] text-[#9CA3AF] text-center">
       {children}
+    </div>
+  )
+}
+
+// Plan-change CTA for users who ALREADY have a paid subscription. Opening a
+// raw Lemon Squeezy checkout would create a second, independent subscription
+// (double-billing — LS checkout never cancels the old one), so existing
+// subscribers are sent to the LS customer portal to swap their plan in place
+// instead. That swap arrives as a subscription_updated webhook, which now
+// retiers the plan + credits.
+function PortalCTA({ label, variant }: { label: string; variant: "purple" | "amber" }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <a
+        href="https://app.lemonsqueezy.com/my-orders"
+        target="_blank"
+        rel="noopener noreferrer"
+        className={[
+          "w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[13.5px] font-semibold text-white transition-all",
+          variant === "amber"
+            ? "bg-[#F59E0B] hover:bg-[#D97706] shadow-[0_8px_30px_rgba(245,158,11,0.25)]"
+            : "bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_8px_30px_rgba(124,58,237,0.35)]",
+        ].join(" ")}
+      >
+        {label} →
+      </a>
+      <p className="text-[11px] text-[#9CA3AF] text-center leading-snug">
+        You&apos;ll be redirected to manage your subscription. Your existing subscription will be
+        updated — you won&apos;t be charged twice.
+      </p>
     </div>
   )
 }
@@ -143,6 +175,16 @@ export default async function BillingPage() {
         </div>
       </div>
 
+      {/* Credit top-ups — paid plans only (component also guards internally) */}
+      {isPaid && (
+        <TopUpCredits
+          extraCredits={creditSub.extraCredits}
+          extraCreditsExpiry={creditSub.extraCreditsExpiry?.toISOString() ?? null}
+          userId={user.id}
+          plan={plan}
+        />
+      )}
+
       {/* Upgrade / manage */}
       {!isPaid ? (
         <div className="flex flex-col gap-3">
@@ -185,12 +227,17 @@ export default async function BillingPage() {
               )
             }
           />
+          {/* Free users get a fresh checkout (nothing to conflict with);
+              existing paid subscribers get the portal so a plan change
+              updates their subscription instead of stacking a second one. */}
           <PlanCard
             plan={PRO_PLAN}
             isCurrent={isPro}
             cta={
               isPro ? (
                 <CurrentPlanCTA />
+              ) : isGrowth ? (
+                <PortalCTA label="Switch to Pro" variant="purple" />
               ) : (
                 <LemonSqueezyButton email={user.email} label="Start Creating" />
               )
@@ -202,6 +249,13 @@ export default async function BillingPage() {
             cta={
               isGrowth ? (
                 <CurrentPlanCTA />
+              ) : isPro ? (
+                // Pro → Growth is scheduled for the next renewal (no charge
+                // today) instead of routing through the LS portal.
+                <UpgradeToGrowthButton
+                  renewalDate={renewal}
+                  upgradeScheduled={sub?.upgradeScheduled ?? false}
+                />
               ) : (
                 <LemonSqueezyButton
                   email={user.email}

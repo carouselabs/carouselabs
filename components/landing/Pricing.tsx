@@ -4,6 +4,11 @@ import { AnimatedSection } from "@/components/marketing/AnimatedSection"
 import { PlanCard } from "@/components/marketing/PlanCard"
 import { FREE_PLAN, PRO_PLAN, GROWTH_PLAN, CREDIT_COST_LINES, PRICING_FAQ } from "@/lib/plans"
 
+// Raw checkout links are safe HERE because marketing visitors aren't logged
+// in and have no existing subscription to conflict with. Inside the app,
+// existing paid subscribers must NOT get these links — a second checkout
+// creates a second LS subscription (double-billing); the billing page routes
+// them to the customer portal instead (see PortalCTA in settings/billing).
 const PRO_CHECKOUT_URL = process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL
 const GROWTH_CHECKOUT_URL = process.env.NEXT_PUBLIC_LEMONSQUEEZY_GROWTH_CHECKOUT_URL
 

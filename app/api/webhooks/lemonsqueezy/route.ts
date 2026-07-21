@@ -6,6 +6,7 @@ import {
   sendUpgradedToProEmail,
   sendSubscriptionCancelledEmail,
   sendMonthlyResetEmail,
+  sendTopUpEmail,
 } from "@/lib/email"
 
 // Lemon Squeezy events are signed with HMAC-SHA256 over the raw body, so this
@@ -26,6 +27,10 @@ type LsWebhook = {
       status?: string
       renews_at?: string | null
       ends_at?: string | null
+      // order_created only:
+      subtotal?: number
+      total?: number
+      first_order_item?: { variant_id?: number }
     }
   }
 }
@@ -82,12 +87,6 @@ export async function POST(req: Request) {
   const attrs = payload.data?.attributes ?? {}
   const customerEmail = attrs.user_email
 
-  // order_created carries the buyer email too — log it and we're done.
-  if (eventName === "order_created") {
-    console.log("[webhooks/lemonsqueezy] order_created:", payload.data.id, customerEmail)
-    return new Response("OK", { status: 200 })
-  }
-
   if (!customerEmail) {
     console.error("[webhooks/lemonsqueezy] no user_email on event:", eventName)
     return new Response("OK", { status: 200 })
@@ -108,6 +107,64 @@ export async function POST(req: Request) {
 
   try {
     switch (eventName) {
+      case "order_created": {
+        // Fires for every purchase, including new subscriptions — only orders
+        // for the top-up variant grant extra credits.
+        const topupVariantId = parseInt(process.env.LEMONSQUEEZY_TOPUP_VARIANT_ID ?? "0", 10)
+        const orderVariantId = attrs.first_order_item?.variant_id
+
+        if (!topupVariantId || orderVariantId !== topupVariantId) {
+          console.log(
+            "[webhooks/lemonsqueezy] order_created: not a top-up order, skipping:",
+            payload.data.id,
+          )
+          break
+        }
+
+        // $2 per 100 credits, exact multiples of 100 only. Use the pre-tax
+        // subtotal — `total` includes sales tax where Lemon Squeezy collects
+        // it, which would inflate (or push out of range) the credit count.
+        const amountPaidCents = attrs.subtotal ?? attrs.total ?? 0
+        const amountPaidDollars = amountPaidCents / 100
+        const creditsToGrant = Math.floor(amountPaidDollars / 2) * 100
+
+        if (creditsToGrant < 100 || creditsToGrant > 5000 || creditsToGrant % 100 !== 0) {
+          console.error(
+            `[webhooks/lemonsqueezy] top-up: invalid credit amount ${creditsToGrant} from $${amountPaidDollars} (order ${payload.data.id}, user ${user.id}) — needs manual review`,
+          )
+          break
+        }
+
+        // Extra credits expire 2 months from purchase. Stacking a new top-up
+        // onto unexpired extras extends the whole balance to the new expiry.
+        const expiry = new Date()
+        expiry.setMonth(expiry.getMonth() + 2)
+
+        // updateMany instead of update: a user without a Subscription row
+        // (pre-backfill account) must not throw and put Lemon Squeezy into a
+        // permanent retry loop — log it for manual credit instead.
+        const granted = await db.subscription.updateMany({
+          where: { userId: user.id },
+          data: {
+            extraCredits: { increment: creditsToGrant },
+            extraCreditsExpiry: expiry,
+          },
+        })
+        if (granted.count === 0) {
+          console.error(
+            `[webhooks/lemonsqueezy] top-up: no subscription row for user ${user.id} — paid ${creditsToGrant} credits NOT granted, needs manual review`,
+          )
+          break
+        }
+
+        console.log(
+          `[webhooks/lemonsqueezy] top-up: granted ${creditsToGrant} credits to user ${user.id}, expires ${expiry.toISOString()}`,
+        )
+
+        await safeEmail(() => sendTopUpEmail(user.email, name, creditsToGrant, expiry))
+        break
+      }
+
       case "subscription_created": {
         // The webhook payload only tells us which variant was bought, not
         // which product tier that maps to — resolve it explicitly rather
@@ -120,6 +177,7 @@ export async function POST(req: Request) {
             plan,
             status: "ACTIVE",
             cancelAtPeriodEnd: false,
+            upgradeScheduled: false,
             creditsUsed: 0,
             creditsTotal: credits,
             lsSubscriptionId: payload.data.id,
@@ -136,13 +194,60 @@ export async function POST(req: Request) {
       }
 
       case "subscription_updated": {
+        // Lemon Squeezy fires this for in-place plan swaps (Pro ↔ Growth via
+        // the customer portal / Update Subscription API), not just status
+        // changes — so a variant change here must retier the plan and reset
+        // the credit allowance, or upgrades sit uncredited until the next
+        // renewal.
+        const plan = planForVariantId(attrs.variant_id)
+        const credits = creditsForPlan(plan)
+
+        const currentSub = await db.subscription.findUnique({
+          where: { userId: user.id },
+          select: { plan: true, creditsUsed: true, creditsTotal: true, upgradeScheduled: true },
+        })
+
+        const planChanged = currentSub != null && currentSub.plan !== plan
+
+        // A scheduled upgrade (POST /api/billing/upgrade) swaps the variant
+        // with prorations disabled — Lemon Squeezy fires this event right
+        // away, but the customer hasn't paid the new price yet. Update the
+        // plan now but hold credits at the old allowance; the renewal's
+        // subscription_payment_success resets them to the new tier.
+        const isScheduledUpgrade = planChanged && currentSub?.upgradeScheduled === true
+
         await db.subscription.update({
           where: { userId: user.id },
           data: {
             status: mapStatus(attrs.status),
             currentPeriodEnd: attrs.renews_at ? new Date(attrs.renews_at) : undefined,
+            // If plan changed, update plan (and reset credits unless the
+            // upgrade is deferred to renewal)
+            ...(planChanged
+              ? {
+                  plan,
+                  lsVariantId: attrs.variant_id != null ? String(attrs.variant_id) : null,
+                  ...(isScheduledUpgrade ? {} : { creditsUsed: 0, creditsTotal: credits }),
+                }
+              : {}),
           },
         })
+
+        // Send upgrade email if plan changed to a paid plan. Scheduled
+        // upgrades skip it — nothing was charged or credited yet; the
+        // renewal-time reset email covers activation.
+        if (planChanged && !isScheduledUpgrade && (plan === "PRO" || plan === "GROWTH")) {
+          await safeEmail(() =>
+            sendUpgradedToProEmail(user.email, name, credits, plan === "GROWTH" ? "Growth" : "Pro"),
+          )
+        }
+
+        if (planChanged) {
+          console.log(
+            `[webhooks/lemonsqueezy] plan changed for user ${user.id}: ${currentSub?.plan} → ${plan}, credits reset to ${credits}`,
+          )
+        }
+
         break
       }
 
@@ -180,6 +285,8 @@ export async function POST(req: Request) {
             creditsUsed: 0,
             creditsTotal: credits,
             currentPeriodEnd: attrs.renews_at ? new Date(attrs.renews_at) : undefined,
+            // A pending Pro → Growth upgrade activates with this payment.
+            upgradeScheduled: false,
           },
         })
         await safeEmail(() => sendMonthlyResetEmail(user.email, name, credits))

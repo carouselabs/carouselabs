@@ -98,6 +98,28 @@ export async function sendExtraCreditsEmail(
   if (error) throw new Error(`Resend: ${error.message}`)
 }
 
+// Purchased credit top-up confirmation. Reuses the ExtraCreditsEmail template
+// (same content: credits added + expiry + CTA) with a purchase-specific subject.
+export async function sendTopUpEmail(
+  email: string,
+  name: string,
+  credits: number,
+  expiry: Date,
+) {
+  const expiryDate = expiry.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  })
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: `${credits} credits added to your account! 🎉`,
+    html: await render(ExtraCreditsEmail({ name, creditsAdded: credits, expiryDate })),
+  })
+  if (error) throw new Error(`Resend: ${error.message}`)
+}
+
 export async function sendMonthlyResetEmail(email: string, name: string, credits: number) {
   const { error } = await resend.emails.send({
     from: FROM,

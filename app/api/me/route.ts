@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { availableCredits, FREE_LIFETIME_POSTS } from "@/lib/credits"
+import { availableCredits, extraCreditsValid, FREE_LIFETIME_POSTS } from "@/lib/credits"
 import { isAdminEmail } from "@/lib/adminAuth"
 
 export async function GET() {
@@ -25,6 +25,17 @@ export async function GET() {
     extraCreditsExpiry: sub?.extraCreditsExpiry ?? null,
   })
 
+  // Unexpired purchased top-up credits (already included in creditsRemaining) —
+  // lets the UI show the "X credits + Y extra" breakdown.
+  const extraCredits =
+    sub &&
+    extraCreditsValid({
+      extraCredits: sub.extraCredits,
+      extraCreditsExpiry: sub.extraCreditsExpiry,
+    })
+      ? sub.extraCredits
+      : 0
+
   return NextResponse.json({
     id: user.id,
     email: user.email,
@@ -33,6 +44,7 @@ export async function GET() {
     postsToday: user.usage?.postsToday ?? 0,
     postsTotal: user.usage?.postsTotal ?? 0,
     creditsRemaining,
+    extraCredits,
     freeLimit: FREE_LIFETIME_POSTS,
     onboardingDone: user.profile?.onboardingDone ?? false,
     isAdmin: isAdminEmail(user.email),

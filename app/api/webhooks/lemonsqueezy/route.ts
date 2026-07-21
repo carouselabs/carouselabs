@@ -173,6 +173,10 @@ export async function POST(req: Request) {
         // than assuming every subscription is Pro.
         const plan = planForVariantId(attrs.variant_id)
         const credits = creditsForPlan(plan)
+        console.log(
+          "[webhooks/lemonsqueezy] subscription_created: saving lsSubscriptionId:",
+          payload.data.id,
+        )
         await db.subscription.update({
           where: { userId: user.id },
           data: {
@@ -222,6 +226,9 @@ export async function POST(req: Request) {
           where: { userId: user.id },
           data: {
             status: mapStatus(attrs.status),
+            // Keep the stored id in sync with the event's subscription — also
+            // self-heals rows where a manual backfill stored a bad id.
+            lsSubscriptionId: payload.data.id,
             currentPeriodEnd: attrs.renews_at ? new Date(attrs.renews_at) : undefined,
             // If plan changed, update plan (and reset credits unless the
             // upgrade is deferred to renewal)

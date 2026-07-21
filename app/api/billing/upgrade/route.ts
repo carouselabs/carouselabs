@@ -24,9 +24,14 @@ export async function POST() {
 
   const subId = sub.lsSubscriptionId
   console.log("[billing/upgrade] lsSubscriptionId:", subId)
-  if (!subId) {
+
+  // Guard against missing or placeholder ids (a manual SQL backfill once
+  // stored literal "your_live_subscription_id_here"). Only a real id from the
+  // subscription_created webhook may be sent to Lemon Squeezy.
+  if (!subId || subId.trim() === "" || subId.includes("your_") || subId.includes("_here")) {
+    console.error("[billing/upgrade] Invalid lsSubscriptionId:", subId)
     return NextResponse.json(
-      { error: "No active subscription found. Please contact support." },
+      { error: "Subscription not properly configured. Please contact support." },
       { status: 400 },
     )
   }

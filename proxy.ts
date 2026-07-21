@@ -21,6 +21,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/contact(.*)",
   "/api/webhooks/clerk(.*)",
   "/api/webhooks/lemonsqueezy(.*)",
+  "/api/maintenance-status(.*)",
 ])
 
 const handler = clerkMiddleware(

@@ -9,6 +9,7 @@ import { LemonSqueezyButton } from "@/components/billing/LemonSqueezyButton"
 import { CancelSubscriptionButton } from "@/components/billing/CancelSubscriptionButton"
 import { UpgradeToGrowthButton } from "@/components/billing/UpgradeToGrowthButton"
 import { TopUpCredits } from "@/components/billing/TopUpCredits"
+import { BillingRefresher } from "@/components/billing/BillingRefresher"
 import { PlanCard } from "@/components/marketing/PlanCard"
 import { FREE_PLAN, PRO_PLAN, GROWTH_PLAN } from "@/lib/plans"
 
@@ -114,6 +115,7 @@ export default async function BillingPage() {
 
   return (
     <div className="max-w-5xl mx-auto flex flex-col gap-10">
+      <BillingRefresher />
       <SettingsTabs />
 
       {/* Current plan summary */}

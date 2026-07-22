@@ -129,6 +129,7 @@ model Idea {
   hook        String
   mode        IdeaMode
   category    IdeaCategory
+  source      String?      @default("trending")
   isPinned    Boolean      @default(false)
   isDismissed Boolean      @default(false)
   createdAt   DateTime     @default(now())

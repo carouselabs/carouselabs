@@ -13,7 +13,7 @@ function variantFor(path: string): string | null {
   if (path.startsWith("/settings")) return "settings"
   if (path.startsWith("/history")) return "history"
   if (path.startsWith("/pinned")) return "pinned"
-  if (path.startsWith("/idea") || path.startsWith("/my-idea")) return "idea"
+  if (path.startsWith("/idea") || path.startsWith("/own-idea")) return "idea"
   if (path.startsWith("/dashboard")) return "idea"
   return "generic"
 }

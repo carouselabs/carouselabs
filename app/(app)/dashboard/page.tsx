@@ -1,6 +1,7 @@
 "use client"
 
-import { Sparkles } from "lucide-react"
+import Link from "next/link"
+import { Sparkles, Pencil, ArrowRight } from "lucide-react"
 import { motion } from "framer-motion"
 import { GenerateBar } from "@/components/dashboard/GenerateBar"
 import { IdeaFeed } from "@/components/dashboard/IdeaFeed"
@@ -110,6 +111,31 @@ export default function DashboardPage() {
       <div className="relative z-10 h-full max-w-2xl mx-auto flex flex-col">
         {/* Scrollable region — ideas drop in here (scrollbar hidden) */}
         <div className="order-2 flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-3 py-1">
+          {/* Work on Own Idea — always first, before trending ideas */}
+          {!isGenerating && (
+            <Link
+              href="/own-idea"
+              className="group flex items-center gap-3.5 p-4 rounded-xl bg-[rgba(124,58,237,0.04)] border border-dashed border-[rgba(124,58,237,0.35)] hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.07)] transition-all duration-150"
+            >
+              <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-[rgba(124,58,237,0.10)] flex items-center justify-center">
+                <Pencil size={15} className="text-[#7C3AED]" strokeWidth={2} />
+              </div>
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <p className="text-[14px] font-semibold text-[#0A0A0A]">
+                  Work on Own Idea
+                </p>
+                <p className="text-[12px] text-[#9CA3AF] leading-[1.4]">
+                  Already know what to post? Skip trending and build from your own idea.
+                </p>
+              </div>
+              <ArrowRight
+                size={15}
+                strokeWidth={2.2}
+                className="ml-auto flex-shrink-0 text-[#7C3AED] opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all"
+              />
+            </Link>
+          )}
+
           {/* Error */}
           {error && (
             <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">

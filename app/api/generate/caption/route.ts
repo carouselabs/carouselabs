@@ -220,6 +220,11 @@ export async function POST(req: Request) {
     customStructure: string | undefined
   try {
     const body = await req.json()
+    // Debug: confirm what the client actually sent for the platform flow.
+    console.log(
+      "[caption] Raw request body received:",
+      JSON.stringify({ platform: body.platform, structureMode: body.structureMode, flow: body.flow }),
+    )
     ideaId = body.ideaId
     tone = typeof body.tone === "string" && body.tone ? body.tone : undefined
     userInstruction =
@@ -355,6 +360,9 @@ export async function POST(req: Request) {
   } else if (platform && structureMode) {
     // NEW FLOW — platform-aware master prompt. Tone regens and voice guidelines
     // still apply, appended as extra sections on the user message.
+    console.log(
+      `[caption] Using V2 master prompt: platform=${platform} structureMode=${structureMode} charLimit=${platformCharLimit}`,
+    )
     const userMessage = buildCaptionUserMessage(
       platform,
       breakdown.refinedHook?.trim() || idea.hook,

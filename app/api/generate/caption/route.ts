@@ -9,6 +9,7 @@ import { chargeCreditsForAction } from "@/lib/chargeCredits"
 import { refundCreditsForAction } from "@/lib/refundCredits"
 import type { CreditAction } from "@/lib/creditActions"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
+import { CAPTION_MASTER_SYSTEM_PROMPT, buildCaptionUserMessage } from "@/lib/ai/prompts/captionV2"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -211,7 +212,11 @@ export async function POST(req: Request) {
     currentCaption: string | undefined,
     useVoiceGuidelines: boolean,
     flow: string,
-    isRegen: boolean
+    isRegen: boolean,
+    platform: string | undefined,
+    structureMode: "auto" | "template" | "custom" | undefined,
+    templateStructure: string[] | undefined,
+    customStructure: string | undefined
   try {
     const body = await req.json()
     ideaId = body.ideaId
@@ -230,6 +235,22 @@ export async function POST(req: Request) {
     // callers of the pricier flows are our own clients which always send it).
     flow = typeof body.flow === "string" && body.flow in FLOW_ACTIONS ? body.flow : "caption_only"
     isRegen = body.isRegen === true
+    // New platform/structure flow — all optional; their presence switches to
+    // the V2 master prompt below.
+    platform = typeof body.platform === "string" && body.platform ? body.platform : undefined
+    structureMode =
+      body.structureMode === "auto" || body.structureMode === "template" || body.structureMode === "custom"
+        ? body.structureMode
+        : undefined
+    templateStructure =
+      Array.isArray(body.templateStructure) &&
+      body.templateStructure.every((s: unknown) => typeof s === "string")
+        ? body.templateStructure
+        : undefined
+    customStructure =
+      typeof body.customStructure === "string" && body.customStructure.trim()
+        ? body.customStructure.trim()
+        : undefined
     if (!ideaId) throw new Error("Missing ideaId")
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
@@ -314,12 +335,38 @@ export async function POST(req: Request) {
       : undefined
 
   // Targeted edit when the user gave an instruction AND we have the current
-  // caption to edit; otherwise full regeneration as before. Voice guidelines are
-  // threaded into BOTH paths so the toggle applies to edits too.
-  const prompt =
-    userInstruction && currentCaption
-      ? buildCaptionEditPrompt(currentCaption, userInstruction, useVoiceGuidelines ? voiceGuidelines : undefined)
-      : buildCaptionPrompt(profileContext, breakdown, tone, userInstruction, voiceGuidelines)
+  // caption to edit. Otherwise a full generation: the V2 master prompt when the
+  // client sent a platform + structure selection, the legacy LinkedIn ghost-
+  // writer prompt when it didn't. Voice guidelines are threaded into all paths.
+  let prompt: string
+  if (userInstruction && currentCaption) {
+    prompt = buildCaptionEditPrompt(
+      currentCaption,
+      userInstruction,
+      useVoiceGuidelines ? voiceGuidelines : undefined,
+    )
+  } else if (platform && structureMode) {
+    // NEW FLOW — platform-aware master prompt. Tone regens and voice guidelines
+    // still apply, appended as extra sections on the user message.
+    const userMessage = buildCaptionUserMessage(
+      platform,
+      breakdown.refinedHook?.trim() || idea.hook,
+      breakdown.deepDive,
+      structureMode,
+      templateStructure,
+      customStructure,
+    )
+    const extras = [
+      voiceGuidelines
+        ? `VOICE GUIDELINES — follow these writing style instructions closely:\n${voiceGuidelines}`
+        : null,
+      profileContext ? `User profile (for voice and audience context):\n${profileContext}` : null,
+      tone ? `Tone override: write the entire caption in a ${tone} voice.` : null,
+    ].filter(Boolean)
+    prompt = `${CAPTION_MASTER_SYSTEM_PROMPT}\n\n${extras.length ? extras.join("\n\n") + "\n\n" : ""}${userMessage}`
+  } else {
+    prompt = buildCaptionPrompt(profileContext, breakdown, tone, userInstruction, voiceGuidelines)
+  }
 
   // Stream Claude's response as plain text
   const encoder = new TextEncoder()

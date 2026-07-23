@@ -165,6 +165,15 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
           // regens carry the current caption as evidence and cost 1 credit.
           flow: "caption_only",
           isRegen,
+          // Platform + structure selection — switches the API to the V2 master
+          // prompt. Absent (restored sessions) the API uses the legacy prompt.
+          platform: selectedPlatform ?? undefined,
+          structureMode: structureMode ?? undefined,
+          templateStructure:
+            structureMode === "template"
+              ? CAPTION_TEMPLATES.find((t) => t.id === selectedTemplateId)?.structure
+              : undefined,
+          customStructure: structureMode === "custom" ? customStructure : undefined,
         }),
       })
 

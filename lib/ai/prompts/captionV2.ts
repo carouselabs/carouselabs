@@ -273,6 +273,7 @@ export function buildCaptionUserMessage(
   ideaTitle: string,
   deepDive: string,
   structureMode: "auto" | "template" | "custom",
+  charLimit: number,
   templateStructure?: string[],
   customStructure?: string,
 ): string {
@@ -295,6 +296,9 @@ Deep Dive:
 ${deepDive}
 
 ${structureSection}
+
+CRITICAL LENGTH CONSTRAINT:
+The final caption (excluding the ---HOOKS--- section) MUST be under ${charLimit} characters. This is a hard limit, not a suggestion. Count carefully as you write. If the topic requires more depth than fits, prioritize the most essential points and cut the rest — do not exceed ${charLimit} characters under any circumstances. Aim for 80-90% of the limit (around ${Math.round(charLimit * 0.85)} characters) to leave safety margin.
 
 Generate the caption now following all instructions.`
 }

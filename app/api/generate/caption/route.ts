@@ -10,6 +10,7 @@ import { refundCreditsForAction } from "@/lib/refundCredits"
 import type { CreditAction } from "@/lib/creditActions"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 import { CAPTION_MASTER_SYSTEM_PROMPT, buildCaptionUserMessage } from "@/lib/ai/prompts/captionV2"
+import { CAPTION_PLATFORMS } from "@/lib/captionPlatforms"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -338,6 +339,12 @@ export async function POST(req: Request) {
   // caption to edit. Otherwise a full generation: the V2 master prompt when the
   // client sent a platform + structure selection, the legacy LinkedIn ghost-
   // writer prompt when it didn't. Voice guidelines are threaded into all paths.
+  // Platform char limit — drives the prompt's hard length constraint and the
+  // post-generation length check below. Null outside the platform flow.
+  const platformCharLimit = platform
+    ? (CAPTION_PLATFORMS.find((p) => p.id === platform)?.charLimit ?? 3000)
+    : null
+
   let prompt: string
   if (userInstruction && currentCaption) {
     prompt = buildCaptionEditPrompt(
@@ -353,6 +360,7 @@ export async function POST(req: Request) {
       breakdown.refinedHook?.trim() || idea.hook,
       breakdown.deepDive,
       structureMode,
+      platformCharLimit ?? 3000,
       templateStructure,
       customStructure,
     )
@@ -379,12 +387,28 @@ export async function POST(req: Request) {
           messages: [{ role: "user", content: prompt }],
         })
 
+        let fullText = ""
         for await (const chunk of stream) {
           if (
             chunk.type === "content_block_delta" &&
             chunk.delta.type === "text_delta"
           ) {
+            fullText += chunk.delta.text
             controller.enqueue(encoder.encode(chunk.delta.text))
+          }
+        }
+
+        // Post-generation length check (platform flow only) — the caption is
+        // everything before ---HOOKS---. Doesn't block the response (a retry
+        // would cost more credits); just tracks whether the prompt's hard
+        // limit is holding.
+        if (platformCharLimit !== null) {
+          const hooksAt = fullText.indexOf("---HOOKS---")
+          const captionLength = (hooksAt === -1 ? fullText : fullText.slice(0, hooksAt)).trim().length
+          if (captionLength > platformCharLimit) {
+            console.warn(
+              `[caption] Generated caption exceeds platform limit: ${captionLength}/${platformCharLimit} for platform ${platform}`,
+            )
           }
         }
       } catch (err) {

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, History, Sparkles } from "lucide-react"
-import { CAPTION_TEMPLATES } from "@/lib/captionTemplates"
+import { CAPTION_TEMPLATES, CATEGORY_ORDER, getTemplatesByCategory } from "@/lib/captionTemplates"
 import { CaptionEditor } from "@/components/generate/CaptionEditor"
 import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { ToneSelector, type Tone } from "@/components/generate/ToneSelector"
@@ -56,6 +56,7 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
   const [structureMode, setStructureMode] = useState<StructureMode | null>(null)
   const [customStructure, setCustomStructure] = useState("")
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState(CATEGORY_ORDER[0])
 
   const [caption, setCaption] = useState("")
   const [hooks, setHooks] = useState<string[]>([])
@@ -406,14 +407,34 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
           </div>
         )}
 
-        {/* ── Template grid ────────────────────────────────────── */}
+        {/* ── Template grid — tabbed by category ───────────────── */}
         {captionStep === "template-select" && (
           <div className="flex flex-col gap-4">
             <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
               Pick a caption framework
             </h2>
+
+            {/* Category tabs — horizontally scrollable */}
+            <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
+              {CATEGORY_ORDER.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={[
+                    "flex-shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-all cursor-pointer",
+                    selectedCategory === cat
+                      ? "bg-[#7C3AED] text-white shadow-[0_0_16px_rgba(124,58,237,0.25)]"
+                      : "bg-[#F4F2EC] text-[#6B7280] border border-[#E9E7E1] hover:border-[rgba(124,58,237,0.4)] hover:text-[#7C3AED]",
+                  ].join(" ")}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Templates for the selected category only */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {CAPTION_TEMPLATES.map((template) => (
+              {(getTemplatesByCategory()[selectedCategory] ?? []).map((template) => (
                 <button
                   key={template.id}
                   onClick={() => handleTemplatePick(template.id)}

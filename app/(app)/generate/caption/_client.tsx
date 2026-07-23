@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, History, Sparkles } from "lucide-react"
+import { CAPTION_TEMPLATES } from "@/lib/captionTemplates"
 import { CaptionEditor } from "@/components/generate/CaptionEditor"
 import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { ToneSelector, type Tone } from "@/components/generate/ToneSelector"
@@ -21,6 +22,9 @@ interface CaptionClientProps {
 }
 
 const HOOKS_DELIM = "---HOOKS---"
+
+type CaptionStep = "structure-select" | "custom-input" | "template-select" | "generating"
+type StructureMode = "auto" | "custom" | "template"
 
 function parseFullResponse(raw: string) {
   const hooksIdx = raw.indexOf(HOOKS_DELIM)
@@ -46,6 +50,13 @@ function parseFullResponse(raw: string) {
 }
 
 export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClientProps) {
+  // Structure selection — runs BEFORE caption generation. Not wired into the
+  // generation request yet; the selection is logged and prompts come later.
+  const [captionStep, setCaptionStep] = useState<CaptionStep>("structure-select")
+  const [structureMode, setStructureMode] = useState<StructureMode | null>(null)
+  const [customStructure, setCustomStructure] = useState("")
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+
   const [caption, setCaption] = useState("")
   const [hooks, setHooks] = useState<string[]>([])
   const [tone, setTone] = useState<Tone | null>(null)
@@ -75,14 +86,6 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
   const versions = allVersions[ideaId] ?? []
   const atLimit = regenCount >= MAX_REGENERATIONS
 
-  // On mount: restore a previously saved caption if one exists, otherwise
-  // auto-generate. Guarded so it runs exactly once (no StrictMode double-run).
-  useEffect(() => {
-    if (didInit.current) return
-    didInit.current = true
-    void init()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
   async function init() {
     try {
       const res = await fetch(`/api/posts?ideaId=${ideaId}`)
@@ -91,6 +94,8 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
         if (data.post?.caption) {
           setCaption(data.post.caption)
           setRestored(true)
+          // A caption already exists — skip structure selection entirely.
+          setCaptionStep("generating")
           trackHistory(ideaId, "CAPTION_DONE")
           return
         }
@@ -101,6 +106,14 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
     // No auto-generation on mount: the user picks their voice-guidelines
     // preference first, then clicks "Generate Caption" (see the button below).
   }
+
+  // On mount: restore a previously saved caption if one exists, otherwise
+  // auto-generate. Guarded so it runs exactly once (no StrictMode double-run).
+  useEffect(() => {
+    if (didInit.current) return
+    didInit.current = true
+    void init()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Persist the generated caption so it survives a page revisit.
   async function saveCaption(text: string) {
@@ -234,6 +247,194 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
     })
   }
 
+  // ── Structure selection handlers ──────────────────────────────
+  // Selection is complete → log it (generation prompts wired up later) and
+  // move on to the existing generation screen. Values are passed explicitly
+  // because the setState calls haven't committed yet when we log.
+  function completeSelection(
+    mode: StructureMode,
+    custom: string | null,
+    templateId: string | null,
+  ) {
+    console.log("Caption structure selected:", {
+      structureMode: mode,
+      customStructure: custom,
+      selectedTemplateId: templateId,
+    })
+    setCaptionStep("generating")
+  }
+
+  function handleSelectAuto() {
+    setStructureMode("auto")
+    completeSelection("auto", null, null)
+  }
+
+  function handleSelectCustom() {
+    setStructureMode("custom")
+    setCaptionStep("custom-input")
+  }
+
+  function handleSelectTemplateMode() {
+    setStructureMode("template")
+    setCaptionStep("template-select")
+  }
+
+  function handleCustomContinue() {
+    if (!customStructure.trim()) return
+    completeSelection("custom", customStructure.trim(), null)
+  }
+
+  function handleTemplatePick(templateId: string) {
+    setSelectedTemplateId(templateId)
+    completeSelection("template", null, templateId)
+  }
+
+  const customWordCount = customStructure.trim()
+    ? customStructure.trim().split(/\s+/).length
+    : 0
+
+  // ── Structure selection screens ───────────────────────────────
+  if (captionStep !== "generating") {
+    return (
+      <div className="max-w-2xl mx-auto flex flex-col gap-8">
+        {/* Back — inner steps return to the main selection */}
+        {captionStep === "structure-select" ? (
+          <Link
+            href={`/idea/${ideaId}`}
+            className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+          >
+            <ArrowLeft size={13} strokeWidth={2.2} />
+            Back to breakdown
+          </Link>
+        ) : (
+          <button
+            onClick={() => setCaptionStep("structure-select")}
+            className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+          >
+            <ArrowLeft size={13} strokeWidth={2.2} />
+            Back to structure options
+          </button>
+        )}
+
+        {/* Idea hook */}
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
+            Caption for
+          </p>
+          <p className="text-[15px] font-medium text-[#4B5563] leading-[1.4]">
+            {ideaHook}
+          </p>
+        </div>
+
+        {/* ── Main selection: 3 large cards ────────────────────── */}
+        {captionStep === "structure-select" && (
+          <div className="flex flex-col gap-4">
+            <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
+              How should your caption be structured?
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                {
+                  emoji: "🤖",
+                  title: "Auto (AI Chooses)",
+                  subtitle:
+                    "AI analyzes the topic and automatically selects or combines the best caption structure.",
+                  onClick: handleSelectAuto,
+                },
+                {
+                  emoji: "✍️",
+                  title: "Define Your Own",
+                  subtitle: "Tell us exactly how you want your caption structured.",
+                  onClick: handleSelectCustom,
+                },
+                {
+                  emoji: "📋",
+                  title: "Choose a Template",
+                  subtitle: "Pick from proven caption frameworks.",
+                  onClick: handleSelectTemplateMode,
+                },
+              ].map((opt) => (
+                <button
+                  key={opt.title}
+                  onClick={opt.onClick}
+                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[26px] leading-none">{opt.emoji}</span>
+                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    {opt.title}
+                  </span>
+                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
+                    {opt.subtitle}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Custom structure input ───────────────────────────── */}
+        {captionStep === "custom-input" && (
+          <div className="flex flex-col gap-4">
+            <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
+              Define your caption structure
+            </h2>
+            <div className="flex flex-col gap-2">
+              <textarea
+                value={customStructure}
+                onChange={(e) => setCustomStructure(e.target.value)}
+                rows={5}
+                autoFocus
+                placeholder="Describe how you want your caption structured (e.g. Hook, then 3 quick tips, then a question at the end)"
+                className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[14px] text-[#0A0A0A] leading-[1.6] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.5)] transition-colors"
+              />
+              <p className="text-[11px] text-[#ADA99F] tabular-nums">
+                {customWordCount} {customWordCount === 1 ? "word" : "words"}
+              </p>
+            </div>
+            <button
+              onClick={handleCustomContinue}
+              disabled={!customStructure.trim()}
+              className={[
+                "self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
+                customStructure.trim()
+                  ? "bg-[#7C3AED] hover:bg-[#6D28D9] cursor-pointer shadow-[0_0_24px_rgba(124,58,237,0.28)]"
+                  : "bg-[rgba(124,58,237,0.3)] cursor-not-allowed opacity-50",
+              ].join(" ")}
+            >
+              Continue →
+            </button>
+          </div>
+        )}
+
+        {/* ── Template grid ────────────────────────────────────── */}
+        {captionStep === "template-select" && (
+          <div className="flex flex-col gap-4">
+            <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
+              Pick a caption framework
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {CAPTION_TEMPLATES.map((template) => (
+                <button
+                  key={template.id}
+                  onClick={() => handleTemplatePick(template.id)}
+                  className="group flex flex-col items-start gap-2 p-4 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[20px] leading-none">{template.emoji}</span>
+                  <span className="text-[13px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    {template.name}
+                  </span>
+                  <span className="text-[11px] text-[#9CA3AF] leading-[1.5]">
+                    {template.structure.join(" → ")}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-2xl mx-auto flex flex-col gap-8">
       {/* Back */}
@@ -257,6 +458,18 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
           <span className="mt-1 self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#1A1A1A] bg-[rgba(26,26,26,0.1)] border border-[rgba(26,26,26,0.2)]">
             <History size={11} strokeWidth={2.2} />
             Restored from last session
+          </span>
+        )}
+        {/* Chosen structure — absent on restored sessions (no selection made) */}
+        {structureMode && (
+          <span className="mt-1 self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
+            {structureMode === "auto" && "🤖 Auto structure"}
+            {structureMode === "custom" && "✍️ Custom structure"}
+            {structureMode === "template" &&
+              (() => {
+                const t = CAPTION_TEMPLATES.find((t) => t.id === selectedTemplateId)
+                return t ? `${t.emoji} ${t.name}` : "📋 Template"
+              })()}
           </span>
         )}
       </div>

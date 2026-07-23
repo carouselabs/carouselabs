@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, History, Sparkles } from "lucide-react"
 import { CAPTION_TEMPLATES, CATEGORY_ORDER, getTemplatesByCategory } from "@/lib/captionTemplates"
+import { CAPTION_PLATFORMS } from "@/lib/captionPlatforms"
 import { CaptionEditor } from "@/components/generate/CaptionEditor"
 import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { ToneSelector, type Tone } from "@/components/generate/ToneSelector"
@@ -23,7 +24,12 @@ interface CaptionClientProps {
 
 const HOOKS_DELIM = "---HOOKS---"
 
-type CaptionStep = "structure-select" | "custom-input" | "template-select" | "generating"
+type CaptionStep =
+  | "platform-select"
+  | "structure-select"
+  | "custom-input"
+  | "template-select"
+  | "generating"
 type StructureMode = "auto" | "custom" | "template"
 
 function parseFullResponse(raw: string) {
@@ -52,7 +58,8 @@ function parseFullResponse(raw: string) {
 export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClientProps) {
   // Structure selection — runs BEFORE caption generation. Not wired into the
   // generation request yet; the selection is logged and prompts come later.
-  const [captionStep, setCaptionStep] = useState<CaptionStep>("structure-select")
+  const [captionStep, setCaptionStep] = useState<CaptionStep>("platform-select")
+  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null)
   const [structureMode, setStructureMode] = useState<StructureMode | null>(null)
   const [customStructure, setCustomStructure] = useState("")
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
@@ -257,12 +264,18 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
     custom: string | null,
     templateId: string | null,
   ) {
-    console.log("Caption structure selected:", {
+    console.log("Caption settings selected:", {
+      selectedPlatform,
       structureMode: mode,
       customStructure: custom,
       selectedTemplateId: templateId,
     })
     setCaptionStep("generating")
+  }
+
+  function handleSelectPlatform(platformId: string) {
+    setSelectedPlatform(platformId)
+    setCaptionStep("structure-select")
   }
 
   function handleSelectAuto() {
@@ -298,8 +311,8 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
   if (captionStep !== "generating") {
     return (
       <div className="max-w-2xl mx-auto flex flex-col gap-8">
-        {/* Back — inner steps return to the main selection */}
-        {captionStep === "structure-select" ? (
+        {/* Back — each step returns to the previous one */}
+        {captionStep === "platform-select" ? (
           <Link
             href={`/idea/${ideaId}`}
             className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
@@ -309,11 +322,15 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
           </Link>
         ) : (
           <button
-            onClick={() => setCaptionStep("structure-select")}
+            onClick={() =>
+              setCaptionStep(
+                captionStep === "structure-select" ? "platform-select" : "structure-select",
+              )
+            }
             className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
           >
             <ArrowLeft size={13} strokeWidth={2.2} />
-            Back to structure options
+            {captionStep === "structure-select" ? "Back to platforms" : "Back to structure options"}
           </button>
         )}
 
@@ -325,7 +342,50 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
           <p className="text-[15px] font-medium text-[#4B5563] leading-[1.4]">
             {ideaHook}
           </p>
+          {/* Selected platform carries through the later steps */}
+          {selectedPlatform && captionStep !== "platform-select" && (
+            <span className="mt-1 self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
+              {(() => {
+                const p = CAPTION_PLATFORMS.find((p) => p.id === selectedPlatform)
+                return p ? `${p.emoji} ${p.name}` : selectedPlatform
+              })()}
+            </span>
+          )}
         </div>
+
+        {/* ── Platform selection: 8 cards ──────────────────────── */}
+        {captionStep === "platform-select" && (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
+                Which platform is this caption for?
+              </h2>
+              <p className="text-[13px] text-[#6B7280] leading-[1.55]">
+                We&apos;ll tailor the tone, length, and style to match.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {CAPTION_PLATFORMS.map((platform) => (
+                <button
+                  key={platform.id}
+                  onClick={() => handleSelectPlatform(platform.id)}
+                  className="group flex flex-col items-start gap-2 p-4 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[24px] leading-none">{platform.emoji}</span>
+                  <span className="text-[13px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    {platform.name}
+                  </span>
+                  <span className="self-start text-[10px] font-semibold px-1.5 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)] tabular-nums">
+                    {platform.charLimit.toLocaleString()} chars
+                  </span>
+                  <span className="text-[11px] text-[#9CA3AF] leading-[1.5]">
+                    {platform.guidance}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── Main selection: 3 large cards ────────────────────── */}
         {captionStep === "structure-select" && (
@@ -481,17 +541,29 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
             Restored from last session
           </span>
         )}
-        {/* Chosen structure — absent on restored sessions (no selection made) */}
-        {structureMode && (
-          <span className="mt-1 self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
-            {structureMode === "auto" && "🤖 Auto structure"}
-            {structureMode === "custom" && "✍️ Custom structure"}
-            {structureMode === "template" &&
-              (() => {
-                const t = CAPTION_TEMPLATES.find((t) => t.id === selectedTemplateId)
-                return t ? `${t.emoji} ${t.name}` : "📋 Template"
-              })()}
-          </span>
+        {/* Chosen platform + structure — absent on restored sessions (no selection made) */}
+        {(selectedPlatform || structureMode) && (
+          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+            {selectedPlatform && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
+                {(() => {
+                  const p = CAPTION_PLATFORMS.find((p) => p.id === selectedPlatform)
+                  return p ? `${p.emoji} ${p.name}` : selectedPlatform
+                })()}
+              </span>
+            )}
+            {structureMode && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
+                {structureMode === "auto" && "🤖 Auto structure"}
+                {structureMode === "custom" && "✍️ Custom structure"}
+                {structureMode === "template" &&
+                  (() => {
+                    const t = CAPTION_TEMPLATES.find((t) => t.id === selectedTemplateId)
+                    return t ? `${t.emoji} ${t.name}` : "📋 Template"
+                  })()}
+              </span>
+            )}
+          </div>
         )}
       </div>
 

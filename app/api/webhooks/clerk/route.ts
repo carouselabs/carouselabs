@@ -40,21 +40,39 @@ export async function POST(req: Request) {
     if (!primary) {
       return new Response("No primary email", { status: 400 })
     }
-    await db.user.create({
-      data: {
-        clerkId,
-        email: primary.email_address,
-        subscription: { create: {} },
-        usage: { create: {} },
-      },
-    })
+    const email = primary.email_address
 
-    // Welcome email — best-effort, never fail the webhook on email errors.
-    const name = [first_name, last_name].filter(Boolean).join(" ")
-    try {
-      await sendWelcomeEmail(primary.email_address, name)
-    } catch (err) {
-      console.error("[webhooks/clerk] welcome email failed:", err)
+    // The email may already belong to a User row under a different clerkId
+    // (Clerk account deleted and re-created, or a new sign-in method). Creating
+    // would violate the unique email constraint (P2002) — re-link that row to
+    // the new clerkId instead of creating a duplicate. Same-clerkId hits are
+    // webhook retries: nothing to do.
+    const existingByEmail = await db.user.findFirst({ where: { email } })
+    if (existingByEmail) {
+      if (existingByEmail.clerkId !== clerkId) {
+        await db.user.update({
+          where: { id: existingByEmail.id },
+          data: { clerkId },
+        })
+      }
+    } else {
+      await db.user.create({
+        data: {
+          clerkId,
+          email,
+          subscription: { create: {} },
+          usage: { create: {} },
+        },
+      })
+
+      // Welcome email — best-effort, never fail the webhook on email errors.
+      // Only for genuinely new users, not re-linked or retried ones.
+      const name = [first_name, last_name].filter(Boolean).join(" ")
+      try {
+        await sendWelcomeEmail(email, name)
+      } catch (err) {
+        console.error("[webhooks/clerk] welcome email failed:", err)
+      }
     }
   }
 

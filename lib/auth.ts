@@ -33,6 +33,22 @@ export async function getCurrentUser() {
     clerkUser.emailAddresses[0]?.emailAddress ??
     ""
 
+  // The email may already belong to a User row under a different clerkId
+  // (Clerk account deleted and re-created, or a new sign-in method). Creating
+  // would violate the unique email constraint (P2002) — re-link that row to
+  // the new clerkId instead, then re-run so the normal path (including the
+  // subscription backfill) picks it up.
+  if (email) {
+    const existingByEmail = await db.user.findUnique({ where: { email } })
+    if (existingByEmail && existingByEmail.clerkId !== userId) {
+      await db.user.update({
+        where: { id: existingByEmail.id },
+        data: { clerkId: userId },
+      })
+      return getCurrentUser()
+    }
+  }
+
   return db.user.upsert({
     where: { clerkId: userId },
     create: {

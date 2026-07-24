@@ -7,11 +7,18 @@ import Anthropic from "@anthropic-ai/sdk"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { validateContentTopic } from "@/lib/validateTopic"
+import { countWords } from "@/lib/wordCount"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 import type { Prisma } from "@prisma/client"
 
-// Deep dive generation can take time for complex topics.
-export const maxDuration = 120
+// Deep dive generation can take time for complex topics — matches the timeout
+// used by other complex AI routes (carousel-prompt).
+export const maxDuration = 300
+
+// Mirrors the client-side caps in app/(app)/own-idea/page.tsx — enforced here
+// too since the client's truncation can be bypassed by calling this API directly.
+const TITLE_WORD_LIMIT = 15
+const STRUCTURE_WORD_LIMIT = 650
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -176,6 +183,12 @@ export async function POST(req: Request) {
       structure = typeof body.structure === "string" ? body.structure.trim() : ""
       if (!title) throw new Error("Please give your idea a title")
       if (!structure) throw new Error("Please describe your idea")
+      if (countWords(title) > TITLE_WORD_LIMIT) {
+        throw new Error(`Title must be ${TITLE_WORD_LIMIT} words or fewer`)
+      }
+      if (countWords(structure) > STRUCTURE_WORD_LIMIT) {
+        throw new Error(`Description must be ${STRUCTURE_WORD_LIMIT} words or fewer`)
+      }
     } catch (err) {
       return NextResponse.json(
         { error: err instanceof Error ? err.message : "Invalid request body" },
@@ -195,6 +208,7 @@ export async function POST(req: Request) {
 
     // Build the knowledge document with Claude.
     let response: Anthropic.Message
+    const startTime = Date.now()
     try {
       response = await anthropic.messages.create({
         model: "claude-sonnet-4-5",
@@ -206,6 +220,13 @@ export async function POST(req: Request) {
           },
         ],
       })
+      const duration = Date.now() - startTime
+      console.log(`[own-idea] Claude generation took ${duration}ms`)
+      if (duration > 90000) {
+        console.warn(
+          `[own-idea] WARNING: Generation took over 90s (${duration}ms) — approaching timeout risk`,
+        )
+      }
     } catch (err) {
       console.error("[own-idea/generate] Anthropic API error:", err)
       return NextResponse.json(

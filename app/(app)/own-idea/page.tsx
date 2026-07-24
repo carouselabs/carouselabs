@@ -4,6 +4,10 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, ArrowRight, Sparkles, Loader2, Pencil } from "lucide-react"
+import { countWords, truncateToWords } from "@/lib/wordCount"
+
+const TITLE_WORD_LIMIT = 15
+const STRUCTURE_WORD_LIMIT = 650
 
 export default function OwnIdeaPage() {
   const router = useRouter()
@@ -13,7 +17,18 @@ export default function OwnIdeaPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const wordCount = structure.trim() ? structure.trim().split(/\s+/).length : 0
+  const titleWordCount = countWords(title)
+  const wordCount = countWords(structure)
+
+  // Hard-cap both fields at the word limit — typing or pasting past it just
+  // drops the overflow instead of letting the count climb past the limit.
+  function handleTitleChange(value: string) {
+    setTitle(truncateToWords(value, TITLE_WORD_LIMIT))
+  }
+
+  function handleStructureChange(value: string) {
+    setStructure(truncateToWords(value, STRUCTURE_WORD_LIMIT))
+  }
 
   function handleContinue() {
     if (!title.trim()) return
@@ -94,11 +109,19 @@ export default function OwnIdeaPage() {
           <input
             type="text"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => handleTitleChange(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleContinue()}
             placeholder="e.g. 5 mistakes founders make when hiring their first team"
             className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[14px] text-[#0A0A0A] leading-[1.6] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.5)] transition-colors"
           />
+          <p
+            className={[
+              "text-[11px] tabular-nums self-end",
+              titleWordCount >= TITLE_WORD_LIMIT ? "text-[#D97706] font-medium" : "text-[#ADA99F]",
+            ].join(" ")}
+          >
+            {titleWordCount} / {TITLE_WORD_LIMIT} words
+          </p>
         </div>
 
         {!showStructure && (
@@ -126,14 +149,19 @@ export default function OwnIdeaPage() {
               </h2>
               <textarea
                 value={structure}
-                onChange={(e) => setStructure(e.target.value)}
+                onChange={(e) => handleStructureChange(e.target.value)}
                 rows={8}
                 autoFocus
                 placeholder="Describe your idea, key points, main argument, examples..."
                 className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[14px] text-[#0A0A0A] leading-[1.6] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.5)] transition-colors"
               />
-              <p className="text-[11px] text-[#ADA99F] tabular-nums">
-                {wordCount} {wordCount === 1 ? "word" : "words"}
+              <p
+                className={[
+                  "text-[11px] tabular-nums self-end",
+                  wordCount >= STRUCTURE_WORD_LIMIT ? "text-[#D97706] font-medium" : "text-[#ADA99F]",
+                ].join(" ")}
+              >
+                {wordCount} / {STRUCTURE_WORD_LIMIT} words
               </p>
             </div>
 

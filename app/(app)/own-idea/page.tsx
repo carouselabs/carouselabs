@@ -49,8 +49,21 @@ export default function OwnIdeaPage() {
           structure: structure.trim(),
         }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to generate")
+
+      // Read as text first — a slow generation can run past an infrastructure
+      // gateway timeout, which returns an HTML error page instead of JSON.
+      // Blindly calling res.json() on that surfaces a confusing "Unexpected
+      // token '<'" parse error instead of a usable message.
+      const raw = await res.text()
+      let data: { ideaId?: string; error?: string }
+      try {
+        data = JSON.parse(raw)
+      } catch {
+        console.error("[own-idea] Non-JSON response:", res.status, raw.slice(0, 200))
+        throw new Error("Generation is taking longer than expected. Please try again.")
+      }
+
+      if (!res.ok) throw new Error(data.error ?? "Failed to generate")
       // Keep the loading state up through navigation to the detail page.
       router.push(`/idea/${data.ideaId}`)
     } catch (err) {

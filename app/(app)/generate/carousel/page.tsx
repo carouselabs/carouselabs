@@ -38,5 +38,13 @@ export default async function CarouselPage({
   // key={ideaId} forces a full remount when the idea changes, so per-idea client
   // state (reference image, caption, slides, step) can never leak between ideas
   // when only the ?ideaId searchParam changes.
-  return <CarouselClient key={ideaId} ideaId={ideaId} ideaHook={idea.hook} hasGuidelines={hasGuidelines} />
+  return (
+    <CarouselClient
+      key={ideaId}
+      ideaId={ideaId}
+      ideaHook={idea.hook}
+      hasGuidelines={hasGuidelines}
+      isOwnIdea={idea.source === "own-idea"}
+    />
+  )
 }

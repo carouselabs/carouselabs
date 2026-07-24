@@ -23,11 +23,14 @@ import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regeneratio
 import { friendlyGenerationError } from "@/lib/friendlyError"
 import { countWords } from "@/lib/wordCount"
 import { useCreditStore } from "@/lib/store/creditStore"
+import { CAPTION_PLATFORMS } from "@/lib/captionPlatforms"
+import { CAPTION_TEMPLATES, CATEGORY_ORDER, getTemplatesByCategory } from "@/lib/captionTemplates"
 
 interface CarouselClientProps {
   ideaId: string
   ideaHook: string
   hasGuidelines: boolean
+  isOwnIdea: boolean
 }
 
 type Step = 1 | 2 | 3 | 4
@@ -42,9 +45,32 @@ interface Slide {
 
 const SKELETON_WIDTHS = ["88%", "72%", "95%", "65%", "80%", "55%", "70%", "40%"]
 
-export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClientProps) {
+// Platform + structure selection (own-idea flow only) — appears before caption
+// generation, same pattern as caption/_client.tsx and image/_client.tsx.
+// Trending ideas start (and stay) on "generating", i.e. the unchanged existing
+// flow.
+type CarouselFlowStep =
+  | "platform-select"
+  | "structure-select"
+  | "custom-input"
+  | "template-select"
+  | "generating"
+type StructureMode = "auto" | "custom" | "template"
+
+export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: CarouselClientProps) {
   const router = useRouter()
   const [step, setStep] = useState<Step>(1)
+
+  // Platform + structure selection (own-idea flow only). Selections feed the
+  // /api/generate/caption request; trending ideas never see these screens.
+  const [carouselFlowStep, setCarouselFlowStep] = useState<CarouselFlowStep>(
+    isOwnIdea ? "platform-select" : "generating",
+  )
+  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null)
+  const [structureMode, setStructureMode] = useState<StructureMode | null>(null)
+  const [customStructure, setCustomStructure] = useState("")
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState(CATEGORY_ORDER[0])
 
   // Step 1
   const [caption, setCaption] = useState("")
@@ -170,7 +196,12 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
     if (savedImages) setSlideImages(savedImages)
 
     const hasAnySaved = !!(savedCaption || savedSlides || savedImages || savedSize)
-    if (hasAnySaved) setRestored(true)
+    if (hasAnySaved) {
+      setRestored(true)
+      // A previous session already exists — skip the platform/structure
+      // selection (own-idea flow) and drop straight into the saved state.
+      setCarouselFlowStep("generating")
+    }
 
     // Jump to the furthest step the saved data supports.
     if (savedSlides || savedImages) setStep(4)
@@ -207,6 +238,20 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
           // Carousel post (40); regens carry the caption as evidence.
           flow: "carousel",
           isRegen,
+          // Own-idea flow only: platform + structure selection switches the API
+          // to the V2 master prompt. Trending ideas send nothing extra, so the
+          // API keeps using the legacy prompt for them.
+          ...(isOwnIdea
+            ? {
+                platform: selectedPlatform ?? undefined,
+                structureMode: structureMode ?? undefined,
+                templateStructure:
+                  structureMode === "template"
+                    ? CAPTION_TEMPLATES.find((t) => t.id === selectedTemplateId)?.structure
+                    : undefined,
+                customStructure: structureMode === "custom" ? customStructure : undefined,
+              }
+            : {}),
         }),
         signal: controller.signal,
       })
@@ -544,6 +589,57 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
     }
   }
 
+  // ── Structure selection handlers (own-idea flow) ──────────────
+  // Selection complete → log it and drop into the existing generation flow.
+  // Values are passed explicitly because the setState calls haven't committed.
+  function completeSelection(
+    mode: StructureMode,
+    custom: string | null,
+    templateId: string | null,
+  ) {
+    console.log("Carousel caption settings selected:", {
+      selectedPlatform,
+      structureMode: mode,
+      customStructure: custom,
+      selectedTemplateId: templateId,
+    })
+    setCarouselFlowStep("generating")
+  }
+
+  function handleSelectPlatform(platformId: string) {
+    setSelectedPlatform(platformId)
+    setCarouselFlowStep("structure-select")
+  }
+
+  function handleSelectAuto() {
+    setStructureMode("auto")
+    completeSelection("auto", null, null)
+  }
+
+  function handleSelectCustom() {
+    setStructureMode("custom")
+    setCarouselFlowStep("custom-input")
+  }
+
+  function handleSelectTemplateMode() {
+    setStructureMode("template")
+    setCarouselFlowStep("template-select")
+  }
+
+  function handleCustomContinue() {
+    if (!customStructure.trim()) return
+    completeSelection("custom", customStructure.trim(), null)
+  }
+
+  function handleTemplatePick(templateId: string) {
+    setSelectedTemplateId(templateId)
+    completeSelection("template", null, templateId)
+  }
+
+  const customWordCount = customStructure.trim()
+    ? customStructure.trim().split(/\s+/).length
+    : 0
+
   // The step-4 caption + carousel grid. Rendered centered normally; once image
   // generation has started it moves into a 70% left column with the LoadingGame
   // on the right.
@@ -622,6 +718,206 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
     </div>
   )
 
+  // ── Platform + structure selection screens (own-idea flow only) ──
+  if (isOwnIdea && carouselFlowStep !== "generating") {
+    return (
+      <div className="max-w-2xl mx-auto flex flex-col gap-8">
+        {/* Back — each step returns to the previous one */}
+        {carouselFlowStep === "platform-select" ? (
+          <Link
+            href={`/idea/${ideaId}`}
+            className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+          >
+            <ArrowLeft size={13} strokeWidth={2.2} />
+            Back to breakdown
+          </Link>
+        ) : (
+          <button
+            onClick={() =>
+              setCarouselFlowStep(
+                carouselFlowStep === "structure-select" ? "platform-select" : "structure-select",
+              )
+            }
+            className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+          >
+            <ArrowLeft size={13} strokeWidth={2.2} />
+            {carouselFlowStep === "structure-select" ? "Back to platforms" : "Back to structure options"}
+          </button>
+        )}
+
+        {/* Idea hook */}
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
+            Carousel for
+          </p>
+          <p className="text-[15px] font-medium text-[#4B5563] leading-[1.4]">{ideaHook}</p>
+          {selectedPlatform && carouselFlowStep !== "platform-select" && (
+            <span className="mt-1 self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
+              {(() => {
+                const p = CAPTION_PLATFORMS.find((p) => p.id === selectedPlatform)
+                return p ? `${p.emoji} ${p.name}` : selectedPlatform
+              })()}
+            </span>
+          )}
+        </div>
+
+        {/* ── Platform selection: 8 cards ──────────────────────── */}
+        {carouselFlowStep === "platform-select" && (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
+                Which platform is this carousel for?
+              </h2>
+              <p className="text-[13px] text-[#6B7280] leading-[1.55]">
+                We&apos;ll tailor the tone, length, and style to match.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {CAPTION_PLATFORMS.map((platform) => (
+                <button
+                  key={platform.id}
+                  onClick={() => handleSelectPlatform(platform.id)}
+                  className="group flex flex-col items-start gap-2 p-4 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[24px] leading-none">{platform.emoji}</span>
+                  <span className="text-[13px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    {platform.name}
+                  </span>
+                  <span className="self-start text-[10px] font-semibold px-1.5 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)] tabular-nums">
+                    {platform.charLimit.toLocaleString()} chars
+                  </span>
+                  <span className="text-[11px] text-[#9CA3AF] leading-[1.5]">
+                    {platform.guidance}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Main selection: 3 large cards ────────────────────── */}
+        {carouselFlowStep === "structure-select" && (
+          <div className="flex flex-col gap-4">
+            <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
+              How should your caption be structured?
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                {
+                  emoji: "🤖",
+                  title: "Auto (AI Chooses)",
+                  subtitle:
+                    "AI analyzes the topic and automatically selects or combines the best caption structure.",
+                  onClick: handleSelectAuto,
+                },
+                {
+                  emoji: "✍️",
+                  title: "Define Your Own",
+                  subtitle: "Tell us exactly how you want your caption structured.",
+                  onClick: handleSelectCustom,
+                },
+                {
+                  emoji: "📋",
+                  title: "Choose a Template",
+                  subtitle: "Pick from proven caption frameworks.",
+                  onClick: handleSelectTemplateMode,
+                },
+              ].map((opt) => (
+                <button
+                  key={opt.title}
+                  onClick={opt.onClick}
+                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[26px] leading-none">{opt.emoji}</span>
+                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    {opt.title}
+                  </span>
+                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">{opt.subtitle}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Custom structure input ───────────────────────────── */}
+        {carouselFlowStep === "custom-input" && (
+          <div className="flex flex-col gap-4">
+            <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
+              Define your caption structure
+            </h2>
+            <div className="flex flex-col gap-2">
+              <textarea
+                value={customStructure}
+                onChange={(e) => setCustomStructure(e.target.value)}
+                rows={5}
+                autoFocus
+                placeholder="Describe how you want your caption structured (e.g. Hook, then 3 quick tips, then a question at the end)"
+                className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[14px] text-[#0A0A0A] leading-[1.6] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.5)] transition-colors"
+              />
+              <p className="text-[11px] text-[#ADA99F] tabular-nums">
+                {customWordCount} {customWordCount === 1 ? "word" : "words"}
+              </p>
+            </div>
+            <button
+              onClick={handleCustomContinue}
+              disabled={!customStructure.trim()}
+              className={[
+                "self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
+                customStructure.trim()
+                  ? "bg-[#7C3AED] hover:bg-[#6D28D9] cursor-pointer shadow-[0_0_24px_rgba(124,58,237,0.28)]"
+                  : "bg-[rgba(124,58,237,0.3)] cursor-not-allowed opacity-50",
+              ].join(" ")}
+            >
+              Continue →
+            </button>
+          </div>
+        )}
+
+        {/* ── Template grid — tabbed by category ───────────────── */}
+        {carouselFlowStep === "template-select" && (
+          <div className="flex flex-col gap-4">
+            <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
+              Pick a caption framework
+            </h2>
+            <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
+              {CATEGORY_ORDER.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={[
+                    "flex-shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-all cursor-pointer",
+                    selectedCategory === cat
+                      ? "bg-[#7C3AED] text-white shadow-[0_0_16px_rgba(124,58,237,0.25)]"
+                      : "bg-[#F4F2EC] text-[#6B7280] border border-[#E9E7E1] hover:border-[rgba(124,58,237,0.4)] hover:text-[#7C3AED]",
+                  ].join(" ")}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {(getTemplatesByCategory()[selectedCategory] ?? []).map((template) => (
+                <button
+                  key={template.id}
+                  onClick={() => handleTemplatePick(template.id)}
+                  className="group flex flex-col items-start gap-2 p-4 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[20px] leading-none">{template.emoji}</span>
+                  <span className="text-[13px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    {template.name}
+                  </span>
+                  <span className="text-[11px] text-[#9CA3AF] leading-[1.5]">
+                    {template.structure.join(" → ")}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-4xl mx-auto flex flex-col gap-8">
       <Link
@@ -639,6 +935,31 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines }: CarouselClie
           <History size={11} strokeWidth={2.2} />
           Restored from last session
         </span>
+      )}
+
+      {/* Chosen platform + structure — own-idea flow only */}
+      {isOwnIdea && (selectedPlatform || structureMode) && (
+        <div className="flex items-center gap-1.5 flex-wrap -mt-4">
+          {selectedPlatform && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
+              {(() => {
+                const p = CAPTION_PLATFORMS.find((p) => p.id === selectedPlatform)
+                return p ? `${p.emoji} ${p.name}` : selectedPlatform
+              })()}
+            </span>
+          )}
+          {structureMode && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
+              {structureMode === "auto" && "🤖 Auto structure"}
+              {structureMode === "custom" && "✍️ Custom structure"}
+              {structureMode === "template" &&
+                (() => {
+                  const t = CAPTION_TEMPLATES.find((t) => t.id === selectedTemplateId)
+                  return t ? `${t.emoji} ${t.name}` : "📋 Template"
+                })()}
+            </span>
+          )}
+        </div>
       )}
 
       {/* ── STEP 1: Caption Generation ── */}

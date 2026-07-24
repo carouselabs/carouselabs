@@ -6,6 +6,10 @@ import Anthropic from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 import { db } from "@/lib/db"
 import { buildImagePrompt } from "@/lib/ai/prompts/imagePrompt"
+import {
+  buildOwnIdeaImagePromptSystemMessage,
+  buildOwnIdeaImagePromptUserMessage,
+} from "@/lib/ai/prompts/ownIdeaImagePrompt"
 import { hasGenerationBalance } from "@/lib/credits"
 import { validateReferenceImage } from "@/lib/validateImage"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
@@ -202,6 +206,35 @@ function parseJsonResponse(raw: string): { caption: string; imagePrompt: string 
   throw new Error("All parsing strategies exhausted")
 }
 
+// Own-idea Stage 2 responses carry only { imagePrompt }, so the lenient
+// caption+imagePrompt parser above doesn't apply — same fallback strategies,
+// narrowed to the single field.
+function parseOwnIdeaImagePrompt(raw: string): string | null {
+  try {
+    const parsed = JSON.parse(raw)
+    if (typeof parsed.imagePrompt === "string") return parsed.imagePrompt
+  } catch {}
+
+  try {
+    const start = raw.indexOf("{")
+    const end = raw.lastIndexOf("}")
+    if (start !== -1 && end !== -1 && end > start) {
+      const parsed = JSON.parse(raw.slice(start, end + 1))
+      if (typeof parsed.imagePrompt === "string") return parsed.imagePrompt
+    }
+  } catch {}
+
+  try {
+    const match = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (match) {
+      const parsed = JSON.parse(match[1].trim())
+      if (typeof parsed.imagePrompt === "string") return parsed.imagePrompt
+    }
+  } catch {}
+
+  return extractStringValue(raw, "imagePrompt")
+}
+
 export async function POST(req: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -227,6 +260,8 @@ export async function POST(req: Request) {
   let referenceMediaType: string
   let userInstruction: string | undefined
   let currentImagePrompt: string | undefined
+  let isOwnIdea: boolean
+  let presentationStructure: string | undefined
 
   try {
     const body = await req.json()
@@ -243,6 +278,11 @@ export async function POST(req: Request) {
     currentImagePrompt =
       typeof body.currentImagePrompt === "string" && body.currentImagePrompt.trim()
         ? body.currentImagePrompt
+        : undefined
+    isOwnIdea = body.isOwnIdea === true
+    presentationStructure =
+      typeof body.presentationStructure === "string" && body.presentationStructure.trim()
+        ? body.presentationStructure.trim()
         : undefined
     if (!ideaId) throw new Error("Missing ideaId")
     // TEMP diagnostic — confirm in Vercel logs exactly what the client sent.
@@ -284,6 +324,71 @@ export async function POST(req: Request) {
   console.log(`[image] Profile used: industry=${niche}`)
 
   const breakdown = idea.breakdowns[0].outline as unknown as BreakdownOutline
+
+  // Own-idea Stage 2: builds the image prompt from the Stage 1 Presentation
+  // Structure Decision instead of the legacy single-stage prompt below.
+  // Trending ideas never send presentationStructure, so they always fall
+  // through to the existing logic untouched.
+  if (isOwnIdea && presentationStructure) {
+    try {
+      const sizeBlock = size === "1:1" ? "Square 1080x1080px" : "Portrait 1080x1350px"
+      const userInstructionBlock = userInstruction ? `Special Instruction: ${userInstruction}` : ""
+      const nicheBlock = niche ? `Niche: ${niche}` : ""
+
+      const userMessage = buildOwnIdeaImagePromptUserMessage(
+        breakdown.refinedHook,
+        breakdown.deepDive,
+        caption,
+        presentationStructure,
+        sizeBlock,
+        userInstructionBlock,
+        nicheBlock,
+      )
+
+      const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
+        ...(referenceImage
+          ? [
+              {
+                type: "image_url" as const,
+                image_url: {
+                  url: `data:${referenceMediaType || "image/jpeg"};base64,${referenceImage}`,
+                  detail: "high" as const,
+                },
+              },
+            ]
+          : []),
+        { type: "text" as const, text: userMessage },
+      ]
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        max_tokens: 4096,
+        messages: [
+          { role: "system", content: buildOwnIdeaImagePromptSystemMessage() },
+          { role: "user", content: userContent },
+        ],
+      })
+
+      const raw = response.choices[0]?.message?.content ?? ""
+      const ownIdeaPrompt = parseOwnIdeaImagePrompt(raw)
+
+      if (!ownIdeaPrompt) {
+        console.error("[generate/image-prompt] own-idea: empty/unparseable response. Raw:\n", raw)
+        return NextResponse.json({ error: "Image prompt was empty in AI response" }, { status: 502 })
+      }
+
+      return NextResponse.json({ imagePrompt: ownIdeaPrompt })
+    } catch (err) {
+      console.error("[generate/image-prompt] own-idea path error:", err)
+      return NextResponse.json(
+        { error: "Failed to generate image prompt. Please try again." },
+        { status: 500 },
+      )
+    }
+  }
+
+  // EXISTING LOGIC — unchanged, runs when isOwnIdea is false or
+  // presentationStructure is missing.
   // Targeted edit when the user gave an instruction AND we have the current
   // prompt to edit; otherwise full regeneration as before.
   const prompt =

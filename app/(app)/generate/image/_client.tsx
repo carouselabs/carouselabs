@@ -71,6 +71,17 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
   const [selectedImageTemplateId, setSelectedImageTemplateId] = useState<string | null>(null)
   const [selectedImageCategory, setSelectedImageCategory] = useState(IMAGE_CATEGORY_ORDER[0])
 
+  // Own-idea flow only: the idea's deep dive content, fetched once on mount —
+  // needed by Stage 1 (presentation structure) since this client only
+  // otherwise holds the hook, not the full breakdown.
+  const [deepDive, setDeepDive] = useState("")
+
+  // Own-idea flow only: which of the 3 pipeline stages is running, so the
+  // loading UI can show real progress instead of one generic spinner.
+  const [imageGenStage, setImageGenStage] = useState<
+    "structure" | "prompt" | "image" | null
+  >(null)
+
   // Step 1
   const [caption, setCaption] = useState("")
   const [isStreamingCaption, setIsStreamingCaption] = useState(false)
@@ -151,6 +162,22 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
       if (s === "4:5" || s === "1:1") savedSize = s
     } catch {
       // localStorage unavailable — fall through
+    }
+
+    // Own-idea flow only: Stage 1 (presentation structure) needs the full
+    // deep dive, which this client doesn't otherwise hold. The breakdown is
+    // guaranteed to exist (the server page redirects otherwise), so this is
+    // just a cached DB read.
+    if (isOwnIdea) {
+      try {
+        const res = await fetch(`/api/ideas/${ideaId}/breakdown`)
+        if (res.ok) {
+          const data = await res.json()
+          if (typeof data.breakdown?.deepDive === "string") setDeepDive(data.breakdown.deepDive)
+        }
+      } catch {
+        // best-effort — Stage 1 will still run with an empty deep dive
+      }
     }
 
     // Legacy fallback: caption may live in the Post table from before this
@@ -416,6 +443,110 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     }
   }
 
+  // Own-idea 3-stage pipeline: Stage 1 decides the presentation structure,
+  // Stage 2 turns that + the post content into a detailed image prompt, Stage
+  // 3 renders it — same final call as the trending-idea flow. Trending ideas
+  // never call this; they use generateImageFlow() above unchanged.
+  async function generateImageForOwnIdea(userInstruction?: string, isRegen = false) {
+    setIsGeneratingImage(true)
+    setGameStarted(true) // keep the game visible from now on
+    setError(null)
+    setReferenceNotice(null)
+    setImageUrl(null)
+    setPostId(null)
+
+    try {
+      // 1) Presentation structure decision.
+      setImageGenStage("structure")
+      const structureRes = await fetch("/api/own-idea/presentation-structure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: ideaHook,
+          deepDive,
+          caption,
+          imageStructureMode,
+          customImageStructure: imageStructureMode === "custom" ? customImageStructure : undefined,
+          imageTemplateId: imageStructureMode === "template" ? selectedImageTemplateId : undefined,
+          referenceImageBase64: referenceImage ?? undefined,
+          referenceMediaType: referenceImage ? referenceMediaType : undefined,
+        }),
+      })
+      const structureData = await structureRes.json()
+      if (!structureRes.ok) {
+        throw new Error(
+          (structureData as { error?: string }).error ?? "Failed to determine image structure",
+        )
+      }
+      const presentationStructure = structureData.presentationStructure as string
+
+      // 2) Image prompt generation, grounded in the structure decision above.
+      setImageGenStage("prompt")
+      const promptRes = await fetch("/api/generate/image-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ideaId,
+          caption,
+          size,
+          referenceImage: referenceImage ?? undefined,
+          referenceMediaType: referenceImage ? referenceMediaType : undefined,
+          userInstruction,
+          isOwnIdea: true,
+          presentationStructure,
+        }),
+      })
+      const promptData = await promptRes.json()
+      if (!promptRes.ok) {
+        throw new Error((promptData as { error?: string }).error ?? "Generation failed")
+      }
+      const newPrompt = promptData.imagePrompt as string
+      setImagePrompt(newPrompt)
+      try {
+        localStorage.setItem(`imagePrompt_${ideaId}`, newPrompt)
+      } catch {
+        // best-effort
+      }
+      trackHistory(ideaId, "IMAGE_DONE")
+
+      // 3) Render the image — identical to the trending-idea flow.
+      setImageGenStage("image")
+      const imgRes = await fetch("/api/generate/image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ideaId,
+          imagePrompt: newPrompt,
+          caption,
+          size,
+          referenceImage: referenceImage ?? undefined,
+          referenceMediaType: referenceImage ? referenceMediaType : undefined,
+          isRegen, // server charges image_regen (8) for regenerations
+        }),
+      })
+      const imgData = await imgRes.json()
+      if (!imgRes.ok) {
+        throw new Error((imgData as { error?: string }).error ?? "Image generation failed")
+      }
+      setImageUrl(imgData.imageUrl)
+      setPostId(imgData.postId)
+      setImageInstruction("") // clear the instruction box on success
+      try {
+        localStorage.setItem(`imageUrl_${ideaId}`, imgData.imageUrl)
+      } catch {
+        // best-effort
+      }
+      // Credits were charged server-side — refresh the Topbar balance.
+      void useCreditStore.getState().refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong")
+      throw err // let handleRegenerateImage refund the reserved slot on failure
+    } finally {
+      setIsGeneratingImage(false)
+      setImageGenStage(null)
+    }
+  }
+
   // Step-1 "Regenerate caption" — was calling streamCaption() directly and
   // bypassing the limit. Now gated through the same 2-per-session budget.
   async function handleRegenerateCaption() {
@@ -507,9 +638,13 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     try {
       // With a custom instruction, re-run the full flow so the prompt is edited
       // first; without one, just re-render the image from the existing prompt.
-      // Both paths flag isRegen so the server charges image_regen (8).
+      // All paths flag isRegen so the server charges image_regen (8). Own-idea
+      // always re-runs the full 3-stage pipeline (Stage 1 has no lightweight
+      // edit mode of its own).
       const userInstruction = imageInstruction.trim() || undefined
-      if (userInstruction) {
+      if (isOwnIdea) {
+        await generateImageForOwnIdea(userInstruction, true)
+      } else if (userInstruction) {
         await generateImageFlow(userInstruction, true)
       } else {
         await generateImage(true)
@@ -735,17 +870,24 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
           >
             <div className="h-10 w-10 rounded-full border-2 border-[rgba(26,26,26,0.25)] border-t-[#1A1A1A] animate-spin" />
             <p className="text-[13px] font-medium text-[#1A1A1A]">
-              Generating your image…
+              {isOwnIdea && imageGenStage === "structure" && "Deciding the best visual structure…"}
+              {isOwnIdea && imageGenStage === "prompt" && "Writing your image prompt…"}
+              {(!isOwnIdea || imageGenStage === "image" || imageGenStage === null) &&
+                "Generating your image…"}
             </p>
             <p className="text-[11px] text-[#9CA3AF]">(this can take up to a minute)</p>
           </div>
         )}
 
         {/* Single button — generates the prompt then the image in one go. No
-            instruction box before generation; it appears only after success. */}
+            instruction box before generation; it appears only after success.
+            Own-idea posts run the 3-stage pipeline; trending ideas keep the
+            existing single-stage flow. */}
         {!imageUrl && !isGeneratingImage && (
           <button
-            onClick={() => void generateImageFlow().catch(() => {})}
+            onClick={() =>
+              void (isOwnIdea ? generateImageForOwnIdea() : generateImageFlow()).catch(() => {})
+            }
             className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
           >
             <Sparkles size={14} strokeWidth={2} />
@@ -1453,7 +1595,9 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
                 {friendlyGenerationError(error)}
               </div>
               <button
-                onClick={() => void generateImageFlow().catch(() => {})}
+                onClick={() =>
+                  void (isOwnIdea ? generateImageForOwnIdea() : generateImageFlow()).catch(() => {})
+                }
                 disabled={isGeneratingImage}
                 className="self-start text-[13px] font-medium text-[#1A1A1A] hover:text-black transition-colors disabled:opacity-50"
               >

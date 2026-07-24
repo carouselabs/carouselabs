@@ -25,6 +25,10 @@ import { countWords } from "@/lib/wordCount"
 import { useCreditStore } from "@/lib/store/creditStore"
 import { CAPTION_PLATFORMS } from "@/lib/captionPlatforms"
 import { CAPTION_TEMPLATES, CATEGORY_ORDER, getTemplatesByCategory } from "@/lib/captionTemplates"
+import {
+  CAROUSEL_CATEGORY_ORDER,
+  getCarouselTemplatesByCategory,
+} from "@/lib/carouselStructureTemplates"
 
 interface CarouselClientProps {
   ideaId: string
@@ -57,6 +61,12 @@ type CarouselFlowStep =
   | "generating"
 type StructureMode = "auto" | "custom" | "template"
 
+// Carousel structure selection (own-idea flow only) — gates the "Generate
+// Carousel" button on step 4 until a slide structure is chosen. Trending
+// ideas start (and stay) on "ready", i.e. the unchanged existing flow.
+type CarouselStructureStep = "select" | "custom" | "template" | "ready"
+type CarouselStructureMode = "auto" | "custom" | "template" | "reference-only"
+
 export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: CarouselClientProps) {
   const router = useRouter()
   const [step, setStep] = useState<Step>(1)
@@ -71,6 +81,20 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   const [customStructure, setCustomStructure] = useState("")
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState(CATEGORY_ORDER[0])
+
+  // Carousel structure selection (own-idea flow only) — appears after
+  // reference image upload/size selection, right before carousel generation.
+  const [carouselStructureStep, setCarouselStructureStep] = useState<CarouselStructureStep>(
+    isOwnIdea ? "select" : "ready",
+  )
+  const [carouselStructureMode, setCarouselStructureMode] = useState<CarouselStructureMode | null>(
+    null,
+  )
+  const [customCarouselStructure, setCustomCarouselStructure] = useState("")
+  const [selectedCarouselTemplateId, setSelectedCarouselTemplateId] = useState<string | null>(null)
+  const [selectedCarouselCategory, setSelectedCarouselCategory] = useState(
+    CAROUSEL_CATEGORY_ORDER[0],
+  )
 
   // Step 1
   const [caption, setCaption] = useState("")
@@ -201,6 +225,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
       // A previous session already exists — skip the platform/structure
       // selection (own-idea flow) and drop straight into the saved state.
       setCarouselFlowStep("generating")
+      setCarouselStructureStep("ready")
     }
 
     // Jump to the furthest step the saved data supports.
@@ -366,6 +391,17 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     setIsGeneratingSlides(true)
     setGameStarted(true) // keep the game visible for the whole flow
     setLoadingMessage("Building your carousel structure...")
+
+    // Own-idea flow only: not wired into the request yet — the carousel-prompt
+    // route still uses its existing single-stage prompt. This is the marker
+    // for the future Stage 1/Stage 2 pipeline (same shape as the image flow).
+    if (isOwnIdea) {
+      console.log("Carousel structure selected:", {
+        carouselStructureMode,
+        customCarouselStructure,
+        selectedCarouselTemplateId,
+      })
+    }
 
     let generatedSlides: Slide[]
     try {
@@ -638,6 +674,56 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
 
   const customWordCount = customStructure.trim()
     ? customStructure.trim().split(/\s+/).length
+    : 0
+
+  // ── Carousel structure selection handlers (own-idea flow) ─────
+  // Selection complete → log it and unlock the "Generate Carousel" button.
+  function completeCarouselStructureSelection(
+    mode: CarouselStructureMode,
+    custom: string | null,
+    templateId: string | null,
+  ) {
+    console.log("Carousel structure selected:", {
+      carouselStructureMode: mode,
+      customCarouselStructure: custom,
+      selectedCarouselTemplateId: templateId,
+    })
+    setCarouselStructureStep("ready")
+  }
+
+  function handleSelectCarouselAuto() {
+    setCarouselStructureMode("auto")
+    completeCarouselStructureSelection("auto", null, null)
+  }
+
+  function handleSelectCarouselCustomMode() {
+    setCarouselStructureMode("custom")
+    setCarouselStructureStep("custom")
+  }
+
+  function handleSelectCarouselTemplateMode() {
+    setCarouselStructureMode("template")
+    setCarouselStructureStep("template")
+  }
+
+  function handleSelectCarouselReferenceOnly() {
+    if (!referenceImage) return
+    setCarouselStructureMode("reference-only")
+    completeCarouselStructureSelection("reference-only", null, null)
+  }
+
+  function handleCarouselCustomContinue() {
+    if (!customCarouselStructure.trim()) return
+    completeCarouselStructureSelection("custom", customCarouselStructure.trim(), null)
+  }
+
+  function handleCarouselTemplatePick(templateId: string) {
+    setSelectedCarouselTemplateId(templateId)
+    completeCarouselStructureSelection("template", null, templateId)
+  }
+
+  const customCarouselWordCount = customCarouselStructure.trim()
+    ? customCarouselStructure.trim().split(/\s+/).length
     : 0
 
   // The step-4 caption + carousel grid. Rendered centered normally; once image
@@ -1207,8 +1293,185 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
         </div>
       )}
 
-      {/* ── STEP 4: Final Screen ── */}
-      {step === 4 && (
+      {/* ── STEP 4: Carousel structure selection (own-idea) or Final Screen ── */}
+      {step === 4 && isOwnIdea && carouselStructureStep !== "ready" && (
+        <div className="flex flex-col gap-6 max-w-2xl">
+          {carouselStructureStep === "select" ? (
+            <button
+              onClick={() => setStep(3)}
+              className="self-start flex items-center gap-1.5 text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+            >
+              <ArrowLeft size={13} strokeWidth={2.2} />
+              Back
+            </button>
+          ) : (
+            <button
+              onClick={() => setCarouselStructureStep("select")}
+              className="self-start flex items-center gap-1.5 text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+            >
+              <ArrowLeft size={13} strokeWidth={2.2} />
+              Back to structure options
+            </button>
+          )}
+
+          {/* ── Main selection: 4 cards ─────────────────────────── */}
+          {carouselStructureStep === "select" && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <h1 className="text-[22px] font-bold text-[#0A0A0A]">
+                  How should this carousel be structured?
+                </h1>
+                <p className="text-[13px] text-[#9CA3AF]">
+                  Choose the best slide flow for your content.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  onClick={handleSelectCarouselAuto}
+                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[26px] leading-none">🤖</span>
+                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    Let AI Decide
+                  </span>
+                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
+                    AI analyzes your content and picks the best slide structure automatically.
+                  </span>
+                </button>
+
+                <button
+                  onClick={handleSelectCarouselCustomMode}
+                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[26px] leading-none">✍️</span>
+                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    I&apos;ll Define It
+                  </span>
+                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
+                    Describe exactly how you want the carousel structured.
+                  </span>
+                </button>
+
+                <button
+                  onClick={handleSelectCarouselTemplateMode}
+                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[26px] leading-none">📋</span>
+                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    Choose a Template
+                  </span>
+                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
+                    Pick from 30 proven slide structures.
+                  </span>
+                </button>
+
+                <button
+                  onClick={handleSelectCarouselReferenceOnly}
+                  disabled={!referenceImage}
+                  className={[
+                    "group flex flex-col items-start gap-2.5 p-5 rounded-xl border text-left transition-all duration-150 outline-none",
+                    referenceImage
+                      ? "bg-[#F4F2EC] border-[#E9E7E1] cursor-pointer hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                      : "bg-[rgba(26,26,26,0.03)] border-[#E9E7E1] cursor-not-allowed opacity-50",
+                  ].join(" ")}
+                >
+                  <span className="text-[26px] leading-none">🖼️</span>
+                  <span
+                    className={[
+                      "text-[14px] font-semibold transition-colors",
+                      referenceImage ? "text-[#0A0A0A] group-hover:text-[#7C3AED]" : "text-[#6B7280]",
+                    ].join(" ")}
+                  >
+                    Follow My Reference Image&apos;s Structure
+                  </span>
+                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
+                    {referenceImage
+                      ? "Use the same layout and structure as your uploaded reference image."
+                      : "Upload a reference image first to use this option"}
+                  </span>
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── Custom structure input ───────────────────────────── */}
+          {carouselStructureStep === "custom" && (
+            <div className="flex flex-col gap-4">
+              <h1 className="text-[22px] font-bold text-[#0A0A0A]">
+                Define your carousel structure
+              </h1>
+              <div className="flex flex-col gap-2">
+                <textarea
+                  value={customCarouselStructure}
+                  onChange={(e) => setCustomCarouselStructure(e.target.value)}
+                  rows={5}
+                  autoFocus
+                  placeholder="Describe how you want this carousel structured (e.g. 8 slides: hook, 3 tips, 3 examples, summary)"
+                  className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[14px] text-[#0A0A0A] leading-[1.6] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.5)] transition-colors"
+                />
+                <p className="text-[11px] text-[#ADA99F] tabular-nums">
+                  {customCarouselWordCount} {customCarouselWordCount === 1 ? "word" : "words"}
+                </p>
+              </div>
+              <button
+                onClick={handleCarouselCustomContinue}
+                disabled={!customCarouselStructure.trim()}
+                className={[
+                  "self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
+                  customCarouselStructure.trim()
+                    ? "bg-[#7C3AED] hover:bg-[#6D28D9] cursor-pointer shadow-[0_0_24px_rgba(124,58,237,0.28)]"
+                    : "bg-[rgba(124,58,237,0.3)] cursor-not-allowed opacity-50",
+                ].join(" ")}
+              >
+                Continue →
+              </button>
+            </div>
+          )}
+
+          {/* ── Template grid — tabbed by category ───────────────── */}
+          {carouselStructureStep === "template" && (
+            <div className="flex flex-col gap-4">
+              <h1 className="text-[22px] font-bold text-[#0A0A0A]">
+                Pick a slide structure
+              </h1>
+              <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
+                {CAROUSEL_CATEGORY_ORDER.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCarouselCategory(cat)}
+                    className={[
+                      "flex-shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-all cursor-pointer",
+                      selectedCarouselCategory === cat
+                        ? "bg-[#7C3AED] text-white shadow-[0_0_16px_rgba(124,58,237,0.25)]"
+                        : "bg-[#F4F2EC] text-[#6B7280] border border-[#E9E7E1] hover:border-[rgba(124,58,237,0.4)] hover:text-[#7C3AED]",
+                    ].join(" ")}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(getCarouselTemplatesByCategory()[selectedCarouselCategory] ?? []).map((template) => (
+                  <button
+                    key={template.id}
+                    onClick={() => handleCarouselTemplatePick(template.id)}
+                    className="group flex flex-col items-start gap-1.5 p-4 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                  >
+                    <span className="text-[13px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                      {template.name}
+                    </span>
+                    <span className="text-[11px] text-[#9CA3AF] leading-[1.5]">
+                      {template.slides.join(" → ")}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {step === 4 && !(isOwnIdea && carouselStructureStep !== "ready") && (
         <div className="flex flex-col gap-6">
           <button
             onClick={() => setStep(3)}

@@ -360,20 +360,92 @@ export async function POST(req: Request) {
         { type: "text" as const, text: userMessage },
       ]
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        max_tokens: 4096,
-        messages: [
-          { role: "system", content: buildOwnIdeaImagePromptSystemMessage() },
-          { role: "user", content: userContent },
-        ],
-      })
+      let imagePromptRaw = ""
+      let usedFallback = false
 
-      const raw = response.choices[0]?.message?.content ?? ""
-      const ownIdeaPrompt = parseOwnIdeaImagePrompt(raw)
+      // PRIMARY: GPT-4o. Any refusal or API error falls through to Claude below.
+      try {
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o",
+          max_tokens: 4096,
+          messages: [
+            { role: "system", content: buildOwnIdeaImagePromptSystemMessage() },
+            { role: "user", content: userContent },
+          ],
+        })
+
+        const raw = response.choices[0]?.message?.content ?? ""
+
+        if (isRefusal(raw)) {
+          console.warn("[image-prompt] own-idea: GPT-4o refused, falling back to Claude")
+          usedFallback = true
+        } else {
+          imagePromptRaw = raw
+        }
+      } catch (err) {
+        const e = err as { message?: string }
+        console.warn("[image-prompt] own-idea: GPT-4o error, falling back to Claude:", e?.message ?? err)
+        usedFallback = true
+      }
+
+      // FALLBACK: Claude, fed the same system + user message as a single text
+      // block (Claude's system param is skipped here — the own-idea system
+      // prompt reads fine inline and this keeps the fallback to one message).
+      if (usedFallback) {
+        try {
+          const claudeContent: Anthropic.MessageParam["content"] = [
+            ...(referenceImage
+              ? [
+                  {
+                    type: "image" as const,
+                    source: {
+                      type: "base64" as const,
+                      media_type: (referenceMediaType || "image/jpeg") as
+                        | "image/jpeg"
+                        | "image/png"
+                        | "image/webp",
+                      data: referenceImage,
+                    },
+                  },
+                ]
+              : []),
+            {
+              type: "text" as const,
+              text: `${buildOwnIdeaImagePromptSystemMessage()}\n\n${userMessage}`,
+            },
+          ]
+
+          const claudeResponse = await anthropic.messages.create({
+            model: "claude-sonnet-4-5",
+            max_tokens: 4096,
+            messages: [{ role: "user", content: claudeContent }],
+          })
+
+          console.log("[image-prompt] own-idea: Claude fallback stop_reason:", claudeResponse.stop_reason)
+
+          imagePromptRaw = claudeResponse.content
+            .filter((b): b is Anthropic.TextBlock => b.type === "text")
+            .map((b) => b.text)
+            .join("")
+        } catch (err) {
+          const e = err as { message?: string }
+          console.error("[image-prompt] own-idea: Claude fallback also failed:", e?.message ?? err)
+          return NextResponse.json(
+            { error: "Something went wrong generating the image prompt. Please try again." },
+            { status: 500 },
+          )
+        }
+      }
+
+      console.log("[image-prompt] own-idea: Model used:", usedFallback ? "Claude (fallback)" : "GPT-4o")
+
+      const ownIdeaPrompt = parseOwnIdeaImagePrompt(imagePromptRaw)
 
       if (!ownIdeaPrompt) {
-        console.error("[generate/image-prompt] own-idea: empty/unparseable response. Raw:\n", raw)
+        console.error(
+          "[generate/image-prompt] own-idea: empty/unparseable response. Raw:\n",
+          imagePromptRaw,
+        )
         return NextResponse.json({ error: "Image prompt was empty in AI response" }, { status: 502 })
       }
 

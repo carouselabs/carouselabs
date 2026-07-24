@@ -17,6 +17,7 @@ import { countWords } from "@/lib/wordCount"
 import { useCreditStore } from "@/lib/store/creditStore"
 import { CAPTION_PLATFORMS } from "@/lib/captionPlatforms"
 import { CAPTION_TEMPLATES, CATEGORY_ORDER, getTemplatesByCategory } from "@/lib/captionTemplates"
+import { IMAGE_CATEGORY_ORDER, getImageTemplatesByCategory } from "@/lib/imageStructureTemplates"
 
 interface ImageClientProps {
   ideaId: string
@@ -38,6 +39,11 @@ type ImageFlowStep =
   | "generating"
 type StructureMode = "auto" | "custom" | "template"
 
+// Image structure selection (own-idea flow only) — appears after reference
+// image upload/size selection, right before the actual image generation call.
+type ImageStructureStep = "select" | "custom" | "template" | "ready"
+type ImageStructureMode = "auto" | "custom" | "template" | "reference-only"
+
 const SKELETON_WIDTHS = ["88%", "72%", "95%", "65%", "80%", "55%", "70%", "40%"]
 
 export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: ImageClientProps) {
@@ -53,6 +59,17 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
   const [customStructure, setCustomStructure] = useState("")
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState(CATEGORY_ORDER[0])
+
+  // Image structure selection (own-idea flow only) — gates the "Generate
+  // Image" button on step 4 until a visual structure is chosen. Trending
+  // ideas start (and stay) on "ready", i.e. the unchanged existing flow.
+  const [imageStructureStep, setImageStructureStep] = useState<ImageStructureStep>(
+    isOwnIdea ? "select" : "ready",
+  )
+  const [imageStructureMode, setImageStructureMode] = useState<ImageStructureMode | null>(null)
+  const [customImageStructure, setCustomImageStructure] = useState("")
+  const [selectedImageTemplateId, setSelectedImageTemplateId] = useState<string | null>(null)
+  const [selectedImageCategory, setSelectedImageCategory] = useState(IMAGE_CATEGORY_ORDER[0])
 
   // Step 1
   const [caption, setCaption] = useState("")
@@ -164,6 +181,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
       // A previous session already exists — skip the platform/structure
       // selection (own-idea flow) and drop straight into the saved state.
       setImageFlowStep("generating")
+      setImageStructureStep("ready")
     }
 
     // Jump to the furthest step the saved data supports.
@@ -336,6 +354,17 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
           referenceMediaType: referenceImage ? referenceMediaType : undefined,
           userInstruction,
           currentImagePrompt: userInstruction ? imagePrompt ?? undefined : undefined,
+          // Own-idea flow only: image structure selection. Not wired into the
+          // prompt yet — the API route ignores these until that lands.
+          ...(isOwnIdea
+            ? {
+                imageStructureMode: imageStructureMode ?? undefined,
+                customImageStructure:
+                  imageStructureMode === "custom" ? customImageStructure : undefined,
+                imageTemplateId:
+                  imageStructureMode === "template" ? selectedImageTemplateId : undefined,
+              }
+            : {}),
         }),
       })
       const promptData = await promptRes.json()
@@ -566,6 +595,56 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
 
   const customWordCount = customStructure.trim()
     ? customStructure.trim().split(/\s+/).length
+    : 0
+
+  // ── Image structure selection handlers (own-idea flow) ────────
+  // Selection complete → log it and unlock the "Generate Image" button.
+  function completeImageStructureSelection(
+    mode: ImageStructureMode,
+    custom: string | null,
+    templateId: string | null,
+  ) {
+    console.log("Image structure selected:", {
+      imageStructureMode: mode,
+      customImageStructure: custom,
+      selectedImageTemplateId: templateId,
+    })
+    setImageStructureStep("ready")
+  }
+
+  function handleSelectImageAuto() {
+    setImageStructureMode("auto")
+    completeImageStructureSelection("auto", null, null)
+  }
+
+  function handleSelectImageCustomMode() {
+    setImageStructureMode("custom")
+    setImageStructureStep("custom")
+  }
+
+  function handleSelectImageTemplateMode() {
+    setImageStructureMode("template")
+    setImageStructureStep("template")
+  }
+
+  function handleSelectImageReferenceOnly() {
+    if (!referenceImage) return
+    setImageStructureMode("reference-only")
+    completeImageStructureSelection("reference-only", null, null)
+  }
+
+  function handleImageCustomContinue() {
+    if (!customImageStructure.trim()) return
+    completeImageStructureSelection("custom", customImageStructure.trim(), null)
+  }
+
+  function handleImageTemplatePick(templateId: string) {
+    setSelectedImageTemplateId(templateId)
+    completeImageStructureSelection("template", null, templateId)
+  }
+
+  const customImageWordCount = customImageStructure.trim()
+    ? customImageStructure.trim().split(/\s+/).length
     : 0
 
   // The step-4 caption + image grid. Rendered centered normally; while the image
@@ -1181,8 +1260,185 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
         </div>
       )}
 
-      {/* ── STEP 4: Final Screen ── */}
-      {step === 4 && (
+      {/* ── STEP 4: Image structure selection (own-idea) or Final Screen ── */}
+      {step === 4 && isOwnIdea && imageStructureStep !== "ready" && (
+        <div className="flex flex-col gap-6 max-w-2xl">
+          {imageStructureStep === "select" ? (
+            <button
+              onClick={() => setStep(3)}
+              className="self-start flex items-center gap-1.5 text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+            >
+              <ArrowLeft size={13} strokeWidth={2.2} />
+              Back
+            </button>
+          ) : (
+            <button
+              onClick={() => setImageStructureStep("select")}
+              className="self-start flex items-center gap-1.5 text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+            >
+              <ArrowLeft size={13} strokeWidth={2.2} />
+              Back to structure options
+            </button>
+          )}
+
+          {/* ── Main selection: 4 cards ─────────────────────────── */}
+          {imageStructureStep === "select" && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <h1 className="text-[22px] font-bold text-[#0A0A0A]">
+                  How should this image be structured?
+                </h1>
+                <p className="text-[13px] text-[#9CA3AF]">
+                  Choose the best visual format for your content.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  onClick={handleSelectImageAuto}
+                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[26px] leading-none">🤖</span>
+                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    Let AI Decide
+                  </span>
+                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
+                    AI analyzes your content and picks the best visual structure automatically.
+                  </span>
+                </button>
+
+                <button
+                  onClick={handleSelectImageCustomMode}
+                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[26px] leading-none">✍️</span>
+                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    I&apos;ll Define It
+                  </span>
+                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
+                    Describe exactly how you want the image structured.
+                  </span>
+                </button>
+
+                <button
+                  onClick={handleSelectImageTemplateMode}
+                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[26px] leading-none">📋</span>
+                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    Choose a Template
+                  </span>
+                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
+                    Pick from 20 proven visual structures.
+                  </span>
+                </button>
+
+                <button
+                  onClick={handleSelectImageReferenceOnly}
+                  disabled={!referenceImage}
+                  className={[
+                    "group flex flex-col items-start gap-2.5 p-5 rounded-xl border text-left transition-all duration-150 outline-none",
+                    referenceImage
+                      ? "bg-[#F4F2EC] border-[#E9E7E1] cursor-pointer hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                      : "bg-[rgba(26,26,26,0.03)] border-[#E9E7E1] cursor-not-allowed opacity-50",
+                  ].join(" ")}
+                >
+                  <span className="text-[26px] leading-none">🖼️</span>
+                  <span
+                    className={[
+                      "text-[14px] font-semibold transition-colors",
+                      referenceImage ? "text-[#0A0A0A] group-hover:text-[#7C3AED]" : "text-[#6B7280]",
+                    ].join(" ")}
+                  >
+                    Follow My Reference Image&apos;s Structure
+                  </span>
+                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
+                    {referenceImage
+                      ? "Use the same layout and structure as your uploaded reference image."
+                      : "Upload a reference image first to use this option"}
+                  </span>
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── Custom structure input ───────────────────────────── */}
+          {imageStructureStep === "custom" && (
+            <div className="flex flex-col gap-4">
+              <h1 className="text-[22px] font-bold text-[#0A0A0A]">
+                Define your image structure
+              </h1>
+              <div className="flex flex-col gap-2">
+                <textarea
+                  value={customImageStructure}
+                  onChange={(e) => setCustomImageStructure(e.target.value)}
+                  rows={5}
+                  autoFocus
+                  placeholder="Describe how you want this image structured (e.g. split into 3 sections showing before, during, after)"
+                  className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[14px] text-[#0A0A0A] leading-[1.6] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.5)] transition-colors"
+                />
+                <p className="text-[11px] text-[#ADA99F] tabular-nums">
+                  {customImageWordCount} {customImageWordCount === 1 ? "word" : "words"}
+                </p>
+              </div>
+              <button
+                onClick={handleImageCustomContinue}
+                disabled={!customImageStructure.trim()}
+                className={[
+                  "self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
+                  customImageStructure.trim()
+                    ? "bg-[#7C3AED] hover:bg-[#6D28D9] cursor-pointer shadow-[0_0_24px_rgba(124,58,237,0.28)]"
+                    : "bg-[rgba(124,58,237,0.3)] cursor-not-allowed opacity-50",
+                ].join(" ")}
+              >
+                Continue →
+              </button>
+            </div>
+          )}
+
+          {/* ── Template grid — tabbed by category ───────────────── */}
+          {imageStructureStep === "template" && (
+            <div className="flex flex-col gap-4">
+              <h1 className="text-[22px] font-bold text-[#0A0A0A]">
+                Pick a visual structure
+              </h1>
+              <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
+                {IMAGE_CATEGORY_ORDER.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedImageCategory(cat)}
+                    className={[
+                      "flex-shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-all cursor-pointer",
+                      selectedImageCategory === cat
+                        ? "bg-[#7C3AED] text-white shadow-[0_0_16px_rgba(124,58,237,0.25)]"
+                        : "bg-[#F4F2EC] text-[#6B7280] border border-[#E9E7E1] hover:border-[rgba(124,58,237,0.4)] hover:text-[#7C3AED]",
+                    ].join(" ")}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(getImageTemplatesByCategory()[selectedImageCategory] ?? []).map((template) => (
+                  <button
+                    key={template.id}
+                    onClick={() => handleImageTemplatePick(template.id)}
+                    className="group flex flex-col items-start gap-1.5 p-4 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                  >
+                    <span className="text-[13px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                      {template.name}
+                    </span>
+                    <span className="text-[11px] text-[#9CA3AF] leading-[1.5]">
+                      {template.description}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {step === 4 && !(isOwnIdea && imageStructureStep !== "ready") && (
         <div className="flex flex-col gap-6">
           <button
             onClick={() => setStep(3)}

@@ -225,6 +225,13 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
       // A previous session already exists — skip the platform/structure
       // selection (own-idea flow) and drop straight into the saved state.
       setCarouselFlowStep("generating")
+    }
+    // The carousel structure selection (step 4) is a separate choice from the
+    // caption structure selection above — only mark it as already completed
+    // if a carousel was actually generated. A caption-only (or size-only)
+    // restore means the user hasn't reached that screen yet, so it must still
+    // show instead of jumping straight to the final generate screen.
+    if (savedSlides || savedImages) {
       setCarouselStructureStep("ready")
     }
 

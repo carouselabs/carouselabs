@@ -148,6 +148,12 @@ export function Hero() {
               <PlayCircle size={15} strokeWidth={2} />
               See how it works
             </Link>
+            <Link
+              href="/tools/tap-hold-maker"
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-[#C4B5FD] bg-[#F5F3FF] hover:bg-[#EDE9FE] text-[14px] font-semibold text-[#6D28D9] transition-colors"
+            >
+              ✨ Create a Tap &amp; Hold Image — Free, No Login
+            </Link>
           </div>
         </AnimatedSection>
       </div>

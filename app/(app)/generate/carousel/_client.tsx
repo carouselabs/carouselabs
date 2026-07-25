@@ -394,21 +394,46 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     setReferenceNotice(null)
     setSlideImages([])
 
-    // Step 1 — slide prompts (silent).
     setIsGeneratingSlides(true)
     setGameStarted(true) // keep the game visible for the whole flow
-    setLoadingMessage("Building your carousel structure...")
 
-    // Own-idea flow only: not wired into the request yet — the carousel-prompt
-    // route still uses its existing single-stage prompt. This is the marker
-    // for the future Stage 1/Stage 2 pipeline (same shape as the image flow).
+    // Own-idea flow only: design a bespoke slide-by-slide structure before any
+    // slide content is written. Trending ideas skip this entirely and keep the
+    // original single-stage carousel-prompt flow completely untouched.
+    let carouselStructureDecision: string | undefined
     if (isOwnIdea) {
-      console.log("Carousel structure selected:", {
-        carouselStructureMode,
-        customCarouselStructure,
-        selectedCarouselTemplateId,
-      })
+      setLoadingMessage("Designing carousel structure...")
+      try {
+        const structureRes = await fetch("/api/own-idea/carousel-structure", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ideaId,
+            caption,
+            platform: selectedPlatform ?? undefined,
+            carouselStructureMode,
+            customCarouselStructure,
+            carouselTemplateId: selectedCarouselTemplateId,
+            referenceImage: referenceImage ?? undefined,
+            referenceMediaType: referenceImage ? referenceMediaType : undefined,
+          }),
+        })
+        const structureData = await structureRes.json()
+        if (!structureRes.ok) {
+          throw new Error(
+            (structureData as { error?: string }).error ?? "Couldn't design the carousel structure",
+          )
+        }
+        carouselStructureDecision = structureData.carouselStructureDecision as string
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Something went wrong")
+        setIsGeneratingSlides(false)
+        return
+      }
     }
+
+    // Step 1 — slide prompts (silent).
+    setLoadingMessage("Building your carousel structure...")
 
     let generatedSlides: Slide[]
     try {
@@ -421,6 +446,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
           size,
           referenceImage: referenceImage ?? undefined,
           referenceMediaType: referenceImage ? referenceMediaType : undefined,
+          ...(carouselStructureDecision ? { isOwnIdea: true, carouselStructureDecision } : {}),
         }),
       })
       const promptData = await promptRes.json()

@@ -10,6 +10,10 @@ import {
   CAROUSEL_MASTER_SYSTEM_PROMPT,
   buildCarouselUserMessage,
 } from "@/lib/ai/prompts/carouselPrompt"
+import {
+  buildOwnIdeaCarouselSystemMessage,
+  buildOwnIdeaCarouselUserMessage,
+} from "@/lib/ai/prompts/ownIdeaCarouselPrompt"
 import { validateReferenceImage } from "@/lib/validateImage"
 import { hasGenerationBalance } from "@/lib/credits"
 import { chargeCreditsForAction } from "@/lib/chargeCredits"
@@ -395,6 +399,8 @@ export async function POST(req: Request) {
   let referenceMediaType: string
   let userInstruction: string | undefined
   let currentSlides: string | undefined
+  let isOwnIdea: boolean
+  let carouselStructureDecision: string | undefined
 
   try {
     const body = await req.json()
@@ -412,6 +418,11 @@ export async function POST(req: Request) {
     currentSlides =
       typeof body.currentSlides === "string" && body.currentSlides.trim()
         ? body.currentSlides
+        : undefined
+    isOwnIdea = body.isOwnIdea === true
+    carouselStructureDecision =
+      typeof body.carouselStructureDecision === "string" && body.carouselStructureDecision.trim()
+        ? body.carouselStructureDecision.trim()
         : undefined
     if (!ideaId) throw new Error("Missing ideaId")
     // TEMP diagnostic — confirm in Vercel logs exactly what the client sent.
@@ -459,6 +470,11 @@ export async function POST(req: Request) {
   // The edit prompt is self-contained (carries its own instructions + JSON
   // shape), so the master system prompt is only attached for full generations.
   const isEditMode = !!(userInstruction && currentSlides)
+  // Own-idea full generations follow the two-stage pipeline: a structure was
+  // already decided by /api/own-idea/carousel-structure and is passed in as
+  // carouselStructureDecision. Edit mode's self-contained prompt takes
+  // priority over this — an edit never redesigns the structure.
+  const isOwnIdeaMode = isOwnIdea && !!carouselStructureDecision && !isEditMode
 
   // ── Server-side credit charge (V1 fix) ──
   // Full generation charges carousel_prompts (35) HERE — combined with the 5
@@ -477,9 +493,15 @@ export async function POST(req: Request) {
     }
   }
 
-  const userText =
-    userInstruction && currentSlides
-      ? buildCarouselEditPrompt(currentSlides, userInstruction)
+  const userText = isEditMode
+    ? buildCarouselEditPrompt(currentSlides!, userInstruction!)
+    : isOwnIdeaMode
+      ? buildOwnIdeaCarouselUserMessage(
+          breakdown.refinedHook,
+          caption,
+          breakdown.deepDive,
+          carouselStructureDecision!,
+        )
       : buildCarouselUserMessage(
           breakdown.refinedHook,
           breakdown.deepDive,
@@ -489,6 +511,13 @@ export async function POST(req: Request) {
           niche,
           userInstruction,
         )
+
+  // Full generations use one of two system prompts depending on flow; edit
+  // mode's prompt is self-contained and never attaches a system prompt (see
+  // the `isEditMode ? [] : [...]` branches below).
+  const systemPrompt = isOwnIdeaMode
+    ? buildOwnIdeaCarouselSystemMessage()
+    : CAROUSEL_MASTER_SYSTEM_PROMPT
 
   let modelRaw = ""
   let usedFallback = false
@@ -519,7 +548,7 @@ export async function POST(req: Request) {
       messages: [
         ...(isEditMode
           ? []
-          : [{ role: "system" as const, content: CAROUSEL_MASTER_SYSTEM_PROMPT }]),
+          : [{ role: "system" as const, content: systemPrompt }]),
         { role: "user" as const, content: userContent },
       ],
     })
@@ -595,7 +624,7 @@ export async function POST(req: Request) {
         max_tokens: MAX_TOKENS,
         // Edit mode's prompt is self-contained — mirror the GPT-4o call, which
         // only attaches the master system prompt for full generations.
-        ...(isEditMode ? {} : { system: CAROUSEL_MASTER_SYSTEM_PROMPT }),
+        ...(isEditMode ? {} : { system: systemPrompt }),
         messages: claudeMessages,
       })
 

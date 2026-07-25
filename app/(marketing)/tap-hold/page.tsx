@@ -26,9 +26,9 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/images/carouselabs-landing.png",
-        width: 1920,
-        height: 957,
+        url: "/images/carouselabstool.png",
+        width: 1915,
+        height: 937,
         alt: "CarouseLabs Tap & Hold Image guides",
       },
     ],
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: TITLE,
     description: DESCRIPTION,
-    images: ["/images/carouselabs-landing.png"],
+    images: ["/images/carouselabstool.png"],
   },
 }
 

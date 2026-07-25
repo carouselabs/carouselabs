@@ -1,22 +1,23 @@
-import { ImageIcon } from "lucide-react"
+import Image from "next/image"
 
 type TapHoldScreenshotProps = {
   label: string
   caption: string
 }
 
-/**
- * Placeholder for a real product screenshot, to be swapped in later.
- * Keeps a fixed aspect ratio so layout doesn't shift once images are added.
- */
+/** Product screenshot used throughout the /tap-hold articles. */
 export function TapHoldScreenshot({ label, caption }: TapHoldScreenshotProps) {
   return (
     <figure className="max-w-[720px] mx-auto flex flex-col items-center gap-3">
-      <div className="w-full aspect-video rounded-2xl border-2 border-dashed border-[#D8D0E0] bg-[#FBFAF6] flex flex-col items-center justify-center gap-2">
-        <ImageIcon size={28} strokeWidth={1.6} className="text-[#C4B5FD]" />
-        <span className="text-[13px] font-semibold text-[#9CA3AF]">
-          Screenshot placeholder: {label}
-        </span>
+      <div className="w-full rounded-2xl overflow-hidden border border-[#E5E3DE] shadow-[0_24px_60px_rgba(10,10,10,0.14)] bg-[#FFFDF8]">
+        <Image
+          src="/images/carouselabstool.png"
+          alt={`CarouseLabs Tap & Hold Image Maker — ${label}`}
+          width={1915}
+          height={937}
+          sizes="(max-width: 720px) 100vw, 720px"
+          className="w-full h-auto"
+        />
       </div>
       <figcaption className="text-[13px] text-[#6B7280] text-center">{caption}</figcaption>
     </figure>

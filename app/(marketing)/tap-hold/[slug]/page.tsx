@@ -45,9 +45,9 @@ export async function generateMetadata({
       type: "article",
       images: [
         {
-          url: "/images/carouselabs-landing.png",
-          width: 1920,
-          height: 957,
+          url: "/images/carouselabstool.png",
+          width: 1915,
+          height: 937,
           alt: article.h1,
         },
       ],
@@ -56,7 +56,7 @@ export async function generateMetadata({
       card: "summary_large_image",
       title: article.seo_title,
       description: article.seo_description,
-      images: ["/images/carouselabs-landing.png"],
+      images: ["/images/carouselabstool.png"],
     },
   }
 }

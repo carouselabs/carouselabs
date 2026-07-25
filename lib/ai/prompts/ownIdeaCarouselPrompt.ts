@@ -82,6 +82,18 @@ In the Main Headline section of every slide brief, explicitly state the exact te
 
 ---
 
+## COLOR CLOSED-SET RULE — ABSOLUTE
+
+The 5-8 hex codes you identify from the reference image form a CLOSED SET. Every single color mentioned anywhere in your response — background, text, accents, illustration elements, decorative elements, shadows, everything — MUST be one of these identified hex codes or a direct tint/shade of one of them.
+
+Before writing each slide's Color Palette section, re-read your own list of identified reference hex codes. If you are about to write a color that is NOT in that list and NOT a clear tint/shade of one already in that list, STOP — you are inventing a color that doesn't exist in the reference. Go back and use one of the actual identified colors instead.
+
+Specifically: if the reference image does not contain any orange, red, green, yellow, or any other specific hue, you must NEVER introduce that hue anywhere in the carousel — not as an accent, not as a decorative element, not anywhere. Only use hues that are genuinely present in the reference image.
+
+This is not a suggestion — treat the reference image's actual color family as a hard constraint you cannot violate under any circumstance, even for a small decorative detail.
+
+---
+
 ## DESIGN PRINCIPLES
 
 Create premium editorial SaaS-quality carousel slides. Every slide should teach visually, feel handcrafted, have generous whitespace, use large typography, have elegant hierarchy, avoid clutter, and maintain consistency across the carousel.

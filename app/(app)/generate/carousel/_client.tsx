@@ -30,6 +30,13 @@ import {
   getCarouselTemplatesByCategory,
 } from "@/lib/carouselStructureTemplates"
 
+// TEMPORARY DEBUG FLAG — Work on Own Idea only. When true, the carousel flow
+// stops right after Stage 1 + Stage 2 (structure + slide prompts) and shows
+// the raw prompts as text instead of spending image-generation credits, so
+// prompts can be sanity-checked in ChatGPT first. Flip to false to restore
+// normal image generation.
+const DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION = true
+
 interface CarouselClientProps {
   ideaId: string
   ideaHook: string
@@ -111,6 +118,9 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   // Step 4
   const [slides, setSlides] = useState<Slide[] | null>(null)
   const [isGeneratingSlides, setIsGeneratingSlides] = useState(false)
+  // Own-idea flow only — Stage 1's structure decision, kept in state so the
+  // DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION panel can display it.
+  const [carouselStructureDecision, setCarouselStructureDecision] = useState<string | null>(null)
 
   // Step 4b — actual slide images generated from the prompts (one at a time)
   const [slideImages, setSlideImages] = useState<SlideImage[]>([])
@@ -400,7 +410,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     // Own-idea flow only: design a bespoke slide-by-slide structure before any
     // slide content is written. Trending ideas skip this entirely and keep the
     // original single-stage carousel-prompt flow completely untouched.
-    let carouselStructureDecision: string | undefined
+    let structureDecision: string | undefined
     if (isOwnIdea) {
       setLoadingMessage("Designing carousel structure...")
       try {
@@ -424,7 +434,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
             (structureData as { error?: string }).error ?? "Couldn't design the carousel structure",
           )
         }
-        carouselStructureDecision = structureData.carouselStructureDecision as string
+        structureDecision = structureData.carouselStructureDecision as string
+        setCarouselStructureDecision(structureDecision)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong")
         setIsGeneratingSlides(false)
@@ -446,7 +457,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
           size,
           referenceImage: referenceImage ?? undefined,
           referenceMediaType: referenceImage ? referenceMediaType : undefined,
-          ...(carouselStructureDecision ? { isOwnIdea: true, carouselStructureDecision } : {}),
+          ...(structureDecision ? { isOwnIdea: true, carouselStructureDecision: structureDecision } : {}),
         }),
       })
       const promptData = await promptRes.json()
@@ -473,6 +484,15 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
       return
     }
     setIsGeneratingSlides(false)
+
+    // TEMPORARY DEBUG — stop here and show the raw prompts instead of spending
+    // image-generation credits. See DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION above.
+    if (DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION) {
+      setIsGeneratingSlides(false)
+      setGameStarted(false)
+      setLoadingMessage("")
+      return
+    }
 
     // Step 2 — generate images ONE BY ONE from the client. Each call generates a
     // single slide and does NOT persist (persist: false), so no junk Posts.
@@ -1528,19 +1548,56 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
             </div>
           )}
 
+          {/* TEMPORARY DEBUG — prompts-only panel, see
+              DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION above. */}
+          {DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION && slides && slideImages.length === 0 && (
+            <div className="flex flex-col gap-4 p-4">
+              <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-700">
+                DEBUG MODE — prompts only, no images generated. Carousel structure decision and slide
+                prompts shown below.
+              </div>
+              {carouselStructureDecision && (
+                <div className="flex flex-col gap-2 p-4 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC]">
+                  <p className="text-[12px] font-semibold text-[#0A0A0A]">
+                    Stage 1 — Carousel Structure Decision:
+                  </p>
+                  <pre className="whitespace-pre-wrap text-[11px] text-[#374151] leading-relaxed font-sans">
+                    {carouselStructureDecision}
+                  </pre>
+                </div>
+              )}
+              {slides.map((slide) => (
+                <div
+                  key={slide.slideNumber}
+                  className="flex flex-col gap-2 p-4 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC]"
+                >
+                  <p className="text-[12px] font-semibold text-[#0A0A0A]">
+                    Slide {slide.slideNumber} ({slide.role}): {slide.headline}
+                  </p>
+                  <pre className="whitespace-pre-wrap text-[11px] text-[#374151] leading-relaxed font-sans">
+                    {slide.prompt}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Once generation has started, keep the 2-column layout (caption+images
               left, game right) so the user can keep playing after the carousel is
-              done. Before that, the normal centered grid. */}
-          {gameStarted ? (
-            <div style={{ display: "flex", gap: "2rem", alignItems: "flex-start" }}>
-              <div style={{ flex: "0 0 70%", maxWidth: "70%" }}>{carouselGrid}</div>
-              <div style={{ flex: "0 0 28%", maxWidth: "28%" }}>
-                <LoadingGame />
+              done. Before that, the normal centered grid. Hidden entirely while
+              the DEBUG prompts-only panel above is showing, so the two don't
+              overlap. */}
+          {!(DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION && slides && slideImages.length === 0) &&
+            (gameStarted ? (
+              <div style={{ display: "flex", gap: "2rem", alignItems: "flex-start" }}>
+                <div style={{ flex: "0 0 70%", maxWidth: "70%" }}>{carouselGrid}</div>
+                <div style={{ flex: "0 0 28%", maxWidth: "28%" }}>
+                  <LoadingGame />
+                </div>
               </div>
-            </div>
-          ) : (
-            carouselGrid
-          )}
+            ) : (
+              carouselGrid
+            ))}
         </div>
       )}
 

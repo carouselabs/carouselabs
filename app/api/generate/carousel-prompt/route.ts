@@ -501,6 +501,7 @@ export async function POST(req: Request) {
           caption,
           breakdown.deepDive,
           carouselStructureDecision!,
+          size === "1:1" ? "Square 1080x1080px" : "Portrait 1080x1350px",
         )
       : buildCarouselUserMessage(
           breakdown.refinedHook,

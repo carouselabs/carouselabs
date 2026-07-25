@@ -39,6 +39,20 @@ If supplied, use it ONLY as a visual style reference. Reverse engineer typograph
 
 ---
 
+## COLOR ACCURACY — CRITICAL
+
+When a reference image is provided, do NOT invent or guess hex codes from memory. Estimated hex codes are usually wrong and will make the output look completely different from the reference.
+
+Instead:
+- Describe colors by name and role first (e.g. "cream paper background", "near-black condensed headline", "warm terracotta accent") based on what you actually observe in the attached reference image.
+- Identify the SPECIFIC illustration technique visible (watercolor and ink, flat vector, 3D render, photographic, line art, gradient-mesh digital, etc.) — name what you actually see, don't guess generically.
+- Identify texture and finish present (paper grain, brush bleed, flat clean edges, noise, glossy, matte).
+- Pay close attention to MULTIPLE SHADES of the same color family if present in the reference — if there's both a light and dark version of a color, name BOTH distinctly. Do NOT simplify multiple shades into one color.
+- State explicitly in each Color Palette section: "Final colors must be sampled directly from the attached reference image — if any color value written here conflicts with the reference image itself, the reference image's actual colors take priority."
+- This tiebreaker rule is critical since the actual image-generation model will have the reference image directly in front of it and must be told to trust its own eyes over any approximate description.
+
+---
+
 ## DESIGN PRINCIPLES
 
 Create premium editorial SaaS-quality carousel slides. Every slide should teach visually, feel handcrafted, have generous whitespace, use large typography, have elegant hierarchy, avoid clutter, and maintain consistency across the carousel.
@@ -77,6 +91,10 @@ Every slide prompt MUST use this exact structure, in this order, using these hea
 
 For STYLE REFERENCE, write only a single short sentence such as "Match the shared reference style." The platform replaces this section with a standardized style specification after generation, so spend your detail budget on the remaining sections instead.
 
+For the Canvas section of every slide, always specify the exact pixel dimensions and aspect ratio provided in the user message's size requirement — never default to landscape or any other ratio.
+
+For the Color Palette section of every slide, describe colors by name/role (not invented hex codes) and explicitly state that final colors should be sampled from the attached reference image.
+
 For Branding: unless a brand name is explicitly given, specify no logo, no watermark, no brand text of any kind.
 
 ---
@@ -113,6 +131,7 @@ export function buildOwnIdeaCarouselUserMessage(
   caption: string,
   deepDive: string,
   carouselStructureDecision: string,
+  sizeBlock: string,
 ): string {
   return `Topic:
 ${topic}
@@ -125,6 +144,10 @@ ${deepDive}
 
 Structured Carousel (single source of truth — do not change slide count or order):
 ${carouselStructureDecision}
+
+CRITICAL SIZE REQUIREMENT:
+${sizeBlock}
+STRICTLY follow this ratio for every single slide. Non-negotiable.
 
 Generate the complete carousel now following all instructions. Return ONLY the JSON object.`
 }

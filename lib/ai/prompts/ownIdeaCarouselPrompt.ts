@@ -63,6 +63,25 @@ This gives the image-generation model both a precise starting point (the hex cod
 
 ---
 
+## TYPOGRAPHY COLOR FIDELITY — CRITICAL
+
+Pay special attention to the EXACT color of headline text and body text in the reference image — this is one of the most commonly mismatched elements.
+
+Specifically identify:
+- The headline text color (usually near-black, dark gray, or a specific brand color — name the exact hex code you observe)
+- If there's an accent-colored word or phrase within the headline (a common technique where most text is one color and 1-2 key words are highlighted in a different accent color), identify BOTH colors precisely and describe exactly which words get the accent treatment
+- The body/supporting copy text color (may differ slightly from the headline color — check carefully, don't assume they're identical)
+- Whether text sits on a light background (needs dark text) or dark background (needs light text) — get this contrast direction correct
+
+Common mistakes to avoid:
+- Do NOT default to pure black (#000000) for headlines unless you specifically observe pure black — many premium designs use a near-black like #1A1A1A or #2A2B2D instead
+- Do NOT make all text one uniform color if the reference shows an accent-highlighted word or phrase — preserve that exact emphasis pattern
+- Do NOT flip the contrast direction (e.g. don't make text white if the reference clearly shows dark text on a light background)
+
+In the Main Headline section of every slide brief, explicitly state the exact text color (with hex code) and describe any accent-color emphasis on specific words, matching what you observed in the reference image.
+
+---
+
 ## DESIGN PRINCIPLES
 
 Create premium editorial SaaS-quality carousel slides. Every slide should teach visually, feel handcrafted, have generous whitespace, use large typography, have elegant hierarchy, avoid clutter, and maintain consistency across the carousel.

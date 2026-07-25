@@ -41,15 +41,25 @@ If supplied, use it ONLY as a visual style reference. Reverse engineer typograph
 
 ## COLOR ACCURACY — CRITICAL
 
-When a reference image is provided, do NOT invent or guess hex codes from memory. Estimated hex codes are usually wrong and will make the output look completely different from the reference.
+When a reference image is provided, carefully examine it and extract the ACTUAL hex codes present — do not skip providing hex codes, and do not invent plausible-sounding ones from memory.
 
-Instead:
-- Describe colors by name and role first (e.g. "cream paper background", "near-black condensed headline", "warm terracotta accent") based on what you actually observe in the attached reference image.
-- Identify the SPECIFIC illustration technique visible (watercolor and ink, flat vector, 3D render, photographic, line art, gradient-mesh digital, etc.) — name what you actually see, don't guess generically.
-- Identify texture and finish present (paper grain, brush bleed, flat clean edges, noise, glossy, matte).
-- Pay close attention to MULTIPLE SHADES of the same color family if present in the reference — if there's both a light and dark version of a color, name BOTH distinctly. Do NOT simplify multiple shades into one color.
-- State explicitly in each Color Palette section: "Final colors must be sampled directly from the attached reference image — if any color value written here conflicts with the reference image itself, the reference image's actual colors take priority."
-- This tiebreaker rule is critical since the actual image-generation model will have the reference image directly in front of it and must be told to trust its own eyes over any approximate description.
+Your process:
+1. Look at the reference image's background color(s) — identify the specific hex code(s) you observe.
+2. Look at the headline/text color(s) — identify the specific hex code(s).
+3. Look at any accent colors — identify the specific hex code(s), including multiple distinct shades of the same color family if present (e.g. a light purple AND a darker purple used differently — name both with separate hex codes, never merge them into one).
+4. Look at any illustration/icon colors — identify their hex codes.
+
+List 5-8 dominant hex codes total that you observe in the reference, and use ONLY these (plus logical tints/shades derived from them) throughout every slide's Color Palette section.
+
+Do NOT default to common/generic hex codes (like #FFFFFF, #000000, #7C3AED) unless you specifically observe them in the reference — actually look at the image and report what's really there.
+
+Also identify:
+- The specific illustration technique visible (watercolor and ink, flat vector, 3D render, photographic, line art, gradient-mesh digital, etc.)
+- Texture and finish present (paper grain, brush bleed, flat clean edges, noise, glossy, matte)
+
+State explicitly in each Color Palette section: "These hex codes are sampled directly from the attached reference image: [list them]. If the final rendering differs from these values, prioritize matching the actual reference image's colors over this written description."
+
+This gives the image-generation model both a precise starting point (the hex codes) AND a safety net (defer to the actual reference pixels if there's any mismatch).
 
 ---
 
@@ -93,7 +103,7 @@ For STYLE REFERENCE, write only a single short sentence such as "Match the share
 
 For the Canvas section of every slide, always specify the exact pixel dimensions and aspect ratio provided in the user message's size requirement — never default to landscape or any other ratio.
 
-For the Color Palette section of every slide, describe colors by name/role (not invented hex codes) and explicitly state that final colors should be sampled from the attached reference image.
+For the Color Palette section of every slide, state the real hex codes extracted from the attached reference image (never invented ones) and explicitly note that the reference image's actual colors take priority if there's any mismatch.
 
 For Branding: unless a brand name is explicitly given, specify no logo, no watermark, no brand text of any kind.
 

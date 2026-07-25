@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next"
 import { niches } from "./(marketing)/for/data"
 import { competitors } from "./(marketing)/vs/data"
+import { tapHoldArticles } from "./(marketing)/tap-hold/data"
 
 const BASE_URL = "https://carouselabs.com"
 
@@ -23,7 +24,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${BASE_URL}/vs`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
     { url: `${BASE_URL}/tools`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
     { url: `${BASE_URL}/strategy`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
+    { url: `${BASE_URL}/tap-hold`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
   ]
+
+  const tapHoldRoutes: MetadataRoute.Sitemap = tapHoldArticles.map((article) => ({
+    url: `${BASE_URL}/tap-hold/${article.slug}`,
+    lastModified: now,
+    changeFrequency: "monthly" as const,
+    priority: 0.75,
+  }))
 
   const nicheRoutes: MetadataRoute.Sitemap = niches.map((niche) => ({
     url: `${BASE_URL}/for/${niche.slug}`,
@@ -77,5 +86,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...toolsRoutes,
     ...strategyRoutes,
     ...versusRoutes,
+    ...tapHoldRoutes,
   ]
 }

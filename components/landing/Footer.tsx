@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { ArrowRight } from "lucide-react"
 import { AnimatedFadeIn } from "@/components/marketing/AnimatedSection"
+import { getFeaturedTapHoldArticles } from "@/app/(marketing)/tap-hold/data"
 
 const FOOTER_LINKS = [
   { href: "/#pricing", label: "Pricing" },
@@ -34,6 +35,13 @@ const COMPARE_LINKS = [
 const FREE_TOOL_LINKS = [
   { href: "/tools/tap-hold-maker", label: "Tap & Hold Maker (Free)" },
 ]
+
+// Data-driven — pulled from the /tap-hold SEO article set, not hardcoded, so
+// this list stays in sync as articles are added or reworded.
+const TAP_HOLD_LINKS = getFeaturedTapHoldArticles().map((article) => ({
+  href: `/tap-hold/${article.slug}`,
+  label: article.h1,
+}))
 
 export function Footer() {
   return (
@@ -94,6 +102,27 @@ export function Footer() {
                 {link.label}
               </Link>
             ))}
+          </nav>
+        </div>
+
+        <div className="flex flex-col items-center gap-4 pb-8 border-b border-[#E5E3DE]">
+          <span className="text-[13px] font-semibold text-[#0A0A0A]">Tap & Hold Guides</span>
+          <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
+            {TAP_HOLD_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-[12px] text-[#6B7280] hover:text-[#7C3AED] transition-colors"
+              >
+                {link.label}
+              </Link>
+            ))}
+            <Link
+              href="/tap-hold"
+              className="text-[12px] font-semibold text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
+            >
+              View all {"→"}
+            </Link>
           </nav>
         </div>
 

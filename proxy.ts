@@ -17,6 +17,7 @@ const isPublicRoute = createRouteMatcher([
   "/tools(.*)", // 112 per-niche AI tools pages
   "/tools/tap-hold-maker(.*)", // Free client-side image maker
   "/strategy(.*)", // 112 per-niche content-strategy playbook pages
+  "/tap-hold(.*)", // 60 Tap & Hold Image Maker SEO articles + hub
   "/sitemap.xml",
   "/robots.txt",
   "/api/contact(.*)",

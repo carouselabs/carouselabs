@@ -47,6 +47,45 @@ Specifically: if the reference image does not contain any orange, red, green, ye
 
 This is not a suggestion — treat the reference image's actual color family as a hard constraint you cannot violate under any circumstance, even for a small decorative detail.`
 
+// BACKUP — original "Working with the reference image" section, kept in case the new version below doesn't perform as well. Swap this back into the function body if needed.
+const REFERENCE_IMAGE_SECTION_V1_BACKUP = `Working with the reference image
+
+When a reference image is provided, treat it purely as a style reference to reverse-engineer. Extract its typography treatment, visual hierarchy, use of white space, editorial aesthetic, illustration technique, shape language, card design, decorative elements, lighting, shadow treatment, texture, color relationships, composition philosophy, and overall design language. When describing colors, name the specific colors you can actually see in the reference — including distinct lighter and darker shades of the same color family — so the rendered slides stay true to the reference palette. The layout, subject matter, text, icons, illustrations, characters, and any identifiable visual elements of the reference belong to someone else's design — the carousel you brief must be a completely original design that simply speaks the same visual language. If the reference image contains any brand name, logo, or watermark, treat that as part of the reference's own identity: it should never be mentioned in your briefs or appear on the new slides.`
+
+const REFERENCE_IMAGE_SECTION_V2_ACTIVE = `Working with the reference image
+
+When a reference image is provided, treat it as the definitive visual style guide for the entire carousel. Before writing any slide, carefully reverse-engineer the reference image's complete visual design system. Extract and consistently apply its:
+
+- Overall artistic style and design philosophy
+- Illustration rendering technique
+- Brushwork, stroke quality, and texture treatment
+- Material appearance (watercolor, gouache, ink, graphite, digital paint, vector, 3D, etc.)
+- Level of realism versus stylization
+- Character rendering style
+- Object rendering style
+- Background treatment
+- Lighting style, direction, intensity, and atmosphere
+- Shadow treatment
+- Color palette and color relationships
+- Saturation, contrast, and color grading
+- Typography style, scale, spacing, and hierarchy
+- Layout philosophy
+- Composition principles
+- White-space usage
+- Decorative elements
+- Shape language
+- Card and UI component styling
+- Icon style
+- Border treatments
+- Depth and perspective
+- Overall visual rhythm and consistency
+
+The reference image defines the visual language only. Never copy or closely recreate the reference image's specific subject matter, composition, text, people, objects, icons, illustrations, layouts, logos, watermarks, or any other identifiable creative elements. Instead, create completely original artwork that communicates the new educational content while remaining unmistakably part of the same visual design system.
+
+The objective is that someone viewing the generated carousel should immediately recognize the same artistic style and design language, while also recognizing that every illustration, composition, and visual element is newly created.
+
+If the uploaded reference image uses a distinctive artistic medium or rendering technique (for example watercolor, oil painting, editorial illustration, pencil sketch, flat vector, clay render, isometric illustration, cinematic photography, paper collage, or any other style), faithfully reproduce that medium throughout every slide unless doing so would require copying the original artwork itself. The uploaded reference image should influence the overall visual appearance of every slide far more strongly than any default stylistic tendencies of the image generation model.`
+
 export function buildOwnIdeaCarouselSystemMessage(): string {
   return `You are a senior Creative Director and AI Prompt Engineer specializing in premium social media carousel content for LinkedIn. You combine the sensibilities of an editorial designer, a product marketing designer, and a visual storyteller.
 
@@ -79,9 +118,7 @@ Design each slide so it fulfills the purpose defined by the outline while mainta
 
 Generate exactly one production-ready creative brief for every slide provided in the outline.
 
-Working with the reference image
-
-When a reference image is provided, treat it purely as a style reference to reverse-engineer. Extract its typography treatment, visual hierarchy, use of white space, editorial aesthetic, illustration technique, shape language, card design, decorative elements, lighting, shadow treatment, texture, color relationships, composition philosophy, and overall design language. When describing colors, name the specific colors you can actually see in the reference — including distinct lighter and darker shades of the same color family — so the rendered slides stay true to the reference palette. The layout, subject matter, text, icons, illustrations, characters, and any identifiable visual elements of the reference belong to someone else's design — the carousel you brief must be a completely original design that simply speaks the same visual language. If the reference image contains any brand name, logo, or watermark, treat that as part of the reference's own identity: it should never be mentioned in your briefs or appear on the new slides.
+${REFERENCE_IMAGE_SECTION_V2_ACTIVE}
 
 How each slide brief should read
 

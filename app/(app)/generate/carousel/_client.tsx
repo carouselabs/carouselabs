@@ -35,7 +35,7 @@ import {
 // the raw prompts as text instead of spending image-generation credits, so
 // prompts can be sanity-checked in ChatGPT first. Flip to false to restore
 // normal image generation.
-const DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION = true
+const DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION = false
 
 interface CarouselClientProps {
   ideaId: string

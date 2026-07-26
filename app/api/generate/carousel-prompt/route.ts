@@ -470,11 +470,16 @@ export async function POST(req: Request) {
   // The edit prompt is self-contained (carries its own instructions + JSON
   // shape), so the master system prompt is only attached for full generations.
   const isEditMode = !!(userInstruction && currentSlides)
-  // Own-idea full generations follow the two-stage pipeline: a structure was
-  // already decided by /api/own-idea/carousel-structure and is passed in as
+  // Full generations now follow the two-stage structure-architect pipeline for
+  // every idea, not just own-idea ones: a structure was already decided by
+  // /api/own-idea/carousel-structure and is passed in as
   // carouselStructureDecision. Edit mode's self-contained prompt takes
-  // priority over this — an edit never redesigns the structure.
-  const isOwnIdeaMode = isOwnIdea && !!carouselStructureDecision && !isEditMode
+  // priority over this — an edit never redesigns the structure. A request
+  // without a structure decision (e.g. a restored session that hasn't run
+  // Stage 1) falls through to the LEGACY CAROUSEL_MASTER_SYSTEM_PROMPT path
+  // below — pre-structure-architect system, kept as a working backup rather
+  // than deleted, since it's the same code path edit mode still uses.
+  const usesStructurePipeline = !!carouselStructureDecision && !isEditMode
 
   // ── Server-side credit charge (V1 fix) ──
   // Full generation charges carousel_prompts (35) HERE — combined with the 5
@@ -495,7 +500,7 @@ export async function POST(req: Request) {
 
   const userText = isEditMode
     ? buildCarouselEditPrompt(currentSlides!, userInstruction!)
-    : isOwnIdeaMode
+    : usesStructurePipeline
       ? buildOwnIdeaCarouselUserMessage(
           breakdown.refinedHook,
           caption,
@@ -516,7 +521,7 @@ export async function POST(req: Request) {
   // Full generations use one of two system prompts depending on flow; edit
   // mode's prompt is self-contained and never attaches a system prompt (see
   // the `isEditMode ? [] : [...]` branches below).
-  const systemPrompt = isOwnIdeaMode
+  const systemPrompt = usesStructurePipeline
     ? buildOwnIdeaCarouselSystemMessage()
     : CAROUSEL_MASTER_SYSTEM_PROMPT
 

@@ -56,10 +56,8 @@ interface Slide {
 
 const SKELETON_WIDTHS = ["88%", "72%", "95%", "65%", "80%", "55%", "70%", "40%"]
 
-// Platform + structure selection (own-idea flow only) — appears before caption
-// generation, same pattern as caption/_client.tsx and image/_client.tsx.
-// Trending ideas start (and stay) on "generating", i.e. the unchanged existing
-// flow.
+// Platform + structure selection — shown before caption generation for every
+// idea, same pattern as caption/_client.tsx and image/_client.tsx.
 type CarouselFlowStep =
   | "platform-select"
   | "structure-select"
@@ -68,9 +66,8 @@ type CarouselFlowStep =
   | "generating"
 type StructureMode = "auto" | "custom" | "template"
 
-// Carousel structure selection (own-idea flow only) — gates the "Generate
-// Carousel" button on step 4 until a slide structure is chosen. Trending
-// ideas start (and stay) on "ready", i.e. the unchanged existing flow.
+// Carousel structure selection — gates the "Generate Carousel" button on step
+// 4 until a slide structure is chosen. Shown for every idea.
 type CarouselStructureStep = "select" | "custom" | "template" | "ready"
 type CarouselStructureMode = "auto" | "custom" | "template" | "reference-only"
 
@@ -78,22 +75,19 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   const router = useRouter()
   const [step, setStep] = useState<Step>(1)
 
-  // Platform + structure selection (own-idea flow only). Selections feed the
-  // /api/generate/caption request; trending ideas never see these screens.
-  const [carouselFlowStep, setCarouselFlowStep] = useState<CarouselFlowStep>(
-    isOwnIdea ? "platform-select" : "generating",
-  )
+  // Platform + structure selection — now shown for every idea (trending and
+  // own-idea alike). Selections feed the /api/generate/caption request.
+  const [carouselFlowStep, setCarouselFlowStep] = useState<CarouselFlowStep>("platform-select")
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null)
   const [structureMode, setStructureMode] = useState<StructureMode | null>(null)
   const [customStructure, setCustomStructure] = useState("")
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState(CATEGORY_ORDER[0])
 
-  // Carousel structure selection (own-idea flow only) — appears after
+  // Carousel structure selection — now shown for every idea, appearing after
   // reference image upload/size selection, right before carousel generation.
-  const [carouselStructureStep, setCarouselStructureStep] = useState<CarouselStructureStep>(
-    isOwnIdea ? "select" : "ready",
-  )
+  const [carouselStructureStep, setCarouselStructureStep] =
+    useState<CarouselStructureStep>("select")
   const [carouselStructureMode, setCarouselStructureMode] = useState<CarouselStructureMode | null>(
     null,
   )
@@ -118,7 +112,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   // Step 4
   const [slides, setSlides] = useState<Slide[] | null>(null)
   const [isGeneratingSlides, setIsGeneratingSlides] = useState(false)
-  // Own-idea flow only — Stage 1's structure decision, kept in state so the
+  // Stage 1's structure decision, kept in state so the
   // DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION panel can display it.
   const [carouselStructureDecision, setCarouselStructureDecision] = useState<string | null>(null)
 
@@ -232,16 +226,17 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     const hasAnySaved = !!(savedCaption || savedSlides || savedImages || savedSize)
     if (hasAnySaved) {
       setRestored(true)
-      // A previous session already exists — skip the platform/structure
-      // selection (own-idea flow) and drop straight into the saved state.
+      // A previous session already exists — skip the platform/caption
+      // structure selection and drop straight into the saved state.
       setCarouselFlowStep("generating")
     }
     // The carousel structure selection (step 4) is a separate choice from the
     // caption structure selection above — only mark it as already completed
-    // if a carousel was actually generated. A caption-only (or size-only)
-    // restore means the user hasn't reached that screen yet, so it must still
-    // show instead of jumping straight to the final generate screen.
-    if (savedSlides || savedImages) {
+    // if slide IMAGES were actually generated. Slides-only (prompts saved but
+    // never rendered) still needs to show this screen: if it were skipped,
+    // generateCarouselFlow() would call Stage 1 with a null
+    // carouselStructureMode and the API would reject the request.
+    if (savedImages) {
       setCarouselStructureStep("ready")
     }
 
@@ -280,20 +275,17 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
           // Carousel post (40); regens carry the caption as evidence.
           flow: "carousel",
           isRegen,
-          // Own-idea flow only: platform + structure selection switches the API
-          // to the V2 master prompt. Trending ideas send nothing extra, so the
-          // API keeps using the legacy prompt for them.
-          ...(isOwnIdea
-            ? {
-                platform: selectedPlatform ?? undefined,
-                structureMode: structureMode ?? undefined,
-                templateStructure:
-                  structureMode === "template"
-                    ? CAPTION_TEMPLATES.find((t) => t.id === selectedTemplateId)?.structure
-                    : undefined,
-                customStructure: structureMode === "custom" ? customStructure : undefined,
-              }
-            : {}),
+          // Platform + structure selection — sent for every idea now, which
+          // switches the API to the V2 master prompt (restored sessions that
+          // skipped selection send undefined here, and the API falls back to
+          // its legacy prompt for them).
+          platform: selectedPlatform ?? undefined,
+          structureMode: structureMode ?? undefined,
+          templateStructure:
+            structureMode === "template"
+              ? CAPTION_TEMPLATES.find((t) => t.id === selectedTemplateId)?.structure
+              : undefined,
+          customStructure: structureMode === "custom" ? customStructure : undefined,
         }),
         signal: controller.signal,
       })
@@ -407,40 +399,37 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     setIsGeneratingSlides(true)
     setGameStarted(true) // keep the game visible for the whole flow
 
-    // Own-idea flow only: design a bespoke slide-by-slide structure before any
-    // slide content is written. Trending ideas skip this entirely and keep the
-    // original single-stage carousel-prompt flow completely untouched.
+    // Design a bespoke slide-by-slide structure before any slide content is
+    // written — now runs for every idea (trending and own-idea alike).
     let structureDecision: string | undefined
-    if (isOwnIdea) {
-      setLoadingMessage("Designing carousel structure...")
-      try {
-        const structureRes = await fetch("/api/own-idea/carousel-structure", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ideaId,
-            caption,
-            platform: selectedPlatform ?? undefined,
-            carouselStructureMode,
-            customCarouselStructure,
-            carouselTemplateId: selectedCarouselTemplateId,
-            referenceImage: referenceImage ?? undefined,
-            referenceMediaType: referenceImage ? referenceMediaType : undefined,
-          }),
-        })
-        const structureData = await structureRes.json()
-        if (!structureRes.ok) {
-          throw new Error(
-            (structureData as { error?: string }).error ?? "Couldn't design the carousel structure",
-          )
-        }
-        structureDecision = structureData.carouselStructureDecision as string
-        setCarouselStructureDecision(structureDecision)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong")
-        setIsGeneratingSlides(false)
-        return
+    setLoadingMessage("Designing carousel structure...")
+    try {
+      const structureRes = await fetch("/api/own-idea/carousel-structure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ideaId,
+          caption,
+          platform: selectedPlatform ?? undefined,
+          carouselStructureMode,
+          customCarouselStructure,
+          carouselTemplateId: selectedCarouselTemplateId,
+          referenceImage: referenceImage ?? undefined,
+          referenceMediaType: referenceImage ? referenceMediaType : undefined,
+        }),
+      })
+      const structureData = await structureRes.json()
+      if (!structureRes.ok) {
+        throw new Error(
+          (structureData as { error?: string }).error ?? "Couldn't design the carousel structure",
+        )
       }
+      structureDecision = structureData.carouselStructureDecision as string
+      setCarouselStructureDecision(structureDecision)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong")
+      setIsGeneratingSlides(false)
+      return
     }
 
     // Step 1 — slide prompts (silent).
@@ -857,8 +846,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     </div>
   )
 
-  // ── Platform + structure selection screens (own-idea flow only) ──
-  if (isOwnIdea && carouselFlowStep !== "generating") {
+  // ── Platform + structure selection screens (every idea) ──
+  if (carouselFlowStep !== "generating") {
     return (
       <div className="max-w-2xl mx-auto flex flex-col gap-8">
         {/* Back — each step returns to the previous one */}
@@ -1076,8 +1065,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
         </span>
       )}
 
-      {/* Chosen platform + structure — own-idea flow only */}
-      {isOwnIdea && (selectedPlatform || structureMode) && (
+      {/* Chosen platform + structure */}
+      {(selectedPlatform || structureMode) && (
         <div className="flex items-center gap-1.5 flex-wrap -mt-4">
           {selectedPlatform && (
             <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
@@ -1346,8 +1335,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
         </div>
       )}
 
-      {/* ── STEP 4: Carousel structure selection (own-idea) or Final Screen ── */}
-      {step === 4 && isOwnIdea && carouselStructureStep !== "ready" && (
+      {/* ── STEP 4: Carousel structure selection or Final Screen ── */}
+      {step === 4 && carouselStructureStep !== "ready" && (
         <div className="flex flex-col gap-6 max-w-2xl">
           {carouselStructureStep === "select" ? (
             <button
@@ -1524,7 +1513,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
         </div>
       )}
 
-      {step === 4 && !(isOwnIdea && carouselStructureStep !== "ready") && (
+      {step === 4 && carouselStructureStep === "ready" && (
         <div className="flex flex-col gap-6">
           <button
             onClick={() => setStep(3)}

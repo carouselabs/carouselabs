@@ -39,8 +39,9 @@ type ImageFlowStep =
   | "generating"
 type StructureMode = "auto" | "custom" | "template"
 
-// Image structure selection (own-idea flow only) — appears after reference
-// image upload/size selection, right before the actual image generation call.
+// Image structure selection — appears after reference image upload/size
+// selection, right before the actual image generation call. Shown for
+// every idea.
 type ImageStructureStep = "select" | "custom" | "template" | "ready"
 type ImageStructureMode = "auto" | "custom" | "template" | "reference-only"
 
@@ -49,35 +50,30 @@ const SKELETON_WIDTHS = ["88%", "72%", "95%", "65%", "80%", "55%", "70%", "40%"]
 export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: ImageClientProps) {
   const [step, setStep] = useState<Step>(1)
 
-  // Platform + structure selection (own-idea flow only). Selections feed the
-  // /api/generate/caption request; trending ideas never see these screens.
-  const [imageFlowStep, setImageFlowStep] = useState<ImageFlowStep>(
-    isOwnIdea ? "platform-select" : "generating",
-  )
+  // Platform + structure selection — now shown for every idea (trending and
+  // own-idea alike). Selections feed the /api/generate/caption request.
+  const [imageFlowStep, setImageFlowStep] = useState<ImageFlowStep>("platform-select")
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null)
   const [structureMode, setStructureMode] = useState<StructureMode | null>(null)
   const [customStructure, setCustomStructure] = useState("")
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState(CATEGORY_ORDER[0])
 
-  // Image structure selection (own-idea flow only) — gates the "Generate
-  // Image" button on step 4 until a visual structure is chosen. Trending
-  // ideas start (and stay) on "ready", i.e. the unchanged existing flow.
-  const [imageStructureStep, setImageStructureStep] = useState<ImageStructureStep>(
-    isOwnIdea ? "select" : "ready",
-  )
+  // Image structure selection — now shown for every idea, gating the
+  // "Generate Image" button on step 4 until a visual structure is chosen.
+  const [imageStructureStep, setImageStructureStep] = useState<ImageStructureStep>("select")
   const [imageStructureMode, setImageStructureMode] = useState<ImageStructureMode | null>(null)
   const [customImageStructure, setCustomImageStructure] = useState("")
   const [selectedImageTemplateId, setSelectedImageTemplateId] = useState<string | null>(null)
   const [selectedImageCategory, setSelectedImageCategory] = useState(IMAGE_CATEGORY_ORDER[0])
 
-  // Own-idea flow only: the idea's deep dive content, fetched once on mount —
+  // The idea's deep dive content, fetched once on mount for every idea —
   // needed by Stage 1 (presentation structure) since this client only
   // otherwise holds the hook, not the full breakdown.
   const [deepDive, setDeepDive] = useState("")
 
-  // Own-idea flow only: which of the 3 pipeline stages is running, so the
-  // loading UI can show real progress instead of one generic spinner.
+  // Which of the 3 pipeline stages is running, so the loading UI can show
+  // real progress instead of one generic spinner.
   const [imageGenStage, setImageGenStage] = useState<
     "structure" | "prompt" | "image" | null
   >(null)
@@ -164,20 +160,18 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
       // localStorage unavailable — fall through
     }
 
-    // Own-idea flow only: Stage 1 (presentation structure) needs the full
-    // deep dive, which this client doesn't otherwise hold. The breakdown is
-    // guaranteed to exist (the server page redirects otherwise), so this is
-    // just a cached DB read.
-    if (isOwnIdea) {
-      try {
-        const res = await fetch(`/api/ideas/${ideaId}/breakdown`)
-        if (res.ok) {
-          const data = await res.json()
-          if (typeof data.breakdown?.deepDive === "string") setDeepDive(data.breakdown.deepDive)
-        }
-      } catch {
-        // best-effort — Stage 1 will still run with an empty deep dive
+    // Stage 1 (presentation structure) needs the full deep dive, which this
+    // client doesn't otherwise hold — fetched for every idea now. The
+    // breakdown is guaranteed to exist (the server page redirects otherwise),
+    // so this is just a cached DB read.
+    try {
+      const res = await fetch(`/api/ideas/${ideaId}/breakdown`)
+      if (res.ok) {
+        const data = await res.json()
+        if (typeof data.breakdown?.deepDive === "string") setDeepDive(data.breakdown.deepDive)
       }
+    } catch {
+      // best-effort — Stage 1 will still run with an empty deep dive
     }
 
     // Legacy fallback: caption may live in the Post table from before this
@@ -205,9 +199,17 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     const hasAnySaved = !!(savedCaption || savedPrompt || savedImageUrl || savedSize)
     if (hasAnySaved) {
       setRestored(true)
-      // A previous session already exists — skip the platform/structure
-      // selection (own-idea flow) and drop straight into the saved state.
+      // A previous session already exists — skip the platform/caption
+      // structure selection and drop straight into the saved state.
       setImageFlowStep("generating")
+    }
+    // Image structure selection (Stage 1) is a separate choice from the
+    // caption structure above — only skip it if an image was actually
+    // generated already. A caption/prompt/size-only restore means the user
+    // hasn't reached Stage 1 yet, so it must still show (and if it were
+    // skipped here, generateImageForOwnIdea() would be called with a null
+    // imageStructureMode and Stage 1 would reject the request).
+    if (savedImageUrl) {
       setImageStructureStep("ready")
     }
 
@@ -246,20 +248,17 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
           // Image + Caption post (15); regens carry the caption as evidence.
           flow: "image_caption",
           isRegen,
-          // Own-idea flow only: platform + structure selection switches the API
-          // to the V2 master prompt. Trending ideas send nothing extra, so the
-          // API keeps using the legacy prompt for them.
-          ...(isOwnIdea
-            ? {
-                platform: selectedPlatform ?? undefined,
-                structureMode: structureMode ?? undefined,
-                templateStructure:
-                  structureMode === "template"
-                    ? CAPTION_TEMPLATES.find((t) => t.id === selectedTemplateId)?.structure
-                    : undefined,
-                customStructure: structureMode === "custom" ? customStructure : undefined,
-              }
-            : {}),
+          // Platform + structure selection — sent for every idea now, which
+          // switches the API to the V2 master prompt (restored sessions that
+          // skipped selection send undefined here, and the API falls back to
+          // its legacy prompt for them).
+          platform: selectedPlatform ?? undefined,
+          structureMode: structureMode ?? undefined,
+          templateStructure:
+            structureMode === "template"
+              ? CAPTION_TEMPLATES.find((t) => t.id === selectedTemplateId)?.structure
+              : undefined,
+          customStructure: structureMode === "custom" ? customStructure : undefined,
         }),
         signal: controller.signal,
       })
@@ -355,9 +354,9 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     invalidateGeneratedImage()
   }
 
-  // Single-button flow: silently generate the image prompt, then immediately use
-  // it to generate the image. Only the final image is shown. The prompt is still
-  // kept in state + localStorage so Regenerate Image keeps working.
+  // LEGACY — pre-3-stage-pipeline single-stage flow, kept as backup, currently
+  // unused. Every idea now goes through generateImageForOwnIdea() below
+  // instead. Left defined (not deleted) in case we need to revert.
   async function generateImageFlow(userInstruction?: string, isRegen = false) {
     setIsGeneratingImage(true)
     setGameStarted(true) // keep the game visible from now on
@@ -443,10 +442,10 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     }
   }
 
-  // Own-idea 3-stage pipeline: Stage 1 decides the presentation structure,
-  // Stage 2 turns that + the post content into a detailed image prompt, Stage
-  // 3 renders it — same final call as the trending-idea flow. Trending ideas
-  // never call this; they use generateImageFlow() above unchanged.
+  // 3-stage pipeline, now used for every idea (trending and own-idea alike):
+  // Stage 1 decides the presentation structure, Stage 2 turns that + the post
+  // content into a detailed image prompt, Stage 3 renders it. The name is a
+  // holdover from when this only ran for own-idea posts.
   async function generateImageForOwnIdea(userInstruction?: string, isRegen = false) {
     setIsGeneratingImage(true)
     setGameStarted(true) // keep the game visible from now on
@@ -578,6 +577,9 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     }
   }
 
+  // LEGACY — re-renders the image from an already-generated prompt without
+  // re-running Stage 1/2. Kept as backup, currently unused (regeneration now
+  // always goes through generateImageForOwnIdea()'s full 3-stage pipeline).
   async function generateImage(isRegen = false) {
     if (!imagePrompt) return
     setIsGeneratingImage(true)
@@ -636,19 +638,11 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     // read a stale count and slip past the limit.
     increment(ideaId)
     try {
-      // With a custom instruction, re-run the full flow so the prompt is edited
-      // first; without one, just re-render the image from the existing prompt.
-      // All paths flag isRegen so the server charges image_regen (8). Own-idea
-      // always re-runs the full 3-stage pipeline (Stage 1 has no lightweight
-      // edit mode of its own).
+      // Every idea now re-runs the full 3-stage pipeline on regeneration too —
+      // Stage 1 (presentation structure) has no lightweight edit mode of its
+      // own. Flags isRegen so the server charges image_regen (8).
       const userInstruction = imageInstruction.trim() || undefined
-      if (isOwnIdea) {
-        await generateImageForOwnIdea(userInstruction, true)
-      } else if (userInstruction) {
-        await generateImageFlow(userInstruction, true)
-      } else {
-        await generateImage(true)
-      }
+      await generateImageForOwnIdea(userInstruction, true)
       const newCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
       if (newCount >= MAX_REGENERATIONS) {
         setToastMsg("You've used both regenerations for this session")
@@ -870,10 +864,9 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
           >
             <div className="h-10 w-10 rounded-full border-2 border-[rgba(26,26,26,0.25)] border-t-[#1A1A1A] animate-spin" />
             <p className="text-[13px] font-medium text-[#1A1A1A]">
-              {isOwnIdea && imageGenStage === "structure" && "Deciding the best visual structure…"}
-              {isOwnIdea && imageGenStage === "prompt" && "Writing your image prompt…"}
-              {(!isOwnIdea || imageGenStage === "image" || imageGenStage === null) &&
-                "Generating your image…"}
+              {imageGenStage === "structure" && "Deciding the best visual structure…"}
+              {imageGenStage === "prompt" && "Writing your image prompt…"}
+              {(imageGenStage === "image" || imageGenStage === null) && "Generating your image…"}
             </p>
             <p className="text-[11px] text-[#9CA3AF]">(this can take up to a minute)</p>
           </div>
@@ -881,13 +874,10 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
 
         {/* Single button — generates the prompt then the image in one go. No
             instruction box before generation; it appears only after success.
-            Own-idea posts run the 3-stage pipeline; trending ideas keep the
-            existing single-stage flow. */}
+            Every idea runs the 3-stage pipeline now. */}
         {!imageUrl && !isGeneratingImage && (
           <button
-            onClick={() =>
-              void (isOwnIdea ? generateImageForOwnIdea() : generateImageFlow()).catch(() => {})
-            }
+            onClick={() => void generateImageForOwnIdea().catch(() => {})}
             className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
           >
             <Sparkles size={14} strokeWidth={2} />
@@ -898,8 +888,8 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     </div>
   )
 
-  // ── Platform + structure selection screens (own-idea flow only) ──
-  if (isOwnIdea && imageFlowStep !== "generating") {
+  // ── Platform + structure selection screens (every idea) ──
+  if (imageFlowStep !== "generating") {
     return (
       <div className="max-w-2xl mx-auto flex flex-col gap-8">
         {/* Back — each step returns to the previous one */}
@@ -1132,8 +1122,8 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
         </span>
       )}
 
-      {/* Chosen platform + structure — own-idea flow only */}
-      {isOwnIdea && (selectedPlatform || structureMode) && (
+      {/* Chosen platform + structure */}
+      {(selectedPlatform || structureMode) && (
         <div className="flex items-center gap-1.5 flex-wrap -mt-4">
           {selectedPlatform && (
             <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
@@ -1402,8 +1392,8 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
         </div>
       )}
 
-      {/* ── STEP 4: Image structure selection (own-idea) or Final Screen ── */}
-      {step === 4 && isOwnIdea && imageStructureStep !== "ready" && (
+      {/* ── STEP 4: Image structure selection or Final Screen ── */}
+      {step === 4 && imageStructureStep !== "ready" && (
         <div className="flex flex-col gap-6 max-w-2xl">
           {imageStructureStep === "select" ? (
             <button
@@ -1580,7 +1570,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
         </div>
       )}
 
-      {step === 4 && !(isOwnIdea && imageStructureStep !== "ready") && (
+      {step === 4 && imageStructureStep === "ready" && (
         <div className="flex flex-col gap-6">
           <button
             onClick={() => setStep(3)}
@@ -1595,9 +1585,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
                 {friendlyGenerationError(error)}
               </div>
               <button
-                onClick={() =>
-                  void (isOwnIdea ? generateImageForOwnIdea() : generateImageFlow()).catch(() => {})
-                }
+                onClick={() => void generateImageForOwnIdea().catch(() => {})}
                 disabled={isGeneratingImage}
                 className="self-start text-[13px] font-medium text-[#1A1A1A] hover:text-black transition-colors disabled:opacity-50"
               >

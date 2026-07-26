@@ -325,11 +325,12 @@ export async function POST(req: Request) {
 
   const breakdown = idea.breakdowns[0].outline as unknown as BreakdownOutline
 
-  // Own-idea Stage 2: builds the image prompt from the Stage 1 Presentation
-  // Structure Decision instead of the legacy single-stage prompt below.
-  // Trending ideas never send presentationStructure, so they always fall
-  // through to the existing logic untouched.
-  if (isOwnIdea && presentationStructure) {
+  // Stage 2: builds the image prompt from the Stage 1 Presentation Structure
+  // Decision — now the path for every idea's full generation, not just
+  // own-idea ones. Requests without a presentationStructure (a targeted edit,
+  // or a restored session that hasn't run Stage 1) fall through to the
+  // existing logic below, which still handles both cases.
+  if (presentationStructure) {
     try {
       const sizeBlock = size === "1:1" ? "Square 1080x1080px" : "Portrait 1080x1350px"
       const userInstructionBlock = userInstruction ? `Special Instruction: ${userInstruction}` : ""
@@ -459,10 +460,13 @@ export async function POST(req: Request) {
     }
   }
 
-  // EXISTING LOGIC — unchanged, runs when isOwnIdea is false or
-  // presentationStructure is missing.
-  // Targeted edit when the user gave an instruction AND we have the current
-  // prompt to edit; otherwise full regeneration as before.
+  // Runs when presentationStructure is missing: a targeted edit (has its own
+  // self-contained prompt, doesn't need a structure decision), or a request
+  // that skipped Stage 1. The full single-stage generation branch below this
+  // point is effectively LEGACY now — every idea's full generation goes
+  // through the presentationStructure branch above — kept as a working
+  // fallback rather than deleted, since it's the same code path edit mode
+  // still needs.
   const prompt =
     userInstruction && currentImagePrompt
       ? buildImageEditPrompt(currentImagePrompt, userInstruction)

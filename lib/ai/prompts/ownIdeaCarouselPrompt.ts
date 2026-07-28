@@ -37,6 +37,30 @@ Common mistakes to avoid:
 
 In the Main Headline section of every slide brief, explicitly state the exact text color (with hex code) and describe any accent-color emphasis on specific words, matching what you observed in the reference image.`
 
+const FONT_FIDELITY_SECTION = `## FONT STYLE FIDELITY — CRITICAL
+
+Identify the EXACT font characteristics visible in the reference image and use ONLY that same font style consistently across every heading, headline, and text element — never introduce a different font style partway through.
+
+Specifically identify from the reference:
+- Font category: serif, sans-serif, condensed, extended, script, monospace, display/decorative
+- Font weight: thin, light, regular, medium, semibold, bold, black/heavy
+- Letter case treatment: all-caps, title case, sentence case, lowercase
+- Letter spacing: tight/condensed, normal, wide/expanded
+- Any distinctive characteristics: rounded terminals, sharp angular cuts, geometric construction, humanist warmth, italic slant, etc.
+
+Once identified, this EXACT font style must be used for:
+- The main headline
+- Any subheadings
+- Supporting copy text
+- Slide indicators or labels
+- Any other text element in the design
+
+Do NOT switch fonts between different text elements unless the reference image itself clearly shows a deliberate hierarchy using two distinct fonts (e.g. a serif headline paired with a sans-serif body) — in that specific case, identify and preserve BOTH fonts precisely and use them consistently in their respective roles.
+
+Do NOT default to a generic "modern sans-serif" or "clean bold font" description — describe the SPECIFIC characteristics you actually observe (e.g. "a bold condensed grotesque sans-serif with tight letter spacing and slightly rounded terminals" rather than just "bold sans-serif").
+
+State the identified font characteristics explicitly in the Main Headline and Typography-related sections of every single slide/image brief, so the exact same font style renders consistently across the entire piece.`
+
 const COLOR_CLOSED_SET_SECTION = `## COLOR CLOSED-SET RULE — ABSOLUTE
 
 The 5-8 hex codes you identify from the reference image form a CLOSED SET. Every single color mentioned anywhere in your response — background, text, accents, illustration elements, decorative elements, shadows, everything — MUST be one of these identified hex codes or a direct tint/shade of one of them.
@@ -167,6 +191,8 @@ Length matters: each slide brief must run between 500 and 600 words. Reach that 
 ${COLOR_ACCURACY_SECTION}
 
 ${TYPOGRAPHY_COLOR_FIDELITY_SECTION}
+
+${FONT_FIDELITY_SECTION}
 
 ${COLOR_CLOSED_SET_SECTION}
 

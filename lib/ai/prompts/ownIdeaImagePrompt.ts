@@ -3,6 +3,30 @@
 // Presentation Structure Decision + post content into a detailed AI image
 // prompt. Own-idea only — trending ideas keep using lib/ai/prompts/imagePrompt.ts.
 
+const FONT_FIDELITY_SECTION = `## FONT STYLE FIDELITY — CRITICAL
+
+Identify the EXACT font characteristics visible in the reference image and use ONLY that same font style consistently across every heading, headline, and text element — never introduce a different font style partway through.
+
+Specifically identify from the reference:
+- Font category: serif, sans-serif, condensed, extended, script, monospace, display/decorative
+- Font weight: thin, light, regular, medium, semibold, bold, black/heavy
+- Letter case treatment: all-caps, title case, sentence case, lowercase
+- Letter spacing: tight/condensed, normal, wide/expanded
+- Any distinctive characteristics: rounded terminals, sharp angular cuts, geometric construction, humanist warmth, italic slant, etc.
+
+Once identified, this EXACT font style must be used for:
+- The main headline
+- Any subheadings
+- Supporting copy text
+- Slide indicators or labels
+- Any other text element in the design
+
+Do NOT switch fonts between different text elements unless the reference image itself clearly shows a deliberate hierarchy using two distinct fonts (e.g. a serif headline paired with a sans-serif body) — in that specific case, identify and preserve BOTH fonts precisely and use them consistently in their respective roles.
+
+Do NOT default to a generic "modern sans-serif" or "clean bold font" description — describe the SPECIFIC characteristics you actually observe (e.g. "a bold condensed grotesque sans-serif with tight letter spacing and slightly rounded terminals" rather than just "bold sans-serif").
+
+State the identified font characteristics explicitly in the Main Headline and Typography-related sections of every single slide/image brief, so the exact same font style renders consistently across the entire piece.`
+
 export function buildOwnIdeaImagePromptSystemMessage(): string {
   return `A reference image may be provided. It defines the VISUAL DESIGN SYSTEM for this image ONLY. Treat it as a visual style guide, never as content to recreate.
 
@@ -19,6 +43,8 @@ DO NOT EXTRACT OR REUSE:
 - Any text or words visible in the reference.
 - The literal story the reference image tells.
 - The reference image layout or information structure.
+
+${FONT_FIDELITY_SECTION}
 
 If no reference image is provided, invent a premium, original editorial color palette and design system from scratch that matches the content topic and niche, and state the exact hex codes you're inventing.
 

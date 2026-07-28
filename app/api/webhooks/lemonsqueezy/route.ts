@@ -125,6 +125,12 @@ export async function POST(req: Request) {
         // than assuming every subscription is Pro.
         const plan = planForVariantId(attrs.variant_id)
         const credits = creditsForPlan(plan)
+        // Lemon Squeezy fires this the moment checkout completes — which
+        // includes trial signups (attrs.status === "on_trial") where no
+        // payment has been captured yet. Only "active" means money actually
+        // changed hands; anything else still records plan/status below but
+        // must NOT grant the credit allowance.
+        const isPaid = attrs.status === "active"
         console.log(
           "[webhooks/lemonsqueezy] subscription_created: saving lsSubscriptionId:",
           payload.data.id,
@@ -133,11 +139,10 @@ export async function POST(req: Request) {
           where: { userId: user.id },
           data: {
             plan,
-            status: "ACTIVE",
+            status: mapStatus(attrs.status),
             cancelAtPeriodEnd: false,
             upgradeScheduled: false,
-            creditsUsed: 0,
-            creditsTotal: credits,
+            ...(isPaid ? { creditsUsed: 0, creditsTotal: credits } : {}),
             lsSubscriptionId: payload.data.id,
             lsCustomerId: attrs.customer_id != null ? String(attrs.customer_id) : null,
             lsVariantId: attrs.variant_id != null ? String(attrs.variant_id) : null,
@@ -145,9 +150,18 @@ export async function POST(req: Request) {
             currentPeriodEnd: attrs.renews_at ? new Date(attrs.renews_at) : null,
           },
         })
-        await safeEmail(() =>
-          sendUpgradedToProEmail(user.email, name, credits, plan === "GROWTH" ? "Growth" : "Pro"),
-        )
+        if (!isPaid) {
+          console.log(
+            `[webhooks/lemonsqueezy] subscription_created: status=${attrs.status} for user ${user.id} — not granting credits until payment confirmed`,
+          )
+        }
+        // Only send the "upgraded" email once payment is actually confirmed —
+        // a trial signup email would be misleading before any charge lands.
+        if (isPaid) {
+          await safeEmail(() =>
+            sendUpgradedToProEmail(user.email, name, credits, plan === "GROWTH" ? "Growth" : "Pro"),
+          )
+        }
         break
       }
 
@@ -159,6 +173,10 @@ export async function POST(req: Request) {
         // renewal.
         const plan = planForVariantId(attrs.variant_id)
         const credits = creditsForPlan(plan)
+        // Only an "active" status means a real payment backs this plan — a
+        // trial-to-paid variant swap (or any other non-active status) can
+        // fire subscription_updated too, and must not grant credits.
+        const isPaid = attrs.status === "active"
 
         const currentSub = await db.subscription.findUnique({
           where: { userId: user.id },
@@ -173,6 +191,7 @@ export async function POST(req: Request) {
         // plan now but hold credits at the old allowance; the renewal's
         // subscription_payment_success resets them to the new tier.
         const isScheduledUpgrade = planChanged && currentSub?.upgradeScheduled === true
+        const shouldResetCredits = planChanged && isPaid && !isScheduledUpgrade
 
         await db.subscription.update({
           where: { userId: user.id },
@@ -182,31 +201,37 @@ export async function POST(req: Request) {
             // self-heals rows where a manual backfill stored a bad id.
             lsSubscriptionId: payload.data.id,
             currentPeriodEnd: attrs.renews_at ? new Date(attrs.renews_at) : undefined,
-            // If plan changed, update plan (and reset credits unless the
-            // upgrade is deferred to renewal)
+            // If plan changed, update plan (and reset credits only when the
+            // change reflects a real paid status and isn't a deferred upgrade)
             ...(planChanged
               ? {
                   plan,
                   lsVariantId: attrs.variant_id != null ? String(attrs.variant_id) : null,
-                  ...(isScheduledUpgrade ? {} : { creditsUsed: 0, creditsTotal: credits }),
+                  ...(shouldResetCredits ? { creditsUsed: 0, creditsTotal: credits } : {}),
                 }
               : {}),
           },
         })
 
-        // Send upgrade email if plan changed to a paid plan. Scheduled
-        // upgrades skip it — nothing was charged or credited yet; the
-        // renewal-time reset email covers activation.
-        if (planChanged && !isScheduledUpgrade && (plan === "PRO" || plan === "GROWTH")) {
+        // Send upgrade email only when credits were actually granted — a
+        // trial status or a deferred upgrade hasn't been paid for yet, and
+        // scheduled upgrades get their own email at renewal-time.
+        if (shouldResetCredits && (plan === "PRO" || plan === "GROWTH")) {
           await safeEmail(() =>
             sendUpgradedToProEmail(user.email, name, credits, plan === "GROWTH" ? "Growth" : "Pro"),
           )
         }
 
         if (planChanged) {
-          console.log(
-            `[webhooks/lemonsqueezy] plan changed for user ${user.id}: ${currentSub?.plan} → ${plan}, credits reset to ${credits}`,
-          )
+          if (shouldResetCredits) {
+            console.log(
+              `[webhooks/lemonsqueezy] plan changed for user ${user.id}: ${currentSub?.plan} → ${plan}, credits reset to ${credits}`,
+            )
+          } else {
+            console.log(
+              `[webhooks/lemonsqueezy] plan changed for user ${user.id}: ${currentSub?.plan} → ${plan}, but status=${attrs.status}${isScheduledUpgrade ? " (scheduled upgrade)" : ""} — credits NOT reset`,
+            )
+          }
         }
 
         break

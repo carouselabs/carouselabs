@@ -25,6 +25,10 @@ type LsWebhook = {
       customer_id?: number
       variant_id?: number
       status?: string
+      // Whether the subscription is scheduled to cancel at period end. Lemon
+      // Squeezy sets this true on cancellation, false on resume (before
+      // ends_at) — confirmed against their subscription object docs.
+      cancelled?: boolean
       renews_at?: string | null
       ends_at?: string | null
       // order_created only:
@@ -201,6 +205,15 @@ export async function POST(req: Request) {
             // self-heals rows where a manual backfill stored a bad id.
             lsSubscriptionId: payload.data.id,
             currentPeriodEnd: attrs.renews_at ? new Date(attrs.renews_at) : undefined,
+            // Lemon Squeezy sets attrs.cancelled: false when a subscription is
+            // resumed (un-cancelled) via the customer portal before ends_at —
+            // confirmed against their subscription object docs. That can
+            // happen without a plan change, so this is unconditional, not
+            // nested inside the planChanged block below. `undefined` here
+            // means "don't touch the field" (Prisma omits undefined keys),
+            // so a cancelled:true or missing value leaves it exactly as
+            // subscription_cancelled already set it.
+            cancelAtPeriodEnd: attrs.cancelled === false ? false : undefined,
             // If plan changed, update plan (and reset credits only when the
             // change reflects a real paid status and isn't a deferred upgrade)
             ...(planChanged
@@ -258,6 +271,29 @@ export async function POST(req: Request) {
         break
       }
 
+      case "subscription_expired": {
+        // Fires when the grace period after cancellation actually ends (or a
+        // subscription otherwise lapses) — confirmed via Lemon Squeezy's docs
+        // that this fires reliably and is the correct moment to revoke
+        // access, unlike subscription_cancelled which just starts the grace
+        // period. Downgrade to FREE and clear the paid credit allowance.
+        // cancelAtPeriodEnd/upgradeScheduled are cleared too since neither
+        // flag means anything once there's no paid subscription left.
+        await db.subscription.update({
+          where: { userId: user.id },
+          data: {
+            status: "EXPIRED",
+            plan: "FREE",
+            creditsUsed: 0,
+            creditsTotal: 0,
+            cancelAtPeriodEnd: false,
+            upgradeScheduled: false,
+          },
+        })
+        console.log(`[webhooks/lemonsqueezy] subscription_expired: user ${user.id} downgraded to FREE`)
+        break
+      }
+
       case "subscription_payment_success": {
         // Monthly renewal succeeded — reset the credit allowance. Re-derive
         // the plan from the variant on this event (not the stored row) so a
@@ -305,7 +341,9 @@ export async function POST(req: Request) {
 }
 
 // Maps Lemon Squeezy subscription statuses onto our SubscriptionStatus enum.
-function mapStatus(status?: string): "ACTIVE" | "CANCELLED" | "PAST_DUE" | "TRIALING" | "EXPIRED" {
+function mapStatus(
+  status?: string,
+): "ACTIVE" | "CANCELLED" | "PAST_DUE" | "TRIALING" | "EXPIRED" | "PAUSED" {
   switch (status) {
     case "on_trial":
       return "TRIALING"
@@ -316,6 +354,8 @@ function mapStatus(status?: string): "ACTIVE" | "CANCELLED" | "PAST_DUE" | "TRIA
       return "PAST_DUE"
     case "expired":
       return "EXPIRED"
+    case "paused":
+      return "PAUSED"
     default:
       return "ACTIVE"
   }

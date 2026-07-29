@@ -60,6 +60,7 @@ enum SubscriptionStatus {
   PAST_DUE
   TRIALING
   EXPIRED
+  PAUSED
 }
 
 enum HistoryStatus {

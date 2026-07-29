@@ -601,6 +601,13 @@ export default async function NicheToolsPage({
             >
               Browse all niches
             </Link>
+            <Link
+              href="/generators"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#6B7280] bg-white border border-[#E5E3DE] hover:text-[#7C3AED] hover:border-[#C4B5FD] transition-colors"
+            >
+              Explore our AI tools
+              <ArrowRight size={13} strokeWidth={2.4} />
+            </Link>
           </AnimatedSection>
         </div>
       </section>

@@ -34,6 +34,7 @@ const COMPARE_LINKS = [
 
 const FREE_TOOL_LINKS = [
   { href: "/tools/tap-hold-maker", label: "Tap & Hold Maker (Free)" },
+  { href: "/generators", label: "AI Tools" },
 ]
 
 // Data-driven — pulled from the /tap-hold SEO article set, not hardcoded, so

@@ -12,10 +12,13 @@ import {
   DollarSign,
   Layers,
   Sparkles,
+  Swords,
 } from "lucide-react"
 import {
   AnimatedSection,
   AnimatedFadeIn,
+  AnimatedSlideLeft,
+  AnimatedSlideRight,
 } from "@/components/marketing/AnimatedSection"
 import { competitors, getRelatedCompetitors, type Competitor } from "../data"
 import { niches } from "../../for/data"
@@ -59,7 +62,7 @@ const POPULAR_GUIDES = [
   "digital-marketers",
 ].map(nicheLink)
 
-// Only the 20 slugs below are valid; any other /vs/* path 404s.
+// Only the slugs in `competitors` are valid; any other /vs/* path 404s.
 export const dynamicParams = false
 
 export function generateStaticParams() {
@@ -102,7 +105,7 @@ export async function generateMetadata({
   }
 }
 
-/** SECTION 8 — FAQ structured data (rendered as JSON-LD in the page). */
+/** FAQ structured data (rendered as JSON-LD in the page). */
 function buildFaqJsonLd(competitor: Competitor) {
   return {
     "@context": "https://schema.org",
@@ -128,23 +131,36 @@ function ComparisonCell({
 }) {
   if (typeof value === "boolean") {
     return value ? (
-      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-[#E7F6EC]">
-        <Check size={16} className="text-[#15803D]" strokeWidth={3} />
+      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#E7F6EC]">
+        <Check size={17} className="text-[#15803D]" strokeWidth={3} />
       </span>
     ) : (
-      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-[#FDECEC]">
-        <X size={16} className="text-[#DC2626]" strokeWidth={3} />
+      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#FDECEC]">
+        <X size={17} className="text-[#DC2626]" strokeWidth={3} />
       </span>
     )
   }
   return (
     <span
-      className={`text-[14px] font-medium ${
+      className={`text-[13.5px] font-medium ${
         positive ? "text-[#15803D]" : "text-[#4B5563]"
       }`}
     >
       {value}
     </span>
+  )
+}
+
+/** A small circular "VS" / "OR" badge meant to overlap the seam of a split layout. */
+function SplitBadge({ label }: { label: string }) {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white border-[3px] border-[#F3F0FF] shadow-[0_8px_24px_rgba(10,10,10,0.16)] flex items-center justify-center">
+        <span className="text-[13px] sm:text-[14px] font-extrabold text-[#7C3AED] tracking-tight">
+          {label}
+        </span>
+      </div>
+    </div>
   )
 }
 
@@ -162,196 +178,203 @@ export default async function CompetitorVsPage({
   // Related comparisons for internal linking (same category, 3 max).
   const relatedCompetitors = getRelatedCompetitors(slug, 3)
 
-  // SECTION 2 quick stats
-  const platformsStat = competitor.feature_comparison.some(
-    (r) => /instagram|multi-platform|twitter/i.test(r.feature)
+  // Quick-stat strip
+  const platformsStat = competitor.feature_comparison.some((r) =>
+    /instagram|multi-platform|twitter/i.test(r.feature),
   )
     ? "LinkedIn, Instagram, X"
     : "LinkedIn-first"
 
   return (
     <>
-      {/* SECTION 8 — FAQ structured data */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
       />
 
-      {/* ── SECTION 1 — HERO (clean white, dual price badges) ── */}
-      <section className="relative px-6 pt-20 pb-14 sm:pt-24 sm:pb-16 bg-white">
-        <div className="relative z-10 max-w-3xl mx-auto text-center flex flex-col items-center gap-7">
+      {/* ── SECTION 1 — HERO: head-to-head split panels with a VS badge ── */}
+      <section className="relative px-6 pt-16 pb-14 sm:pt-20 sm:pb-16 bg-white overflow-hidden">
+        <div className="relative z-10 max-w-3xl mx-auto text-center flex flex-col items-center gap-5 pb-11 sm:pb-12">
           <AnimatedSection delay={0}>
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#F3F0FF] text-[12px] font-medium text-[#7C3AED]">
-              <Scale size={12} strokeWidth={2.2} />
-              Honest Comparison
+              <Swords size={12} strokeWidth={2.2} />
+              Head-to-Head Comparison
             </div>
           </AnimatedSection>
 
           <AnimatedSection delay={0.05}>
-            <h1 className="text-[clamp(2.2rem,5.5vw,3.4rem)] font-extrabold leading-[1.08] tracking-[-0.03em] text-[#0A0A0A]">
+            <h1 className="text-[clamp(2.1rem,5vw,3.2rem)] font-extrabold leading-[1.1] tracking-[-0.03em] text-[#0A0A0A]">
               {competitor.hero_headline}
             </h1>
           </AnimatedSection>
 
           <AnimatedSection delay={0.1}>
-            <p className="max-w-2xl text-[18px] text-[#4B5563] leading-[1.6]">
+            <p className="max-w-2xl text-[17px] text-[#4B5563] leading-[1.65]">
               {competitor.hero_subheadline}
             </p>
           </AnimatedSection>
+        </div>
 
-          {/* Dual price badges */}
-          <AnimatedSection delay={0.15}>
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="flex flex-col items-center gap-1 px-6 py-4 rounded-2xl border-2 border-[#7C3AED] bg-[#F3F0FF]">
-                <span className="text-[13px] font-semibold text-[#7C3AED]">
-                  CarouseLabs
-                </span>
-                <span className="text-[22px] font-extrabold text-[#0A0A0A] tracking-[-0.02em]">
-                  {competitor.our_price}
-                </span>
-              </div>
-              <span className="text-[15px] font-bold text-[#9CA3AF]">vs</span>
-              <div className="flex flex-col items-center gap-1 px-6 py-4 rounded-2xl border border-[#E5E3DE] bg-[#FBFAF6]">
-                <span className="text-[13px] font-semibold text-[#6B7280]">
-                  {competitor.name}
-                </span>
-                <span className="text-[22px] font-extrabold text-[#0A0A0A] tracking-[-0.02em]">
-                  {competitor.price}
-                </span>
-              </div>
-            </div>
-          </AnimatedSection>
+        <div className="relative max-w-4xl mx-auto">
+          <div className="relative flex flex-col sm:flex-row rounded-3xl overflow-hidden border border-[#E5E3DE] shadow-[0_20px_60px_rgba(10,10,10,0.10)]">
+            <AnimatedSlideLeft
+              delay={0.1}
+              className="flex-1 flex flex-col items-center gap-3 px-8 py-11 sm:py-14 text-center bg-gradient-to-br from-[#7C3AED] to-[#5B21B6]"
+            >
+              <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-white/70">
+                CarouseLabs
+              </span>
+              <span className="text-[14.5px] font-medium text-white/90 max-w-[220px]">
+                AI carousel &amp; content studio
+              </span>
+              <span className="text-[32px] sm:text-[36px] font-extrabold tracking-[-0.02em] text-white">
+                {competitor.our_price}
+              </span>
+              <span className="inline-flex items-center gap-1.5 mt-1 px-3 py-1.5 rounded-full bg-white/15 text-[12px] font-medium text-white leading-snug max-w-[260px]">
+                <Sparkles size={12} strokeWidth={2.2} className="shrink-0" />
+                {competitor.carouselabs_advantages[0]}
+              </span>
+            </AnimatedSlideLeft>
+
+            <AnimatedSlideRight
+              delay={0.1}
+              className="flex-1 flex flex-col items-center gap-3 px-8 py-11 sm:py-14 text-center bg-[#FBFAF6]"
+            >
+              <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#9CA3AF]">
+                {competitor.name}
+              </span>
+              <span className="text-[14.5px] font-medium text-[#6B7280] max-w-[220px]">
+                {competitor.tagline}
+              </span>
+              <span className="text-[32px] sm:text-[36px] font-extrabold tracking-[-0.02em] text-[#0A0A0A]">
+                {competitor.price}
+              </span>
+              <span className="inline-flex items-center gap-1.5 mt-1 px-3 py-1.5 rounded-full bg-[#EEEBE3] text-[12px] font-medium text-[#4B5563] leading-snug max-w-[260px]">
+                <Info size={12} strokeWidth={2.2} className="shrink-0" />
+                {competitor.competitor_strengths[0]}
+              </span>
+            </AnimatedSlideRight>
+          </div>
+
+          <SplitBadge label="VS" />
         </div>
       </section>
 
-      {/* ── SECTION 2 — QUICK VERDICT BOX ── */}
-      <section className="px-6 pb-16">
-        <AnimatedSection className="max-w-4xl mx-auto">
-          <div className="rounded-2xl border border-[#E5DEF7] bg-[#F3F0FF] p-7 sm:p-9 flex flex-col gap-7">
-            <div className="flex items-start gap-4">
-              <div className="shrink-0 w-11 h-11 rounded-xl bg-[#7C3AED] flex items-center justify-center">
-                <Scale size={20} className="text-white" strokeWidth={2.2} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold uppercase tracking-wide text-[#7C3AED]">
-                  The Quick Verdict
-                </span>
-                <p className="text-[17px] leading-[1.6] text-[#1F2937] font-medium">
-                  {competitor.verdict}
-                </p>
-              </div>
+      {/* ── SECTION 2 — QUICK VERDICT (answers-style snippet callout) + stat strip ── */}
+      <section className="px-6 pb-16 sm:pb-20">
+        <div className="max-w-3xl mx-auto flex flex-col gap-6">
+          <AnimatedSection>
+            <div className="border-l-[3px] border-[#7C3AED] bg-[#F7F5FF] rounded-r-xl px-6 py-6 sm:px-7 sm:py-7">
+              <span className="block text-[11px] font-bold uppercase tracking-wider text-[#7C3AED] mb-2.5">
+                The Quick Verdict
+              </span>
+              <p className="text-[17px] sm:text-[18px] font-semibold leading-[1.55] text-[#0A0A0A]">
+                {competitor.verdict}
+              </p>
             </div>
+          </AnimatedSection>
 
-            <div className="grid sm:grid-cols-3 gap-4 pt-1">
-              {[
-                {
-                  icon: <DollarSign size={18} className="text-[#7C3AED]" strokeWidth={2.2} />,
-                  label: "CarouseLabs price",
-                  value: `${competitor.our_price} vs ${competitor.price}`,
-                },
-                {
-                  icon: <Layers size={18} className="text-[#7C3AED]" strokeWidth={2.2} />,
-                  label: "Platforms",
-                  value: platformsStat,
-                },
-                {
-                  icon: <Sparkles size={18} className="text-[#7C3AED]" strokeWidth={2.2} />,
-                  label: "Key advantage",
-                  value: competitor.carouselabs_advantages[0],
-                },
-              ].map((stat, i) => (
-                <div
-                  key={i}
-                  className="flex flex-col gap-2 p-4 rounded-xl bg-white border border-[#E5DEF7]"
-                >
+          <div className="grid sm:grid-cols-3 gap-4">
+            {[
+              {
+                icon: <DollarSign size={17} className="text-[#7C3AED]" strokeWidth={2.2} />,
+                label: "Monthly price",
+                value: `${competitor.our_price} vs ${competitor.price}`,
+              },
+              {
+                icon: <Layers size={17} className="text-[#7C3AED]" strokeWidth={2.2} />,
+                label: "Platforms",
+                value: platformsStat,
+              },
+              {
+                icon: <Sparkles size={17} className="text-[#7C3AED]" strokeWidth={2.2} />,
+                label: "Key advantage",
+                value: competitor.carouselabs_advantages[0],
+              },
+            ].map((stat, i) => (
+              <AnimatedSection key={stat.label} delay={0.05 + i * 0.05}>
+                <div className="h-full flex flex-col gap-2.5 p-4 rounded-xl border border-[#E5E3DE] bg-white">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-[#EDE9FE] flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-lg bg-[#F3F0FF] flex items-center justify-center shrink-0">
                       {stat.icon}
                     </div>
-                    <span className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                    <span className="text-[11.5px] font-semibold uppercase tracking-wide text-[#6B7280]">
                       {stat.label}
                     </span>
                   </div>
-                  <span className="text-[14px] leading-[1.45] font-semibold text-[#0A0A0A]">
+                  <span className="text-[13.5px] leading-[1.45] font-semibold text-[#0A0A0A]">
                     {stat.value}
                   </span>
                 </div>
-              ))}
-            </div>
+              </AnimatedSection>
+            ))}
           </div>
-        </AnimatedSection>
+        </div>
       </section>
 
       {/* ── OVERVIEW — educational intro prose ── */}
-      <section className="px-6 pb-16">
+      <section className="px-6 pb-16 sm:pb-20">
         <div className="max-w-3xl mx-auto flex flex-col gap-5">
           <AnimatedSection>
             <h2 className="text-[clamp(1.5rem,3.2vw,2rem)] font-bold tracking-[-0.02em] text-[#0A0A0A]">
               CarouseLabs vs {competitor.name}: The Overview
             </h2>
           </AnimatedSection>
-          {[...competitor.overview.split("\n\n"), competitor.deep_dive].map(
-            (para, i) => (
-              <AnimatedSection key={i} delay={0.05 + i * 0.05}>
-                <p className="text-[17px] leading-[1.75] text-[#3F3F46]">
-                  {para}
-                </p>
-              </AnimatedSection>
-            )
-          )}
+          {[...competitor.overview.split("\n\n"), competitor.deep_dive].map((para, i) => (
+            <AnimatedSection key={i} delay={0.05 + i * 0.05}>
+              <p className="text-[17px] leading-[1.75] text-[#3F3F46]">{para}</p>
+            </AnimatedSection>
+          ))}
         </div>
       </section>
 
-      {/* ── SECTION 3 — FEATURE COMPARISON TABLE ── */}
+      {/* ── SECTION 3 — FEATURE COMPARISON: sticky-header table ── */}
       <section className="px-6 py-16 sm:py-20 bg-[#FBFAF6]">
-        <div className="max-w-5xl mx-auto flex flex-col gap-10">
+        <div className="max-w-4xl mx-auto flex flex-col gap-10">
           <AnimatedSection className="text-center">
             <h2 className="text-[clamp(1.8rem,4vw,2.75rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
-              CarouseLabs vs {competitor.name}: Feature Comparison
+              Every Feature, Head-to-Head
             </h2>
             <p className="mt-3 max-w-2xl mx-auto text-[16px] text-[#6B7280]">
-              A side-by-side look at how the two tools stack up, feature by
-              feature.
+              Scroll through the full breakdown — the header stays put so you always
+              know which column is which.
             </p>
           </AnimatedSection>
 
           <AnimatedFadeIn>
-            <div className="overflow-x-auto rounded-2xl border border-[#E5E3DE] bg-white shadow-[0_10px_30px_rgba(10,10,10,0.05)]">
-              <table className="w-full min-w-[560px] border-collapse">
-                <thead>
-                  <tr className="border-b border-[#E5E3DE]">
-                    <th className="text-left px-5 py-4 text-[13px] font-semibold uppercase tracking-wide text-[#6B7280]">
-                      Feature
-                    </th>
-                    <th className="px-5 py-4 text-center text-[14px] font-bold text-[#7C3AED] bg-[#F3F0FF]">
-                      CarouseLabs
-                    </th>
-                    <th className="px-5 py-4 text-center text-[14px] font-bold text-[#4B5563]">
-                      {competitor.name}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {competitor.feature_comparison.map((row, i) => (
-                    <tr
-                      key={i}
-                      className={
-                        i % 2 === 0 ? "bg-white" : "bg-[#FBFAF6]"
-                      }
-                    >
-                      <td className="px-5 py-4 text-[15px] font-medium text-[#1F2937] align-middle">
-                        {row.feature}
-                      </td>
-                      <td className="px-5 py-4 text-center align-middle bg-[#FAF8FF]">
-                        <ComparisonCell value={row.carouselabs} positive />
-                      </td>
-                      <td className="px-5 py-4 text-center align-middle">
-                        <ComparisonCell value={row.competitor} positive={false} />
-                      </td>
+            <div className="rounded-2xl border border-[#E5E3DE] bg-white overflow-hidden shadow-[0_10px_30px_rgba(10,10,10,0.06)]">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px] border-collapse">
+                  <thead className="sticky top-16 z-10">
+                    <tr>
+                      <th className="text-left px-5 py-4 text-[12px] font-semibold uppercase tracking-wide text-[#6B7280] bg-white/95 backdrop-blur-sm border-b border-[#E5E3DE]">
+                        Feature
+                      </th>
+                      <th className="px-5 py-4 text-center text-[13.5px] font-bold text-white bg-[#7C3AED] border-b border-[#7C3AED]">
+                        CarouseLabs
+                      </th>
+                      <th className="px-5 py-4 text-center text-[13.5px] font-bold text-[#4B5563] bg-[#EEEBE3] border-b border-[#E5E3DE]">
+                        {competitor.name}
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {competitor.feature_comparison.map((row, i) => (
+                      <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-[#FBFAF6]"}>
+                        <td className="px-5 py-4 text-[14.5px] font-medium text-[#1F2937] align-middle border-b border-[#F0EEE8]">
+                          {row.feature}
+                        </td>
+                        <td className="px-5 py-4 text-center align-middle bg-[#FAF8FF] border-b border-[#F0EEE8]">
+                          <ComparisonCell value={row.carouselabs} positive />
+                        </td>
+                        <td className="px-5 py-4 text-center align-middle border-b border-[#F0EEE8]">
+                          <ComparisonCell value={row.competitor} positive={false} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </AnimatedFadeIn>
         </div>
@@ -365,16 +388,16 @@ export default async function CompetitorVsPage({
               What {competitor.name} Does Well
             </h2>
             <p className="mt-3 max-w-2xl mx-auto text-[16px] text-[#6B7280]">
-              We believe in honest comparisons. Here&rsquo;s where{" "}
-              {competitor.name} genuinely shines.
+              We believe in honest comparisons. Here&rsquo;s where {competitor.name}{" "}
+              genuinely shines.
             </p>
           </AnimatedSection>
           <div className="grid sm:grid-cols-2 gap-5">
             {competitor.competitor_strengths.map((strength, i) => (
               <AnimatedSection key={i} delay={(i % 2) * 0.05}>
-                <div className="h-full flex items-start gap-4 p-6 rounded-2xl border border-[#D6E4F5] bg-[#F5F9FF]">
-                  <div className="shrink-0 w-10 h-10 rounded-xl bg-[#E1EDFB] flex items-center justify-center">
-                    <Info size={18} className="text-[#2563EB]" strokeWidth={2.2} />
+                <div className="h-full flex items-start gap-4 p-6 rounded-2xl border border-[#E3E7EE] bg-[#F7F9FC]">
+                  <div className="shrink-0 w-10 h-10 rounded-xl bg-white border border-[#E3E7EE] flex items-center justify-center">
+                    <Info size={18} className="text-[#4B6DA8]" strokeWidth={2.2} />
                   </div>
                   <p className="text-[15px] leading-[1.55] text-[#3F3F46] pt-1.5">
                     {strength}
@@ -399,11 +422,7 @@ export default async function CompetitorVsPage({
               <AnimatedSection key={i} delay={(i % 2) * 0.05}>
                 <div className="h-full flex items-start gap-4 p-6 rounded-2xl border border-[#E5DEF7] bg-white">
                   <div className="shrink-0 w-10 h-10 rounded-xl bg-[#EDE9FE] flex items-center justify-center">
-                    <CheckCircle2
-                      size={18}
-                      className="text-[#7C3AED]"
-                      strokeWidth={2.2}
-                    />
+                    <CheckCircle2 size={18} className="text-[#7C3AED]" strokeWidth={2.2} />
                   </div>
                   <p className="text-[15px] leading-[1.55] text-[#3F3F46] pt-1.5">
                     {advantage}
@@ -436,40 +455,46 @@ export default async function CompetitorVsPage({
         </AnimatedFadeIn>
       </section>
 
-      {/* ── SECTION 7 — WHO SHOULD CHOOSE WHAT ── */}
+      {/* ── SECTION 7 — WHO SHOULD CHOOSE WHAT (split panels, echoing the hero) ── */}
       <section className="px-6 py-16 sm:py-20 bg-[#FBFAF6]">
-        <div className="max-w-5xl mx-auto flex flex-col gap-10">
+        <div className="max-w-4xl mx-auto flex flex-col gap-10">
           <AnimatedSection className="text-center">
             <h2 className="text-[clamp(1.8rem,4vw,2.75rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
               Which One Should You Choose?
             </h2>
           </AnimatedSection>
-          <div className="grid md:grid-cols-2 gap-6">
-            <AnimatedSection delay={0}>
-              <div className="h-full flex flex-col gap-4 p-7 rounded-2xl border border-[#E5E3DE] bg-white">
-                <h3 className="text-[19px] font-bold text-[#0A0A0A]">
-                  Choose {competitor.name} if&hellip;
-                </h3>
-                <p className="text-[15px] leading-[1.65] text-[#4B5563]">
-                  {competitor.who_should_choose_competitor}
-                </p>
-              </div>
-            </AnimatedSection>
-            <AnimatedSection delay={0.05}>
-              <div className="h-full flex flex-col gap-4 p-7 rounded-2xl border-2 border-[#7C3AED] bg-[#F3F0FF]">
-                <h3 className="text-[19px] font-bold text-[#7C3AED]">
-                  Choose CarouseLabs if&hellip;
-                </h3>
-                <p className="text-[15px] leading-[1.65] text-[#3F3F46]">
-                  {competitor.who_should_choose_carouselabs}
-                </p>
-              </div>
-            </AnimatedSection>
+
+          <div className="relative">
+            <div className="grid md:grid-cols-2 gap-6">
+              <AnimatedSlideLeft delay={0}>
+                <div className="h-full flex flex-col gap-4 p-7 rounded-2xl border border-[#E5E3DE] bg-white">
+                  <h3 className="text-[19px] font-bold text-[#0A0A0A]">
+                    Choose {competitor.name} if&hellip;
+                  </h3>
+                  <p className="text-[15px] leading-[1.65] text-[#4B5563]">
+                    {competitor.who_should_choose_competitor}
+                  </p>
+                </div>
+              </AnimatedSlideLeft>
+              <AnimatedSlideRight delay={0.05}>
+                <div className="h-full flex flex-col gap-4 p-7 rounded-2xl border-2 border-[#7C3AED] bg-[#F3F0FF]">
+                  <h3 className="text-[19px] font-bold text-[#7C3AED]">
+                    Choose CarouseLabs if&hellip;
+                  </h3>
+                  <p className="text-[15px] leading-[1.65] text-[#3F3F46]">
+                    {competitor.who_should_choose_carouselabs}
+                  </p>
+                </div>
+              </AnimatedSlideRight>
+            </div>
+            <div className="hidden md:block">
+              <SplitBadge label="OR" />
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ── SECTION 8 — FAQ ── */}
+      {/* ── SECTION 8 — FAQ (always-visible Q&A, not a collapsed accordion) ── */}
       <section className="px-6 py-16 sm:py-20">
         <div className="max-w-3xl mx-auto flex flex-col gap-10">
           <AnimatedSection className="text-center">
@@ -477,24 +502,20 @@ export default async function CompetitorVsPage({
               CarouseLabs vs {competitor.name}: FAQs
             </h2>
           </AnimatedSection>
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-6">
             {competitor.faq.map((item, i) => (
               <AnimatedSection key={i} delay={i * 0.05}>
-                <details className="group rounded-2xl border border-[#E5E3DE] bg-[#FFFDF8] p-6 [&_summary::-webkit-details-marker]:hidden">
-                  <summary className="flex items-center justify-between gap-4 cursor-pointer list-none">
-                    <span className="text-[17px] font-semibold text-[#0A0A0A]">
+                <div className="flex gap-4 pb-6 border-b border-[#EEEBE3] last:border-b-0 last:pb-0">
+                  <span className="shrink-0 w-8 h-8 rounded-full bg-[#EDE9FE] flex items-center justify-center text-[13px] font-bold text-[#7C3AED]">
+                    Q{i + 1}
+                  </span>
+                  <div className="flex flex-col gap-2 pt-0.5">
+                    <p className="text-[16.5px] font-semibold text-[#0A0A0A] leading-snug">
                       {item.question}
-                    </span>
-                    <span className="shrink-0 w-7 h-7 rounded-full bg-[#EDE9FE] flex items-center justify-center transition-transform group-open:rotate-45">
-                      <span className="text-[#7C3AED] text-[18px] leading-none font-light">
-                        +
-                      </span>
-                    </span>
-                  </summary>
-                  <p className="mt-4 text-[15px] leading-[1.7] text-[#4B5563]">
-                    {item.answer}
-                  </p>
-                </details>
+                    </p>
+                    <p className="text-[15px] leading-[1.7] text-[#4B5563]">{item.answer}</p>
+                  </div>
+                </div>
               </AnimatedSection>
             ))}
           </div>
@@ -505,9 +526,10 @@ export default async function CompetitorVsPage({
       <section className="px-6 pb-4">
         <AnimatedSection className="max-w-3xl mx-auto">
           <div className="flex flex-col gap-4 p-7 sm:p-8 rounded-2xl border border-[#E5E3DE] bg-[#FBFAF6]">
-            <h2 className="text-[clamp(1.4rem,3vw,1.9rem)] font-bold tracking-[-0.02em] text-[#0A0A0A]">
+            <div className="inline-flex items-center gap-2 w-fit px-3 py-1 rounded-full bg-white border border-[#E5E3DE] text-[11px] font-bold uppercase tracking-wide text-[#7C3AED]">
+              <Scale size={12} strokeWidth={2.4} />
               The Bottom Line
-            </h2>
+            </div>
             <p className="text-[16px] leading-[1.75] text-[#3F3F46]">
               {competitor.bottom_line}
             </p>
@@ -532,8 +554,8 @@ export default async function CompetitorVsPage({
             </h2>
             <p className="max-w-xl text-[16px] text-white/85 leading-[1.65]">
               See for yourself why creators are switching. Generate your first
-              on-brand carousel, caption, and image in minutes &mdash; then
-              decide how it compares to {competitor.name}.
+              on-brand carousel, caption, and image in minutes &mdash; then decide
+              how it compares to {competitor.name}.
             </p>
             <Link
               href={SIGNUP_URL}
@@ -557,9 +579,9 @@ export default async function CompetitorVsPage({
               Who Uses CarouseLabs?
             </h2>
             <p className="max-w-xl mx-auto text-[15px] text-[#6B7280] leading-[1.6]">
-              CarouseLabs is built for professionals who need consistent
-              LinkedIn content without hiring a designer or ghostwriter. See how
-              it works for your line of work.
+              CarouseLabs is built for professionals who need consistent LinkedIn
+              content without hiring a designer or ghostwriter. See how it works for
+              your line of work.
             </p>
           </AnimatedSection>
 

@@ -1,11 +1,14 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ArrowRight, Scale, Sparkles } from "lucide-react"
+import { ArrowRight, Sparkles } from "lucide-react"
+import { AnimatedSection } from "@/components/marketing/AnimatedSection"
+import { VsFilterGrid } from "@/components/marketing/VsFilterGrid"
 import {
-  AnimatedSection,
-  AnimatedFadeIn,
-} from "@/components/marketing/AnimatedSection"
-import { competitors } from "./data"
+  competitors,
+  COMPETITOR_CATEGORIES,
+  COMPETITOR_CATEGORY_LABELS,
+  COMPETITOR_CATEGORY_ORDER,
+} from "./data"
 
 const SIGNUP_URL = "https://carouselabs.com/signup"
 
@@ -88,66 +91,31 @@ export default function ComparisonIndexPage() {
         </div>
       </section>
 
-      {/* ── ALL COMPARISONS ── */}
+      {/* ── ALL COMPARISONS — filterable by category ── */}
       <section className="px-6 py-16 sm:py-20">
         <div className="max-w-6xl mx-auto flex flex-col gap-10">
           <AnimatedSection className="text-center">
             <h2 className="text-[clamp(1.6rem,3.5vw,2.4rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
               All {competitors.length} Comparisons
             </h2>
+            <p className="mt-3 max-w-xl mx-auto text-[15px] text-[#6B7280]">
+              Filter by category to find the closest comparison to what you're
+              already using.
+            </p>
           </AnimatedSection>
 
-          <AnimatedFadeIn>
-            <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sorted.map((c) => (
-                <li key={c.slug} className="h-full">
-                  <Link
-                    href={`/vs/${c.slug}`}
-                    className="group h-full flex flex-col gap-4 p-6 rounded-2xl border border-[#E5E3DE] bg-[#FFFDF8] hover:border-[#C4B5FD] hover:shadow-[0_12px_30px_rgba(124,58,237,0.10)] transition-all"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="shrink-0 w-9 h-9 rounded-xl bg-[#EDE9FE] flex items-center justify-center">
-                          <Scale
-                            size={16}
-                            className="text-[#7C3AED]"
-                            strokeWidth={2.2}
-                          />
-                        </div>
-                        <span className="text-[16px] font-semibold text-[#0A0A0A] leading-snug">
-                          vs {c.name}
-                        </span>
-                      </div>
-                      <ArrowRight
-                        size={15}
-                        strokeWidth={2.2}
-                        className="shrink-0 mt-2 text-[#7C3AED] group-hover:translate-x-0.5 transition-transform"
-                      />
-                    </div>
-
-                    <p className="text-[13px] leading-[1.55] text-[#6B7280]">
-                      {c.tagline}
-                    </p>
-
-                    <div className="mt-auto pt-3 border-t border-[#F0EEE8] flex items-center justify-between gap-3">
-                      <span className="text-[12px] text-[#6B7280]">
-                        {c.name}:{" "}
-                        <span className="font-semibold text-[#3F3F46]">
-                          {c.price}
-                        </span>
-                      </span>
-                      <span className="text-[12px] text-[#6B7280]">
-                        Ours:{" "}
-                        <span className="font-semibold text-[#7C3AED]">
-                          {c.our_price}
-                        </span>
-                      </span>
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </AnimatedFadeIn>
+          <VsFilterGrid
+            competitors={sorted.map((c) => ({
+              slug: c.slug,
+              name: c.name,
+              tagline: c.tagline,
+              price: c.price,
+              our_price: c.our_price,
+            }))}
+            categoryBySlug={COMPETITOR_CATEGORIES}
+            categoryLabels={COMPETITOR_CATEGORY_LABELS}
+            categoryOrder={COMPETITOR_CATEGORY_ORDER}
+          />
         </div>
       </section>
 

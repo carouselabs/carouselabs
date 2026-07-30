@@ -35,6 +35,7 @@ const COMPARE_LINKS = [
 const FREE_TOOL_LINKS = [
   { href: "/tools/tap-hold-maker", label: "Tap & Hold Maker (Free)" },
   { href: "/generators", label: "AI Tools" },
+  { href: "/best", label: "Best Of" },
 ]
 
 // Data-driven — pulled from the /tap-hold SEO article set, not hardcoded, so
@@ -70,6 +71,13 @@ export function Footer() {
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
           >
             Compare Tools
+            <ArrowRight size={13} strokeWidth={2.4} />
+          </Link>
+          <Link
+            href="/best"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
+          >
+            Best Of Lists
             <ArrowRight size={13} strokeWidth={2.4} />
           </Link>
         </div>

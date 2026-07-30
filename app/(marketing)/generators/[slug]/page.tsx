@@ -13,10 +13,34 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
-import { GENERATOR_PAGES, type GeneratorPage } from "../data"
+import {
+  GENERATOR_PAGES,
+  GENERATOR_PAGES_BY_CATEGORY,
+  type GeneratorPage,
+  type GeneratorCategory,
+} from "../data"
 
 const BASE_URL = "https://carouselabs.com"
 const SIGNUP_URL = "https://carouselabs.com/signup"
+
+// Each generator category maps to the single most relevant /best ranking,
+// so the cross-link always points somewhere genuinely on-topic rather than
+// a generic hub link.
+const CATEGORY_TO_BEST_SLUG: Record<GeneratorCategory, string> = {
+  Carousel: "best-ai-tools-for-linkedin-carousels",
+  Caption: "best-ai-caption-generators",
+  Image: "best-ai-image-generators-for-social-media",
+  "Ideas & Strategy": "best-linkedin-content-tools-2026",
+  Free: "best-free-linkedin-carousel-tools",
+  Format: "best-linkedin-carousel-generators",
+}
+
+const categoryBySlug = new Map<string, GeneratorCategory>()
+for (const category of Object.keys(GENERATOR_PAGES_BY_CATEGORY) as GeneratorCategory[]) {
+  for (const p of GENERATOR_PAGES_BY_CATEGORY[category]) {
+    categoryBySlug.set(p.slug, category)
+  }
+}
 
 const bySlug = new Map<string, GeneratorPage>(GENERATOR_PAGES.map((p) => [p.slug, p]))
 
@@ -99,6 +123,8 @@ export default async function GeneratorPageRoute({
 
   const related = getRelated(page)
   const faqJsonLd = buildFaqJsonLd(page)
+  const category = categoryBySlug.get(page.slug)
+  const bestSlug = category ? CATEGORY_TO_BEST_SLUG[category] : undefined
 
   return (
     <>
@@ -293,7 +319,7 @@ export default async function GeneratorPageRoute({
                 </AnimatedSection>
               ))}
             </div>
-            <AnimatedSection className="text-center">
+            <AnimatedSection className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
               <Link
                 href="/generators"
                 className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
@@ -301,6 +327,15 @@ export default async function GeneratorPageRoute({
                 Browse all AI tools
                 <ArrowRight size={13} strokeWidth={2.2} />
               </Link>
+              {bestSlug && (
+                <Link
+                  href={`/best/${bestSlug}`}
+                  className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
+                >
+                  See how we compare
+                  <ArrowRight size={13} strokeWidth={2.2} />
+                </Link>
+              )}
             </AnimatedSection>
           </div>
         </section>

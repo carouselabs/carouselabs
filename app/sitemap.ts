@@ -3,6 +3,7 @@ import { niches } from "./(marketing)/for/data"
 import { competitors } from "./(marketing)/vs/data"
 import { tapHoldArticles } from "./(marketing)/tap-hold/data"
 import { GENERATOR_PAGES } from "./(marketing)/generators/data"
+import { BEST_OF_PAGES } from "./(marketing)/best/data"
 
 const BASE_URL = "https://carouselabs.com"
 
@@ -27,6 +28,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${BASE_URL}/strategy`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
     { url: `${BASE_URL}/tap-hold`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
     { url: `${BASE_URL}/generators`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
+    { url: `${BASE_URL}/best`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
   ]
 
   const tapHoldRoutes: MetadataRoute.Sitemap = tapHoldArticles.map((article) => ({
@@ -38,6 +40,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   const generatorRoutes: MetadataRoute.Sitemap = GENERATOR_PAGES.map((page) => ({
     url: `${BASE_URL}/generators/${page.slug}`,
+    lastModified: now,
+    changeFrequency: "monthly" as const,
+    priority: 0.8,
+  }))
+
+  const bestOfRoutes: MetadataRoute.Sitemap = BEST_OF_PAGES.map((page) => ({
+    url: `${BASE_URL}/best/${page.slug}`,
     lastModified: now,
     changeFrequency: "monthly" as const,
     priority: 0.8,
@@ -97,5 +106,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...versusRoutes,
     ...tapHoldRoutes,
     ...generatorRoutes,
+    ...bestOfRoutes,
   ]
 }

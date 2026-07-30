@@ -2,6 +2,9 @@ import Link from "next/link"
 import { ArrowRight } from "lucide-react"
 import { AnimatedFadeIn } from "@/components/marketing/AnimatedSection"
 import { getFeaturedTapHoldArticles } from "@/app/(marketing)/tap-hold/data"
+import { GENERATOR_PAGES } from "@/app/(marketing)/generators/data"
+import { BEST_OF_PAGES } from "@/app/(marketing)/best/data"
+import { ANSWER_PAGES } from "@/app/(marketing)/answers/data"
 
 const FOOTER_LINKS = [
   { href: "/#pricing", label: "Pricing" },
@@ -32,24 +35,78 @@ const COMPARE_LINKS = [
   { href: "/vs/postnitro", label: "vs PostNitro" },
 ]
 
-const FREE_TOOL_LINKS = [
-  { href: "/tools/tap-hold-maker", label: "Tap & Hold Maker (Free)" },
-  { href: "/generators", label: "AI Tools" },
-  { href: "/best", label: "Best Of" },
-  { href: "/answers", label: "Answers" },
-]
-
 // Data-driven — pulled from the /tap-hold SEO article set, not hardcoded, so
 // this list stays in sync as articles are added or reworded.
-const TAP_HOLD_LINKS = getFeaturedTapHoldArticles().map((article) => ({
-  href: `/tap-hold/${article.slug}`,
-  label: article.h1,
-}))
+const TAP_HOLD_LINKS = [
+  { href: "/tools/tap-hold-maker", label: "Tap & Hold Maker (Free)" },
+  ...getFeaturedTapHoldArticles().map((article) => ({
+    href: `/tap-hold/${article.slug}`,
+    label: article.h1,
+  })),
+]
+
+// AI Tools / Best Of / Answers link groups are pulled from their respective
+// data files rather than hardcoded, so labels stay accurate as those SEO
+// systems grow or get reworded.
+const AI_TOOL_SLUGS = [
+  "linkedin-carousel-maker",
+  "ai-caption-generator",
+  "linkedin-post-generator",
+  "ai-image-generator-for-linkedin",
+  "free-linkedin-carousel-maker",
+  "linkedin-post-ideas-generator",
+]
+
+const BEST_OF_SLUGS = [
+  "best-ai-tools-for-linkedin-carousels",
+  "best-linkedin-carousel-generators",
+  "best-free-linkedin-carousel-tools",
+  "best-ai-caption-generators",
+]
+
+const ANSWER_SLUGS = [
+  "best-time-to-post-on-linkedin-2026",
+  "how-to-write-a-linkedin-hook",
+  "linkedin-carousel-dimensions",
+  "how-to-make-a-linkedin-carousel-without-canva",
+  "can-ai-write-good-linkedin-content",
+  "how-often-should-i-post-on-linkedin",
+]
+
+const generatorBySlug = new Map(GENERATOR_PAGES.map((p) => [p.slug, p]))
+const bestOfBySlug = new Map(BEST_OF_PAGES.map((p) => [p.slug, p]))
+const answerBySlug = new Map(ANSWER_PAGES.map((p) => [p.slug, p]))
+
+const AI_TOOL_LINKS = AI_TOOL_SLUGS.map((slug) => {
+  const page = generatorBySlug.get(slug)
+  return page ? { href: `/generators/${page.slug}`, label: page.keyword } : null
+}).filter((l): l is { href: string; label: string } => Boolean(l))
+
+const BEST_OF_LINKS = BEST_OF_SLUGS.map((slug) => {
+  const page = bestOfBySlug.get(slug)
+  return page ? { href: `/best/${page.slug}`, label: page.title } : null
+}).filter((l): l is { href: string; label: string } => Boolean(l))
+
+const ANSWER_LINKS = ANSWER_SLUGS.map((slug) => {
+  const page = answerBySlug.get(slug)
+  return page ? { href: `/answers/${page.slug}`, label: page.question } : null
+}).filter((l): l is { href: string; label: string } => Boolean(l))
+
+// The 6 link groups below render in a responsive grid (1 col mobile, 2 cols
+// tablet, 3 cols desktop — so 2 rows of 3 rather than a single tall stack).
+const LINK_GROUPS = [
+  { heading: "For Your Niche", links: NICHE_LINKS, viewAllHref: "/for" },
+  { heading: "AI Tools", links: AI_TOOL_LINKS, viewAllHref: "/generators" },
+  { heading: "Best Of", links: BEST_OF_LINKS, viewAllHref: "/best" },
+  { heading: "Answers", links: ANSWER_LINKS, viewAllHref: "/answers" },
+  { heading: "Compare", links: COMPARE_LINKS, viewAllHref: "/vs" },
+  { heading: "Tap & Hold Guides", links: TAP_HOLD_LINKS, viewAllHref: "/tap-hold" },
+]
 
 export function Footer() {
   return (
     <footer className="py-12 px-6 border-t border-[#E5E3DE] bg-[#F9F7F2]">
-      <AnimatedFadeIn className="max-w-6xl mx-auto flex flex-col gap-8">
+      <AnimatedFadeIn className="max-w-6xl mx-auto flex flex-col gap-10">
         {/* Hub links — reachable from every marketing page, so crawlers can
             always get to the full niche and comparison indexes in one hop. */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pb-8 border-b border-[#E5E3DE]">
@@ -90,78 +147,31 @@ export function Footer() {
           </Link>
         </div>
 
-        <div className="flex flex-col items-center gap-4 pb-8 border-b border-[#E5E3DE]">
-          <span className="text-[13px] font-semibold text-[#0A0A0A]">For Your Niche</span>
-          <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
-            {NICHE_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="text-[12px] text-[#6B7280] hover:text-[#7C3AED] transition-colors"
-              >
-                {link.label}
-              </Link>
-            ))}
-            <Link
-              href="/for"
-              className="text-[12px] font-semibold text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
-            >
-              View all {"→"}
-            </Link>
-          </nav>
-        </div>
-
-        <div className="flex flex-col items-center gap-4 pb-8 border-b border-[#E5E3DE]">
-          <span className="text-[13px] font-semibold text-[#0A0A0A]">Free Tools</span>
-          <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
-            {FREE_TOOL_LINKS.map((link) => (
-              <Link key={link.href} href={link.href} className="text-[12px] text-[#6B7280] hover:text-[#7C3AED] transition-colors">
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-
-        <div className="flex flex-col items-center gap-4 pb-8 border-b border-[#E5E3DE]">
-          <span className="text-[13px] font-semibold text-[#0A0A0A]">Tap & Hold Guides</span>
-          <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
-            {TAP_HOLD_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="text-[12px] text-[#6B7280] hover:text-[#7C3AED] transition-colors"
-              >
-                {link.label}
-              </Link>
-            ))}
-            <Link
-              href="/tap-hold"
-              className="text-[12px] font-semibold text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
-            >
-              View all {"→"}
-            </Link>
-          </nav>
-        </div>
-
-        <div className="flex flex-col items-center gap-4 pb-8 border-b border-[#E5E3DE]">
-          <span className="text-[13px] font-semibold text-[#0A0A0A]">Compare</span>
-          <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
-            {COMPARE_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="text-[12px] text-[#6B7280] hover:text-[#7C3AED] transition-colors"
-              >
-                {link.label}
-              </Link>
-            ))}
-            <Link
-              href="/vs"
-              className="text-[12px] font-semibold text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
-            >
-              View all {"→"}
-            </Link>
-          </nav>
+        {/* Link groups — 2 rows of 3 columns on desktop instead of one long
+            vertical stack, now that there are 6 groups instead of 4. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-10 pb-8 border-b border-[#E5E3DE]">
+          {LINK_GROUPS.map((group) => (
+            <div key={group.heading} className="flex flex-col items-start gap-3">
+              <span className="text-[13px] font-semibold text-[#0A0A0A]">{group.heading}</span>
+              <nav className="flex flex-col items-start gap-2">
+                {group.links.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="text-[12px] text-[#6B7280] hover:text-[#7C3AED] transition-colors leading-snug"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+                <Link
+                  href={group.viewAllHref}
+                  className="text-[12px] font-semibold text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
+                >
+                  View all {"→"}
+                </Link>
+              </nav>
+            </div>
+          ))}
         </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-6">

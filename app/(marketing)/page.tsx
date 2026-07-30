@@ -5,6 +5,7 @@ import { HowItWorks } from "@/components/landing/HowItWorks"
 import { FeaturesGrid } from "@/components/landing/FeaturesGrid"
 import { Pricing } from "@/components/landing/Pricing"
 import { CTA } from "@/components/landing/CTA"
+import { ExploreResources } from "@/components/landing/ExploreResources"
 import { ContactSection } from "@/components/landing/ContactSection"
 
 export default async function Home() {
@@ -18,6 +19,7 @@ export default async function Home() {
       <FeaturesGrid />
       <Pricing />
       <CTA />
+      <ExploreResources />
       <ContactSection />
     </>
   )

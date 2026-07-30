@@ -19,6 +19,8 @@ import {
   type GeneratorPage,
   type GeneratorCategory,
 } from "../data"
+import { ANSWER_PAGES, type AnswerPage } from "../../answers/data"
+import { GENERATOR_TO_ANSWER_SLUGS } from "../../answers/cross-link"
 
 const BASE_URL = "https://carouselabs.com"
 const SIGNUP_URL = "https://carouselabs.com/signup"
@@ -43,9 +45,16 @@ for (const category of Object.keys(GENERATOR_PAGES_BY_CATEGORY) as GeneratorCate
 }
 
 const bySlug = new Map<string, GeneratorPage>(GENERATOR_PAGES.map((p) => [p.slug, p]))
+const answerBySlug = new Map<string, AnswerPage>(ANSWER_PAGES.map((p) => [p.slug, p]))
 
 function getPage(slug: string): GeneratorPage | undefined {
   return bySlug.get(slug)
+}
+
+function getRelatedAnswers(slug: string): AnswerPage[] {
+  return (GENERATOR_TO_ANSWER_SLUGS[slug] ?? [])
+    .map((s) => answerBySlug.get(s))
+    .filter((p): p is AnswerPage => Boolean(p))
 }
 
 function getRelated(page: GeneratorPage): GeneratorPage[] {
@@ -122,6 +131,7 @@ export default async function GeneratorPageRoute({
   if (!page) notFound()
 
   const related = getRelated(page)
+  const relatedAnswers = getRelatedAnswers(page.slug)
   const faqJsonLd = buildFaqJsonLd(page)
   const category = categoryBySlug.get(page.slug)
   const bestSlug = category ? CATEGORY_TO_BEST_SLUG[category] : undefined
@@ -260,6 +270,27 @@ export default async function GeneratorPageRoute({
           </figure>
         </AnimatedFadeIn>
       </section>
+
+      {/* ── RELATED ANSWER (cross-link to /answers where topically relevant) ── */}
+      {relatedAnswers.length > 0 && (
+        <section className="px-6 pb-16 sm:pb-20">
+          <div className="max-w-3xl mx-auto flex flex-wrap items-center gap-x-6 gap-y-2">
+            <span className="text-[12.5px] font-semibold text-[#9CA3AF] uppercase tracking-wide">
+              Related answer
+            </span>
+            {relatedAnswers.map((a) => (
+              <Link
+                key={a.slug}
+                href={`/answers/${a.slug}`}
+                className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
+              >
+                {a.question}
+                <ArrowRight size={12} strokeWidth={2.2} />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── SECTION 6 — FAQ ── */}
       <section className="px-6 py-16 sm:py-20">

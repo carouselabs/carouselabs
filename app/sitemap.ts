@@ -4,6 +4,7 @@ import { competitors } from "./(marketing)/vs/data"
 import { tapHoldArticles } from "./(marketing)/tap-hold/data"
 import { GENERATOR_PAGES } from "./(marketing)/generators/data"
 import { BEST_OF_PAGES } from "./(marketing)/best/data"
+import { ANSWER_PAGES } from "./(marketing)/answers/data"
 
 const BASE_URL = "https://carouselabs.com"
 
@@ -29,6 +30,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${BASE_URL}/tap-hold`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
     { url: `${BASE_URL}/generators`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
     { url: `${BASE_URL}/best`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
+    { url: `${BASE_URL}/answers`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
   ]
 
   const tapHoldRoutes: MetadataRoute.Sitemap = tapHoldArticles.map((article) => ({
@@ -50,6 +52,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
     lastModified: now,
     changeFrequency: "monthly" as const,
     priority: 0.8,
+  }))
+
+  // Informational direct-answer pages — lower priority than product/conversion
+  // pages since they target citation/snippet placement, not signup intent.
+  const answerRoutes: MetadataRoute.Sitemap = ANSWER_PAGES.map((page) => ({
+    url: `${BASE_URL}/answers/${page.slug}`,
+    lastModified: now,
+    changeFrequency: "monthly" as const,
+    priority: 0.7,
   }))
 
   const nicheRoutes: MetadataRoute.Sitemap = niches.map((niche) => ({
@@ -107,5 +118,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...tapHoldRoutes,
     ...generatorRoutes,
     ...bestOfRoutes,
+    ...answerRoutes,
   ]
 }

@@ -25,6 +25,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
   // they carry higher priority than the individual pages they point to.
   const hubRoutes: MetadataRoute.Sitemap = [
     { url: `${BASE_URL}/for`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
+    { url: `${BASE_URL}/ideas`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
+    { url: `${BASE_URL}/how-to`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
     { url: `${BASE_URL}/vs`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
     { url: `${BASE_URL}/tools`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
     { url: `${BASE_URL}/strategy`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },

@@ -29,6 +29,17 @@ const NICHE_LINKS = [
   { href: "/for/personal-trainers", label: "Personal Trainers" },
 ]
 
+// Derived from NICHE_LINKS (same 10 niches, different destination route) so
+// these two groups never drift out of sync with the niche list above.
+const IDEAS_LINKS = NICHE_LINKS.map((l) => ({
+  href: l.href.replace("/for/", "/ideas/"),
+  label: l.label,
+}))
+const HOW_TO_LINKS = NICHE_LINKS.map((l) => ({
+  href: l.href.replace("/for/", "/how-to/"),
+  label: l.label,
+}))
+
 const COMPARE_LINKS = [
   { href: "/vs/taplio", label: "vs Taplio" },
   { href: "/vs/supergrow", label: "vs Supergrow" },
@@ -113,10 +124,12 @@ const ANSWER_LINKS = ANSWER_SLUGS.map((slug) => {
   return page ? { href: `/answers/${page.slug}`, label: page.question } : null
 }).filter((l): l is { href: string; label: string } => Boolean(l))
 
-// The 7 link groups below render in a responsive grid (1 col mobile, 2 cols
-// tablet, 4 cols desktop — so 2 rows of 4 rather than a single tall stack).
+// The 9 link groups below render in a responsive grid (1 col mobile, 2 cols
+// tablet, 3 cols desktop — so 3 rows of 3 rather than a single tall stack).
 const LINK_GROUPS = [
   { heading: "For Your Niche", links: NICHE_LINKS, viewAllHref: "/for" },
+  { heading: "Carousel Ideas", links: IDEAS_LINKS, viewAllHref: "/ideas" },
+  { heading: "How-To Guides", links: HOW_TO_LINKS, viewAllHref: "/how-to" },
   { heading: "AI Tools", links: AI_TOOL_LINKS, viewAllHref: "/generators" },
   { heading: "Best Of", links: BEST_OF_LINKS, viewAllHref: "/best" },
   { heading: "Answers", links: ANSWER_LINKS, viewAllHref: "/answers" },
@@ -176,9 +189,9 @@ export function Footer() {
           </Link>
         </div>
 
-        {/* Link groups — 2 rows of 4 columns on desktop instead of one long
-            vertical stack, now that there are 7 groups instead of 6. */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-10 pb-8 border-b border-[#E5E3DE]">
+        {/* Link groups — 3 rows of 3 columns on desktop instead of one long
+            vertical stack, now that there are 9 groups instead of 7. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-10 pb-8 border-b border-[#E5E3DE]">
           {LINK_GROUPS.map((group) => (
             <div key={group.heading} className="flex flex-col items-start gap-3">
               <span className="text-[13px] font-semibold text-[#0A0A0A]">{group.heading}</span>

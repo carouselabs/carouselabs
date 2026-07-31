@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, Wand2, Trophy, MessageCircleQuestion, LayoutGrid, Users, Scale } from "lucide-react"
+import { ArrowRight, Wand2, Trophy, MessageCircleQuestion, LayoutGrid, Users, Scale, Lightbulb, BookOpen } from "lucide-react"
 import { AnimatedSection, AnimatedScale } from "@/components/marketing/AnimatedSection"
 import { niches } from "@/app/(marketing)/for/data"
 import { competitors } from "@/app/(marketing)/vs/data"
@@ -69,6 +69,28 @@ const COLUMNS = [
     links: NICHE_SLUGS.map((slug) => {
       const niche = nicheBySlug.get(slug)
       return niche ? { href: `/for/${niche.slug}`, label: niche.name } : null
+    }).filter((l): l is { href: string; label: string } => Boolean(l)),
+  },
+  {
+    icon: Lightbulb,
+    title: "Carousel Ideas",
+    description: "10 proven carousel ideas and a content calendar for your profession.",
+    seeAllHref: "/ideas",
+    seeAllLabel: "Browse all idea guides",
+    links: NICHE_SLUGS.map((slug) => {
+      const niche = nicheBySlug.get(slug)
+      return niche ? { href: `/ideas/${niche.slug}`, label: niche.name } : null
+    }).filter((l): l is { href: string; label: string } => Boolean(l)),
+  },
+  {
+    icon: BookOpen,
+    title: "How-To Guides",
+    description: "Step-by-step guides to building a LinkedIn presence in your field.",
+    seeAllHref: "/how-to",
+    seeAllLabel: "Browse all guides",
+    links: NICHE_SLUGS.map((slug) => {
+      const niche = nicheBySlug.get(slug)
+      return niche ? { href: `/how-to/${niche.slug}`, label: niche.name } : null
     }).filter((l): l is { href: string; label: string } => Boolean(l)),
   },
   {
@@ -147,7 +169,7 @@ export function ExploreResources() {
           </p>
         </AnimatedSection>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {COLUMNS.map((column, ci) => (
             <AnimatedScale
               key={column.title}

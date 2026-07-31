@@ -160,7 +160,7 @@ export function FormatsHub() {
       <section className="px-6 py-12 text-center">
         <p className="text-[13.5px] text-[#6B7280]">
           Looking for ideas by profession instead of topic? Browse{" "}
-          <Link href="/for" className="font-semibold text-[#7C3AED] hover:text-[#6D28D9]">
+          <Link href="/ideas" className="font-semibold text-[#7C3AED] hover:text-[#6D28D9]">
             carousel ideas by niche
           </Link>{" "}
           or see{" "}

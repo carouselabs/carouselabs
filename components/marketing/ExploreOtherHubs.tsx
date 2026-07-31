@@ -12,11 +12,13 @@ const ALL_HUBS = [
 ] as const
 
 /**
- * Renders a pill row linking to every SEO hub except the current one, so
- * each hub is always one click from every other hub (not just from the
- * footer). Drop this near the bottom of any hub page.
+ * Renders a pill row linking to every SEO hub except `current`, so each hub
+ * is always one click from every other hub (not just from the footer). Drop
+ * this near the bottom of any hub page. `current` accepts any string so it
+ * can also be dropped onto pages outside the 6 hubs (e.g. /ideas, /how-to)
+ * to render the full unfiltered set of 6.
  */
-export function ExploreOtherHubs({ current }: { current: (typeof ALL_HUBS)[number]["href"] }) {
+export function ExploreOtherHubs({ current }: { current?: string }) {
   const hubs = ALL_HUBS.filter((h) => h.href !== current)
 
   return (

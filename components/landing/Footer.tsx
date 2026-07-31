@@ -5,6 +5,8 @@ import { getFeaturedTapHoldArticles } from "@/app/(marketing)/tap-hold/data"
 import { GENERATOR_PAGES } from "@/app/(marketing)/generators/data"
 import { BEST_OF_PAGES } from "@/app/(marketing)/best/data"
 import { ANSWER_PAGES } from "@/app/(marketing)/answers/data"
+import { FORMAT_PAGES } from "@/app/(marketing)/formats/data"
+import { FORMAT_LABELS } from "@/app/(marketing)/formats/types"
 
 const FOOTER_LINKS = [
   { href: "/#pricing", label: "Pricing" },
@@ -73,9 +75,28 @@ const ANSWER_SLUGS = [
   "how-often-should-i-post-on-linkedin",
 ]
 
+// One page per format type, all on the "networking" topic, as a
+// representative cross-section of the /formats system.
+const FORMAT_SLUGS = [
+  "carousel-ideas-for-networking",
+  "caption-examples-for-networking",
+  "hook-examples-for-networking",
+  "post-ideas-for-networking",
+  "content-calendar-for-networking",
+  "linkedin-post-examples-for-networking",
+]
+
 const generatorBySlug = new Map(GENERATOR_PAGES.map((p) => [p.slug, p]))
 const bestOfBySlug = new Map(BEST_OF_PAGES.map((p) => [p.slug, p]))
 const answerBySlug = new Map(ANSWER_PAGES.map((p) => [p.slug, p]))
+const formatBySlug = new Map(FORMAT_PAGES.map((p) => [p.slug, p]))
+
+const FORMAT_LINKS = FORMAT_SLUGS.map((slug) => {
+  const page = formatBySlug.get(slug)
+  return page
+    ? { href: `/formats/${page.slug}`, label: `${FORMAT_LABELS[page.formatType]} — ${page.topic}` }
+    : null
+}).filter((l): l is { href: string; label: string } => Boolean(l))
 
 const AI_TOOL_LINKS = AI_TOOL_SLUGS.map((slug) => {
   const page = generatorBySlug.get(slug)
@@ -92,14 +113,15 @@ const ANSWER_LINKS = ANSWER_SLUGS.map((slug) => {
   return page ? { href: `/answers/${page.slug}`, label: page.question } : null
 }).filter((l): l is { href: string; label: string } => Boolean(l))
 
-// The 6 link groups below render in a responsive grid (1 col mobile, 2 cols
-// tablet, 3 cols desktop — so 2 rows of 3 rather than a single tall stack).
+// The 7 link groups below render in a responsive grid (1 col mobile, 2 cols
+// tablet, 4 cols desktop — so 2 rows of 4 rather than a single tall stack).
 const LINK_GROUPS = [
   { heading: "For Your Niche", links: NICHE_LINKS, viewAllHref: "/for" },
   { heading: "AI Tools", links: AI_TOOL_LINKS, viewAllHref: "/generators" },
   { heading: "Best Of", links: BEST_OF_LINKS, viewAllHref: "/best" },
   { heading: "Answers", links: ANSWER_LINKS, viewAllHref: "/answers" },
   { heading: "Compare", links: COMPARE_LINKS, viewAllHref: "/vs" },
+  { heading: "Content Formats", links: FORMAT_LINKS, viewAllHref: "/formats" },
   { heading: "Tap & Hold Guides", links: TAP_HOLD_LINKS, viewAllHref: "/tap-hold" },
 ]
 
@@ -145,11 +167,18 @@ export function Footer() {
             Answers
             <ArrowRight size={13} strokeWidth={2.4} />
           </Link>
+          <Link
+            href="/formats"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
+          >
+            Content Formats
+            <ArrowRight size={13} strokeWidth={2.4} />
+          </Link>
         </div>
 
-        {/* Link groups — 2 rows of 3 columns on desktop instead of one long
-            vertical stack, now that there are 6 groups instead of 4. */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-10 pb-8 border-b border-[#E5E3DE]">
+        {/* Link groups — 2 rows of 4 columns on desktop instead of one long
+            vertical stack, now that there are 7 groups instead of 6. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-10 pb-8 border-b border-[#E5E3DE]">
           {LINK_GROUPS.map((group) => (
             <div key={group.heading} className="flex flex-col items-start gap-3">
               <span className="text-[13px] font-semibold text-[#0A0A0A]">{group.heading}</span>

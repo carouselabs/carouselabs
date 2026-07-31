@@ -21,6 +21,7 @@ const isPublicRoute = createRouteMatcher([
   "/generators(.*)", // 40 generic product/feature-keyword SEO articles + hub
   "/best(.*)", // 30 "best-of" ranked listicle SEO articles + hub
   "/answers(.*)", // 100 direct-answer SEO pages + hub
+  "/formats(.*)", // 216 content-format SEO pages + hub
   "/sitemap.xml",
   "/robots.txt",
   "/api/contact(.*)",

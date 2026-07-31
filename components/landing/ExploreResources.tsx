@@ -1,9 +1,11 @@
 import Link from "next/link"
-import { ArrowRight, Wand2, Trophy, MessageCircleQuestion } from "lucide-react"
+import { ArrowRight, Wand2, Trophy, MessageCircleQuestion, LayoutGrid } from "lucide-react"
 import { AnimatedSection, AnimatedScale } from "@/components/marketing/AnimatedSection"
 import { GENERATOR_PAGES } from "@/app/(marketing)/generators/data"
 import { BEST_OF_PAGES } from "@/app/(marketing)/best/data"
 import { ANSWER_PAGES } from "@/app/(marketing)/answers/data"
+import { FORMAT_PAGES } from "@/app/(marketing)/formats/data"
+import { FORMAT_LABELS } from "@/app/(marketing)/formats/types"
 
 const AI_TOOL_SLUGS = [
   "linkedin-carousel-maker",
@@ -30,9 +32,17 @@ const ANSWER_SLUGS = [
   "how-often-should-i-post-on-linkedin",
 ]
 
+const FORMAT_SLUGS = [
+  "carousel-ideas-for-networking",
+  "hook-examples-for-networking",
+  "content-calendar-for-networking",
+  "caption-examples-for-networking",
+]
+
 const generatorBySlug = new Map(GENERATOR_PAGES.map((p) => [p.slug, p]))
 const bestOfBySlug = new Map(BEST_OF_PAGES.map((p) => [p.slug, p]))
 const answerBySlug = new Map(ANSWER_PAGES.map((p) => [p.slug, p]))
+const formatBySlug = new Map(FORMAT_PAGES.map((p) => [p.slug, p]))
 
 const COLUMNS = [
   {
@@ -68,6 +78,19 @@ const COLUMNS = [
       return page ? { href: `/answers/${page.slug}`, label: page.question } : null
     }).filter((l): l is { href: string; label: string } => Boolean(l)),
   },
+  {
+    icon: LayoutGrid,
+    title: "Content Formats",
+    description: "Ready-to-use carousel ideas, hooks, captions, and calendars by topic.",
+    seeAllHref: "/formats",
+    seeAllLabel: "Browse all formats",
+    links: FORMAT_SLUGS.map((slug) => {
+      const page = formatBySlug.get(slug)
+      return page
+        ? { href: `/formats/${page.slug}`, label: `${FORMAT_LABELS[page.formatType]} — ${page.topic}` }
+        : null
+    }).filter((l): l is { href: string; label: string } => Boolean(l)),
+  },
 ]
 
 export function ExploreResources() {
@@ -87,7 +110,7 @@ export function ExploreResources() {
           </p>
         </AnimatedSection>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {COLUMNS.map((column, ci) => (
             <AnimatedScale
               key={column.title}

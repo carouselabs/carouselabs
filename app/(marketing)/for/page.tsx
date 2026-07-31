@@ -6,6 +6,7 @@ import {
   AnimatedFadeIn,
 } from "@/components/marketing/AnimatedSection"
 import { niches } from "./data"
+import { ExploreOtherHubs } from "@/components/marketing/ExploreOtherHubs"
 
 const SIGNUP_URL = "https://carouselabs.com/signup"
 
@@ -242,6 +243,8 @@ export default function NicheIndexPage() {
           </Link>
         </AnimatedSection>
       </section>
+
+      <ExploreOtherHubs current="/for" />
     </>
   )
 }

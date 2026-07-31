@@ -10,6 +10,7 @@ import {
   GENERATOR_PAGES_BY_CATEGORY,
   GENERATOR_CATEGORY_ORDER,
 } from "./data"
+import { ExploreOtherHubs } from "@/components/marketing/ExploreOtherHubs"
 
 const BASE_URL = "https://carouselabs.com"
 const SIGNUP_URL = "https://carouselabs.com/signup"
@@ -171,6 +172,8 @@ export default function GeneratorsIndexPage() {
           </div>
         </AnimatedFadeIn>
       </section>
+
+      <ExploreOtherHubs current="/generators" />
     </>
   )
 }

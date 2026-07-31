@@ -16,12 +16,15 @@ import {
 import { BEST_OF_PAGES, type BestOfPage } from "../data"
 import { ANSWER_PAGES, type AnswerPage } from "../../answers/data"
 import { BEST_TO_ANSWER_SLUGS } from "../../answers/cross-link"
+import { GENERATOR_PAGES, type GeneratorPage } from "../../generators/data"
+import { BEST_TO_GENERATOR_SLUGS } from "../generators-cross-link"
 
 const BASE_URL = "https://carouselabs.com"
 const SIGNUP_URL = "https://carouselabs.com/signup"
 
 const bySlug = new Map<string, BestOfPage>(BEST_OF_PAGES.map((p) => [p.slug, p]))
 const answerBySlug = new Map<string, AnswerPage>(ANSWER_PAGES.map((p) => [p.slug, p]))
+const generatorBySlug = new Map<string, GeneratorPage>(GENERATOR_PAGES.map((p) => [p.slug, p]))
 
 function getPage(slug: string): BestOfPage | undefined {
   return bySlug.get(slug)
@@ -31,6 +34,12 @@ function getRelatedAnswers(slug: string): AnswerPage[] {
   return (BEST_TO_ANSWER_SLUGS[slug] ?? [])
     .map((s) => answerBySlug.get(s))
     .filter((p): p is AnswerPage => Boolean(p))
+}
+
+function getRelatedGenerators(slug: string): GeneratorPage[] {
+  return (BEST_TO_GENERATOR_SLUGS[slug] ?? [])
+    .map((s) => generatorBySlug.get(s))
+    .filter((p): p is GeneratorPage => Boolean(p))
 }
 
 function getRelated(page: BestOfPage): BestOfPage[] {
@@ -122,6 +131,7 @@ export default async function BestOfPageRoute({
 
   const related = getRelated(page)
   const relatedAnswers = getRelatedAnswers(page.slug)
+  const relatedGenerators = getRelatedGenerators(page.slug)
   const faqJsonLd = buildFaqJsonLd(page)
   const itemListJsonLd = buildItemListJsonLd(page)
   const updatedMonth = new Date().toLocaleString("en-US", { month: "long" })
@@ -316,6 +326,27 @@ export default async function BestOfPageRoute({
           </div>
         </AnimatedSection>
       </section>
+
+      {/* ── RELATED TOOL (cross-link to /generators where category-matched) ── */}
+      {relatedGenerators.length > 0 && (
+        <section className="px-6 pb-4 sm:pb-6">
+          <div className="max-w-3xl mx-auto flex flex-wrap items-center gap-x-6 gap-y-2">
+            <span className="text-[12.5px] font-semibold text-[#9CA3AF] uppercase tracking-wide">
+              Related tool
+            </span>
+            {relatedGenerators.map((g) => (
+              <Link
+                key={g.slug}
+                href={`/generators/${g.slug}`}
+                className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
+              >
+                {g.keyword}
+                <ArrowRight size={12} strokeWidth={2.2} />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── RELATED ANSWER (cross-link to /answers where topically relevant) ── */}
       {relatedAnswers.length > 0 && (

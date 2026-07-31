@@ -3,6 +3,7 @@ import Link from "next/link"
 import { ArrowRight, Sparkles } from "lucide-react"
 import { AnimatedSection } from "@/components/marketing/AnimatedSection"
 import { VsFilterGrid } from "@/components/marketing/VsFilterGrid"
+import { ExploreOtherHubs } from "@/components/marketing/ExploreOtherHubs"
 import {
   competitors,
   COMPETITOR_CATEGORIES,
@@ -159,6 +160,8 @@ export default function ComparisonIndexPage() {
           </Link>
         </AnimatedSection>
       </section>
+
+      <ExploreOtherHubs current="/vs" />
     </>
   )
 }

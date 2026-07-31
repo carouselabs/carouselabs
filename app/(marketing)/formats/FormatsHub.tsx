@@ -5,6 +5,7 @@ import { useMemo, useState } from "react"
 import { ArrowRight, Search } from "lucide-react"
 import { FORMAT_PAGES, type FormatPage } from "./data"
 import { FORMATS, FORMAT_LABELS, FORMAT_EMOJI, topicLabel } from "./types"
+import { ExploreOtherHubs } from "@/components/marketing/ExploreOtherHubs"
 
 type FormatFilter = "all" | (typeof FORMATS)[number]
 
@@ -159,7 +160,7 @@ export function FormatsHub() {
       <section className="px-6 py-12 text-center">
         <p className="text-[13.5px] text-[#6B7280]">
           Looking for ideas by profession instead of topic? Browse{" "}
-          <Link href="/ideas" className="font-semibold text-[#7C3AED] hover:text-[#6D28D9]">
+          <Link href="/for" className="font-semibold text-[#7C3AED] hover:text-[#6D28D9]">
             carousel ideas by niche
           </Link>{" "}
           or see{" "}
@@ -169,6 +170,8 @@ export function FormatsHub() {
           .
         </p>
       </section>
+
+      <ExploreOtherHubs current="/formats" />
     </div>
   )
 }

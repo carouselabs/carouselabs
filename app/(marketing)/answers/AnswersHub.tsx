@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useMemo, useState } from "react"
 import { ArrowUpRight, Search } from "lucide-react"
 import { ANSWER_PAGES, ANSWER_PAGES_BY_CATEGORY, ANSWER_CATEGORIES } from "./data"
+import { ExploreOtherHubs } from "@/components/marketing/ExploreOtherHubs"
 
 function categorySlug(category: string): string {
   return category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
@@ -134,6 +135,8 @@ export function AnswersHub() {
           .
         </p>
       </section>
+
+      <ExploreOtherHubs current="/answers" />
     </div>
   )
 }

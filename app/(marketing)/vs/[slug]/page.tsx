@@ -20,15 +20,25 @@ import {
   AnimatedSlideLeft,
   AnimatedSlideRight,
 } from "@/components/marketing/AnimatedSection"
-import { competitors, getRelatedCompetitors, type Competitor } from "../data"
+import { competitors, getRelatedCompetitors, COMPETITOR_CATEGORIES, type Competitor } from "../data"
 import { niches } from "../../for/data"
+import { BEST_OF_PAGES, type BestOfPage } from "../../best/data"
+import { VS_CATEGORY_TO_BEST_SLUG } from "../best-cross-link"
 
 const SIGNUP_URL = "https://carouselabs.com/signup"
 
 const bySlug = new Map<string, Competitor>(competitors.map((c) => [c.slug, c]))
+const bestOfBySlug = new Map<string, BestOfPage>(BEST_OF_PAGES.map((p) => [p.slug, p]))
 
 function getCompetitor(slug: string): Competitor | undefined {
   return bySlug.get(slug)
+}
+
+/** Category-matched /best ranking for this competitor, if one exists. */
+function getRelatedBestOf(slug: string): BestOfPage | undefined {
+  const category = COMPETITOR_CATEGORIES[slug] as keyof typeof VS_CATEGORY_TO_BEST_SLUG | undefined
+  const bestSlug = category ? VS_CATEGORY_TO_BEST_SLUG[category] : undefined
+  return bestSlug ? bestOfBySlug.get(bestSlug) : undefined
 }
 
 /**
@@ -177,6 +187,7 @@ export default async function CompetitorVsPage({
 
   // Related comparisons for internal linking (same category, 3 max).
   const relatedCompetitors = getRelatedCompetitors(slug, 3)
+  const relatedBestOf = getRelatedBestOf(slug)
 
   // Quick-stat strip
   const platformsStat = competitor.feature_comparison.some((r) =>
@@ -636,6 +647,34 @@ export default async function CompetitorVsPage({
               ))}
             </div>
           </div>
+
+          {/* Related best-of ranking (category-matched cross-link) */}
+          {relatedBestOf && (
+            <div className="flex flex-col gap-4">
+              <AnimatedSection>
+                <p className="text-[13px] font-semibold text-[#6B7280] text-center">
+                  See the full ranking
+                </p>
+              </AnimatedSection>
+              <div className="flex justify-center">
+                <AnimatedSection>
+                  <Link
+                    href={`/best/${relatedBestOf.slug}`}
+                    className="group inline-flex items-center gap-3 p-5 rounded-2xl border border-[#E5DEF7] bg-[#F3F0FF] hover:border-[#C4B5FD] transition-colors max-w-md"
+                  >
+                    <span className="text-[15px] font-semibold text-[#0A0A0A] leading-snug">
+                      {relatedBestOf.title}
+                    </span>
+                    <ArrowRight
+                      size={15}
+                      strokeWidth={2.2}
+                      className="shrink-0 text-[#7C3AED] group-hover:translate-x-0.5 transition-transform"
+                    />
+                  </Link>
+                </AnimatedSection>
+              </div>
+            </div>
+          )}
 
           {/* Related comparisons */}
           {relatedCompetitors.length > 0 && (

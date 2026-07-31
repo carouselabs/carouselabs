@@ -1,11 +1,24 @@
 import Link from "next/link"
-import { ArrowRight, Wand2, Trophy, MessageCircleQuestion, LayoutGrid } from "lucide-react"
+import { ArrowRight, Wand2, Trophy, MessageCircleQuestion, LayoutGrid, Users, Scale } from "lucide-react"
 import { AnimatedSection, AnimatedScale } from "@/components/marketing/AnimatedSection"
+import { niches } from "@/app/(marketing)/for/data"
+import { competitors } from "@/app/(marketing)/vs/data"
 import { GENERATOR_PAGES } from "@/app/(marketing)/generators/data"
 import { BEST_OF_PAGES } from "@/app/(marketing)/best/data"
 import { ANSWER_PAGES } from "@/app/(marketing)/answers/data"
 import { FORMAT_PAGES } from "@/app/(marketing)/formats/data"
 import { FORMAT_LABELS } from "@/app/(marketing)/formats/types"
+
+const NICHE_SLUGS = [
+  "saas-founders",
+  "business-coaches",
+  "digital-marketers",
+  "content-creators",
+  "freelancers",
+  "startup-founders",
+]
+
+const COMPARE_SLUGS = ["taplio", "supergrow", "canva", "chatgpt", "postnitro"]
 
 const AI_TOOL_SLUGS = [
   "linkedin-carousel-maker",
@@ -39,12 +52,25 @@ const FORMAT_SLUGS = [
   "caption-examples-for-networking",
 ]
 
+const nicheBySlug = new Map(niches.map((n) => [n.slug, n]))
+const competitorBySlug = new Map(competitors.map((c) => [c.slug, c]))
 const generatorBySlug = new Map(GENERATOR_PAGES.map((p) => [p.slug, p]))
 const bestOfBySlug = new Map(BEST_OF_PAGES.map((p) => [p.slug, p]))
 const answerBySlug = new Map(ANSWER_PAGES.map((p) => [p.slug, p]))
 const formatBySlug = new Map(FORMAT_PAGES.map((p) => [p.slug, p]))
 
 const COLUMNS = [
+  {
+    icon: Users,
+    title: "For Your Niche",
+    description: "Content strategy, ideas, and messaging tailored to your profession.",
+    seeAllHref: "/for",
+    seeAllLabel: "Browse all niches",
+    links: NICHE_SLUGS.map((slug) => {
+      const niche = nicheBySlug.get(slug)
+      return niche ? { href: `/for/${niche.slug}`, label: niche.name } : null
+    }).filter((l): l is { href: string; label: string } => Boolean(l)),
+  },
   {
     icon: Wand2,
     title: "AI Tools",
@@ -91,6 +117,17 @@ const COLUMNS = [
         : null
     }).filter((l): l is { href: string; label: string } => Boolean(l)),
   },
+  {
+    icon: Scale,
+    title: "Compare",
+    description: "Honest, head-to-head comparisons against every major competitor.",
+    seeAllHref: "/vs",
+    seeAllLabel: "See all comparisons",
+    links: COMPARE_SLUGS.map((slug) => {
+      const competitor = competitorBySlug.get(slug)
+      return competitor ? { href: `/vs/${competitor.slug}`, label: `vs ${competitor.name}` } : null
+    }).filter((l): l is { href: string; label: string } => Boolean(l)),
+  },
 ]
 
 export function ExploreResources() {
@@ -110,7 +147,7 @@ export function ExploreResources() {
           </p>
         </AnimatedSection>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {COLUMNS.map((column, ci) => (
             <AnimatedScale
               key={column.title}

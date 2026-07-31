@@ -67,3 +67,21 @@ export const BEST_TO_ANSWER_SLUGS: Record<string, string[]> = {
   "best-tools-for-linkedin-personal-branding": ["how-to-build-a-personal-brand-on-linkedin"],
   "best-tools-to-turn-blog-posts-into-carousels": ["how-to-repurpose-a-blog-post-for-linkedin"],
 }
+
+/** Inverts a one-to-many slug map: { a: [x, y], b: [x] } -> { x: [a, b], y: [a] }. */
+function invert(map: Record<string, string[]>): Record<string, string[]> {
+  const result: Record<string, string[]> = {}
+  for (const [key, values] of Object.entries(map)) {
+    for (const value of values) {
+      result[value] = result[value] ? [...result[value], key] : [key]
+    }
+  }
+  return result
+}
+
+// Reverse of the maps above — lets /answers/[slug] pages link back out to
+// the /generators and /best pages that link into them, so the relationship
+// is reciprocal instead of one-directional. Derived automatically so it can
+// never drift out of sync with the forward maps.
+export const ANSWER_TO_GENERATOR_SLUGS: Record<string, string[]> = invert(GENERATOR_TO_ANSWER_SLUGS)
+export const ANSWER_TO_BEST_SLUGS: Record<string, string[]> = invert(BEST_TO_ANSWER_SLUGS)

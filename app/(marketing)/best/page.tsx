@@ -6,6 +6,7 @@ import {
   AnimatedFadeIn,
 } from "@/components/marketing/AnimatedSection"
 import { BEST_OF_PAGES } from "./data"
+import { ExploreOtherHubs } from "@/components/marketing/ExploreOtherHubs"
 
 const BASE_URL = "https://carouselabs.com"
 const SIGNUP_URL = "https://carouselabs.com/signup"
@@ -167,6 +168,8 @@ export default function BestOfIndexPage() {
           </div>
         </AnimatedFadeIn>
       </section>
+
+      <ExploreOtherHubs current="/best" />
     </>
   )
 }

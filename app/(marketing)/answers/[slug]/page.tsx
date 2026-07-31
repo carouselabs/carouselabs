@@ -3,11 +3,16 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowRight, ArrowUpRight, CheckCircle2 } from "lucide-react"
 import { ANSWER_PAGES, type AnswerPage } from "../data"
+import { ANSWER_TO_GENERATOR_SLUGS, ANSWER_TO_BEST_SLUGS } from "../cross-link"
+import { GENERATOR_PAGES, type GeneratorPage } from "../../generators/data"
+import { BEST_OF_PAGES, type BestOfPage } from "../../best/data"
 
 const BASE_URL = "https://carouselabs.com"
 const SIGNUP_URL = "https://carouselabs.com/signup"
 
 const bySlug = new Map<string, AnswerPage>(ANSWER_PAGES.map((p) => [p.slug, p]))
+const generatorBySlug = new Map<string, GeneratorPage>(GENERATOR_PAGES.map((p) => [p.slug, p]))
+const bestOfBySlug = new Map<string, BestOfPage>(BEST_OF_PAGES.map((p) => [p.slug, p]))
 
 function getPage(slug: string): AnswerPage | undefined {
   return bySlug.get(slug)
@@ -18,6 +23,18 @@ function getRelated(page: AnswerPage): AnswerPage[] {
     .map((s) => bySlug.get(s))
     .filter((p): p is AnswerPage => Boolean(p))
     .slice(0, 4)
+}
+
+function getRelatedGenerators(slug: string): GeneratorPage[] {
+  return (ANSWER_TO_GENERATOR_SLUGS[slug] ?? [])
+    .map((s) => generatorBySlug.get(s))
+    .filter((p): p is GeneratorPage => Boolean(p))
+}
+
+function getRelatedBestOf(slug: string): BestOfPage[] {
+  return (ANSWER_TO_BEST_SLUGS[slug] ?? [])
+    .map((s) => bestOfBySlug.get(s))
+    .filter((p): p is BestOfPage => Boolean(p))
 }
 
 function categorySlug(category: string): string {
@@ -99,6 +116,8 @@ export default async function AnswerPageRoute({
   if (!page) notFound()
 
   const related = getRelated(page)
+  const relatedGenerators = getRelatedGenerators(page.slug)
+  const relatedBestOf = getRelatedBestOf(page.slug)
   const qaJsonLd = buildQAPageJsonLd(page)
   const faqJsonLd = buildFaqJsonLd(page)
   const catSlug = categorySlug(page.category)
@@ -201,6 +220,34 @@ export default async function AnswerPageRoute({
               ))}
             </div>
           </div>
+
+          {/* ── RELATED TOOL / RANKING (cross-category, where a topical match exists) ── */}
+          {(relatedGenerators.length > 0 || relatedBestOf.length > 0) && (
+            <div className="flex flex-col gap-2 pt-6 border-t border-[#EEEBE3]">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                {relatedGenerators.map((g) => (
+                  <Link
+                    key={g.slug}
+                    href={`/generators/${g.slug}`}
+                    className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
+                  >
+                    Try {g.keyword}
+                    <ArrowRight size={12} strokeWidth={2.2} />
+                  </Link>
+                ))}
+                {relatedBestOf.map((b) => (
+                  <Link
+                    key={b.slug}
+                    href={`/best/${b.slug}`}
+                    className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
+                  >
+                    {b.title}
+                    <ArrowRight size={12} strokeWidth={2.2} />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ── SECTION 7 — MORE QUESTIONS IN CATEGORY ── */}
           {related.length > 0 && (

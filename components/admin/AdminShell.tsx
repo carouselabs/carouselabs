@@ -19,6 +19,8 @@ import {
   ScrollText,
   Megaphone,
   Search,
+  Award,
+  ListChecks,
 } from "lucide-react"
 import { GlobalSearch } from "@/components/admin/GlobalSearch"
 
@@ -28,6 +30,8 @@ const NAV = [
   { href: "/admin/subscriptions", label: "Subscriptions", icon: CreditCard },
   { href: "/admin/posts", label: "Posts", icon: FileText },
   { href: "/admin/credits", label: "Credits", icon: Coins },
+  { href: "/admin/interns", label: "Interns", icon: Award },
+  { href: "/admin/tasks", label: "Manage Tasks", icon: ListChecks },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone },
   { href: "/admin/audit-logs", label: "Audit Logs", icon: ScrollText },
@@ -36,6 +40,7 @@ const NAV = [
 
 function pageTitle(pathname: string): string {
   if (pathname.startsWith("/admin/users/") && pathname !== "/admin/users") return "User Profile"
+  if (pathname.startsWith("/admin/interns/") && pathname !== "/admin/interns") return "Intern Profile"
   const item = [...NAV].sort((a, b) => b.href.length - a.href.length).find((n) => pathname.startsWith(n.href))
   return item ? item.label : "Admin"
 }

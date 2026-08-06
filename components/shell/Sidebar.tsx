@@ -2,10 +2,11 @@
 
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { Sparkles, Clock, Bookmark, Settings } from "lucide-react"
+import { Sparkles, Clock, Bookmark, Settings, Award } from "lucide-react"
 import { NavItem } from "./NavItem"
 import { UserMenu } from "./UserMenu"
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser"
+import { useInternAccess } from "@/lib/hooks/useInternAccess"
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Generate", icon: Sparkles },
@@ -17,6 +18,10 @@ const NAV_ITEMS = [
 export function Sidebar() {
   const pathname = usePathname()
   const { user } = useCurrentUser()
+  const isIntern = useInternAccess()
+  const navItems = isIntern
+    ? [...NAV_ITEMS, { href: "/intern", label: "Intern Points", icon: Award }]
+    : NAV_ITEMS
 
   function isActive(href: string) {
     if (href === "/settings") return pathname.startsWith("/settings")
@@ -42,7 +47,7 @@ export function Sidebar() {
 
         {/* Nav */}
         <nav className="flex-1 px-3 pt-3 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavItem
               key={item.href}
               href={item.href}
@@ -65,7 +70,7 @@ export function Sidebar() {
 
       {/* Mobile tab bar */}
       <div className="md:hidden fixed bottom-0 inset-x-0 z-50 h-[58px] bg-white border-t border-[#E5E3DE] flex items-center justify-around">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+        {navItems.map(({ href, label, icon: Icon }) => {
           const active = isActive(href)
           return (
             <Link

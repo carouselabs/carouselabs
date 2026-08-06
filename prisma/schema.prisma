@@ -318,3 +318,42 @@ model ProcessedWebhookEvent {
 
   @@index([source])
 }
+
+// ── Intern Points Board ─────────────────────────────────────────
+
+// Fixed-point daily tasks offered in the "Quick Task" add-entry mode. Never
+// renamed once created (only points/active are editable) so historical
+// InternPointEntry.category values stay reliably matched to a task by name.
+model PredefinedTask {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  points    Int
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Intern {
+  id        String              @id @default(cuid())
+  name      String
+  email     String              @unique
+  clerkId   String?             @unique
+  active    Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  entries   InternPointEntry[]
+}
+
+model InternPointEntry {
+  id        String   @id @default(cuid())
+  internId  String
+  intern    Intern   @relation(fields: [internId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  points    Int
+  category  String // "Task Completed" | "SEO Page" | "Bug Fixed" | "Research" | "Late/Missed" | "Custom"
+  note      String?
+  source    String   @default("manual") // "manual" | "automated"
+  addedBy   String // admin email
+  createdAt DateTime @default(now())
+
+  @@index([internId])
+  @@index([internId, date])
+}

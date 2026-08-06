@@ -18,6 +18,13 @@ export type AdminAuditAction =
   | "UPDATE_NOTE"
   | "UPDATE_SETTINGS"
   | "SEND_BROADCAST"
+  | "CREATE_INTERN"
+  | "UPDATE_INTERN"
+  | "ADD_INTERN_ENTRY"
+  | "UPDATE_INTERN_ENTRY"
+  | "DELETE_INTERN_ENTRY"
+  | "CREATE_TASK"
+  | "UPDATE_TASK"
 
 export async function logAdminAction({
   adminEmail,

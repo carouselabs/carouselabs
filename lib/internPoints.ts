@@ -59,6 +59,36 @@ export async function predefinedTaskNames(): Promise<Set<string>> {
   return new Set(tasks.map((t) => t.name))
 }
 
+// Self-service leave is auto-approved, so "used" is just the count of
+// approved requests — no separate ledger to keep in sync.
+export function getLeaveBalance(intern: { leaveAllowance: number }, approvedLeaveCount: number) {
+  const used = approvedLeaveCount
+  const remaining = Math.max(0, intern.leaveAllowance - used)
+  return { total: intern.leaveAllowance, used, remaining }
+}
+
+// Adds durationMonths to joinDate — used on create and on every extension to
+// (re)compute Intern.endDate, which is stored (not derived on read) so it can
+// be queried/sorted directly.
+export function calculateEndDate(joinDate: Date, durationMonths: number): Date {
+  const end = new Date(joinDate)
+  end.setMonth(end.getMonth() + durationMonths)
+  return end
+}
+
+// Percent-through and days-left for the internship window, clamped to
+// [0, 100] / [0, ∞) so a not-yet-started or already-ended internship never
+// renders a nonsensical progress bar.
+export function getInternshipProgress(joinDate: Date, endDate: Date) {
+  const now = new Date()
+  const total = endDate.getTime() - joinDate.getTime()
+  const elapsed = now.getTime() - joinDate.getTime()
+  const percentComplete = Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)))
+  const daysRemaining = Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+  const isCompleted = now > endDate
+  return { percentComplete, daysRemaining, isCompleted }
+}
+
 // Not wired to any trigger yet — ready to be called from anywhere in the
 // codebase later (e.g. auto-award points when an intern completes a
 // specific tracked task).

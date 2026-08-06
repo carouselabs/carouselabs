@@ -50,10 +50,10 @@ export function AdminShell({ email, children }: { email: string; children: React
   const pathname = usePathname()
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#0F0F0F] text-white">
+    <div className="flex h-screen overflow-hidden bg-[#0F0F0F] text-white print:h-auto print:overflow-visible print:bg-white">
       {/* Sidebar */}
       <aside
-        className={`flex shrink-0 flex-col border-r border-[#2A2A2A] bg-[#141414] transition-all duration-200 ${
+        className={`flex shrink-0 flex-col border-r border-[#2A2A2A] bg-[#141414] transition-all duration-200 print:hidden ${
           collapsed ? "w-[60px]" : "w-[220px]"
         }`}
       >
@@ -115,8 +115,8 @@ export function AdminShell({ email, children }: { email: string; children: React
       </aside>
 
       {/* Main */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-[56px] shrink-0 items-center justify-between border-b border-[#2A2A2A] bg-[#0F0F0F]/90 px-6 backdrop-blur">
+      <div className="flex min-w-0 flex-1 flex-col print:block">
+        <header className="flex h-[56px] shrink-0 items-center justify-between border-b border-[#2A2A2A] bg-[#0F0F0F]/90 px-6 backdrop-blur print:hidden">
           <div className="flex items-center gap-3">
             <span className="text-[14px] font-semibold tracking-tight">{pageTitle(pathname)}</span>
             <span className="inline-flex items-center gap-1 rounded-full bg-[#7C3AED]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#A78BFA]">
@@ -138,7 +138,9 @@ export function AdminShell({ email, children }: { email: string; children: React
             <span className="text-[12px] text-[#6A6A6A]">{email}</span>
           </div>
         </header>
-        <main className="min-h-0 flex-1 overflow-y-auto px-6 py-6 md:px-8">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto px-6 py-6 md:px-8 print:h-auto print:overflow-visible print:p-0">
+          {children}
+        </main>
       </div>
       <GlobalSearch />
     </div>

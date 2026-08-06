@@ -333,13 +333,59 @@ model PredefinedTask {
 }
 
 model Intern {
-  id        String              @id @default(cuid())
-  name      String
-  email     String              @unique
-  clerkId   String?             @unique
-  active    Boolean             @default(true)
-  createdAt DateTime            @default(now())
-  entries   InternPointEntry[]
+  id             String   @id @default(cuid())
+  name           String
+  email          String   @unique
+  phone          String?
+  clerkId        String?  @unique
+  role           String? // e.g. "Marketing Intern", "Content Intern"
+  department     String?
+  photoUrl       String?
+  status         String   @default("active") // "active" | "completed" | "terminated" | "extended"
+  active         Boolean  @default(true)
+  joinDate       DateTime @default(now())
+  durationMonths Int      @default(3)
+  endDate        DateTime? // calculated on create/extend, stored for easy querying
+  leaveAllowance Int      @default(5)
+  createdAt      DateTime @default(now())
+
+  entries       InternPointEntry[]
+  attendance    InternAttendance[]
+  leaveRequests InternLeaveRequest[]
+  notes         InternNote[]
+  extensions    InternExtension[]
+}
+
+// Freeform notes/reviews an admin attaches to an intern's record — praise,
+// warnings, general remarks, or formal review writeups. Feeds the "Notes"
+// tab and "review"-type notes surface prominently on the Performance Report.
+model InternNote {
+  id        String   @id @default(cuid())
+  internId  String
+  intern    Intern   @relation(fields: [internId], references: [id], onDelete: Cascade)
+  content   String   @db.Text
+  type      String   @default("general") // "general" | "praise" | "warning" | "review"
+  addedBy   String // admin email
+  createdAt DateTime @default(now())
+
+  @@index([internId])
+}
+
+// Audit trail of internship-length extensions — each row captures the
+// before/after endDate so the profile can show a full extension history
+// alongside the current duration.
+model InternExtension {
+  id              String   @id @default(cuid())
+  internId        String
+  intern          Intern   @relation(fields: [internId], references: [id], onDelete: Cascade)
+  addedMonths     Int
+  reason          String?
+  previousEndDate DateTime
+  newEndDate      DateTime
+  extendedBy      String // admin email
+  createdAt       DateTime @default(now())
+
+  @@index([internId])
 }
 
 model InternPointEntry {
@@ -356,4 +402,41 @@ model InternPointEntry {
 
   @@index([internId])
   @@index([internId, date])
+}
+
+// One row per (intern, day) — the day's attendance status. Rows created via
+// the admin Daily Checklist (markedBy: admin email) or auto-created by a
+// self-service leave application (markedBy: "self").
+model InternAttendance {
+  id        String   @id @default(cuid())
+  internId  String
+  intern    Intern   @relation(fields: [internId], references: [id], onDelete: Cascade)
+  date      DateTime
+  status    String // "present" | "absent" | "half-day" | "leave"
+  note      String?
+  markedBy  String // admin email OR "self" if intern-marked leave
+  createdAt DateTime @default(now())
+
+  @@unique([internId, date])
+  @@index([internId])
+}
+
+// Self-service leave applications. Auto-approved on creation (see
+// lib/internPoints.ts getLeaveBalance) — "pending"/"rejected" are reserved
+// for a future approval workflow but not used by the current self-service
+// flow. Revoking (admin) deletes both this row and its matching
+// InternAttendance row together.
+model InternLeaveRequest {
+  id          String    @id @default(cuid())
+  internId    String
+  intern      Intern    @relation(fields: [internId], references: [id], onDelete: Cascade)
+  date        DateTime
+  reason      String?
+  status      String    @default("approved") // "pending" | "approved" | "rejected"
+  requestedAt DateTime  @default(now())
+  reviewedBy  String?
+  reviewedAt  DateTime?
+
+  @@unique([internId, date])
+  @@index([internId])
 }

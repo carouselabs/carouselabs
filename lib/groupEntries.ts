@@ -37,3 +37,49 @@ export function groupEntriesByDate<T extends GroupableEntry>(entries: T[]): Dail
   }
   return [...map.values()].sort((a, b) => (a.date < b.date ? 1 : -1))
 }
+
+export type AttendanceStatus = "present" | "absent" | "half-day" | "leave"
+
+export type AttendanceRecord = {
+  id: string
+  date: string // ISO date string
+  status: string
+  note: string | null
+  markedBy: string
+}
+
+export type DailyRecord = {
+  date: string // yyyy-mm-dd
+  totalPoints: number
+  taskNames: string[]
+  entries: GroupableEntry[]
+  attendance: AttendanceRecord | null
+}
+
+// Like groupEntriesByDate, but also folds in attendance — so a day that's
+// marked "absent" with zero point entries still shows up as its own row
+// (points-only grouping would silently drop it).
+export function mergeDailyRecords<T extends GroupableEntry, A extends AttendanceRecord>(
+  entries: T[],
+  attendance: A[],
+): DailyRecord[] {
+  const map = new Map<string, DailyRecord>()
+  const get = (key: string) => {
+    let r = map.get(key)
+    if (!r) {
+      r = { date: key, totalPoints: 0, taskNames: [], entries: [], attendance: null }
+      map.set(key, r)
+    }
+    return r
+  }
+  for (const e of entries) {
+    const r = get(e.date.slice(0, 10))
+    r.totalPoints += e.points
+    r.entries.push(e)
+    if (!r.taskNames.includes(e.category)) r.taskNames.push(e.category)
+  }
+  for (const a of attendance) {
+    get(a.date.slice(0, 10)).attendance = a
+  }
+  return [...map.values()].sort((a, b) => (a.date < b.date ? 1 : -1))
+}

@@ -26,6 +26,12 @@ export type AdminAuditAction =
   | "ADD_DAILY_CHECKLIST"
   | "CREATE_TASK"
   | "UPDATE_TASK"
+  | "MARK_ATTENDANCE"
+  | "REVOKE_INTERN_LEAVE"
+  | "EXTEND_INTERNSHIP"
+  | "UPDATE_INTERN_STATUS"
+  | "ADD_INTERN_NOTE"
+  | "DELETE_INTERN_NOTE"
 
 export async function logAdminAction({
   adminEmail,

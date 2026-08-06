@@ -5,7 +5,7 @@
 import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
-import { summarizeEntries } from "@/lib/internPoints"
+import { summarizeEntries, getLeaveBalance, calculateEndDate, getInternshipProgress } from "@/lib/internPoints"
 import { logAdminAction, getRequestIp } from "@/lib/auditLog"
 
 export async function GET() {
@@ -14,7 +14,10 @@ export async function GET() {
 
   const interns = await db.intern.findMany({
     orderBy: { createdAt: "desc" },
-    include: { entries: { select: { points: true, date: true } } },
+    include: {
+      entries: { select: { points: true, date: true } },
+      leaveRequests: { where: { status: "approved" }, select: { id: true } },
+    },
   })
 
   // Ranked by all-time total points, descending — this list doubles as the
@@ -26,16 +29,24 @@ export async function GET() {
         (max, e) => (!max || e.date > max ? e.date : max),
         null,
       )
+      const leave = getLeaveBalance(i, i.leaveRequests.length)
+      const endDate = i.endDate ?? calculateEndDate(i.joinDate, i.durationMonths)
+      const progress = getInternshipProgress(i.joinDate, endDate)
       return {
         id: i.id,
         name: i.name,
         email: i.email,
+        role: i.role,
+        status: i.status,
         active: i.active,
         createdAt: i.createdAt,
         totalPoints: total,
         pointsToday,
         pointsThisWeek,
         lastEntryDate,
+        leaveUsed: leave.used,
+        leaveAllowance: leave.total,
+        progress,
       }
     })
     .sort((a, b) => b.totalPoints - a.totalPoints)
@@ -49,18 +60,37 @@ export async function POST(req: Request) {
 
   let name: string
   let email: string
+  let phone: string | null
+  let role: string | null
+  let department: string | null
+  let photoUrl: string | null
+  let joinDate: Date
+  let durationMonths: number
   try {
     const body = await req.json()
     if (typeof body.name !== "string" || !body.name.trim()) throw new Error()
     if (typeof body.email !== "string" || !body.email.trim()) throw new Error()
     name = body.name.trim()
     email = body.email.trim().toLowerCase()
+    phone = typeof body.phone === "string" && body.phone.trim() ? body.phone.trim() : null
+    role = typeof body.role === "string" && body.role.trim() ? body.role.trim() : null
+    department = typeof body.department === "string" && body.department.trim() ? body.department.trim() : null
+    photoUrl = typeof body.photoUrl === "string" && body.photoUrl.trim() ? body.photoUrl.trim() : null
+
+    joinDate = body.joinDate ? new Date(body.joinDate) : new Date()
+    if (isNaN(joinDate.getTime())) throw new Error()
+
+    durationMonths = body.durationMonths !== undefined ? Number(body.durationMonths) : 3
+    if (!Number.isInteger(durationMonths) || durationMonths < 1) throw new Error()
   } catch {
     return NextResponse.json({ error: "name and email are required" }, { status: 400 })
   }
+  const endDate = calculateEndDate(joinDate, durationMonths)
 
   try {
-    const intern = await db.intern.create({ data: { name, email } })
+    const intern = await db.intern.create({
+      data: { name, email, phone, role, department, photoUrl, joinDate, durationMonths, endDate },
+    })
     await logAdminAction({
       adminEmail: admin.email,
       action: "CREATE_INTERN",

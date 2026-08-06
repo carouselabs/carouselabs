@@ -1,10 +1,16 @@
-// /admin/interns/[id] — intern's full entry history, running totals, and
-// admin controls (add/edit/delete entries, toggle active).
+// /admin/interns/[id] — intern's full profile: overview, daily log, leave &
+// attendance, notes, and a printable performance report.
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 import { db } from "@/lib/db"
-import { summarizeEntries, predefinedTaskNames } from "@/lib/internPoints"
+import {
+  summarizeEntries,
+  predefinedTaskNames,
+  getLeaveBalance,
+  calculateEndDate,
+  getInternshipProgress,
+} from "@/lib/internPoints"
 import { InternDetail } from "@/components/admin/InternDetail"
 
 export const dynamic = "force-dynamic"
@@ -17,42 +23,65 @@ export default async function AdminInternDetailPage({
   const { id } = await params
   const intern = await db.intern.findUnique({
     where: { id },
-    include: { entries: { orderBy: { date: "desc" } } },
+    include: {
+      entries: { orderBy: { date: "desc" } },
+      attendance: { orderBy: { date: "desc" } },
+      leaveRequests: { orderBy: { date: "desc" } },
+      notes: { orderBy: { createdAt: "desc" } },
+      extensions: { orderBy: { createdAt: "desc" } },
+    },
   })
   if (!intern) notFound()
 
+  // Rank on the all-time-points leaderboard — same ranking the roster and
+  // intern portal leaderboard use, computed here so the profile doesn't need
+  // a second client-side fetch of every intern's entries.
+  const allInterns = await db.intern.findMany({
+    where: { active: true },
+    select: { id: true, entries: { select: { points: true } } },
+  })
+  const ranked = allInterns
+    .map((i) => ({ id: i.id, total: i.entries.reduce((sum, e) => sum + e.points, 0) }))
+    .sort((a, b) => b.total - a.total)
+  const rank = ranked.findIndex((r) => r.id === id) + 1
+
   const { total, pointsToday, pointsThisWeek } = summarizeEntries(intern.entries)
   const taskNames = await predefinedTaskNames()
+  const approvedLeaveCount = intern.leaveRequests.filter((r) => r.status === "approved").length
+  const leaveBalance = getLeaveBalance(intern, approvedLeaveCount)
+  const endDate = intern.endDate ?? calculateEndDate(intern.joinDate, intern.durationMonths)
+  const progress = getInternshipProgress(intern.joinDate, endDate)
 
   return (
     <div className="space-y-6">
       <Link
         href="/admin/interns"
-        className="inline-flex items-center gap-1.5 text-[12.5px] text-[#8A8A8A] hover:text-white transition-colors"
+        className="inline-flex items-center gap-1.5 text-[12.5px] text-[#8A8A8A] hover:text-white transition-colors print:hidden"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
         All interns
       </Link>
-
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[18px] font-bold text-[#A78BFA]">
-          {intern.name[0]?.toUpperCase()}
-        </div>
-        <div>
-          <h1 className="text-[18px] font-bold text-white">{intern.name}</h1>
-          <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">{intern.email}</p>
-        </div>
-      </div>
 
       <InternDetail
         intern={{
           id: intern.id,
           name: intern.name,
           email: intern.email,
+          phone: intern.phone,
+          role: intern.role,
+          department: intern.department,
+          photoUrl: intern.photoUrl,
+          status: intern.status,
           active: intern.active,
+          joinDate: intern.joinDate.toISOString(),
+          durationMonths: intern.durationMonths,
+          endDate: endDate.toISOString(),
           totalPoints: total,
           pointsToday,
           pointsThisWeek,
+          leaveBalance,
+          progress,
+          rank: rank > 0 ? rank : null,
         }}
         entries={intern.entries.map((e) => ({
           id: e.id,
@@ -63,6 +92,38 @@ export default async function AdminInternDetailPage({
           source: e.source,
           addedBy: e.addedBy,
           isPredefinedTask: taskNames.has(e.category),
+        }))}
+        attendance={intern.attendance.map((a) => ({
+          id: a.id,
+          date: a.date.toISOString(),
+          status: a.status,
+          note: a.note,
+          markedBy: a.markedBy,
+        }))}
+        leaveRequests={intern.leaveRequests.map((r) => ({
+          id: r.id,
+          date: r.date.toISOString(),
+          reason: r.reason,
+          status: r.status,
+          requestedAt: r.requestedAt.toISOString(),
+          reviewedBy: r.reviewedBy,
+          reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : null,
+        }))}
+        notes={intern.notes.map((n) => ({
+          id: n.id,
+          content: n.content,
+          type: n.type,
+          addedBy: n.addedBy,
+          createdAt: n.createdAt.toISOString(),
+        }))}
+        extensions={intern.extensions.map((x) => ({
+          id: x.id,
+          addedMonths: x.addedMonths,
+          reason: x.reason,
+          previousEndDate: x.previousEndDate.toISOString(),
+          newEndDate: x.newEndDate.toISOString(),
+          extendedBy: x.extendedBy,
+          createdAt: x.createdAt.toISOString(),
         }))}
       />
     </div>

@@ -4,8 +4,16 @@
 import { ShieldOff } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { summarizeEntries, predefinedTaskNames, getLeaderboard } from "@/lib/internPoints"
-import { PerformanceCalendar, type DayCell } from "@/components/intern/PerformanceCalendar"
+import {
+  summarizeEntries,
+  predefinedTaskNames,
+  getLeaderboard,
+  getLeaveBalance,
+  calculateEndDate,
+  getInternshipProgress,
+} from "@/lib/internPoints"
+import { PerformanceCalendar, type DayCell, type AttendanceStatus } from "@/components/intern/PerformanceCalendar"
+import { LeaveApplication } from "@/components/intern/LeaveApplication"
 
 export const dynamic = "force-dynamic"
 
@@ -19,7 +27,11 @@ function dayKey(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
-function buildMonthGrid(pointsByDay: Map<string, number>, tasksByDay: Map<string, string[]>) {
+function buildMonthGrid(
+  pointsByDay: Map<string, number>,
+  tasksByDay: Map<string, string[]>,
+  attendanceByDay: Map<string, AttendanceStatus>,
+) {
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth()
@@ -28,13 +40,14 @@ function buildMonthGrid(pointsByDay: Map<string, number>, tasksByDay: Map<string
   const daysInMonth = new Date(year, month + 1, 0).getDate()
 
   const cells: DayCell[] = []
-  for (let i = 0; i < startWeekday; i++) cells.push({ day: null, points: null, tasks: [] })
+  for (let i = 0; i < startWeekday; i++) cells.push({ day: null, points: null, tasks: [], attendanceStatus: null })
   for (let d = 1; d <= daysInMonth; d++) {
     const key = dayKey(new Date(year, month, d))
     cells.push({
       day: d,
       points: pointsByDay.has(key) ? pointsByDay.get(key)! : null,
       tasks: tasksByDay.get(key) ?? [],
+      attendanceStatus: attendanceByDay.get(key) ?? null,
     })
   }
 
@@ -47,7 +60,11 @@ export default async function InternPage() {
 
   let intern = await db.intern.findUnique({
     where: { email: user.email },
-    include: { entries: { orderBy: { date: "desc" } } },
+    include: {
+      entries: { orderBy: { date: "desc" } },
+      attendance: { orderBy: { date: "desc" } },
+      leaveRequests: { orderBy: { date: "desc" } },
+    },
   })
 
   if (!intern) {
@@ -70,13 +87,23 @@ export default async function InternPage() {
     intern = await db.intern.update({
       where: { id: intern.id },
       data: { clerkId: user.clerkId },
-      include: { entries: { orderBy: { date: "desc" } } },
+      include: {
+        entries: { orderBy: { date: "desc" } },
+        attendance: { orderBy: { date: "desc" } },
+        leaveRequests: { orderBy: { date: "desc" } },
+      },
     })
   }
 
   const { total, pointsToday, pointsThisWeek } = summarizeEntries(intern.entries)
   const taskNames = await predefinedTaskNames()
   const leaderboard = await getLeaderboard()
+
+  const approvedLeaveCount = intern.leaveRequests.filter((r) => r.status === "approved").length
+  const leaveBalance = getLeaveBalance(intern, approvedLeaveCount)
+  const endDate = intern.endDate ?? calculateEndDate(intern.joinDate, intern.durationMonths)
+  const progress = getInternshipProgress(intern.joinDate, endDate)
+  const hasEnded = intern.status === "completed" || intern.status === "terminated"
 
   const pointsByDay = new Map<string, number>()
   const tasksByDay = new Map<string, string[]>()
@@ -87,7 +114,12 @@ export default async function InternPage() {
     if (!tasks.includes(e.category)) tasks.push(e.category)
     tasksByDay.set(key, tasks)
   }
-  const { cells, monthLabel } = buildMonthGrid(pointsByDay, tasksByDay)
+  const attendanceByDay = new Map<string, AttendanceStatus>()
+  for (const a of intern.attendance) {
+    attendanceByDay.set(dayKey(a.date), a.status as AttendanceStatus)
+  }
+  const takenDates = intern.attendance.map((a) => dayKey(a.date))
+  const { cells, monthLabel } = buildMonthGrid(pointsByDay, tasksByDay, attendanceByDay)
   const recent = intern.entries.slice(0, 15)
 
   return (
@@ -98,10 +130,38 @@ export default async function InternPage() {
           {intern.name} · {intern.email}
           {!intern.active && (
             <span className="ml-2 inline-flex rounded-full bg-[#F1EFE9] px-2 py-0.5 text-[11px] font-medium text-[#6B7280]">
-              INACTIVE
+              {intern.status.toUpperCase()}
             </span>
           )}
         </p>
+      </div>
+
+      {hasEnded && (
+        <div className="rounded-2xl border border-[#E5E3DE] bg-[#F1EFE9] p-4 text-[13px] font-medium text-[#0A0A0A]">
+          Your internship has ended on {fmtDate(endDate)}. You can still view your history below, but new leave
+          applications are no longer available.
+        </div>
+      )}
+
+      {/* Internship progress */}
+      <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5">
+        <div className="mb-1.5 flex items-center justify-between text-[12.5px] text-[#6B7280]">
+          <span>
+            {fmtDate(intern.joinDate)} → {fmtDate(endDate)}
+          </span>
+          <span>
+            {progress.isCompleted
+              ? "Internship period ended"
+              : `${progress.daysRemaining} day${progress.daysRemaining === 1 ? "" : "s"} remaining`}
+          </span>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-[#F1EFE9]">
+          <div
+            className={`h-full rounded-full ${progress.isCompleted ? "bg-[#9CA3AF]" : "bg-[#7C3AED]"}`}
+            style={{ width: `${progress.percentComplete}%` }}
+          />
+        </div>
+        <div className="mt-1 text-right text-[11px] text-[#9CA3AF]">{progress.percentComplete}% complete</div>
       </div>
 
       {/* Stat cards */}
@@ -123,6 +183,19 @@ export default async function InternPage() {
           </div>
         </div>
       </div>
+
+      {/* Apply for Leave — read-only once the internship has ended */}
+      {hasEnded ? (
+        <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5">
+          <h2 className="mb-1 text-[13px] font-semibold text-[#0A0A0A]">Leave</h2>
+          <p className="text-[13px] text-[#6B7280]">
+            Leave applications are closed now that your internship has ended. Your past leave history is still
+            shown in the calendar below.
+          </p>
+        </div>
+      ) : (
+        <LeaveApplication remaining={leaveBalance.remaining} total={leaveBalance.total} takenDates={takenDates} />
+      )}
 
       {/* Leaderboard */}
       <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5">

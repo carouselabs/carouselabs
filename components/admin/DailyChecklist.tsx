@@ -7,11 +7,20 @@
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Trash2 } from "lucide-react"
-import { AdminButton, AdminCard, AdminInput, ConfirmModal } from "@/components/admin/ui"
+import { AdminButton, AdminCard, AdminInput, AdminSelect, ConfirmModal } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
 
 type Task = { id: string; name: string; points: number }
 type CustomRow = { key: string; name: string; points: string; note: string }
+type AttendanceInfo = { status: string; note: string | null; markedBy: string } | null
+
+const ATTENDANCE_OPTIONS = [
+  { value: "", label: "Not marked" },
+  { value: "present", label: "Present" },
+  { value: "absent", label: "Absent" },
+  { value: "half-day", label: "Half-Day" },
+  { value: "leave", label: "Leave" },
+]
 
 const dateInputCls =
   "h-9 rounded-lg border border-[#2A2A2A] bg-[#141414] px-3 text-[13px] text-white outline-none focus:border-[#7C3AED] [color-scheme:dark]"
@@ -47,6 +56,9 @@ export function DailyChecklist({ internId }: { internId: string }) {
   const [customRows, setCustomRows] = useState<CustomRow[]>([])
 
   const [existing, setExisting] = useState<{ count: number; totalPoints: number } | null>(null)
+  const [existingAttendance, setExistingAttendance] = useState<AttendanceInfo>(null)
+  const [attendanceStatus, setAttendanceStatus] = useState("")
+  const [attendanceNote, setAttendanceNote] = useState("")
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -61,11 +73,27 @@ export function DailyChecklist({ internId }: { internId: string }) {
     let cancelled = false
     fetch(`/api/admin/interns/${internId}/checklist?date=${date}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { count: number; totalPoints: number } | null) => {
-        if (!cancelled) setExisting(d)
-      })
+      .then(
+        (
+          d: {
+            count: number
+            totalPoints: number
+            attendance: AttendanceInfo
+          } | null,
+        ) => {
+          if (cancelled) return
+          setExisting(d ? { count: d.count, totalPoints: d.totalPoints } : null)
+          setExistingAttendance(d?.attendance ?? null)
+          setAttendanceStatus(d?.attendance?.status ?? "")
+          setAttendanceNote(d?.attendance?.note ?? "")
+        },
+      )
       .catch(() => {
-        if (!cancelled) setExisting(null)
+        if (cancelled) return
+        setExisting(null)
+        setExistingAttendance(null)
+        setAttendanceStatus("")
+        setAttendanceNote("")
       })
     return () => {
       cancelled = true
@@ -113,13 +141,14 @@ export function DailyChecklist({ internId }: { internId: string }) {
     const customEntries = customRows
       .filter((r) => r.name.trim() && Number.isInteger(Number(r.points)))
       .map((r) => ({ name: r.name.trim(), points: Number(r.points), note: r.note.trim() || undefined }))
-    return { date, taskEntries, customEntries }
+    const attendance = attendanceStatus ? { status: attendanceStatus, note: attendanceNote.trim() || undefined } : null
+    return { date, taskEntries, customEntries, attendance }
   }
 
   const save = async () => {
     const payload = buildPayload()
-    if (payload.taskEntries.length === 0 && payload.customEntries.length === 0) {
-      toast("Check at least one task or add a custom entry", "error")
+    if (payload.taskEntries.length === 0 && payload.customEntries.length === 0 && !payload.attendance) {
+      toast("Check at least one task, add a custom entry, or set attendance", "error")
       return
     }
 
@@ -177,6 +206,37 @@ export function DailyChecklist({ internId }: { internId: string }) {
             {existing.totalPoints} pts). Saving again will ADD to that total.
           </p>
         )}
+      </AdminCard>
+
+      <AdminCard title="Attendance">
+        {existingAttendance?.markedBy === "self" && (
+          <div className="mb-3 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2.5 text-[12px] leading-relaxed text-blue-300">
+            Intern applied for leave on this date
+            {existingAttendance.note ? `: "${existingAttendance.note}"` : "."} This was self-service —
+            use Revoke on the Leave Requests panel to undo it properly. Changing the status here won&apos;t
+            update their leave balance.
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <AdminSelect
+            value={attendanceStatus}
+            onChange={(e) => setAttendanceStatus(e.target.value)}
+            className="w-40"
+          >
+            {ATTENDANCE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </AdminSelect>
+          <AdminInput
+            placeholder="Note (optional)"
+            value={attendanceNote}
+            onChange={(e) => setAttendanceNote(e.target.value)}
+            disabled={!attendanceStatus}
+            className="flex-1 min-w-[200px] disabled:opacity-40"
+          />
+        </div>
       </AdminCard>
 
       <AdminCard title="Tasks">
@@ -274,6 +334,7 @@ export function DailyChecklist({ internId }: { internId: string }) {
           <div className="text-[11px] font-medium text-[#8A8A8A]">
             {checkedCount} task{checkedCount === 1 ? "" : "s"} · {validCustomCount} custom entr
             {validCustomCount === 1 ? "y" : "ies"}
+            {attendanceStatus && ` · attendance: ${attendanceStatus}`}
           </div>
           <div
             className={`text-[22px] font-bold tabular-nums leading-tight ${grandTotal < 0 ? "text-red-400" : "text-white"}`}

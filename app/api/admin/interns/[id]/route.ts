@@ -3,8 +3,14 @@
 import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
-import { summarizeEntries, predefinedTaskNames } from "@/lib/internPoints"
-import { groupEntriesByDate } from "@/lib/groupEntries"
+import {
+  summarizeEntries,
+  predefinedTaskNames,
+  getLeaveBalance,
+  calculateEndDate,
+  getInternshipProgress,
+} from "@/lib/internPoints"
+import { mergeDailyRecords } from "@/lib/groupEntries"
 import { logAdminAction, getRequestIp } from "@/lib/auditLog"
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -14,12 +20,22 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params
   const intern = await db.intern.findUnique({
     where: { id },
-    include: { entries: { orderBy: { date: "desc" } } },
+    include: {
+      entries: { orderBy: { date: "desc" } },
+      attendance: { orderBy: { date: "desc" } },
+      leaveRequests: { orderBy: { date: "desc" } },
+      notes: { orderBy: { createdAt: "desc" } },
+      extensions: { orderBy: { createdAt: "desc" } },
+    },
   })
   if (!intern) return NextResponse.json({ error: "Intern not found" }, { status: 404 })
 
   const { total, pointsToday, pointsThisWeek } = summarizeEntries(intern.entries)
   const taskNames = await predefinedTaskNames()
+  const approvedLeaveCount = intern.leaveRequests.filter((r) => r.status === "approved").length
+  const leaveBalance = getLeaveBalance(intern, approvedLeaveCount)
+  const endDate = intern.endDate ?? calculateEndDate(intern.joinDate, intern.durationMonths)
+  const progress = getInternshipProgress(intern.joinDate, endDate)
 
   const entries = intern.entries.map((e) => ({
     id: e.id,
@@ -32,22 +48,73 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     isPredefinedTask: taskNames.has(e.category),
   }))
 
+  const attendance = intern.attendance.map((a) => ({
+    id: a.id,
+    date: a.date.toISOString(),
+    status: a.status,
+    note: a.note,
+    markedBy: a.markedBy,
+  }))
+
+  const leaveRequests = intern.leaveRequests.map((r) => ({
+    id: r.id,
+    date: r.date.toISOString(),
+    reason: r.reason,
+    status: r.status,
+    requestedAt: r.requestedAt.toISOString(),
+    reviewedBy: r.reviewedBy,
+    reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : null,
+  }))
+
+  const notes = intern.notes.map((n) => ({
+    id: n.id,
+    content: n.content,
+    type: n.type,
+    addedBy: n.addedBy,
+    createdAt: n.createdAt.toISOString(),
+  }))
+
+  const extensions = intern.extensions.map((x) => ({
+    id: x.id,
+    addedMonths: x.addedMonths,
+    reason: x.reason,
+    previousEndDate: x.previousEndDate.toISOString(),
+    newEndDate: x.newEndDate.toISOString(),
+    extendedBy: x.extendedBy,
+    createdAt: x.createdAt.toISOString(),
+  }))
+
   return NextResponse.json({
     intern: {
       id: intern.id,
       name: intern.name,
       email: intern.email,
+      phone: intern.phone,
+      role: intern.role,
+      department: intern.department,
+      photoUrl: intern.photoUrl,
+      status: intern.status,
       active: intern.active,
+      joinDate: intern.joinDate.toISOString(),
+      durationMonths: intern.durationMonths,
+      endDate: endDate.toISOString(),
       createdAt: intern.createdAt,
       totalPoints: total,
       pointsToday,
       pointsThisWeek,
+      leaveBalance,
+      progress,
     },
     entries,
-    // Same entries grouped by calendar day — lets the admin Daily Log view
-    // (and any future consumer) render per-day rows without recomputing
-    // this client-side.
-    groupedByDate: groupEntriesByDate(entries),
+    attendance,
+    leaveRequests,
+    notes,
+    extensions,
+    // Entries + attendance merged by calendar day — lets the admin Daily
+    // Log view (and any future consumer) render per-day rows, including
+    // attendance-only days (e.g. "absent" with no points logged), without
+    // recomputing this client-side.
+    groupedByDate: mergeDailyRecords(entries, attendance),
   })
 }
 

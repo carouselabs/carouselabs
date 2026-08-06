@@ -1,8 +1,9 @@
 "use client"
 
-// /admin/interns — intern roster: name, email, active status, all-time
-// points, points today, last entry date. "Add Intern" opens a create modal;
-// clicking a row goes to the intern's detail page.
+// /admin/interns — intern roster doubling as the leaderboard: ranked by
+// all-time points descending (server-sorted), with medal badges for the top
+// 3. "Add Intern" opens a create modal; clicking a row goes to the intern's
+// detail page.
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { UserPlus } from "lucide-react"
@@ -23,7 +24,21 @@ type InternRow = {
   active: boolean
   totalPoints: number
   pointsToday: number
+  pointsThisWeek: number
   lastEntryDate: string | null
+}
+
+const MEDALS = ["🥇", "🥈", "🥉"]
+
+function RankBadge({ rank }: { rank: number }) {
+  const medal = MEDALS[rank - 1]
+  return medal ? (
+    <span className="text-[16px] leading-none" aria-label={`Rank ${rank}`}>
+      {medal}
+    </span>
+  ) : (
+    <span className="text-[12.5px] font-semibold text-[#8A8A8A] tabular-nums">#{rank}</span>
+  )
 }
 
 export function InternsTable() {
@@ -96,28 +111,33 @@ export function InternsTable() {
         <table className={tableCls.table}>
           <thead>
             <tr>
+              <th className={tableCls.th}>Rank</th>
               <th className={tableCls.th}>Name</th>
               <th className={tableCls.th}>Email</th>
               <th className={tableCls.th}>Status</th>
               <th className={tableCls.th}>Total Points</th>
-              <th className={tableCls.th}>Points Today</th>
-              <th className={tableCls.th}>Last Entry</th>
+              <th className={tableCls.th}>This Week</th>
+              <th className={tableCls.th}>Today</th>
+              <th className={tableCls.th}>Last Active</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td className={tableCls.td} colSpan={6}>
+                <td className={tableCls.td} colSpan={8}>
                   No interns yet
                 </td>
               </tr>
             )}
-            {rows.map((r) => (
+            {rows.map((r, i) => (
               <tr
                 key={r.id}
                 className={`${tableCls.row} cursor-pointer`}
                 onClick={() => router.push(`/admin/interns/${r.id}`)}
               >
+                <td className={tableCls.td}>
+                  <RankBadge rank={i + 1} />
+                </td>
                 <td className={tableCls.td}>
                   <div className="flex items-center gap-2.5">
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[11px] font-bold text-[#A78BFA]">
@@ -138,7 +158,8 @@ export function InternsTable() {
                     </span>
                   )}
                 </td>
-                <td className={`${tableCls.td} tabular-nums`}>{r.totalPoints}</td>
+                <td className={`${tableCls.td} tabular-nums font-semibold text-white`}>{r.totalPoints}</td>
+                <td className={`${tableCls.td} tabular-nums`}>{r.pointsThisWeek}</td>
                 <td className={`${tableCls.td} tabular-nums`}>{r.pointsToday}</td>
                 <td className={tableCls.td}>{r.lastEntryDate ? fmtDate(r.lastEntryDate) : "—"}</td>
               </tr>

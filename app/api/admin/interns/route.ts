@@ -17,9 +17,11 @@ export async function GET() {
     include: { entries: { select: { points: true, date: true } } },
   })
 
-  return NextResponse.json({
-    interns: interns.map((i) => {
-      const { total, pointsToday } = summarizeEntries(i.entries)
+  // Ranked by all-time total points, descending — this list doubles as the
+  // admin leaderboard.
+  const rows = interns
+    .map((i) => {
+      const { total, pointsToday, pointsThisWeek } = summarizeEntries(i.entries)
       const lastEntryDate = i.entries.reduce<Date | null>(
         (max, e) => (!max || e.date > max ? e.date : max),
         null,
@@ -32,10 +34,13 @@ export async function GET() {
         createdAt: i.createdAt,
         totalPoints: total,
         pointsToday,
+        pointsThisWeek,
         lastEntryDate,
       }
-    }),
-  })
+    })
+    .sort((a, b) => b.totalPoints - a.totalPoints)
+
+  return NextResponse.json({ interns: rows })
 }
 
 export async function POST(req: Request) {

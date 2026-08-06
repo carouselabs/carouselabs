@@ -33,6 +33,24 @@ export function summarizeEntries(entries: { points: number; date: Date }[]) {
   return { total, pointsToday, pointsThisWeek }
 }
 
+// Active interns ranked by all-time total points, descending — the
+// leaderboard shown in both the admin panel and the intern portal. Only
+// name + total are exposed here; callers that need per-intern detail (email,
+// today/week splits) should compute those separately.
+export async function getLeaderboard(): Promise<{ id: string; name: string; totalPoints: number }[]> {
+  const interns = await db.intern.findMany({
+    where: { active: true },
+    include: { entries: { select: { points: true } } },
+  })
+  return interns
+    .map((i) => ({
+      id: i.id,
+      name: i.name,
+      totalPoints: i.entries.reduce((sum, e) => sum + e.points, 0),
+    }))
+    .sort((a, b) => b.totalPoints - a.totalPoints)
+}
+
 // Names of every PredefinedTask (active and inactive — tasks are never
 // renamed, only soft-deleted, so old entries stay matched). Used to tag
 // which InternPointEntry rows came from a Quick Task vs a Custom Task.

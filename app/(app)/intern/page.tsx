@@ -5,6 +5,7 @@ import { ShieldOff } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { summarizeEntries, predefinedTaskNames, getLeaderboard } from "@/lib/internPoints"
+import { PerformanceCalendar, type DayCell } from "@/components/intern/PerformanceCalendar"
 
 export const dynamic = "force-dynamic"
 
@@ -18,7 +19,7 @@ function dayKey(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
-function buildMonthGrid(pointsByDay: Map<string, number>) {
+function buildMonthGrid(pointsByDay: Map<string, number>, tasksByDay: Map<string, string[]>) {
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth()
@@ -26,11 +27,15 @@ function buildMonthGrid(pointsByDay: Map<string, number>) {
   const startWeekday = first.getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
 
-  const cells: { day: number | null; points: number | null }[] = []
-  for (let i = 0; i < startWeekday; i++) cells.push({ day: null, points: null })
+  const cells: DayCell[] = []
+  for (let i = 0; i < startWeekday; i++) cells.push({ day: null, points: null, tasks: [] })
   for (let d = 1; d <= daysInMonth; d++) {
     const key = dayKey(new Date(year, month, d))
-    cells.push({ day: d, points: pointsByDay.has(key) ? pointsByDay.get(key)! : null })
+    cells.push({
+      day: d,
+      points: pointsByDay.has(key) ? pointsByDay.get(key)! : null,
+      tasks: tasksByDay.get(key) ?? [],
+    })
   }
 
   return { cells, monthLabel: first.toLocaleDateString("en-US", { month: "long", year: "numeric" }) }
@@ -74,11 +79,15 @@ export default async function InternPage() {
   const leaderboard = await getLeaderboard()
 
   const pointsByDay = new Map<string, number>()
+  const tasksByDay = new Map<string, string[]>()
   for (const e of intern.entries) {
     const key = dayKey(e.date)
     pointsByDay.set(key, (pointsByDay.get(key) ?? 0) + e.points)
+    const tasks = tasksByDay.get(key) ?? []
+    if (!tasks.includes(e.category)) tasks.push(e.category)
+    tasksByDay.set(key, tasks)
   }
-  const { cells, monthLabel } = buildMonthGrid(pointsByDay)
+  const { cells, monthLabel } = buildMonthGrid(pointsByDay, tasksByDay)
   const recent = intern.entries.slice(0, 15)
 
   return (
@@ -155,43 +164,7 @@ export default async function InternPage() {
       </div>
 
       {/* Calendar */}
-      <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5">
-        <h2 className="mb-4 text-[13px] font-semibold text-[#0A0A0A]">{monthLabel}</h2>
-        <div className="grid grid-cols-7 gap-2 mb-2 text-center text-[11px] font-medium text-[#9CA3AF]">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-            <span key={d}>{d}</span>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-2">
-          {cells.map((c, i) => {
-            if (c.day === null) return <div key={i} />
-            const hasEntry = c.points !== null && c.points !== 0
-            const positive = (c.points ?? 0) > 0
-            return (
-              <div
-                key={i}
-                className={`aspect-square rounded-lg border flex flex-col items-center justify-center gap-0.5 ${
-                  hasEntry
-                    ? positive
-                      ? "border-emerald-200 bg-emerald-50"
-                      : "border-red-200 bg-red-50"
-                    : "border-[#F1EFE9] bg-[#F9F7F2]"
-                }`}
-              >
-                <span className="text-[11px] font-medium text-[#6B7280]">{c.day}</span>
-                {hasEntry && (
-                  <span
-                    className={`text-[11px] font-bold tabular-nums ${positive ? "text-emerald-600" : "text-red-600"}`}
-                  >
-                    {positive ? "+" : ""}
-                    {c.points}
-                  </span>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </div>
+      <PerformanceCalendar cells={cells} monthLabel={monthLabel} />
 
       {/* Recent entries */}
       <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5">

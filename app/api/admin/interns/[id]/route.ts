@@ -4,6 +4,7 @@ import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
 import { summarizeEntries, predefinedTaskNames } from "@/lib/internPoints"
+import { groupEntriesByDate } from "@/lib/groupEntries"
 import { logAdminAction, getRequestIp } from "@/lib/auditLog"
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -20,6 +21,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { total, pointsToday, pointsThisWeek } = summarizeEntries(intern.entries)
   const taskNames = await predefinedTaskNames()
 
+  const entries = intern.entries.map((e) => ({
+    id: e.id,
+    date: e.date.toISOString(),
+    points: e.points,
+    category: e.category,
+    note: e.note,
+    source: e.source,
+    addedBy: e.addedBy,
+    isPredefinedTask: taskNames.has(e.category),
+  }))
+
   return NextResponse.json({
     intern: {
       id: intern.id,
@@ -31,7 +43,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       pointsToday,
       pointsThisWeek,
     },
-    entries: intern.entries.map((e) => ({ ...e, isPredefinedTask: taskNames.has(e.category) })),
+    entries,
+    // Same entries grouped by calendar day — lets the admin Daily Log view
+    // (and any future consumer) render per-day rows without recomputing
+    // this client-side.
+    groupedByDate: groupEntriesByDate(entries),
   })
 }
 

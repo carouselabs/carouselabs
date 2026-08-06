@@ -1,17 +1,17 @@
 "use client"
 
 // /admin/interns/[id] — interactive half of the intern detail page: active
-// toggle, add-entry form (Quick Task from PredefinedTask, or Custom Task with
-// admin-set points), entries table with inline edit/delete, and the
-// points-over-time chart. Server component passes the initial fetch; this
-// component owns all mutation + refresh from here on.
-import { useEffect, useState } from "react"
-import { Pencil, Trash2 } from "lucide-react"
+// toggle, points-over-time chart, and entries in two views — a flat "Entry
+// List" (with inline edit/delete) and a "Daily Log" grouped by date (see
+// lib/groupEntries.ts). New entries are now logged via the dedicated Daily
+// Checklist page (/admin/interns/[id]/checklist), not a modal here.
+import { Fragment, useState } from "react"
+import Link from "next/link"
+import { ChevronDown, ClipboardList, Pencil, Trash2 } from "lucide-react"
 import {
   AdminButton,
   AdminCard,
   AdminInput,
-  AdminSelect,
   ConfirmModal,
   Modal,
   StatCard,
@@ -20,6 +20,7 @@ import {
 } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
 import { AdminLineChart, CHART_COLORS } from "@/components/admin/charts"
+import { groupEntriesByDate } from "@/lib/groupEntries"
 
 export type InternEntry = {
   id: string
@@ -41,8 +42,6 @@ export type InternSummary = {
   pointsToday: number
   pointsThisWeek: number
 }
-
-type Task = { id: string; name: string; points: number }
 
 function chartData(entries: InternEntry[]) {
   const byDay = new Map<string, number>()
@@ -70,6 +69,14 @@ function TypeBadge({ isTask }: { isTask: boolean }) {
   )
 }
 
+function TaskPill({ name }: { name: string }) {
+  return (
+    <span className="inline-flex rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[10.5px] font-medium text-[#D0D0D0]">
+      {name}
+    </span>
+  )
+}
+
 export function InternDetail({
   intern: initialIntern,
   entries: initialEntries,
@@ -82,22 +89,8 @@ export function InternDetail({
   const [entries, setEntries] = useState(initialEntries)
   const [togglingActive, setTogglingActive] = useState(false)
 
-  const [tasks, setTasks] = useState<Task[]>([])
-  useEffect(() => {
-    fetch("/api/admin/tasks?active=true")
-      .then((r) => (r.ok ? r.json() : { tasks: [] }))
-      .then((d: { tasks?: Task[] }) => setTasks(d.tasks ?? []))
-      .catch(() => setTasks([]))
-  }, [])
-
-  const [addOpen, setAddOpen] = useState(false)
-  const [mode, setMode] = useState<"quick" | "custom">("quick")
-  const [taskId, setTaskId] = useState("")
-  const [quantity, setQuantity] = useState("1")
-  const [customName, setCustomName] = useState("")
-  const [customPoints, setCustomPoints] = useState("")
-  const [note, setNote] = useState("")
-  const [addBusy, setAddBusy] = useState(false)
+  const [view, setView] = useState<"list" | "daily">("daily")
+  const [expandedDate, setExpandedDate] = useState<string | null>(null)
 
   const [editing, setEditing] = useState<InternEntry | null>(null)
   const [editPoints, setEditPoints] = useState("")
@@ -131,66 +124,6 @@ export function InternDetail({
       toast("Failed to update status", "error")
     } finally {
       setTogglingActive(false)
-    }
-  }
-
-  const resetAddForm = () => {
-    setMode("quick")
-    setTaskId("")
-    setQuantity("1")
-    setCustomName("")
-    setCustomPoints("")
-    setNote("")
-  }
-
-  const selectedTask = tasks.find((t) => t.id === taskId)
-  const quickQty = Math.max(1, Math.round(Number(quantity) || 1))
-  const quickPointsPreview = selectedTask ? selectedTask.points * quickQty : null
-
-  const addEntry = async () => {
-    let body: { points: number; category: string; note?: string }
-
-    if (mode === "quick") {
-      if (!selectedTask) {
-        toast("Select a task", "error")
-        return
-      }
-      const noteParts = [note.trim(), quickQty > 1 ? `×${quickQty}` : ""].filter(Boolean)
-      body = {
-        points: selectedTask.points * quickQty,
-        category: selectedTask.name,
-        note: noteParts.join(" ") || undefined,
-      }
-    } else {
-      const n = Number(customPoints)
-      if (!customName.trim()) {
-        toast("Task name is required", "error")
-        return
-      }
-      if (!Number.isInteger(n)) {
-        toast("Points must be a whole number", "error")
-        return
-      }
-      body = { points: n, category: customName.trim(), note: note.trim() || undefined }
-    }
-
-    setAddBusy(true)
-    try {
-      const res = await fetch(`/api/admin/interns/${intern.id}/entries`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error)
-      toast("Entry added", "success")
-      setAddOpen(false)
-      resetAddForm()
-      await refresh()
-    } catch (e) {
-      toast(e instanceof Error && e.message ? e.message : "Failed to add entry", "error")
-    } finally {
-      setAddBusy(false)
     }
   }
 
@@ -249,6 +182,26 @@ export function InternDetail({
   }
 
   const series = chartData(entries)
+  const dailyGroups = groupEntriesByDate(entries)
+
+  const entryActions = (e: InternEntry) => (
+    <div className="flex items-center gap-1.5">
+      <button
+        onClick={() => openEdit(e)}
+        className="rounded-md p-1.5 text-[#8A8A8A] hover:bg-[#2A2A2A] hover:text-white transition-colors"
+        aria-label="Edit entry"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+      <button
+        onClick={() => setDeleting(e)}
+        className="rounded-md p-1.5 text-[#8A8A8A] hover:bg-red-500/15 hover:text-red-400 transition-colors"
+        aria-label="Delete entry"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  )
 
   return (
     <div className="space-y-6">
@@ -284,165 +237,160 @@ export function InternDetail({
       </AdminCard>
 
       <AdminCard
-        title={`Entry History (${entries.length})`}
-        actions={<AdminButton onClick={() => setAddOpen(true)}>Add Entry</AdminButton>}
-      >
-        <div className={tableCls.wrap}>
-          <table className={tableCls.table}>
-            <thead>
-              <tr>
-                <th className={tableCls.th}>Date</th>
-                <th className={tableCls.th}>Points</th>
-                <th className={tableCls.th}>Category</th>
-                <th className={tableCls.th}>Type</th>
-                <th className={tableCls.th}>Note</th>
-                <th className={tableCls.th}>Source</th>
-                <th className={tableCls.th}>Added By</th>
-                <th className={tableCls.th}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.length === 0 && (
-                <tr>
-                  <td className={tableCls.td} colSpan={8}>
-                    No entries yet
-                  </td>
-                </tr>
-              )}
-              {entries.map((e) => (
-                <tr key={e.id} className={tableCls.row}>
-                  <td className={tableCls.td}>{fmtDate(e.date)}</td>
-                  <td
-                    className={`${tableCls.td} tabular-nums ${e.points < 0 ? "text-red-400" : "text-emerald-400"}`}
-                  >
-                    {e.points >= 0 ? "+" : ""}
-                    {e.points}
-                  </td>
-                  <td className={tableCls.td}>{e.category}</td>
-                  <td className={tableCls.td}>
-                    <TypeBadge isTask={e.isPredefinedTask} />
-                  </td>
-                  <td className={`${tableCls.td} max-w-[240px] truncate text-[#8A8A8A]`}>{e.note ?? "—"}</td>
-                  <td className={tableCls.td}>{e.source}</td>
-                  <td className={`${tableCls.td} text-[#8A8A8A]`}>{e.addedBy}</td>
-                  <td className={tableCls.td}>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => openEdit(e)}
-                        className="rounded-md p-1.5 text-[#8A8A8A] hover:bg-[#2A2A2A] hover:text-white transition-colors"
-                        aria-label="Edit entry"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => setDeleting(e)}
-                        className="rounded-md p-1.5 text-[#8A8A8A] hover:bg-red-500/15 hover:text-red-400 transition-colors"
-                        aria-label="Delete entry"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+        title={view === "daily" ? `Daily Log (${dailyGroups.length})` : `Entry List (${entries.length})`}
+        actions={
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-[#2A2A2A] bg-[#141414] p-1">
+              {(["daily", "list"] as const).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={`rounded-md px-3 py-1 text-[12px] font-semibold transition-colors ${
+                    view === v ? "bg-[#7C3AED] text-white" : "text-[#8A8A8A] hover:text-white"
+                  }`}
+                >
+                  {v === "daily" ? "Daily Log" : "Entry List"}
+                </button>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </AdminCard>
-
-      {/* Add entry modal */}
-      <Modal
-        open={addOpen}
-        onClose={() => {
-          setAddOpen(false)
-          resetAddForm()
-        }}
-        title={`Add entry for ${intern.name}`}
+            </div>
+            <Link href={`/admin/interns/${intern.id}/checklist`}>
+              <AdminButton>
+                <ClipboardList className="h-3.5 w-3.5" />
+                Daily Checklist
+              </AdminButton>
+            </Link>
+          </div>
+        }
       >
-        <div className="space-y-4">
-          <div className="flex rounded-lg border border-[#2A2A2A] bg-[#141414] p-1">
-            {(["quick", "custom"] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                className={`flex-1 rounded-md py-1.5 text-[12.5px] font-semibold transition-colors ${
-                  mode === m ? "bg-[#7C3AED] text-white" : "text-[#8A8A8A] hover:text-white"
-                }`}
-              >
-                {m === "quick" ? "Quick Task" : "Custom Task"}
-              </button>
-            ))}
-          </div>
-
-          {mode === "quick" ? (
-            <div className="space-y-3">
-              <AdminSelect value={taskId} onChange={(e) => setTaskId(e.target.value)} className="w-full">
-                <option value="">Select a task…</option>
-                {tasks.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({t.points >= 0 ? "+" : ""}
-                    {t.points} pts)
-                  </option>
+        {view === "list" ? (
+          <div className={tableCls.wrap}>
+            <table className={tableCls.table}>
+              <thead>
+                <tr>
+                  <th className={tableCls.th}>Date</th>
+                  <th className={tableCls.th}>Points</th>
+                  <th className={tableCls.th}>Category</th>
+                  <th className={tableCls.th}>Type</th>
+                  <th className={tableCls.th}>Note</th>
+                  <th className={tableCls.th}>Source</th>
+                  <th className={tableCls.th}>Added By</th>
+                  <th className={tableCls.th}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.length === 0 && (
+                  <tr>
+                    <td className={tableCls.td} colSpan={8}>
+                      No entries yet
+                    </td>
+                  </tr>
+                )}
+                {entries.map((e) => (
+                  <tr key={e.id} className={tableCls.row}>
+                    <td className={tableCls.td}>{fmtDate(e.date)}</td>
+                    <td
+                      className={`${tableCls.td} tabular-nums ${e.points < 0 ? "text-red-400" : "text-emerald-400"}`}
+                    >
+                      {e.points >= 0 ? "+" : ""}
+                      {e.points}
+                    </td>
+                    <td className={tableCls.td}>{e.category}</td>
+                    <td className={tableCls.td}>
+                      <TypeBadge isTask={e.isPredefinedTask} />
+                    </td>
+                    <td className={`${tableCls.td} max-w-[240px] truncate text-[#8A8A8A]`}>{e.note ?? "—"}</td>
+                    <td className={tableCls.td}>{e.source}</td>
+                    <td className={`${tableCls.td} text-[#8A8A8A]`}>{e.addedBy}</td>
+                    <td className={tableCls.td}>{entryActions(e)}</td>
+                  </tr>
                 ))}
-              </AdminSelect>
-              <div className="flex items-center gap-3">
-                <AdminInput
-                  type="number"
-                  min={1}
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  className="w-24"
-                  aria-label="Quantity"
-                />
-                <span className="text-[12px] text-[#6A6A6A]">
-                  {quickPointsPreview !== null
-                    ? `= ${quickPointsPreview >= 0 ? "+" : ""}${quickPointsPreview} pts total`
-                    : "times done today"}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <AdminInput
-                placeholder="Task name"
-                value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                className="w-full"
-              />
-              <AdminInput
-                type="number"
-                placeholder="Points (can be negative)"
-                value={customPoints}
-                onChange={(e) => setCustomPoints(e.target.value)}
-                className="w-full"
-              />
-            </div>
-          )}
-
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={3}
-            placeholder="Note (optional)"
-            className="w-full rounded-lg border border-[#2A2A2A] bg-[#141414] p-3 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED]"
-          />
-
-          <div className="flex justify-end gap-2">
-            <AdminButton
-              variant="secondary"
-              onClick={() => {
-                setAddOpen(false)
-                resetAddForm()
-              }}
-            >
-              Cancel
-            </AdminButton>
-            <AdminButton loading={addBusy} onClick={addEntry}>
-              Add Entry
-            </AdminButton>
+              </tbody>
+            </table>
           </div>
-        </div>
-      </Modal>
+        ) : (
+          <div className={tableCls.wrap}>
+            <table className={tableCls.table}>
+              <thead>
+                <tr>
+                  <th className={tableCls.th}>Date</th>
+                  <th className={tableCls.th}>Tasks Completed</th>
+                  <th className={tableCls.th}>Total Points</th>
+                  <th className={tableCls.th} />
+                </tr>
+              </thead>
+              <tbody>
+                {dailyGroups.length === 0 && (
+                  <tr>
+                    <td className={tableCls.td} colSpan={4}>
+                      No entries yet
+                    </td>
+                  </tr>
+                )}
+                {dailyGroups.map((g) => {
+                  const isOpen = expandedDate === g.date
+                  return (
+                    <Fragment key={g.date}>
+                      <tr
+                        className={`${tableCls.row} cursor-pointer`}
+                        onClick={() => setExpandedDate(isOpen ? null : g.date)}
+                      >
+                        <td className={tableCls.td}>{fmtDate(g.date)}</td>
+                        <td className={tableCls.td}>
+                          <div className="flex flex-wrap gap-1.5 max-w-[420px]">
+                            {g.taskNames.map((name) => (
+                              <TaskPill key={name} name={name} />
+                            ))}
+                          </div>
+                        </td>
+                        <td
+                          className={`${tableCls.td} tabular-nums font-semibold ${g.totalPoints < 0 ? "text-red-400" : "text-emerald-400"}`}
+                        >
+                          {g.totalPoints >= 0 ? "+" : ""}
+                          {g.totalPoints}
+                        </td>
+                        <td className={tableCls.td}>
+                          <ChevronDown
+                            className={`h-4 w-4 text-[#8A8A8A] transition-transform ${isOpen ? "rotate-180" : ""}`}
+                          />
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <tr>
+                          <td colSpan={4} className="border-b border-[#232323] bg-[#141414] p-0">
+                            <table className="w-full text-left text-[12.5px]">
+                              <tbody>
+                                {g.entries.map((e) => (
+                                  <tr key={e.id} className="border-b border-[#232323] last:border-0">
+                                    <td
+                                      className={`px-4 py-2.5 tabular-nums ${e.points < 0 ? "text-red-400" : "text-emerald-400"}`}
+                                    >
+                                      {e.points >= 0 ? "+" : ""}
+                                      {e.points}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-[#D0D0D0]">{e.category}</td>
+                                    <td className="px-4 py-2.5">
+                                      <TypeBadge isTask={e.isPredefinedTask} />
+                                    </td>
+                                    <td className="max-w-[220px] truncate px-4 py-2.5 text-[#8A8A8A]">
+                                      {e.note ?? "—"}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-[#8A8A8A]">{e.addedBy}</td>
+                                    <td className="px-4 py-2.5">{entryActions(e)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </AdminCard>
 
       {/* Edit entry modal */}
       <Modal open={!!editing} onClose={() => setEditing(null)} title="Edit entry">

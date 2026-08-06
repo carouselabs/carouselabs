@@ -23,6 +23,7 @@ export type AdminAuditAction =
   | "ADD_INTERN_ENTRY"
   | "UPDATE_INTERN_ENTRY"
   | "DELETE_INTERN_ENTRY"
+  | "ADD_DAILY_CHECKLIST"
   | "CREATE_TASK"
   | "UPDATE_TASK"
 

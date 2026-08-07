@@ -12,6 +12,8 @@ import { ExtraCreditsEmail } from "@/emails/ExtraCreditsEmail"
 import { MonthlyResetEmail } from "@/emails/MonthlyResetEmail"
 import { RenewalReminderEmail } from "@/emails/RenewalReminderEmail"
 import { SubscriptionCancelledEmail } from "@/emails/SubscriptionCancelledEmail"
+import { InternWelcomeEmail } from "@/emails/InternWelcomeEmail"
+import { InternWeeklyDigestEmail, type InternDigestRow } from "@/emails/InternWeeklyDigestEmail"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -156,6 +158,37 @@ export async function sendSubscriptionCancelledEmail(
     to: email,
     subject: `Your ${planName} subscription has been cancelled`,
     html: await render(SubscriptionCancelledEmail({ name, planName })),
+  })
+  if (error) throw new Error(`Resend: ${error.message}`)
+}
+
+export async function sendInternWelcomeEmail(
+  email: string,
+  name: string,
+  role: string | null,
+  joinDate: string,
+  leaveAllowance: number,
+  loginUrl: string,
+) {
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: `Welcome to CarouseLabs, ${name}! 🎉`,
+    html: await render(InternWelcomeEmail({ name, role, joinDate, leaveAllowance, loginUrl, email })),
+  })
+  if (error) throw new Error(`Resend: ${error.message}`)
+}
+
+export async function sendInternWeeklyDigestEmail(
+  adminEmail: string,
+  weekLabel: string,
+  interns: InternDigestRow[],
+) {
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: adminEmail,
+    subject: `Intern Weekly Digest — ${weekLabel}`,
+    html: await render(InternWeeklyDigestEmail({ weekLabel, interns })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
 }

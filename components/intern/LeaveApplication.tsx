@@ -6,8 +6,12 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 
+// text-[16px] on mobile — anything smaller makes iOS Safari auto-zoom the
+// page on focus; sm:text-[13px] restores the compact desktop size once
+// zoom-on-focus isn't a concern. py-3 (not py-2.5) keeps the ~44px min tap
+// target with the larger mobile font.
 const inputCls =
-  "w-full px-3.5 py-2.5 rounded-lg bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-[13px] focus:outline-none focus:border-[#7C3AED]/50 transition-colors"
+  "w-full px-3.5 py-3 rounded-lg bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-[16px] sm:text-[13px] focus:outline-none focus:border-[#7C3AED]/50 transition-colors"
 
 function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
@@ -61,7 +65,7 @@ export function LeaveApplication({
   }
 
   return (
-    <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5">
+    <div className="rounded-2xl border border-[#E5E3DE] bg-white p-4 sm:p-5">
       <h2 className="mb-1 text-[13px] font-semibold text-[#0A0A0A]">Apply for Leave</h2>
       <p className="mb-4 text-[13px] text-[#6B7280]">
         You have <span className="font-semibold text-[#0A0A0A]">{remaining} of {total}</span> leave days
@@ -104,7 +108,7 @@ export function LeaveApplication({
           <button
             onClick={submit}
             disabled={submitting || dateTaken}
-            className="w-full rounded-lg bg-[#7C3AED] px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 w-full touch-manipulation rounded-lg bg-[#7C3AED] px-4 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? "Submitting…" : "Submit Leave Request"}
           </button>

@@ -20,6 +20,7 @@ import {
 import { useToast } from "@/components/admin/Toast"
 
 type Progress = { percentComplete: number; daysRemaining: number; isCompleted: boolean }
+type AttendanceFlag = "good" | "warning" | "critical"
 
 type InternRow = {
   id: string
@@ -35,6 +36,29 @@ type InternRow = {
   leaveUsed: number
   leaveAllowance: number
   progress: Progress
+  attendanceFlag: AttendanceFlag
+  consecutiveAbsences: number
+}
+
+const FLAG_DOT: Record<AttendanceFlag, string> = {
+  good: "bg-emerald-500",
+  warning: "bg-amber-500",
+  critical: "bg-red-500",
+}
+const FLAG_TITLE: Record<AttendanceFlag, string> = {
+  good: "Attendance: good",
+  warning: "Attendance: warning",
+  critical: "Attendance: critical",
+}
+
+function AttendanceDot({ flag }: { flag: AttendanceFlag }) {
+  return (
+    <span
+      className={`inline-block h-2 w-2 shrink-0 rounded-full ${FLAG_DOT[flag]}`}
+      title={FLAG_TITLE[flag]}
+      aria-label={FLAG_TITLE[flag]}
+    />
+  )
 }
 
 const MEDALS = ["🥇", "🥈", "🥉"]
@@ -242,8 +266,16 @@ export function InternsTable() {
                       {r.name[0]?.toUpperCase()}
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-white">{r.name}</span>
+                      <div className="flex items-center gap-1.5">
+                        <AttendanceDot flag={r.attendanceFlag} />
+                        <span className="text-white">{r.name}</span>
+                      </div>
                       <span className="text-[11px] text-[#8A8A8A]">{r.email}</span>
+                      {r.consecutiveAbsences >= 3 && (
+                        <span className="mt-0.5 inline-flex w-fit whitespace-nowrap rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-red-400">
+                          ⚠️ {r.consecutiveAbsences} days absent in a row
+                        </span>
+                      )}
                     </div>
                   </div>
                 </td>

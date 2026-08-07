@@ -9,6 +9,8 @@ import {
   getLeaveBalance,
   calculateEndDate,
   getInternshipProgress,
+  getAttendanceFlag,
+  getConsecutiveAbsences,
 } from "@/lib/internPoints"
 import { mergeDailyRecords } from "@/lib/groupEntries"
 import { logAdminAction, getRequestIp } from "@/lib/auditLog"
@@ -36,6 +38,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const leaveBalance = getLeaveBalance(intern, approvedLeaveCount)
   const endDate = intern.endDate ?? calculateEndDate(intern.joinDate, intern.durationMonths)
   const progress = getInternshipProgress(intern.joinDate, endDate)
+  const presentDays = intern.attendance.filter((a) => a.status === "present").length
+  const absentDays = intern.attendance.filter((a) => a.status === "absent").length
+  const halfDays = intern.attendance.filter((a) => a.status === "half-day").length
+  const attendanceFlag = getAttendanceFlag(presentDays, absentDays, halfDays)
+  const consecutiveAbsences = getConsecutiveAbsences(intern.attendance)
 
   const entries = intern.entries.map((e) => ({
     id: e.id,
@@ -104,6 +111,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       pointsThisWeek,
       leaveBalance,
       progress,
+      attendanceFlag,
+      consecutiveAbsences,
     },
     entries,
     attendance,

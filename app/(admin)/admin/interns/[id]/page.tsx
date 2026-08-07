@@ -10,6 +10,8 @@ import {
   getLeaveBalance,
   calculateEndDate,
   getInternshipProgress,
+  getAttendanceFlag,
+  getConsecutiveAbsences,
 } from "@/lib/internPoints"
 import { InternDetail } from "@/components/admin/InternDetail"
 
@@ -51,6 +53,11 @@ export default async function AdminInternDetailPage({
   const leaveBalance = getLeaveBalance(intern, approvedLeaveCount)
   const endDate = intern.endDate ?? calculateEndDate(intern.joinDate, intern.durationMonths)
   const progress = getInternshipProgress(intern.joinDate, endDate)
+  const presentDays = intern.attendance.filter((a) => a.status === "present").length
+  const absentDays = intern.attendance.filter((a) => a.status === "absent").length
+  const halfDays = intern.attendance.filter((a) => a.status === "half-day").length
+  const attendanceFlag = getAttendanceFlag(presentDays, absentDays, halfDays)
+  const consecutiveAbsences = getConsecutiveAbsences(intern.attendance)
 
   return (
     <div className="space-y-6">
@@ -82,6 +89,8 @@ export default async function AdminInternDetailPage({
           leaveBalance,
           progress,
           rank: rank > 0 ? rank : null,
+          attendanceFlag,
+          consecutiveAbsences,
         }}
         entries={intern.entries.map((e) => ({
           id: e.id,

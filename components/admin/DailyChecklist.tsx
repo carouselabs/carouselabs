@@ -45,7 +45,7 @@ function newRowKey() {
   return `row-${rowKeySeq}`
 }
 
-export function DailyChecklist({ internId }: { internId: string }) {
+export function DailyChecklist({ internId, internRole }: { internId: string; internRole?: string | null }) {
   const router = useRouter()
   const { toast } = useToast()
 
@@ -63,11 +63,17 @@ export function DailyChecklist({ internId }: { internId: string }) {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    fetch("/api/admin/tasks?active=true")
+    // role-scoped: server returns tasks with role IS NULL (everyone) OR role
+    // matching this intern's role, so an "HR Intern" doesn't see tasks meant
+    // for other roles.
+    const url = internRole
+      ? `/api/admin/tasks?active=true&role=${encodeURIComponent(internRole)}`
+      : "/api/admin/tasks?active=true"
+    fetch(url)
       .then((r) => (r.ok ? r.json() : { tasks: [] }))
       .then((d: { tasks?: Task[] }) => setTasks(d.tasks ?? []))
       .catch(() => setTasks([]))
-  }, [])
+  }, [internRole])
 
   useEffect(() => {
     let cancelled = false

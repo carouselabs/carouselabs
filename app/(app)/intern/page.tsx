@@ -119,11 +119,23 @@ export default async function InternPage() {
     attendanceByDay.set(dayKey(a.date), a.status as AttendanceStatus)
   }
   const takenDates = intern.attendance.map((a) => dayKey(a.date))
+  const relevantAttendance = intern.attendance.filter((a) => a.status !== "leave")
+  const attendanceRateLabel =
+    relevantAttendance.length === 0
+      ? "—"
+      : `${Math.round(
+          (relevantAttendance.reduce(
+            (sum, a) => sum + (a.status === "present" ? 1 : a.status === "half-day" ? 0.5 : 0),
+            0,
+          ) /
+            relevantAttendance.length) *
+            100,
+        )}%`
   const { cells, monthLabel } = buildMonthGrid(pointsByDay, tasksByDay, attendanceByDay)
   const recent = intern.entries.slice(0, 15)
 
   return (
-    <div className="max-w-4xl mx-auto flex flex-col gap-8">
+    <div className="max-w-4xl mx-auto flex flex-col gap-6 sm:gap-8">
       <div className="flex flex-col gap-2">
         <h1 className="text-[24px] font-bold text-[#0A0A0A] tracking-[-0.4px]">Your Performance</h1>
         <p className="text-[14px] text-[#6B7280] leading-[1.5]">
@@ -144,7 +156,7 @@ export default async function InternPage() {
       )}
 
       {/* Internship progress */}
-      <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5">
+      <div className="rounded-2xl border border-[#E5E3DE] bg-white p-4 sm:p-5">
         <div className="mb-1.5 flex items-center justify-between text-[12.5px] text-[#6B7280]">
           <span>
             {fmtDate(intern.joinDate)} → {fmtDate(endDate)}
@@ -164,29 +176,46 @@ export default async function InternPage() {
         <div className="mt-1 text-right text-[11px] text-[#9CA3AF]">{progress.percentComplete}% complete</div>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5">
+      {/* Stat cards — stack to 1 column below sm, 3 across from sm up */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+        <div className="rounded-2xl border border-[#E5E3DE] bg-white p-4 sm:p-5">
           <span className="text-[12px] font-medium text-[#6B7280]">Total Points</span>
-          <div className="mt-2 text-[26px] font-bold leading-none text-[#0A0A0A] tabular-nums">{total}</div>
+          <div className="mt-2 text-[22px] font-bold leading-none text-[#0A0A0A] tabular-nums sm:text-[26px]">
+            {total}
+          </div>
         </div>
-        <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5">
+        <div className="rounded-2xl border border-[#E5E3DE] bg-white p-4 sm:p-5">
           <span className="text-[12px] font-medium text-[#6B7280]">This Week</span>
-          <div className="mt-2 text-[26px] font-bold leading-none text-[#0A0A0A] tabular-nums">
+          <div className="mt-2 text-[22px] font-bold leading-none text-[#0A0A0A] tabular-nums sm:text-[26px]">
             {pointsThisWeek}
           </div>
         </div>
-        <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5">
+        <div className="rounded-2xl border border-[#E5E3DE] bg-white p-4 sm:p-5">
           <span className="text-[12px] font-medium text-[#6B7280]">Today</span>
-          <div className="mt-2 text-[26px] font-bold leading-none text-[#0A0A0A] tabular-nums">
+          <div className="mt-2 text-[22px] font-bold leading-none text-[#0A0A0A] tabular-nums sm:text-[26px]">
             {pointsToday}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+        <div className="rounded-2xl border border-[#E5E3DE] bg-white p-4 sm:p-5">
+          <span className="text-[12px] font-medium text-[#6B7280]">Attendance Rate</span>
+          <div className="mt-2 text-[22px] font-bold leading-none text-[#0A0A0A] tabular-nums sm:text-[26px]">
+            {attendanceRateLabel}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-[#E5E3DE] bg-white p-4 sm:p-5">
+          <span className="text-[12px] font-medium text-[#6B7280]">Leave Balance</span>
+          <div className="mt-2 text-[22px] font-bold leading-none text-[#0A0A0A] tabular-nums sm:text-[26px]">
+            {leaveBalance.remaining}/{leaveBalance.total}
           </div>
         </div>
       </div>
 
       {/* Apply for Leave — read-only once the internship has ended */}
       {hasEnded ? (
-        <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5">
+        <div className="rounded-2xl border border-[#E5E3DE] bg-white p-4 sm:p-5">
           <h2 className="mb-1 text-[13px] font-semibold text-[#0A0A0A]">Leave</h2>
           <p className="text-[13px] text-[#6B7280]">
             Leave applications are closed now that your internship has ended. Your past leave history is still
@@ -198,7 +227,7 @@ export default async function InternPage() {
       )}
 
       {/* Leaderboard */}
-      <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5">
+      <div className="rounded-2xl border border-[#E5E3DE] bg-white p-4 sm:p-5">
         <h2 className="mb-4 text-[13px] font-semibold text-[#0A0A0A]">Leaderboard</h2>
         {leaderboard.length === 0 ? (
           <p className="text-[13px] text-[#9CA3AF]">No active interns yet.</p>
@@ -240,7 +269,7 @@ export default async function InternPage() {
       <PerformanceCalendar cells={cells} monthLabel={monthLabel} />
 
       {/* Recent entries */}
-      <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5">
+      <div className="rounded-2xl border border-[#E5E3DE] bg-white p-4 sm:p-5">
         <h2 className="mb-4 text-[13px] font-semibold text-[#0A0A0A]">Recent Entries</h2>
         {recent.length === 0 ? (
           <p className="text-[13px] text-[#9CA3AF]">No entries yet.</p>

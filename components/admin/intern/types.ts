@@ -16,6 +16,8 @@ export type InternEntry = {
 
 export type InternProgress = { percentComplete: number; daysRemaining: number; isCompleted: boolean }
 
+export type AttendanceFlag = "good" | "warning" | "critical"
+
 export type InternProfile = {
   id: string
   name: string
@@ -35,6 +37,8 @@ export type InternProfile = {
   leaveBalance: LeaveBalance
   progress: InternProgress
   rank: number | null
+  attendanceFlag: AttendanceFlag
+  consecutiveAbsences: number
 }
 
 export type InternNoteT = {

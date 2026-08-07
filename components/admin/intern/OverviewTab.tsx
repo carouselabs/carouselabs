@@ -3,9 +3,10 @@
 // Tab 1 — Overview: profile card, internship progress, quick stats, and the
 // extend / complete / terminate actions.
 import { useState } from "react"
+import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react"
 import { AdminButton, AdminCard, AdminSelect, ConfirmModal, Modal, StatCard, fmtDate } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
-import type { AttendanceRecord, InternExtensionT, InternProfile } from "@/components/admin/intern/types"
+import type { AttendanceFlag, AttendanceRecord, InternExtensionT, InternProfile } from "@/components/admin/intern/types"
 
 const STATUS_STYLES: Record<string, string> = {
   active: "bg-emerald-500/15 text-emerald-400",
@@ -23,6 +24,14 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
+function attendanceCounts(attendance: AttendanceRecord[]) {
+  return {
+    present: attendance.filter((a) => a.status === "present").length,
+    absent: attendance.filter((a) => a.status === "absent").length,
+    halfDay: attendance.filter((a) => a.status === "half-day").length,
+  }
+}
+
 function attendanceRate(attendance: AttendanceRecord[]): string {
   const relevant = attendance.filter((a) => a.status !== "leave")
   if (relevant.length === 0) return "—"
@@ -32,6 +41,39 @@ function attendanceRate(attendance: AttendanceRecord[]): string {
     return sum
   }, 0)
   return `${Math.round((score / relevant.length) * 100)}%`
+}
+
+const FLAG_META: Record<AttendanceFlag, { label: string; color: string; bg: string; icon: typeof CheckCircle2 }> = {
+  good: { label: "Good", color: "text-emerald-400", bg: "border-emerald-500/30 bg-emerald-500/[0.06]", icon: CheckCircle2 },
+  warning: { label: "Warning", color: "text-amber-400", bg: "border-amber-500/30 bg-amber-500/[0.06]", icon: AlertTriangle },
+  critical: { label: "Critical", color: "text-red-400", bg: "border-red-500/30 bg-red-500/[0.06]", icon: XCircle },
+}
+
+function AttendanceFlagCard({ intern, attendance }: { intern: InternProfile; attendance: AttendanceRecord[] }) {
+  const { present, absent, halfDay } = attendanceCounts(attendance)
+  const total = present + absent + halfDay
+  const meta = FLAG_META[intern.attendanceFlag]
+  const Icon = meta.icon
+  return (
+    <div className={`flex items-start gap-3 rounded-xl border p-4 ${meta.bg}`}>
+      <Icon className={`h-5 w-5 shrink-0 ${meta.color}`} />
+      <div>
+        <div className={`text-[13px] font-semibold ${meta.color}`}>Attendance: {meta.label}</div>
+        <p className="mt-1 text-[12.5px] leading-relaxed text-[#B0B0B0]">
+          {total === 0
+            ? "No attendance records yet."
+            : `Based on ${present} present, ${absent} absent, and ${halfDay} half-day record${
+                total === 1 ? "" : "s"
+              } (${attendanceRate(attendance)} attendance rate).`}
+          {intern.consecutiveAbsences >= 3 && (
+            <span className="ml-1 font-semibold text-red-400">
+              ⚠️ {intern.consecutiveAbsences} days absent in a row.
+            </span>
+          )}
+        </p>
+      </div>
+    </div>
+  )
 }
 
 const DURATION_PRESETS = [1, 2, 3, 6]
@@ -201,6 +243,8 @@ export function OverviewTab({
           </div>
         </div>
       </AdminCard>
+
+      <AttendanceFlagCard intern={intern} attendance={attendance} />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="Total Points" value={intern.totalPoints} />

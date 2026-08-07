@@ -329,6 +329,7 @@ model PredefinedTask {
   name      String   @unique
   points    Int
   active    Boolean  @default(true)
+  role      String? // null = applies to ALL roles, or a specific role string (matching Intern.role)
   createdAt DateTime @default(now())
 }
 

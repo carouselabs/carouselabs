@@ -15,7 +15,10 @@ export default async function AdminInternChecklistPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const intern = await db.intern.findUnique({ where: { id }, select: { id: true, name: true, email: true } })
+  const intern = await db.intern.findUnique({
+    where: { id },
+    select: { id: true, name: true, email: true, role: true },
+  })
   if (!intern) notFound()
 
   return (
@@ -35,7 +38,7 @@ export default async function AdminInternChecklistPage({
         </p>
       </div>
 
-      <DailyChecklist internId={intern.id} />
+      <DailyChecklist internId={intern.id} internRole={intern.role} />
     </div>
   )
 }

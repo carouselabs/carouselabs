@@ -5,8 +5,17 @@
 import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
-import { summarizeEntries, getLeaveBalance, calculateEndDate, getInternshipProgress } from "@/lib/internPoints"
+import {
+  summarizeEntries,
+  getLeaveBalance,
+  calculateEndDate,
+  getInternshipProgress,
+  getAttendanceFlag,
+  getConsecutiveAbsences,
+} from "@/lib/internPoints"
 import { logAdminAction, getRequestIp } from "@/lib/auditLog"
+import { sendInternWelcomeEmail } from "@/lib/email"
+import { APP_URL } from "@/emails/EmailLayout"
 
 export async function GET() {
   const admin = await getAdminUser()
@@ -17,6 +26,7 @@ export async function GET() {
     include: {
       entries: { select: { points: true, date: true } },
       leaveRequests: { where: { status: "approved" }, select: { id: true } },
+      attendance: { select: { date: true, status: true }, orderBy: { date: "desc" } },
     },
   })
 
@@ -32,6 +42,11 @@ export async function GET() {
       const leave = getLeaveBalance(i, i.leaveRequests.length)
       const endDate = i.endDate ?? calculateEndDate(i.joinDate, i.durationMonths)
       const progress = getInternshipProgress(i.joinDate, endDate)
+      const presentDays = i.attendance.filter((a) => a.status === "present").length
+      const absentDays = i.attendance.filter((a) => a.status === "absent").length
+      const halfDays = i.attendance.filter((a) => a.status === "half-day").length
+      const attendanceFlag = getAttendanceFlag(presentDays, absentDays, halfDays)
+      const consecutiveAbsences = getConsecutiveAbsences(i.attendance)
       return {
         id: i.id,
         name: i.name,
@@ -47,6 +62,8 @@ export async function GET() {
         leaveUsed: leave.used,
         leaveAllowance: leave.total,
         progress,
+        attendanceFlag,
+        consecutiveAbsences,
       }
     })
     .sort((a, b) => b.totalPoints - a.totalPoints)
@@ -98,6 +115,19 @@ export async function POST(req: Request) {
       details: `Intern created: ${name} <${email}>`,
       ipAddress: getRequestIp(req),
     })
+
+    // Best-effort — a Resend hiccup should never fail intern creation.
+    try {
+      const joinDateLabel = joinDate.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+      await sendInternWelcomeEmail(email, name, role, joinDateLabel, intern.leaveAllowance, `${APP_URL}/sign-in`)
+    } catch (err) {
+      console.error("[api/admin/interns] welcome email failed:", err)
+    }
+
     return NextResponse.json({ intern })
   } catch (e: unknown) {
     if (typeof e === "object" && e !== null && "code" in e && e.code === "P2002") {

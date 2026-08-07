@@ -14,6 +14,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   let points: number | undefined
   let active: boolean | undefined
+  let role: string | null | undefined
   try {
     const body = await req.json()
     if (body.points !== undefined) {
@@ -24,19 +25,26 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       if (typeof body.active !== "boolean") throw new Error()
       active = body.active
     }
-    if (points === undefined && active === undefined) throw new Error()
+    if (body.role !== undefined) {
+      if (body.role !== null && typeof body.role !== "string") throw new Error()
+      role = typeof body.role === "string" && body.role.trim() ? body.role.trim() : null
+    }
+    if (points === undefined && active === undefined && role === undefined) throw new Error()
   } catch {
-    return NextResponse.json({ error: "Expected points (integer) and/or active (boolean)" }, { status: 400 })
+    return NextResponse.json(
+      { error: "Expected points (integer), active (boolean), and/or role (string or null)" },
+      { status: 400 },
+    )
   }
 
   try {
-    const updated = await db.predefinedTask.update({ where: { id }, data: { points, active } })
+    const updated = await db.predefinedTask.update({ where: { id }, data: { points, active, role } })
     await logAdminAction({
       adminEmail: admin.email,
       action: "UPDATE_TASK",
       details: `Task "${updated.name}" updated${points !== undefined ? ` — ${points} pts` : ""}${
         active !== undefined ? ` — ${active ? "active" : "inactive"}` : ""
-      }`,
+      }${role !== undefined ? ` — role: ${role ?? "all roles"}` : ""}`,
       ipAddress: getRequestIp(req),
     })
     return NextResponse.json({ task: updated })

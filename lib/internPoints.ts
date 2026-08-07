@@ -89,6 +89,36 @@ export function getInternshipProgress(joinDate: Date, endDate: Date) {
   return { percentComplete, daysRemaining, isCompleted }
 }
 
+// All-time present/absent/half-day counts → a coarse traffic-light flag.
+// "leave" days are excluded (excused, not a sign of disengagement). No
+// attendance history at all reads as "good" rather than penalizing a
+// brand-new intern who hasn't had a day marked yet.
+export function getAttendanceFlag(
+  presentDays: number,
+  absentDays: number,
+  halfDays: number,
+): "good" | "warning" | "critical" {
+  const total = presentDays + absentDays + halfDays
+  if (total === 0) return "good"
+  const rate = (presentDays + halfDays * 0.5) / total
+  if (rate < 0.6) return "critical"
+  if (rate < 0.8) return "warning"
+  return "good"
+}
+
+// Counts consecutive "absent" days working backward from the most recent
+// attendance record, stopping at the first non-absent status. Callers should
+// pass records in any order — they're sorted here.
+export function getConsecutiveAbsences(recentAttendance: { date: Date; status: string }[]): number {
+  const sorted = [...recentAttendance].sort((a, b) => b.date.getTime() - a.date.getTime())
+  let count = 0
+  for (const a of sorted) {
+    if (a.status !== "absent") break
+    count++
+  }
+  return count
+}
+
 // Not wired to any trigger yet — ready to be called from anywhere in the
 // codebase later (e.g. auto-award points when an intern completes a
 // specific tracked task).

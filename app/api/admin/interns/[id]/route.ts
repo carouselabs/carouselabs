@@ -1,5 +1,8 @@
-// GET   /api/admin/interns/[id] — intern detail + full entry history.
-// PATCH /api/admin/interns/[id] — update active status.
+// GET    /api/admin/interns/[id] — intern detail + full entry history.
+// PATCH  /api/admin/interns/[id] — update active status.
+// DELETE /api/admin/interns/[id] — permanently delete the intern and all
+// their data (entries, attendance, leave requests, notes, extensions all
+// cascade via the schema's onDelete: Cascade). Irreversible.
 import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
@@ -154,4 +157,26 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   } catch {
     return NextResponse.json({ error: "Intern not found" }, { status: 404 })
   }
+}
+
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await getAdminUser()
+  if (!admin) return adminForbidden()
+
+  const { id } = await params
+
+  const intern = await db.intern.findUnique({ where: { id } })
+  if (!intern) return NextResponse.json({ error: "Intern not found" }, { status: 404 })
+
+  await db.intern.delete({ where: { id } })
+
+  await logAdminAction({
+    adminEmail: admin.email,
+    action: "DELETE_INTERN",
+    targetEmail: intern.email,
+    details: `Intern permanently deleted: ${intern.name} <${intern.email}> — all entries, attendance, leave requests, notes, and extension history removed`,
+    ipAddress: getRequestIp(req),
+  })
+
+  return NextResponse.json({ ok: true })
 }

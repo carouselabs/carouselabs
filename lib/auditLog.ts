@@ -20,6 +20,7 @@ export type AdminAuditAction =
   | "SEND_BROADCAST"
   | "CREATE_INTERN"
   | "UPDATE_INTERN"
+  | "DELETE_INTERN"
   | "ADD_INTERN_ENTRY"
   | "UPDATE_INTERN_ENTRY"
   | "DELETE_INTERN_ENTRY"

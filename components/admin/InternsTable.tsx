@@ -7,7 +7,7 @@
 // already fetched for the leaderboard ranking).
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { UserPlus } from "lucide-react"
+import { Trash2, UserPlus } from "lucide-react"
 import {
   AdminButton,
   AdminInput,
@@ -128,6 +128,10 @@ export function InternsTable() {
   const [customDuration, setCustomDuration] = useState("")
   const [busy, setBusy] = useState(false)
 
+  const [deleting, setDeleting] = useState<InternRow | null>(null)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [deleteBusy, setDeleteBusy] = useState(false)
+
   const load = async () => {
     try {
       const res = await fetch("/api/admin/interns")
@@ -199,6 +203,27 @@ export function InternsTable() {
     }
   }
 
+  const openDelete = (r: InternRow) => {
+    setDeleting(r)
+    setDeleteConfirmText("")
+  }
+
+  const confirmDelete = async () => {
+    if (!deleting) return
+    setDeleteBusy(true)
+    try {
+      const res = await fetch(`/api/admin/interns/${deleting.id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error)
+      toast(`${deleting.name} and all their data were deleted`, "success")
+      setDeleting(null)
+      await load()
+    } catch (e) {
+      toast(e instanceof Error && e.message ? e.message : "Failed to delete intern", "error")
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
+
   if (rows === null) return <Spinner label="Loading interns…" />
 
   return (
@@ -241,12 +266,13 @@ export function InternsTable() {
               <th className={tableCls.th}>Total Points</th>
               <th className={tableCls.th}>Leave</th>
               <th className={tableCls.th}>Last Active</th>
+              <th className={tableCls.th} />
             </tr>
           </thead>
           <tbody>
             {visibleRows && visibleRows.length === 0 && (
               <tr>
-                <td className={tableCls.td} colSpan={9}>
+                <td className={tableCls.td} colSpan={10}>
                   No interns {filter === "all" ? "yet" : `with status "${filter}"`}
                 </td>
               </tr>
@@ -294,6 +320,18 @@ export function InternsTable() {
                   {r.leaveUsed}/{r.leaveAllowance} used
                 </td>
                 <td className={tableCls.td}>{r.lastEntryDate ? fmtDate(r.lastEntryDate) : "—"}</td>
+                <td className={tableCls.td}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      openDelete(r)
+                    }}
+                    className="rounded-md p-1.5 text-[#8A8A8A] hover:bg-red-500/15 hover:text-red-400 transition-colors"
+                    aria-label={`Delete ${r.name}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -377,6 +415,40 @@ export function InternsTable() {
             </AdminButton>
             <AdminButton loading={busy} onClick={addIntern}>
               Add Intern
+            </AdminButton>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={!!deleting} onClose={() => setDeleting(null)} title="Delete intern permanently?">
+        <div className="space-y-3">
+          <p className="text-[13px] leading-relaxed text-[#B0B0B0]">
+            This permanently deletes <span className="font-semibold text-white">{deleting?.name}</span> and{" "}
+            <span className="font-semibold text-white">all</span> of their data — point entries, attendance,
+            leave requests, notes, and extension history. This cannot be undone.
+          </p>
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-medium text-[#8A8A8A]">
+              Type <span className="font-semibold text-white">{deleting?.name}</span> to confirm
+            </span>
+            <AdminInput
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder={deleting?.name}
+              className="w-full"
+            />
+          </label>
+          <div className="flex justify-end gap-2">
+            <AdminButton variant="secondary" onClick={() => setDeleting(null)}>
+              Cancel
+            </AdminButton>
+            <AdminButton
+              variant="danger"
+              loading={deleteBusy}
+              disabled={deleteConfirmText !== deleting?.name}
+              onClick={confirmDelete}
+            >
+              Delete Permanently
             </AdminButton>
           </div>
         </div>

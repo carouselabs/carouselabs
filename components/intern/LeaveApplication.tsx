@@ -55,7 +55,7 @@ export function LeaveApplication({
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error)
       setReason("")
-      setSuccess(`Leave applied for ${date}.`)
+      setSuccess(data.status === "absent" ? "Marked as Absent — no leave days remaining" : "Leave approved")
       router.refresh()
     } catch (e) {
       setError(e instanceof Error && e.message ? e.message : "Failed to apply for leave")
@@ -77,43 +77,48 @@ export function LeaveApplication({
       )}
       {error && <p className="mb-3 rounded-lg bg-red-50 px-3.5 py-2.5 text-[13px] text-red-600">{error}</p>}
 
-      {noBalance ? (
-        <p className="rounded-lg bg-[#F1EFE9] px-3.5 py-2.5 text-[13px] font-medium text-[#6B7280]">
-          No leave days remaining
-        </p>
-      ) : (
-        <div className="space-y-3">
-          <input
-            type="date"
-            value={date}
-            min={todayStr()}
-            onChange={(e) => {
-              setDate(e.target.value)
-              setError(null)
-            }}
-            className={inputCls}
-          />
-          {dateTaken && (
-            <p className="text-[12px] text-red-600">
-              You already have an attendance or leave record for this date.
-            </p>
-          )}
-          <input
-            type="text"
-            placeholder="Reason (optional)"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            className={inputCls}
-          />
-          <button
-            onClick={submit}
-            disabled={submitting || dateTaken}
-            className="min-h-11 w-full touch-manipulation rounded-lg bg-[#7C3AED] px-4 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {submitting ? "Submitting…" : "Submit Leave Request"}
-          </button>
-        </div>
-      )}
+      <div className="space-y-3">
+        {noBalance && (
+          <p className="rounded-lg bg-amber-50 px-3.5 py-2.5 text-[12.5px] font-medium text-amber-700">
+            You&apos;re out of leave days. Applying now will mark you Absent instead of Leave.
+          </p>
+        )}
+        <input
+          type="date"
+          value={date}
+          min={todayStr()}
+          onChange={(e) => {
+            setDate(e.target.value)
+            setError(null)
+          }}
+          className={inputCls}
+        />
+        {dateTaken && (
+          <p className="text-[12px] text-red-600">
+            You already have an attendance or leave record for this date.
+          </p>
+        )}
+        <input
+          type="text"
+          placeholder="Reason (optional)"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          className={inputCls}
+        />
+        <button
+          onClick={submit}
+          disabled={submitting || dateTaken}
+          className={`min-h-11 w-full touch-manipulation rounded-lg px-4 py-3 text-[14px] font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            noBalance ? "bg-red-600 hover:bg-red-700" : "bg-[#7C3AED] hover:bg-[#6D28D9]"
+          }`}
+        >
+          {submitting
+            ? "Submitting…"
+            : noBalance
+              ? "Apply (will be marked Absent — no leave days left)"
+              : "Submit Leave Request"}
+        </button>
+      </div>
     </div>
   )
 }

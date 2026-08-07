@@ -1,11 +1,14 @@
 // GET  /api/intern/leave — the logged-in intern's own leave requests +
 // balance.
-// POST /api/intern/leave — self-service leave application. Auto-approved:
-// creates an InternLeaveRequest (status "approved") and a matching
-// InternAttendance (status "leave", markedBy "self") together, atomically.
-// Visibility for admins comes from those two records showing up in the
-// admin Leave Requests panel and Daily Log — not a separate audit-log entry,
-// since this isn't an admin action.
+// POST /api/intern/leave — self-service leave application. Auto-approved
+// when balance remains: creates an InternLeaveRequest (status "approved")
+// and a matching InternAttendance (status "leave", markedBy "self") together,
+// atomically. Once the balance is exhausted, the request is no longer
+// rejected — it's auto-marked absent instead (InternAttendance only, no
+// InternLeaveRequest, since there's no balance left to consume).
+// Visibility for admins comes from those records showing up in the admin
+// Leave Requests panel and Daily Log — not a separate audit-log entry, since
+// this isn't an admin action.
 import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import { db } from "@/lib/db"
@@ -71,9 +74,7 @@ export async function POST(req: Request) {
   }
 
   const balance = getLeaveBalance(intern, intern.leaveRequests.length)
-  if (balance.remaining <= 0) {
-    return NextResponse.json({ error: "No leave days remaining" }, { status: 400 })
-  }
+  const balanceExhausted = balance.remaining <= 0
 
   const [existingAttendance, existingLeave] = await Promise.all([
     db.internAttendance.findUnique({
@@ -88,6 +89,26 @@ export async function POST(req: Request) {
   }
 
   try {
+    if (balanceExhausted) {
+      // No balance left to consume — mark absent instead of rejecting the
+      // request outright. No InternLeaveRequest is created.
+      const attendance = await db.internAttendance.create({
+        data: {
+          internId: intern.id,
+          date: requestedDate,
+          status: "absent",
+          note: "Leave requested but balance exhausted — auto-marked absent",
+          markedBy: "self",
+        },
+      })
+      return NextResponse.json({
+        ok: true,
+        status: "absent",
+        message: "Marked as Absent — no leave days remaining",
+        attendance,
+      })
+    }
+
     const [leaveRequest, attendance] = await db.$transaction([
       db.internLeaveRequest.create({
         data: { internId: intern.id, date: requestedDate, reason, status: "approved" },
@@ -96,7 +117,13 @@ export async function POST(req: Request) {
         data: { internId: intern.id, date: requestedDate, status: "leave", note: reason, markedBy: "self" },
       }),
     ])
-    return NextResponse.json({ ok: true, leaveRequest, attendance })
+    return NextResponse.json({
+      ok: true,
+      status: "leave",
+      message: "Leave approved",
+      leaveRequest,
+      attendance,
+    })
   } catch (e: unknown) {
     if (typeof e === "object" && e !== null && "code" in e && e.code === "P2002") {
       return NextResponse.json(

@@ -19,6 +19,13 @@ export const dynamic = "force-dynamic"
 
 const MEDALS = ["🥇", "🥈", "🥉"]
 
+const STATUS_BADGE_STYLES: Record<string, string> = {
+  active: "bg-emerald-50 text-emerald-700",
+  extended: "bg-emerald-50 text-emerald-700",
+  completed: "bg-blue-50 text-blue-700",
+  terminated: "bg-red-50 text-red-700",
+}
+
 function fmtDate(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
 }
@@ -64,6 +71,7 @@ export default async function InternPage() {
       entries: { orderBy: { date: "desc" } },
       attendance: { orderBy: { date: "desc" } },
       leaveRequests: { orderBy: { date: "desc" } },
+      extensions: { orderBy: { createdAt: "desc" } },
     },
   })
 
@@ -91,6 +99,7 @@ export default async function InternPage() {
         entries: { orderBy: { date: "desc" } },
         attendance: { orderBy: { date: "desc" } },
         leaveRequests: { orderBy: { date: "desc" } },
+        extensions: { orderBy: { createdAt: "desc" } },
       },
     })
   }
@@ -138,14 +147,57 @@ export default async function InternPage() {
     <div className="max-w-4xl mx-auto flex flex-col gap-6 sm:gap-8">
       <div className="flex flex-col gap-2">
         <h1 className="text-[24px] font-bold text-[#0A0A0A] tracking-[-0.4px]">Your Performance</h1>
-        <p className="text-[14px] text-[#6B7280] leading-[1.5]">
-          {intern.name} · {intern.email}
-          {!intern.active && (
-            <span className="ml-2 inline-flex rounded-full bg-[#F1EFE9] px-2 py-0.5 text-[11px] font-medium text-[#6B7280]">
-              {intern.status.toUpperCase()}
-            </span>
+      </div>
+
+      {/* My Profile */}
+      <div className="rounded-2xl border border-[#E5E3DE] bg-white p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#7C3AED]/10 text-[20px] font-bold text-[#7C3AED]">
+              {intern.name[0]?.toUpperCase()}
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h2 className="text-[19px] font-bold text-[#0A0A0A]">{intern.name}</h2>
+                <span
+                  className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase ${
+                    STATUS_BADGE_STYLES[intern.status] ?? "bg-[#F1EFE9] text-[#6B7280]"
+                  }`}
+                >
+                  {intern.status}
+                </span>
+              </div>
+              <p className="mt-0.5 text-[13px] text-[#6B7280]">
+                {[intern.role, intern.department].filter(Boolean).join(" · ") || "No role/department set"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-x-6 gap-y-1.5 border-t border-[#F1EFE9] pt-4 text-[13px] sm:grid-cols-2">
+          <div className="flex items-center gap-1.5 text-[#6B7280]">
+            <span className="font-medium text-[#0A0A0A]">Email:</span> {intern.email}
+          </div>
+          {intern.phone && (
+            <div className="flex items-center gap-1.5 text-[#6B7280]">
+              <span className="font-medium text-[#0A0A0A]">Phone:</span> {intern.phone}
+            </div>
           )}
-        </p>
+          <div className="flex items-center gap-1.5 text-[#6B7280] sm:col-span-2">
+            <span className="font-medium text-[#0A0A0A]">Internship:</span> {fmtDate(intern.joinDate)} →{" "}
+            {fmtDate(endDate)}
+          </div>
+        </div>
+
+        {intern.extensions.length > 0 && (
+          <div className="mt-3 flex flex-col gap-1 border-t border-[#F1EFE9] pt-3">
+            {intern.extensions.map((x) => (
+              <p key={x.id} className="text-[12px] text-[#9CA3AF]">
+                Extended by {x.addedMonths} month{x.addedMonths === 1 ? "" : "s"} on {fmtDate(x.createdAt)}
+              </p>
+            ))}
+          </div>
+        )}
       </div>
 
       {hasEnded && (

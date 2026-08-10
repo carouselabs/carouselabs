@@ -7,6 +7,7 @@ import { BEST_OF_PAGES } from "@/app/(marketing)/best/data"
 import { ANSWER_PAGES } from "@/app/(marketing)/answers/data"
 import { FORMAT_PAGES } from "@/app/(marketing)/formats/data"
 import { FORMAT_LABELS } from "@/app/(marketing)/formats/types"
+import { SPEED_PAGES } from "@/app/(marketing)/speed/data"
 
 const FOOTER_LINKS = [
   { href: "/#pricing", label: "Pricing" },
@@ -97,10 +98,22 @@ const FORMAT_SLUGS = [
   "linkedin-post-examples-for-networking",
 ]
 
+// One page per format type, all for SaaS founders or real-estate investors, as
+// a representative cross-section of the /speed system.
+const SPEED_SLUGS = [
+  "carousel-in-5-minutes-for-saas-founders",
+  "caption-in-5-minutes-for-real-estate-investors",
+  "hook-in-5-minutes-for-real-estate-investors",
+  "content-calendar-in-5-minutes-for-saas-founders",
+  "post-ideas-in-5-minutes-for-saas-founders",
+  "image-in-5-minutes-for-saas-founders",
+]
+
 const generatorBySlug = new Map(GENERATOR_PAGES.map((p) => [p.slug, p]))
 const bestOfBySlug = new Map(BEST_OF_PAGES.map((p) => [p.slug, p]))
 const answerBySlug = new Map(ANSWER_PAGES.map((p) => [p.slug, p]))
 const formatBySlug = new Map(FORMAT_PAGES.map((p) => [p.slug, p]))
+const speedBySlug = new Map(SPEED_PAGES.map((p) => [p.slug, p]))
 
 const FORMAT_LINKS = FORMAT_SLUGS.map((slug) => {
   const page = formatBySlug.get(slug)
@@ -124,6 +137,11 @@ const ANSWER_LINKS = ANSWER_SLUGS.map((slug) => {
   return page ? { href: `/answers/${page.slug}`, label: page.question } : null
 }).filter((l): l is { href: string; label: string } => Boolean(l))
 
+const SPEED_LINKS = SPEED_SLUGS.map((slug) => {
+  const page = speedBySlug.get(slug)
+  return page ? { href: `/speed/${page.slug}`, label: page.headline } : null
+}).filter((l): l is { href: string; label: string } => Boolean(l))
+
 // The 9 link groups below render in a responsive grid (1 col mobile, 2 cols
 // tablet, 3 cols desktop — so 3 rows of 3 rather than a single tall stack).
 const LINK_GROUPS = [
@@ -135,6 +153,7 @@ const LINK_GROUPS = [
   { heading: "Answers", links: ANSWER_LINKS, viewAllHref: "/answers" },
   { heading: "Compare", links: COMPARE_LINKS, viewAllHref: "/vs" },
   { heading: "Content Formats", links: FORMAT_LINKS, viewAllHref: "/formats" },
+  { heading: "Speed", links: SPEED_LINKS, viewAllHref: "/speed" },
   { heading: "Tap & Hold Guides", links: TAP_HOLD_LINKS, viewAllHref: "/tap-hold" },
 ]
 
@@ -185,6 +204,13 @@ export function Footer() {
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
           >
             Content Formats
+            <ArrowRight size={13} strokeWidth={2.4} />
+          </Link>
+          <Link
+            href="/speed"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
+          >
+            Speed
             <ArrowRight size={13} strokeWidth={2.4} />
           </Link>
         </div>

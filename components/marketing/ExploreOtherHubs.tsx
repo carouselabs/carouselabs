@@ -9,6 +9,7 @@ const ALL_HUBS = [
   { href: "/best", label: "Best Of Lists" },
   { href: "/answers", label: "Answers" },
   { href: "/formats", label: "Content Formats" },
+  { href: "/speed", label: "Speed" },
 ] as const
 
 /**

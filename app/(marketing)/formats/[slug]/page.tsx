@@ -453,6 +453,32 @@ export default async function FormatPageRoute({
         </section>
       )}
 
+      {/* ── CROSS-LINK — /speed hub, for readers who want this done in minutes ── */}
+      <section className="px-6 pb-6">
+        <AnimatedSection className="max-w-4xl mx-auto">
+          <Link
+            href="/speed"
+            className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-2xl border border-[#E5DEF7] bg-[#F3F0FF] hover:border-[#C4B5FD] transition-colors"
+          >
+            <span className="text-[16px] font-medium text-[#1F2937]">
+              In a hurry? &rarr;{" "}
+              <span className="font-semibold text-[#7C3AED]">
+                See how fast {formatLabel.toLowerCase()} come together — by profession, in 5
+                minutes
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 shrink-0 text-[14px] font-semibold text-[#7C3AED]">
+              Browse speed pages
+              <ArrowRight
+                size={16}
+                strokeWidth={2.2}
+                className="group-hover:translate-x-0.5 transition-transform"
+              />
+            </span>
+          </Link>
+        </AnimatedSection>
+      </section>
+
       {/* ── SECTION 8 — CTA ── */}
       <section className="px-6 py-20 sm:py-24">
         <AnimatedSection className="relative max-w-4xl mx-auto rounded-3xl overflow-hidden px-8 py-16 sm:py-20 text-center">

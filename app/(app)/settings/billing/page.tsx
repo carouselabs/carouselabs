@@ -270,6 +270,7 @@ export default async function BillingPage() {
                   label="Go Growth"
                   variant="amber"
                   checkoutUrl={growthCheckoutUrl}
+                  plan="growth"
                 />
               )
             }

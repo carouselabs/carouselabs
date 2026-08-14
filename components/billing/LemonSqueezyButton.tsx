@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Script from "next/script"
 import { Loader2, Sparkles } from "lucide-react"
+import { PRO_PLAN, GROWTH_PLAN } from "@/lib/plans"
 
 // lemon.js attaches a global once loaded.
 declare global {
@@ -13,6 +14,8 @@ declare global {
       Url: { Open: (url: string) => void; Close: () => void }
     }
     createLemonSqueezy?: () => void
+    // X (Twitter) Ads pixel — attached by the base script in app/layout.tsx.
+    twq: (...args: any[]) => void
   }
 }
 
@@ -21,6 +24,7 @@ export function LemonSqueezyButton({
   label = "Upgrade to Pro · $24.99/mo",
   variant = "purple",
   checkoutUrl,
+  plan = "pro",
 }: {
   email?: string
   label?: string
@@ -28,6 +32,9 @@ export function LemonSqueezyButton({
   // Defaults to the Pro checkout; pass NEXT_PUBLIC_LEMONSQUEEZY_GROWTH_CHECKOUT_URL
   // to point this same button at the Growth variant instead.
   checkoutUrl?: string
+  // Which plan this button purchases — determines the value reported on the
+  // X Ads Purchase conversion event fired from Checkout.Success below.
+  plan?: "pro" | "growth"
 }) {
   const router = useRouter()
   const [ready, setReady] = useState(false)
@@ -68,6 +75,16 @@ export function LemonSqueezyButton({
           window.LemonSqueezy?.Setup({
             eventHandler: (event) => {
               if (event.event === "Checkout.Success") {
+                // Fire the X Ads Purchase conversion right here — this is the
+                // only client-side signal we get that checkout succeeded.
+                // Plan activation itself still happens server-side via the
+                // Lemon Squeezy webhook; this just reports the conversion.
+                if (typeof window.twq === "function") {
+                  window.twq("event", "tw-recx3-recxe", {
+                    value: plan === "growth" ? GROWTH_PLAN.price : PRO_PLAN.price,
+                    currency: "USD",
+                  })
+                }
                 // Webhook flips the plan to PRO/GROWTH; refresh to reflect it.
                 setTimeout(() => router.refresh(), 1500)
                 setLoading(false)

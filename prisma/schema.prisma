@@ -409,14 +409,18 @@ model InternPointEntry {
 // the admin Daily Checklist (markedBy: admin email) or auto-created by a
 // self-service leave application (markedBy: "self").
 model InternAttendance {
-  id        String   @id @default(cuid())
-  internId  String
-  intern    Intern   @relation(fields: [internId], references: [id], onDelete: Cascade)
-  date      DateTime
-  status    String // "present" | "absent" | "half-day" | "leave"
-  note      String?
-  markedBy  String // admin email OR "self" if intern-marked leave
-  createdAt DateTime @default(now())
+  id               String    @id @default(cuid())
+  internId         String
+  intern           Intern    @relation(fields: [internId], references: [id], onDelete: Cascade)
+  date             DateTime
+  status           String // "present" | "absent" | "half-day" | "leave"
+  note             String?
+  markedBy         String // admin email OR "self" if intern-marked leave
+  // Set the first time the daily notification email (summary or absent
+  // warning) is sent for this (intern, day) — re-submitting/editing the same
+  // day's checklist afterward must not re-send it. Null = not sent yet.
+  dailyEmailSentAt DateTime?
+  createdAt        DateTime  @default(now())
 
   @@unique([internId, date])
   @@index([internId])

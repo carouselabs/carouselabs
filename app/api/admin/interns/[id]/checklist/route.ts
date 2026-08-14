@@ -8,6 +8,7 @@ import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
 import { logAdminAction, getRequestIp } from "@/lib/auditLog"
+import { sendInternDailySummaryEmail, sendInternAbsentWarningEmail } from "@/lib/email"
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const ATTENDANCE_STATUSES = ["present", "absent", "half-day", "leave"]
@@ -16,6 +17,24 @@ function dayBounds(date: string) {
   const start = new Date(`${date}T00:00:00.000Z`)
   const end = new Date(`${date}T23:59:59.999Z`)
   return { start, end }
+}
+
+function formatDateLabel(date: string): string {
+  return new Date(`${date}T00:00:00.000Z`).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  })
+}
+
+// Emails are best-effort — never fail the checklist save because Resend hiccuped.
+async function safeEmail(fn: () => Promise<unknown>) {
+  try {
+    await fn()
+  } catch (err) {
+    console.error("[admin/interns/checklist] email failed:", err)
+  }
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -110,6 +129,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const entryDate = new Date(`${date}T00:00:00.000Z`)
 
+  // ── Daily email dedupe ────────────────────────────────────────────
+  // Resolve the day's attendance status from this submission, falling back to
+  // whatever was already on record (e.g. tasks added in a later edit, after
+  // attendance was already set earlier the same day). Only the FIRST
+  // submission for a given (intern, day) that resolves a status sends an
+  // email — re-submits/edits afterward are silently skipped.
+  const existingAttendance = await db.internAttendance.findUnique({
+    where: { internId_date: { internId: id, date: entryDate } },
+  })
+  const resolvedStatus = attendance?.status ?? existingAttendance?.status ?? null
+  const shouldSendEmail = resolvedStatus !== null && !existingAttendance?.dailyEmailSentAt
+
   const creates = [
     ...taskEntries.map((t) => {
       const task = taskById.get(t.taskId)!
@@ -134,29 +165,40 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     })),
   ]
 
+  // Attendance write for this transaction — either the normal upsert (when
+  // this request sets/changes attendance), or, if attendance already existed
+  // from an earlier submission today and just hasn't triggered an email yet,
+  // a plain update that only stamps dailyEmailSentAt. Otherwise no write.
+  const attendanceWrite = attendance
+    ? db.internAttendance.upsert({
+        where: { internId_date: { internId: id, date: entryDate } },
+        create: {
+          internId: id,
+          date: entryDate,
+          status: attendance.status,
+          note: attendance.note?.trim() || null,
+          markedBy: admin.email,
+          dailyEmailSentAt: shouldSendEmail ? new Date() : null,
+        },
+        update: {
+          status: attendance.status,
+          note: attendance.note?.trim() || null,
+          markedBy: admin.email,
+          ...(shouldSendEmail ? { dailyEmailSentAt: new Date() } : {}),
+        },
+      })
+    : shouldSendEmail && existingAttendance
+      ? db.internAttendance.update({
+          where: { internId_date: { internId: id, date: entryDate } },
+          data: { dailyEmailSentAt: new Date() },
+        })
+      : null
+
   // Atomic — either the whole day's checklist (points entries + attendance)
   // saves, or none of it does.
   await db.$transaction([
     ...creates.map((data) => db.internPointEntry.create({ data })),
-    ...(attendance
-      ? [
-          db.internAttendance.upsert({
-            where: { internId_date: { internId: id, date: entryDate } },
-            create: {
-              internId: id,
-              date: entryDate,
-              status: attendance.status,
-              note: attendance.note?.trim() || null,
-              markedBy: admin.email,
-            },
-            update: {
-              status: attendance.status,
-              note: attendance.note?.trim() || null,
-              markedBy: admin.email,
-            },
-          }),
-        ]
-      : []),
+    ...(attendanceWrite ? [attendanceWrite] : []),
   ])
 
   const totalPoints = creates.reduce((sum, e) => sum + e.points, 0)
@@ -168,6 +210,73 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     details: `Daily checklist for ${date}: ${creates.length} entries, ${totalPoints >= 0 ? "+" : ""}${totalPoints} pts${attendance ? `, attendance: ${attendance.status}` : ""}`,
     ipAddress: getRequestIp(req),
   })
+
+  // ── Daily email notification (best-effort, never fails the save) ───
+  if (shouldSendEmail && resolvedStatus) {
+    const dateLabel = formatDateLabel(date)
+
+    if (resolvedStatus === "present" || resolvedStatus === "half-day") {
+      // Full day's tasks, not just this request's — a later edit that adds
+      // more tasks (without re-touching attendance) never reaches here again
+      // since shouldSendEmail is already false by then, but a same-request
+      // combination of "first-ever attendance + tasks" must reflect everything
+      // logged for the day so far.
+      const { start, end } = dayBounds(date)
+      const dayEntries = await db.internPointEntry.findMany({
+        where: { internId: id, date: { gte: start, lte: end } },
+        select: { category: true, points: true },
+      })
+      const allTime = await db.internPointEntry.aggregate({
+        where: { internId: id },
+        _sum: { points: true },
+      })
+      const pointsToday = dayEntries.reduce((sum, e) => sum + e.points, 0)
+
+      await safeEmail(() =>
+        sendInternDailySummaryEmail(
+          intern.email,
+          intern.name,
+          dateLabel,
+          dayEntries.map((e) => ({ name: e.category, points: e.points })),
+          pointsToday,
+          allTime._sum.points ?? 0,
+        ),
+      )
+    } else if (resolvedStatus === "absent") {
+      // Guard: an approved self-service leave for this exact day means this
+      // isn't a genuine unplanned absence, even if the status field says
+      // "absent" — skip the warning.
+      const approvedLeave = await db.internLeaveRequest.findUnique({
+        where: { internId_date: { internId: id, date: entryDate } },
+      })
+
+      if (!approvedLeave || approvedLeave.status !== "approved") {
+        const allAttendance = await db.internAttendance.findMany({
+          where: { internId: id },
+          select: { status: true },
+        })
+        const presentDays = allAttendance.filter((a) => a.status === "present").length
+        const absentDays = allAttendance.filter((a) => a.status === "absent").length
+        const halfDays = allAttendance.filter((a) => a.status === "half-day").length
+        const totalDays = presentDays + absentDays + halfDays
+        const attendanceRate =
+          totalDays > 0 ? Math.round(((presentDays + halfDays * 0.5) / totalDays) * 100) : 100
+
+        await safeEmail(() =>
+          sendInternAbsentWarningEmail(
+            intern.email,
+            intern.name,
+            dateLabel,
+            presentDays,
+            absentDays,
+            attendanceRate,
+          ),
+        )
+      }
+    }
+    // resolvedStatus === "leave" → skip entirely, per spec (self-approved
+    // leave isn't something to warn or celebrate).
+  }
 
   return NextResponse.json({ ok: true, count: creates.length, totalPoints })
 }

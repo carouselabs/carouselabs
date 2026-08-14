@@ -14,6 +14,8 @@ import { RenewalReminderEmail } from "@/emails/RenewalReminderEmail"
 import { SubscriptionCancelledEmail } from "@/emails/SubscriptionCancelledEmail"
 import { InternWelcomeEmail } from "@/emails/InternWelcomeEmail"
 import { InternWeeklyDigestEmail, type InternDigestRow } from "@/emails/InternWeeklyDigestEmail"
+import { InternDailySummaryEmail, type DailySummaryTask } from "@/emails/InternDailySummaryEmail"
+import { InternAbsentWarningEmail } from "@/emails/InternAbsentWarningEmail"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -189,6 +191,49 @@ export async function sendInternWeeklyDigestEmail(
     to: adminEmail,
     subject: `Intern Weekly Digest — ${weekLabel}`,
     html: await render(InternWeeklyDigestEmail({ weekLabel, interns })),
+  })
+  if (error) throw new Error(`Resend: ${error.message}`)
+}
+
+// Sent right after an admin submits a Daily Checklist marking the intern
+// present/half-day for that day — see app/api/admin/interns/[id]/checklist.
+export async function sendInternDailySummaryEmail(
+  email: string,
+  name: string,
+  date: string,
+  tasksCompleted: DailySummaryTask[],
+  pointsToday: number,
+  totalPoints: number,
+) {
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: `Your summary for ${date} 📋`,
+    html: await render(
+      InternDailySummaryEmail({ name, date, tasksCompleted, pointsToday, totalPoints }),
+    ),
+  })
+  if (error) throw new Error(`Resend: ${error.message}`)
+}
+
+// Sent right after an admin marks the intern absent in the Daily Checklist —
+// see app/api/admin/interns/[id]/checklist. Skipped when the day is an
+// approved self-service leave instead of a genuine unplanned absence.
+export async function sendInternAbsentWarningEmail(
+  email: string,
+  name: string,
+  date: string,
+  presentDays: number,
+  absentDays: number,
+  attendanceRate: number,
+) {
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: `Attendance notice — ${date}`,
+    html: await render(
+      InternAbsentWarningEmail({ name, date, presentDays, absentDays, attendanceRate }),
+    ),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
 }

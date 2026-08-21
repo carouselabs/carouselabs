@@ -44,15 +44,6 @@ DO NOT EXTRACT OR REUSE:
 - The literal story the reference image tells.
 - The reference image layout or information structure.
 
-Not copying the reference's specific illustration content does NOT mean abandoning its thematic visual world entirely — style extraction should include both HOW it's rendered (technique) AND WHAT KIND of visual world it lives in (theme/motif), while the SPECIFIC scene/subject must be original.
-
-ILLUSTRATION THEME CONSISTENCY — IMPORTANT:
-Beyond just the rendering technique (watercolor, flat vector, etc.), also identify if the reference image uses a consistent VISUAL THEME or RECURRING MOTIF as its illustration approach — for example: book/literary imagery, nature/plant motifs, geometric shapes, hand-drawn icons, abstract blob shapes, etc.
-
-If the reference has a clear recurring visual theme like this, the new illustration should draw from a SIMILAR conceptual world (e.g. if the reference uses book/page imagery throughout, the new illustration should also incorporate book, page, or reading-related visual metaphors where it makes sense for the content) — while still being a completely original composition and never copying the exact reference imagery.
-
-Do NOT default to generic illustration choices (people, laptops, arrows, lightbulbs) if the reference clearly establishes a specific thematic visual world — match that thematic world with an original illustration.
-
 ${FONT_FIDELITY_SECTION}
 
 If no reference image is provided, invent a premium, original editorial color palette and design system from scratch that matches the content topic and niche, and state the exact hex codes you're inventing.

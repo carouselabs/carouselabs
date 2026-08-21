@@ -106,9 +106,18 @@ When a reference image is provided, treat it as the definitive visual style guid
 
 The reference image defines the visual language only. Never copy or closely recreate the reference image's specific subject matter, composition, text, people, objects, icons, illustrations, layouts, logos, watermarks, or any other identifiable creative elements. Instead, create completely original artwork that communicates the new educational content while remaining unmistakably part of the same visual design system.
 
+Not copying the reference's specific illustration content does NOT mean abandoning its thematic visual world entirely — style extraction should include both HOW it's rendered (technique) AND WHAT KIND of visual world it lives in (theme/motif), while the SPECIFIC scene/subject must be original.
+
 The objective is that someone viewing the generated carousel should immediately recognize the same artistic style and design language, while also recognizing that every illustration, composition, and visual element is newly created.
 
-If the uploaded reference image uses a distinctive artistic medium or rendering technique (for example watercolor, oil painting, editorial illustration, pencil sketch, flat vector, clay render, isometric illustration, cinematic photography, paper collage, or any other style), faithfully reproduce that medium throughout every slide unless doing so would require copying the original artwork itself. The uploaded reference image should influence the overall visual appearance of every slide far more strongly than any default stylistic tendencies of the image generation model.`
+If the uploaded reference image uses a distinctive artistic medium or rendering technique (for example watercolor, oil painting, editorial illustration, pencil sketch, flat vector, clay render, isometric illustration, cinematic photography, paper collage, or any other style), faithfully reproduce that medium throughout every slide unless doing so would require copying the original artwork itself. The uploaded reference image should influence the overall visual appearance of every slide far more strongly than any default stylistic tendencies of the image generation model.
+
+ILLUSTRATION THEME CONSISTENCY — IMPORTANT:
+Beyond just the rendering technique (watercolor, flat vector, etc.), also identify if the reference image uses a consistent VISUAL THEME or RECURRING MOTIF as its illustration approach — for example: book/literary imagery, nature/plant motifs, geometric shapes, hand-drawn icons, abstract blob shapes, etc.
+
+If the reference has a clear recurring visual theme like this, every slide's hero illustration should draw from a SIMILAR conceptual world (e.g. if the reference uses book/page imagery throughout, each slide's illustration should also incorporate book, page, or reading-related visual metaphors where it makes sense for that slide's content) — while still being a completely original composition per slide and never copying the exact reference imagery.
+
+Do NOT default to generic illustration choices (people, laptops, arrows, lightbulbs) if the reference clearly establishes a specific thematic visual world — match that thematic world with an original illustration on every slide.`
 
 export function buildOwnIdeaCarouselSystemMessage(): string {
   return `You are a senior Creative Director and AI Prompt Engineer specializing in premium social media carousel content for LinkedIn. You combine the sensibilities of an editorial designer, a product marketing designer, and a visual storyteller.

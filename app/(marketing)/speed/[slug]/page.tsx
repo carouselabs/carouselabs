@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  Hash,
 } from "lucide-react"
 import {
   AnimatedSection,
@@ -268,7 +269,35 @@ export default async function SpeedPageRoute({
         </div>
       </section>
 
-      {/* ── SECTION 6 — FAQ ── */}
+      {/* ── SECTION 6 — HASHTAGS ── */}
+      <section className="px-6 py-16 sm:py-20 bg-[#FBFAF6]">
+        <div className="max-w-4xl mx-auto flex flex-col gap-8">
+          <AnimatedSection className="text-center">
+            <h2 className="text-[clamp(1.8rem,4vw,2.75rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
+              Hashtags to Pair With This Post
+            </h2>
+          </AnimatedSection>
+          <AnimatedSection className="flex flex-wrap justify-center gap-3">
+            {page.hashtags.map((tag, i) => {
+              const keyword = tag.replace(/^#/, "")
+              return (
+                <a
+                  key={i}
+                  href={`https://www.linkedin.com/feed/hashtag/?keywords=${keyword}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-[14px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
+                >
+                  <Hash size={13} strokeWidth={2.4} />
+                  {keyword}
+                </a>
+              )
+            })}
+          </AnimatedSection>
+        </div>
+      </section>
+
+      {/* ── SECTION 7 — FAQ ── */}
       <section className="px-6 py-16 sm:py-20">
         <div className="max-w-3xl mx-auto flex flex-col gap-10">
           <AnimatedSection className="text-center">
@@ -291,7 +320,7 @@ export default async function SpeedPageRoute({
         </div>
       </section>
 
-      {/* ── SECTION 7 — RELATED PAGES ── */}
+      {/* ── SECTION 8 — RELATED PAGES ── */}
       {related.length > 0 && (
         <section className="px-6 py-16 sm:py-20 bg-[#FBFAF6]">
           <div className="max-w-5xl mx-auto flex flex-col gap-10">
@@ -332,7 +361,7 @@ export default async function SpeedPageRoute({
         </section>
       )}
 
-      {/* ── SECTION 8 — URGENT CTA ── */}
+      {/* ── SECTION 9 — URGENT CTA ── */}
       <section className="px-6 py-20 sm:py-24">
         <AnimatedSection className="relative max-w-4xl mx-auto rounded-3xl overflow-hidden px-8 py-16 sm:py-20 text-center">
           <div

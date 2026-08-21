@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>CarouseLabs — Feature Reference</title>
+<style>
+  :root{
+    --purple:#7C3AED;
+    --purple-deep:#5B21B6;
+    --purple-soft:#F3EEFD;
+    --ink:#18181B;
+    --gray:#3F3F46;
+    --gray-soft:#71717A;
+    --line:#E4E4E7;
+    --cream:#FAF7F1;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    color:var(--ink);
+    font-size:14.5px;
+    line-height:1.55;
+  }
+  @page{ size: letter; margin: 0.72in 0.78in 0.75in; }
+
+  h1,h2,h3,h4{ font-family:inherit; letter-spacing:-0.01em; }
+
+  /* ---------- Cover ---------- */
+  .cover{
+    height:9.5in;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    page-break-after:always;
+    position:relative;
+  }
+  .cover .mark{
+    width:56px;height:56px;border-radius:16px;
+    background:var(--purple);
+    color:white; font-weight:900; font-size:28px;
+    display:flex;align-items:center;justify-content:center;
+    margin-bottom:28px;
+  }
+  .cover .kicker{
+    text-transform:uppercase; letter-spacing:0.18em; font-size:12.5px;
+    font-weight:800; color:var(--purple); margin-bottom:14px;
+  }
+  .cover h1{
+    font-size:46px; font-weight:800; line-height:1.08; margin:0 0 18px; max-width:8in;
+  }
+  .cover p.sub{
+    font-size:17px; color:var(--gray-soft); max-width:6.6in; margin:0 0 40px; font-weight:500;
+  }
+  .cover .meta{
+    border-top:1px solid var(--line); padding-top:20px; display:flex; gap:48px;
+  }
+  .cover .meta .item .label{ font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:var(--gray-soft); font-weight:800; margin-bottom:4px;}
+  .cover .meta .item .value{ font-size:14.5px; font-weight:700; }
+
+  /* ---------- TOC ---------- */
+  .toc{ page-break-after:always; }
+  .toc h2{ font-size:13px; text-transform:uppercase; letter-spacing:0.14em; color:var(--purple); margin:0 0 22px; }
+  .toc ol{ list-style:none; margin:0; padding:0; counter-reset:toc; }
+  .toc li{
+    counter-increment:toc;
+    display:flex; gap:14px; align-items:baseline;
+    padding:9px 0; border-bottom:1px dotted var(--line);
+    font-size:15px; font-weight:700;
+  }
+  .toc li::before{
+    content: counter(toc) ".";
+    color:var(--purple); font-weight:800; width:22px; flex-shrink:0;
+  }
+  .toc li .sec-desc{ font-weight:500; color:var(--gray-soft); font-size:13px; }
+
+  /* ---------- Sections ---------- */
+  section.doc{ margin-bottom:8px; }
+  .sec-num-badge{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:28px;height:28px;border-radius:8px;
+    background:var(--purple); color:white; font-weight:800; font-size:13.5px;
+    margin-right:10px;
+  }
+  h2.sec-title{
+    font-size:22px; font-weight:800; margin:0 0 4px;
+    display:flex; align-items:center;
+    padding-top:6px;
+    border-top:2px solid var(--ink);
+  }
+  h2.sec-title .sec-num-badge{ margin-top:6px; }
+  .sec-title-text{ padding-top:6px; }
+  p.sec-intro{ color:var(--gray); font-size:14.5px; margin:10px 0 16px 38px; max-width:6.6in;}
+
+  h3.sub{
+    font-size:15.5px; font-weight:800; margin:20px 0 6px 38px; color:var(--ink);
+  }
+  .body{ margin-left:38px; }
+  .body p{ margin:0 0 10px; color:var(--gray); }
+  .body ul{ margin:6px 0 14px; padding-left:20px; }
+  .body ul li{ margin-bottom:5px; color:var(--gray); }
+  .body ul li strong{ color:var(--ink); }
+  .body ul.tight li{ margin-bottom:2px; }
+
+  .note{
+    background:var(--purple-soft);
+    border-left:3px solid var(--purple);
+    border-radius:6px;
+    padding:10px 14px;
+    font-size:13.5px;
+    color:var(--purple-deep);
+    margin:10px 0 14px;
+    font-weight:600;
+  }
+
+  table.ref{
+    width:100%;
+    border-collapse:collapse;
+    margin:10px 0 16px;
+    font-size:13.5px;
+  }
+  table.ref th{
+    text-align:left;
+    background:var(--ink);
+    color:white;
+    padding:8px 10px;
+    font-weight:700;
+    font-size:12.5px;
+    text-transform:uppercase;
+    letter-spacing:0.03em;
+  }
+  table.ref td{
+    padding:7px 10px;
+    border-bottom:1px solid var(--line);
+    color:var(--gray);
+    vertical-align:top;
+  }
+  table.ref tr:nth-child(even) td{ background:#FAFAFA; }
+  table.ref td strong{ color:var(--ink); }
+  table.ref td.num{ font-weight:800; color:var(--purple-deep); }
+
+  .pill-row{ display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 14px; }
+  .pill{
+    background:white; border:1px solid var(--line); border-radius:999px;
+    padding:4px 11px; font-size:12.5px; font-weight:700; color:var(--ink);
+  }
+
+  .two-col{ display:flex; gap:28px; margin-left:38px; }
+  .two-col > div{ flex:1; }
+
+  .avoid-break{ page-break-inside:avoid; }
+
+  code.inline{
+    background:#F4F4F5; border:1px solid var(--line); border-radius:4px;
+    padding:1px 5px; font-size:12.5px; font-family:"SF Mono", Consolas, monospace; color:var(--purple-deep);
+  }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <div class="mark">C</div>
+  <div class="kicker">Feature Reference</div>
+  <h1>CarouseLabs — Complete Feature Documentation</h1>
+  <p class="sub">A full reference of every feature in the CarouseLabs AI content-creation product: generation flows, the AI pipeline, templates, platforms, editing controls, plans &amp; credits, and account tools. Compiled directly from the current codebase.</p>
+  <div class="meta">
+    <div class="item"><div class="label">Product</div><div class="value">CarouseLabs Content Studio</div></div>
+    <div class="item"><div class="label">Scope</div><div class="value">Content-creation product only</div></div>
+    <div class="item"><div class="label">Prepared</div><div class="value">August 2026</div></div>
+  </div>
+</div>
+
+<!-- TOC -->
+<div class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li>Overview <span class="sec-desc">— what CarouseLabs is</span></li>
+    <li>Two Ways to Create <span class="sec-desc">— Own Idea &amp; on-demand trending ideas</span></li>
+    <li>Output Formats <span class="sec-desc">— Caption Only, Image + Caption, Carousel</span></li>
+    <li>The 3-Stage AI Pipeline <span class="sec-desc">— how images &amp; carousels get generated</span></li>
+    <li>Structure Templates <span class="sec-desc">— 87 proven frameworks across formats</span></li>
+    <li>Platform-Specific Optimization <span class="sec-desc">— 8 supported platforms</span></li>
+    <li>Reference Image Style Matching <span class="sec-desc">— brand-consistent visuals</span></li>
+    <li>Regeneration &amp; Editing Controls <span class="sec-desc">— every in-flow control</span></li>
+    <li>History, Pinned &amp; Drafts <span class="sec-desc">— managing past &amp; saved work</span></li>
+    <li>Onboarding &amp; Personalization <span class="sec-desc">— the Profile that drives the AI</span></li>
+    <li>Voice Presets &amp; Voice Guidelines <span class="sec-desc">— reusable writing style</span></li>
+    <li>LinkedIn Direct Posting <span class="sec-desc">— one-click publishing</span></li>
+    <li>Plans &amp; Credits <span class="sec-desc">— Free, Pro, Growth, and top-ups</span></li>
+    <li>Account &amp; Billing <span class="sec-desc">— connections, export, subscription management</span></li>
+    <li>Admin Tools <span class="sec-desc">— internal management console</span></li>
+    <li>Additional Features <span class="sec-desc">— email system, exports, and extras</span></li>
+  </ol>
+</div>
+
+<!-- 1. OVERVIEW -->
+<section class="doc">
+  <h2 class="sec-title"><span class="sec-num-badge">1</span><span class="sec-title-text">Overview</span></h2>
+  <p class="sec-intro">CarouseLabs is an AI content-creation studio that turns a topic — or nothing at all — into a ready-to-post caption, on-brand image, or full multi-slide carousel, tailored to any of 8 supported platforms. It's built for founders, creators, and marketers who want consistent, high-quality social content without a design tool, a writer, or hours per post.</p>
+  <div class="body">
+    <p>Every generation runs through the same underlying pipeline regardless of entry point: a caption is drafted first, and — for image or carousel formats — a 3-stage AI process plans the layout, writes a visual brief, and renders the final image. The product is built around two symmetric entry points (own idea vs. AI-suggested idea, see Section 2), three output formats (Section 3), and a personalization layer (Section 10) that shapes every generation to the user's profile, industry, and voice.</p>
+  </div>
+</section>
+
+<!-- 2. TWO WAYS TO CREATE -->
+<section class="doc">
+  <h2 class="sec-title"><span class="sec-num-badge">2</span><span class="sec-title-text">Two Ways to Create</span></h2>
+  <p class="sec-intro">Every session starts from one of two entry points, both landing on the same breakdown → format-picker → generation flow.</p>
+
+  <h3 class="sub">2.1 Work on Own Idea</h3>
+  <div class="body">
+    <ul>
+      <li><strong>Title</strong> — up to 15 words, enforced client- and server-side.</li>
+      <li><strong>Notes</strong> — "Tell us more about your idea," up to 650 words.</li>
+      <li>Claude (<code class="inline">claude-sonnet-4-5</code>) runs a <strong>Research Expansion</strong> pass that turns the title + notes into a full breakdown: an 800–2,000 word knowledge document, a refined hook, key talking points, and a strong ending line — generated immediately, with no separate "breakdown" step.</li>
+    </ul>
+  </div>
+
+  <h3 class="sub">2.2 Trending / AI-Suggested Ideas</h3>
+  <div class="body">
+    <ul>
+      <li>The dashboard generates <strong>10 ideas per request, on demand</strong> — not a fixed daily batch. Mix: 3 Latest News + 3 Trending Topic + 3 Industry Topic + 1 Random-but-relevant.</li>
+      <li>"Latest News" ideas are grounded in real headlines from NewsAPI.org (last 48 hours) when available; otherwise Claude falls back to its own knowledge, labeled "[Trending]".</li>
+      <li>Rate-limited to <strong>10 generations per hour</strong> per user.</li>
+      <li>"Load More" fetches 10 more, deduplicated against already-seen hooks, capped at <strong>30 ideas per session</strong>.</li>
+      <li>"Work on Own Idea" is always pinned first in the feed, above the AI-suggested ideas.</li>
+      <li>Any idea can be <strong>duplicated</strong> into a fresh session (clones the idea + latest breakdown) without disturbing the original.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 3. OUTPUT FORMATS -->
+<section class="doc">
+  <h2 class="sec-title"><span class="sec-num-badge">3</span><span class="sec-title-text">Output Formats</span></h2>
+  <p class="sec-intro">Every idea — own or suggested — can become any of three outputs.</p>
+  <table class="ref avoid-break">
+    <tr><th>Format</th><th>What you get</th><th>Credit cost</th></tr>
+    <tr><td><strong>Caption Only</strong></td><td>A scroll-stopping caption, written for the selected platform, ready to post</td><td class="num">5 credits</td></tr>
+    <tr><td><strong>Image + Caption</strong></td><td>A caption plus one AI-generated visual (4:5 portrait or 1:1 square)</td><td class="num">15 credits</td></tr>
+    <tr><td><strong>Caption + Slides (Carousel)</strong></td><td>A caption plus a full 7–8 slide carousel, each slide individually generated</td><td class="num">40 credits</td></tr>
+  </table>
+  <div class="note">Caption Only and Image + Caption are available on every plan, including Free. The Carousel format requires a paid plan (Pro or Growth).</div>
+</section>
+
+<!-- 4. AI PIPELINE -->
+<section class="doc">
+  <h2 class="sec-title"><span class="sec-num-badge">4</span><span class="sec-title-text">The 3-Stage AI Pipeline</span></h2>
+  <p class="sec-intro">Image and carousel generation don't rely on a single prompt — they run through a 3-stage pipeline that mirrors a real design process.</p>
+  <div class="body">
+    <ul>
+      <li><strong>Stage 1 — Plan the layout.</strong> GPT-4o decides how the content should be visually organized: for a single image, a layout approach (e.g. "Hero + Infographic"); for a carousel, the slide count, order, and section roles (Hook → Problem → Solution → CTA, etc).</li>
+      <li><strong>Stage 2 — Write the visual brief.</strong> GPT-4o (primary) turns that structural decision, plus the caption and breakdown, into the actual image-generation prompt — a headline and detailed visual brief per slide for carousels. Falls back automatically to Claude Sonnet 4.5 on refusal or API error.</li>
+      <li><strong>Stage 3 — Generate the image.</strong> OpenAI's <code class="inline">gpt-image-2</code> renders the final visual — <code class="inline">images.generate</code> normally, or <code class="inline">images.edit</code> when a style reference is attached. Carousel slides are generated sequentially (not in parallel) to stay within rate limits.</li>
+    </ul>
+    <p>This pipeline runs for every idea — own or AI-suggested — not just the Own Idea flow.</p>
+  </div>
+</section>
+
+<!-- 5. TEMPLATES -->
+<section class="doc">
+  <h2 class="sec-title"><span class="sec-num-badge">5</span><span class="sec-title-text">Structure Templates</span></h2>
+  <p class="sec-intro">Proven content frameworks keep output from feeling formulaic, across all three formats.</p>
+  <table class="ref avoid-break">
+    <tr><th>Library</th><th>Templates</th><th>Categories</th></tr>
+    <tr><td>Carousel structures</td><td class="num">30</td><td>12</td></tr>
+    <tr><td>Image structures</td><td class="num">21</td><td>7</td></tr>
+    <tr><td>Caption structures</td><td class="num">36</td><td>9</td></tr>
+    <tr><td><strong>Total</strong></td><td class="num">87</td><td>—</td></tr>
+  </table>
+  <div class="body">
+    <p>For any format, the user can let the AI auto-select the best structure, describe their own, or hand-pick a template. Carousels additionally support <strong>"Follow My Reference Image's Structure"</strong> — matching the slide layout and flow of an uploaded example, independent of its visual style.</p>
+  </div>
+</section>
+
+<!-- 6. PLATFORMS -->
+<section class="doc">
+  <h2 class="sec-title"><span class="sec-num-badge">6</span><span class="sec-title-text">Platform-Specific Optimization</span></h2>
+  <p class="sec-intro">Captions are tailored to the selected platform's tone, length, and conventions — not one-size-fits-all.</p>
+  <table class="ref avoid-break">
+    <tr><th>Platform</th><th>Character limit</th><th>Style</th></tr>
+    <tr><td>💼 LinkedIn</td><td>3,000</td><td>Professional tone, hashtags at the end</td></tr>
+    <tr><td>📸 Instagram</td><td>2,200</td><td>Casual and visual, hashtag-heavy (15–30 tags)</td></tr>
+    <tr><td>𝕏 X (Twitter)</td><td>280</td><td>Short and punchy, thread-friendly for longer ideas</td></tr>
+    <tr><td>📘 Facebook</td><td>5,000</td><td>Conversational tone, longer form okay, link-friendly</td></tr>
+    <tr><td>🧵 Threads</td><td>500</td><td>Casual and relaxed, Twitter-like but more personal</td></tr>
+    <tr><td>🎵 TikTok</td><td>2,200</td><td>Very casual, trend-aware, emoji-heavy, hook in the first line</td></tr>
+    <tr><td>▶️ YouTube</td><td>5,000</td><td>Video description style, timestamps and SEO keywords</td></tr>
+    <tr><td>📌 Pinterest</td><td>500</td><td>Short, SEO-keyword-heavy, description style, searchable phrases</td></tr>
+  </table>
+  <div class="note">Only LinkedIn currently supports one-click direct posting from CarouseLabs — see Section 12. The other 7 platforms shape the generated caption's tone and length, but publishing is manual (copy → paste).</div>
+</section>
+
+<!-- 7. REFERENCE STYLE -->
+<section class="doc">
+  <h2 class="sec-title"><span class="sec-num-badge">7</span><span class="sec-title-text">Reference Image Style Matching</span></h2>
+  <p class="sec-intro">Upload one example post, and every generated visual matches its look — without copying it.</p>
+  <div class="body">
+    <ul>
+      <li>The reference image is sent to vision-capable models at up to three separate pipeline stages, each paired with an explicit instruction to extract <strong>style only</strong> — typography, color relationships, layout philosophy — and never copy layout, composition, icons, text, logos, or any identifiable visual element.</li>
+      <li>A <strong>"reference-only" structure mode</strong> lets a reference image drive composition/reading order specifically, independent of color or typography.</li>
+      <li>At the final image-generation stage, the reference is passed again to <code class="inline">gpt-image-2</code> via <code class="inline">images.edit</code>, reinforcing "keep the tone and accents consistent; don't copy the content."</li>
+      <li>Uploaded references are client-side compressed (max 1024px, JPEG quality 0.8) before upload, to stay under payload limits.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 8. REGEN CONTROLS -->
+<section class="doc">
+  <h2 class="sec-title"><span class="sec-num-badge">8</span><span class="sec-title-text">Regeneration &amp; Editing Controls</span></h2>
+  <p class="sec-intro">Every generation surface (caption, image, carousel) shares a common set of fine-grained controls.</p>
+  <div class="body">
+    <ul>
+      <li><strong>Tone Selector</strong> — 5 tones (Analytical, Candid, Playful, Authoritative, Story-driven) for the initial caption pass.</li>
+      <li><strong>Custom Instructions</strong> — an optional free-text box (up to 1,000 characters) attached to any regeneration, e.g. "make it shorter," "add more stats."</li>
+      <li><strong>Apply My Voice Guidelines</strong> — a checkbox that folds the user's saved writing-style guidelines into the regeneration (only shown if guidelines exist).</li>
+      <li><strong>Hook Variations</strong> — AI-suggested alternate opening lines; clicking one swaps the caption's hook.</li>
+      <li><strong>Hashtag Chips</strong> — suggested hashtags, click to append to the caption.</li>
+      <li><strong>Version History</strong> — up to 2 prior versions kept and individually restorable, for both captions and carousels.</li>
+      <li><strong>Image aspect ratio</strong> — 4:5 Portrait or 1:1 Square, remembered across sessions.</li>
+      <li><strong>Per-slide regeneration</strong> — each carousel slide can be regenerated independently, with its own custom-instructions box, for 8 credits.</li>
+      <li><strong>Download All as PDF</strong> — exports a full carousel as a print-ready PDF, one slide per page at native resolution.</li>
+    </ul>
+    <div class="note">Regeneration is capped at 2 uses per idea, per session — applied consistently across caption, image, and carousel regeneration.</div>
+  </div>
+</section>
+
+<!-- 9. HISTORY / PINNED / DRAFTS -->
+<section class="doc">
+  <h2 class="sec-title"><span class="sec-num-badge">9</span><span class="sec-title-text">History, Pinned &amp; Drafts</span></h2>
+  <div class="two-col">
+    <div>
+      <h3 class="sub" style="margin-left:0;">History</h3>
+      <ul class="tight">
+        <li>Search by keyword; filter by Caption / Image / Carousel</li>
+        <li>Idea-category tag (News / Trending / Industry / Random)</li>
+        <li>"Draft saved" badge when a session has unpublished work</li>
+        <li>Per-card: pin, duplicate, resume, or delete</li>
+        <li>"Continue" resumes exactly where a session left off</li>
+      </ul>
+    </div>
+    <div>
+      <h3 class="sub" style="margin-left:0;">Pinned ("Content Wishlist")</h3>
+      <ul class="tight">
+        <li>Ideas saved at the <strong>idea</strong> level, before generation starts</li>
+        <li>No session is created just by pinning</li>
+        <li>Searchable, individually removable</li>
+      </ul>
+    </div>
+  </div>
+  <h3 class="sub">Drafts</h3>
+  <div class="body">
+    <p>There's no separate drafts page — every generated post is saved with a <code class="inline">DRAFT</code> status by default, surfaced back in History via the "Draft saved" badge. A "Save Draft" button appears in every editor, and caption edits are additionally auto-saved in the background as a safety net.</p>
+  </div>
+</section>
+
+<!-- 10. ONBOARDING -->
+<section class="doc">
+  <h2 class="sec-title"><span class="sec-num-badge">10</span><span class="sec-title-text">Onboarding &amp; Personalization</span></h2>
+  <p class="sec-intro">A one-time profile (editable anytime in Settings → Profile) personalizes every idea and caption generated.</p>
+  <div class="body">
+    <ul>
+      <li><strong>Identity</strong> — one role: Founder/Entrepreneur, Content Creator, Freelancer, Operator/Manager, Consultant, Executive/CXO, or Other.</li>
+      <li><strong>Industry &amp; Niche</strong> — searchable industry, plus a free-text niche description (up to 500 words).</li>
+      <li><strong>Content Topics</strong> — 3 to 7 topic tags, from suggestions or free text.</li>
+      <li><strong>Target Audience</strong> — audience role, seniority (6 levels), audience industry, and core problem being solved (up to 200 words).</li>
+      <li><strong>Content Goals</strong> — multi-select from 5 goals (brand-building, lead gen, audience growth, thought leadership, education), with one marked primary.</li>
+      <li><strong>Tone &amp; Voice</strong> — multi-select from 5 base tones (Professional, Conversational, Inspirational, Educational, Bold).</li>
+    </ul>
+    <p>This profile feeds directly into idea generation (topic selection, news-query targeting) and every caption prompt (audience, goals, tone) — it's functional personalization, not a cosmetic form.</p>
+  </div>
+</section>
+
+<!-- 11. VOICE -->
+<section class="doc">
+  <h2 class="sec-title"><span class="sec-num-badge">11</span><span class="sec-title-text">Voice Presets &amp; Voice Guidelines</span></h2>
+  <div class="body">
+    <ul>
+      <li><strong>Voice Presets</strong> — named, reusable combinations of the 5 base tones. Up to <strong>5 presets</strong> can be saved, added, edited, or deleted.</li>
+      <li><strong>Voice Guidelines</strong> — a single free-form text block (soft target of ~1,000 words) where a user pastes tone/phrasing instructions or example best-performing posts, for the AI to match their exact writing style. Applied via the "Apply my voice guidelines" checkbox at generation time.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 12. LINKEDIN -->
+<section class="doc">
+  <h2 class="sec-title"><span class="sec-num-badge">12</span><span class="sec-title-text">LinkedIn Direct Posting</span></h2>
+  <div class="body">
+    <ul>
+      <li>Connect a LinkedIn account once via OAuth (Settings → Account); the connection status, name, and any expiry are shown there.</li>
+      <li>"Post to LinkedIn" is available on every generation surface — caption-only, single image, and carousel — and posts the caption plus up to 8 images directly to the connected account.</li>
+      <li>On success, a confirmation links straight to the live post.</li>
+      <li>This is currently the <strong>only</strong> platform with direct publishing; all others are copy-paste.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 13. PLANS -->
+<section class="doc">
+  <h2 class="sec-title"><span class="sec-num-badge">13</span><span class="sec-title-text">Plans &amp; Credits</span></h2>
+  <table class="ref avoid-break">
+    <tr><th>Plan</th><th>Price</th><th>Credits</th><th>Includes</th></tr>
+    <tr>
+      <td><strong>Free</strong></td><td>$0</td><td class="num">1 lifetime post</td>
+      <td>Caption Only &amp; Image + Caption, basic idea generation. No carousel, no LinkedIn posting, no voice guidelines.</td>
+    </tr>
+    <tr>
+      <td><strong>Pro</strong> <span style="color:var(--purple-deep); font-weight:800;">★ Most Popular</span></td><td>$24.99/mo</td><td class="num">1,000 / mo</td>
+      <td>Everything in Free, plus: carousels, LinkedIn posting, reference-image style matching, voice guidelines &amp; presets, daily trending ideas, all regeneration types, priority support.</td>
+    </tr>
+    <tr>
+      <td><strong>Growth</strong></td><td>$45.99/mo</td><td class="num">2,000 / mo</td>
+      <td>Everything in Pro, with a higher monthly credit ceiling for agencies and power users. (No team/multi-seat features exist — this is a credit-volume tier, not collaboration.)</td>
+    </tr>
+  </table>
+
+  <div class="avoid-break">
+    <h3 class="sub">Credit costs</h3>
+    <table class="ref">
+      <tr><th>Action</th><th>Cost</th></tr>
+      <tr><td>Caption Only (first generation)</td><td class="num">5 credits</td></tr>
+      <tr><td>Image + Caption (first generation)</td><td class="num">15 credits</td></tr>
+      <tr><td>Carousel (first generation)</td><td class="num">40 credits</td></tr>
+      <tr><td>Regenerate caption</td><td class="num">1 credit</td></tr>
+      <tr><td>Regenerate image</td><td class="num">8 credits</td></tr>
+      <tr><td>Regenerate a single carousel slide</td><td class="num">8 credits</td></tr>
+    </table>
+  </div>
+
+  <div class="avoid-break">
+    <h3 class="sub">Credit top-ups</h3>
+    <div class="body">
+      <p>Paid-plan users can buy extra credits anytime: <strong>$2 per 100 credits</strong>, in multiples of 100 (min 100 / max 5,000 per purchase). Top-up credits expire 2 months after purchase and are only spent after the monthly allowance runs out. Checkout runs through a Lemon Squeezy overlay; plan changes and cancellations route through the same billing portal to avoid double charges.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 14. ACCOUNT -->
+<section class="doc">
+  <h2 class="sec-title"><span class="sec-num-badge">14</span><span class="sec-title-text">Account &amp; Billing</span></h2>
+  <div class="body">
+    <ul>
+      <li><strong>Billing tab</strong> — current plan, renewal/cancellation date, a credits-remaining progress bar (with a low-credit warning at ≤100 left), the top-up widget, upgrade/manage actions, and a full plan-comparison grid.</li>
+      <li><strong>Account tab</strong> — account email and plan badge, LinkedIn connect/disconnect, and <strong>Export My Data</strong> — a one-click JSON download of every idea and post ever generated.</li>
+      <li>Upgrading Pro → Growth is scheduled for the next renewal (no immediate charge); all other plan and cancellation changes go through the Lemon Squeezy customer portal.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 15. ADMIN -->
+<section class="doc">
+  <h2 class="sec-title"><span class="sec-num-badge">15</span><span class="sec-title-text">Admin Tools</span></h2>
+  <p class="sec-intro">An internal console, visible only to admin accounts, for operating the content product.</p>
+  <div class="body">
+    <ul>
+      <li><strong>Overview dashboard</strong> — user counts by plan, total posts/carousels/images generated, credits used, and estimated API cost; quick actions to grant credits or change a user's plan by email.</li>
+      <li><strong>User management</strong> — searchable table plus per-user detail pages, bulk plan/suspend actions.</li>
+      <li><strong>Credit administration</strong>, <strong>all-user post browsing</strong>, and a <strong>subscriptions overview</strong> with CSV export.</li>
+      <li><strong>Analytics</strong> — usage charts and cohort retention.</li>
+      <li><strong>Audit log</strong> of every admin action, and a <strong>broadcast composer</strong> for sending email announcements to users.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 16. EXTRAS -->
+<section class="doc">
+  <h2 class="sec-title"><span class="sec-num-badge">16</span><span class="sec-title-text">Additional Features</span></h2>
+  <div class="body">
+    <ul>
+      <li><strong>Transactional email system</strong> (via Resend) — welcome, onboarding-complete, first-post celebration, upgrade confirmation, low/exhausted credits, top-up receipt, monthly reset, renewal reminder, and cancellation confirmation.</li>
+      <li><strong>Contact form</strong> — routes to support@carouselabs.com, rate-limited to 3 messages/hour per sender.</li>
+      <li><strong>Data export</strong> — full account export as JSON (see Section 14).</li>
+      <li><strong>PDF export</strong> — full carousel export as a print-ready PDF (see Section 8).</li>
+      <li><strong>Loading mini-game</strong> — a short "stop the needle" timing game shown while content generates, so the wait doesn't feel idle; a rare win quietly notifies the team to follow up with the player.</li>
+    </ul>
+  </div>
+</section>
+
+</body>
+</html>

@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>CarouseLabs — Hackathon Pitch</title>
+<style>
+  :root{
+    --purple:#7C3AED;
+    --purple-deep:#5B21B6;
+    --purple-soft:#EDE4FE;
+    --cream:#FAF7F1;
+    --white:#FFFFFF;
+    --ink:#18181B;
+    --gray:#52525B;
+    --gray-light:#8A8578;
+    --line:#E7E1D6;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    color:var(--ink);
+    background:#ddd;
+  }
+  @page{ size: 1280px 720px; margin:0; }
+  @media print{
+    .page{ page-break-after: always; }
+    .page:last-child{ page-break-after: auto; }
+  }
+
+  .page{
+    width:1280px;
+    height:720px;
+    position:relative;
+    overflow:hidden;
+    background:var(--cream);
+    padding:60px 76px;
+  }
+  .page.white{ background:var(--white); }
+  .page.dark{ background:var(--ink); color:var(--white); }
+
+  .blob{
+    position:absolute;
+    border-radius:50%;
+    filter:blur(2px);
+    opacity:0.9;
+  }
+
+  .brand{
+    position:absolute;
+    top:40px; left:76px;
+    display:flex; align-items:center; gap:10px;
+    font-weight:800; font-size:15px; letter-spacing:-0.01em; color:var(--ink);
+  }
+  .page.dark .brand{ color:var(--white); }
+  .brand .mark{
+    width:24px;height:24px;border-radius:7px;
+    background:var(--purple);
+    display:flex;align-items:center;justify-content:center;
+    color:white;font-size:14px;font-weight:900;
+  }
+
+  .pagenum{
+    position:absolute; bottom:32px; right:44px;
+    font-size:12px; font-weight:700; color:var(--gray-light);
+    letter-spacing:0.04em;
+  }
+  .page.dark .pagenum{ color:#A3A3AA; }
+
+  .eyebrow{
+    text-transform:uppercase;
+    letter-spacing:0.16em;
+    font-size:13px;
+    font-weight:800;
+    color:var(--purple);
+    margin:0 0 16px;
+  }
+  .page.dark .eyebrow{ color:#C4B5FD; }
+
+  h1.h1{
+    font-size:60px;
+    font-weight:800;
+    line-height:1.06;
+    letter-spacing:-0.025em;
+    margin:0 0 26px;
+    max-width:1000px;
+  }
+  h2.h2{
+    font-size:42px;
+    font-weight:800;
+    line-height:1.08;
+    letter-spacing:-0.02em;
+    margin:0 0 14px;
+    max-width:980px;
+  }
+  p.lead{
+    font-size:21px;
+    line-height:1.55;
+    color:var(--gray);
+    max-width:760px;
+    margin:0;
+    font-weight:500;
+  }
+  .page.dark p.lead{ color:#D4D4D8; }
+
+  /* ---- Problem / Solution cards ---- */
+  .cards-row{
+    display:flex;
+    gap:28px;
+    margin-top:44px;
+  }
+  .card{
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:34px 32px;
+    flex:1;
+    box-shadow: 0 1px 2px rgba(24,24,27,0.04);
+  }
+  .card .icon{
+    width:56px;height:56px;border-radius:14px;
+    background:var(--purple-soft);
+    display:flex;align-items:center;justify-content:center;
+    font-size:28px;
+    margin-bottom:22px;
+  }
+  .card h3{
+    font-size:24px;
+    font-weight:800;
+    margin:0 0 10px;
+    letter-spacing:-0.01em;
+  }
+  .card p{
+    font-size:16.5px;
+    line-height:1.55;
+    color:var(--gray);
+    margin:0;
+    font-weight:500;
+  }
+
+  .hero-block{
+    margin-top:56px;
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:24px;
+    padding:48px 52px;
+    display:flex;
+    align-items:center;
+    gap:40px;
+    box-shadow: 0 1px 2px rgba(24,24,27,0.04);
+  }
+  .hero-block .icon-big{
+    width:110px;height:110px;border-radius:26px;
+    background:var(--purple-soft);
+    display:flex;align-items:center;justify-content:center;
+    font-size:56px;
+    flex-shrink:0;
+  }
+  .hero-block h3{
+    font-size:30px;
+    font-weight:800;
+    margin:0 0 10px;
+    letter-spacing:-0.015em;
+  }
+  .hero-block p{
+    font-size:19px;
+    line-height:1.6;
+    color:var(--gray);
+    margin:0;
+    max-width:720px;
+    font-weight:500;
+  }
+
+  /* platform chips */
+  .chips{ display:flex; gap:12px; flex-wrap:wrap; margin-top:40px; }
+  .chip{
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:10px 18px;
+    font-size:14.5px;
+    font-weight:700;
+    color:var(--ink);
+    display:flex; align-items:center; gap:8px;
+  }
+
+  /* grid 2x2 for differentiators */
+  .grid2{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:20px;
+    margin-top:32px;
+  }
+  .grid2 .card{
+    padding:24px 26px;
+  }
+  .grid2 .card .icon{
+    width:42px;height:42px;border-radius:12px;
+    font-size:21px;
+    margin-bottom:14px;
+  }
+  .grid2 .card h3{
+    font-size:20px;
+    margin:0 0 8px;
+  }
+  .grid2 .card p{
+    font-size:15px;
+    line-height:1.45;
+  }
+
+  /* screenshots */
+  .flow-lead{ margin-top:2px; margin-bottom:20px; }
+  .shots{
+    display:grid;
+    grid-template-columns:repeat(3, 1fr);
+    gap:20px 14px;
+    justify-items:center;
+  }
+  .shot{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:9px;
+    width:100%;
+  }
+  .shot .frame{
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:10px;
+    width:216px;
+    height:150px;
+    flex-shrink:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    position:relative;
+    box-shadow: 0 1px 2px rgba(24,24,27,0.05);
+  }
+  .shot .frame::before{
+    content:attr(data-step);
+    position:absolute;
+    top:7px; left:7px;
+    background:var(--purple);
+    color:white;
+    font-size:10.5px;
+    font-weight:800;
+    width:18px;height:18px;
+    border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    z-index:2;
+  }
+  .shot img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    object-position:top;
+  }
+  .shot .cap{
+    font-size:13px;
+    font-weight:700;
+    color:var(--ink);
+    line-height:1.3;
+    text-align:center;
+    max-width:216px;
+  }
+
+  .arrow-row{
+    display:flex;
+    justify-content:space-between;
+    padding:0 4px;
+    margin-top:-4px;
+  }
+
+  /* roadmap */
+  .road-top{
+    display:flex;
+    gap:24px;
+    margin-top:36px;
+  }
+  .road-small{
+    flex:1;
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:22px 26px;
+  }
+  .road-small .rt-head{
+    display:flex; align-items:center; gap:10px;
+    font-size:17px; font-weight:800; margin-bottom:6px;
+  }
+  .road-small p{
+    font-size:14.5px; line-height:1.5; color:var(--gray); margin:0; font-weight:500;
+  }
+
+  .analytics-block{
+    margin-top:22px;
+    background:linear-gradient(135deg, var(--purple) 0%, var(--purple-deep) 100%);
+    border-radius:22px;
+    padding:32px 40px;
+    color:white;
+    display:flex;
+    gap:40px;
+  }
+  .analytics-block .a-left{ width:260px; flex-shrink:0; }
+  .analytics-block .a-left .icon-big{
+    width:64px;height:64px;border-radius:16px;
+    background:rgba(255,255,255,0.16);
+    display:flex;align-items:center;justify-content:center;
+    font-size:32px;
+    margin-bottom:16px;
+  }
+  .analytics-block .a-left h3{
+    font-size:26px; font-weight:800; margin:0 0 8px; line-height:1.15;
+  }
+  .analytics-block .a-left p{
+    font-size:14.5px; margin:0; color:#EDE4FE; font-weight:600; line-height:1.5;
+  }
+  .a-list{
+    flex:1;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px 28px;
+    align-content:center;
+  }
+  .a-item{
+    display:flex; gap:10px; align-items:flex-start;
+  }
+  .a-item .dot{
+    width:7px;height:7px;border-radius:50%;
+    background:#C4B5FD;
+    margin-top:8px; flex-shrink:0;
+  }
+  .a-item span{
+    font-size:14px; line-height:1.45; font-weight:600; color:#F4F0FE;
+  }
+
+  /* thank you page */
+  .center-page{
+    height:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+  }
+  .center-page .mark-big{
+    width:74px;height:74px;border-radius:20px;
+    background:var(--purple);
+    display:flex;align-items:center;justify-content:center;
+    color:white;font-size:38px;font-weight:900;
+    margin-bottom:34px;
+  }
+  .center-page h1{
+    font-size:64px; font-weight:800; margin:0 0 18px; letter-spacing:-0.02em;
+  }
+  .center-page p.sub{
+    font-size:19px; color:#D4D4D8; margin:0 0 52px; font-weight:500;
+  }
+  .contact-row{
+    display:flex; gap:56px; justify-content:center;
+  }
+  .contact-item .label{
+    font-size:12px; text-transform:uppercase; letter-spacing:0.14em;
+    color:#A78BFA; font-weight:800; margin-bottom:8px;
+  }
+  .contact-item .value{
+    font-size:19px; font-weight:700; color:white;
+  }
+
+  .divider{
+    width:44px;height:4px;background:var(--purple);
+    border-radius:2px; margin:0 0 24px;
+  }
+</style>
+</head>
+<body>
+
+<!-- PAGE 1 : WHAT IS CAROUSELABS -->
+<section class="page">
+  <div class="blob" style="width:460px;height:460px;background:radial-gradient(circle at 30% 30%, #EDE4FE, transparent 70%); top:-160px; right:-160px;"></div>
+  <div class="blob" style="width:320px;height:320px;background:radial-gradient(circle at 60% 60%, #F3EEFD, transparent 70%); bottom:-120px; left:-100px;"></div>
+
+  <div style="position:relative; z-index:1; height:100%; display:flex; flex-direction:column; justify-content:center;">
+    <div class="brand" style="position:static; margin-bottom:24px;">
+      <div class="mark">C</div>
+      CAROUSELABS
+    </div>
+
+    <div style="display:flex; align-items:center; gap:44px;">
+      <div style="flex:0 0 520px;">
+        <div class="divider"></div>
+        <h1 class="h1" style="font-size:48px; margin-bottom:20px;">AI Content Studio for LinkedIn, Instagram, X, and more</h1>
+        <p class="lead" style="font-size:18px; max-width:none;">CarouseLabs turns a topic — or nothing at all — into a ready-to-post caption, on-brand image, or full multi-slide carousel. Built for founders, creators, and marketers who don't have hours to spend designing every post.</p>
+
+        <div class="chips" style="margin-top:30px;">
+          <div class="chip">💼 LinkedIn</div>
+          <div class="chip">📸 Instagram</div>
+          <div class="chip">𝕏 X</div>
+          <div class="chip">📘 Facebook</div>
+          <div class="chip">🧵 Threads</div>
+          <div class="chip">🎵 TikTok</div>
+          <div class="chip">▶️ YouTube</div>
+          <div class="chip">📌 Pinterest</div>
+        </div>
+      </div>
+
+      <div style="flex:1; display:flex; justify-content:center;">
+        <div style="width:100%; max-width:560px; background:white; border-radius:14px; border:1px solid var(--line); box-shadow:0 20px 50px -12px rgba(91,33,182,0.28), 0 4px 14px rgba(24,24,27,0.06); overflow:hidden;">
+          <img src="images/hero-dashboard.png" style="width:100%; display:block;" />
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="pagenum">01</div>
+</section>
+
+<!-- PAGE 2 : PROBLEM - TIME -->
+<section class="page white">
+  <div class="brand"><div class="mark">C</div>CAROUSELABS</div>
+  <div style="margin-top:70px;">
+    <div class="eyebrow">The Problem</div>
+    <h2 class="h2">Creating content eats your calendar</h2>
+    <p class="lead">Every post is a small project. Multiply that by every platform you're supposed to show up on, every week.</p>
+  </div>
+
+  <div class="hero-block">
+    <div class="icon-big">⏱️</div>
+    <div>
+      <h3>Hours per post, not minutes</h3>
+      <p>Writing a caption from scratch, wrestling with Canva, resizing the same idea for every platform — one carousel can swallow an entire afternoon. And then it's time to do it again tomorrow.</p>
+    </div>
+  </div>
+
+  <div class="pagenum">02</div>
+</section>
+
+<!-- PAGE 3 : PROBLEM - MONEY + BURNOUT -->
+<section class="page">
+  <div class="brand"><div class="mark">C</div>CAROUSELABS</div>
+  <div style="margin-top:70px;">
+    <div class="eyebrow">The Problem, Continued</div>
+    <h2 class="h2">And it's expensive — in more ways than one</h2>
+    <p class="lead">The cost isn't just time. It's your budget, and it's you.</p>
+  </div>
+
+  <div class="cards-row" style="margin-top:52px;">
+    <div class="card" style="padding:40px 36px;">
+      <div class="icon" style="width:64px;height:64px;font-size:32px;">💸</div>
+      <h3 style="font-size:26px;">Death by a thousand subscriptions</h3>
+      <p style="font-size:17.5px;">A designer here, a VA there, a writing tool, a scheduling tool — the stack adds up fast, and most of it sits half-used.</p>
+    </div>
+    <div class="card" style="padding:40px 36px;">
+      <div class="icon" style="width:64px;height:64px;font-size:32px;">🔥</div>
+      <h3 style="font-size:26px;">Exhausted by the pressure to post</h3>
+      <p style="font-size:17.5px;">"Stay consistent" is the advice everyone gives — and the thing that quietly burns creators out. Running out of ideas feels like running out of things to say.</p>
+    </div>
+  </div>
+
+  <div class="pagenum">03</div>
+</section>
+
+<!-- PAGE 4 : SOLUTION - MIRROR -->
+<section class="page white">
+  <div class="brand"><div class="mark">C</div>CAROUSELABS</div>
+  <div style="margin-top:70px;">
+    <div class="eyebrow">The Solution</div>
+    <h2 class="h2">CarouseLabs solves all three</h2>
+    <p class="lead">Same three problems. Now flipped.</p>
+  </div>
+
+  <div class="cards-row" style="margin-top:48px;">
+    <div class="card">
+      <div class="icon">⏱️</div>
+      <h3>Time saved</h3>
+      <p><strong style="color:var(--purple); font-size:1.35em;">~7 minutes</strong><br/>From a blank page to a ready-to-post carousel — caption, image, and all.</p>
+    </div>
+    <div class="card">
+      <div class="icon">💰</div>
+      <h3>Money saved</h3>
+      <p>One plan replaces the stack. Pro is $24.99/mo for 1,000 credits — no designer, no VA, no extra design tool.</p>
+    </div>
+    <div class="card">
+      <div class="icon">🧘</div>
+      <h3>Burnout relieved</h3>
+      <p>Never face a blank page. Get 10 fresh ideas generated on demand, anytime you're stuck.</p>
+    </div>
+  </div>
+
+  <div class="pagenum">04</div>
+</section>
+
+<!-- PAGE 5 : WHAT MAKES IT DIFFERENT -->
+<section class="page">
+  <div class="brand"><div class="mark">C</div>CAROUSELABS</div>
+  <div style="margin-top:52px;">
+    <div class="eyebrow">What Makes It Different</div>
+    <h2 class="h2">Not just another AI writer</h2>
+    <p class="lead">Four things competitors don't do.</p>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="icon">🎨</div>
+      <h3>Reference image brand-matching</h3>
+      <p>Upload one example post and every future post matches your colors, fonts, and style — never copies the content.</p>
+    </div>
+    <div class="card">
+      <div class="icon">📱</div>
+      <h3>Platform-specific optimization</h3>
+      <p>8 platforms, each with its own tone, length, and hashtag rules baked in — not one-size-fits-all.</p>
+    </div>
+    <div class="card">
+      <div class="icon">🧠</div>
+      <h3>3-stage AI pipeline</h3>
+      <p>AI plans the layout, then writes the visual brief, then generates the image — like a real design process, not one prompt.</p>
+    </div>
+    <div class="card">
+      <div class="icon">🧩</div>
+      <h3>80+ structure templates</h3>
+      <p>Across captions, carousels, and images — so content never feels formulaic or repetitive.</p>
+    </div>
+  </div>
+
+  <div class="pagenum">05</div>
+</section>
+
+<!-- PAGE 6 : PATH 1 -->
+<section class="page white">
+  <div class="brand"><div class="mark">C</div>CAROUSELABS</div>
+  <div style="margin-top:70px;">
+    <div class="eyebrow">Two Ways to Create</div>
+    <h2 class="h2" style="margin-bottom:8px;">Path 1: Have Your Own Idea?</h2>
+    <p class="lead flow-lead">Type a title, add context, pick a format — CarouseLabs builds the rest.</p>
+  </div>
+
+  <div class="shots">
+    <div class="shot">
+      <div class="frame" data-step="1"><img src="images/path1-1-title.png" /></div>
+      <div class="cap">Start with just a title</div>
+    </div>
+    <div class="shot">
+      <div class="frame" data-step="2"><img src="images/path1-2-details.png" /></div>
+      <div class="cap">Add the details that matter</div>
+    </div>
+    <div class="shot">
+      <div class="frame" data-step="3"><img src="images/path1-3-format.png" /></div>
+      <div class="cap">Pick caption, image, or full carousel</div>
+    </div>
+    <div class="shot">
+      <div class="frame" data-step="4"><img src="images/path1-4-platform.png" /></div>
+      <div class="cap">Optimized for your platform</div>
+    </div>
+    <div class="shot">
+      <div class="frame" data-step="5"><img src="images/path1-5-structure.png" /></div>
+      <div class="cap">Choose from proven slide structures</div>
+    </div>
+    <div class="shot">
+      <div class="frame" data-step="6"><img src="images/path1-6-result.png" style="object-position:0% top;" /></div>
+      <div class="cap">Full carousel, captioned and ready to post</div>
+    </div>
+  </div>
+
+  <div class="pagenum">06</div>
+</section>
+
+<!-- PAGE 7 : PATH 2 -->
+<section class="page">
+  <div class="brand"><div class="mark">C</div>CAROUSELABS</div>
+  <div style="margin-top:70px;">
+    <div class="eyebrow">Two Ways to Create</div>
+    <h2 class="h2" style="margin-bottom:8px;">Path 2: Need Inspiration?</h2>
+    <p class="lead flow-lead">No idea yet? CarouseLabs suggests one — freshly generated, on demand.</p>
+  </div>
+
+  <div class="shots">
+    <div class="shot">
+      <div class="frame" data-step="1"><img src="images/path2-1-profile.png" /></div>
+      <div class="cap">Set up your profile once</div>
+    </div>
+    <div class="shot">
+      <div class="frame" data-step="2"><img src="images/path2-2-dashboard.png" /></div>
+      <div class="cap">Ask for fresh ideas anytime</div>
+    </div>
+    <div class="shot">
+      <div class="frame" data-step="3"><img src="images/path2-3-idea.png" /></div>
+      <div class="cap">AI hands you a full trending idea</div>
+    </div>
+    <div class="shot">
+      <div class="frame" data-step="4"><img src="images/path2-4-caption.png" /></div>
+      <div class="cap">Caption written instantly</div>
+    </div>
+    <div class="shot">
+      <div class="frame" data-step="5"><img src="images/path2-5-reference.png" /></div>
+      <div class="cap">Match your brand's style, optionally</div>
+    </div>
+    <div class="shot">
+      <div class="frame" data-step="6"><img src="images/path2-6-result.png" /></div>
+      <div class="cap">Image + caption, ready to post</div>
+    </div>
+  </div>
+
+  <p style="text-align:center; margin-top:26px; font-size:15.5px; font-weight:700; color:var(--purple);">CarouseLabs works whether you already have an idea — or need one.</p>
+
+  <div class="pagenum">07</div>
+</section>
+
+<!-- PAGE 8 : ROADMAP -->
+<section class="page white">
+  <div class="brand"><div class="mark">C</div>CAROUSELABS</div>
+  <div style="margin-top:70px;">
+    <div class="eyebrow">What's Next</div>
+    <h2 class="h2" style="margin-bottom:8px;">Where we're headed</h2>
+  </div>
+
+  <div class="road-top">
+    <div class="road-small">
+      <div class="rt-head">🔗 Multi-platform posting</div>
+      <p>Expanding one-click direct posting beyond LinkedIn to all 8 supported platforms — Instagram, X, Facebook, Threads, TikTok, YouTube, and Pinterest.</p>
+    </div>
+    <div class="road-small">
+      <div class="rt-head">👥 Team &amp; agency collaboration</div>
+      <p>Shared workspaces, roles, and approval flows for teams managing content together.</p>
+    </div>
+  </div>
+
+  <div class="analytics-block">
+    <div class="a-left">
+      <div class="icon-big">📊</div>
+      <h3>Analytics</h3>
+      <p>Know what's actually working — not just that you posted.</p>
+    </div>
+    <div class="a-list">
+      <div class="a-item"><div class="dot"></div><span>Per-post performance tracking — impressions, reactions, comments, and reshares across LinkedIn, Instagram, and every connected platform</span></div>
+      <div class="a-item"><div class="dot"></div><span>Unified dashboard showing which format — carousel, caption, or image — and which topics perform best</span></div>
+      <div class="a-item"><div class="dot"></div><span>Follower growth tracking, tied back to the specific posts that drove it</span></div>
+      <div class="a-item"><div class="dot"></div><span>Best-time-to-post recommendations based on your own historical performance, not generic advice</span></div>
+      <div class="a-item"><div class="dot"></div><span>Weekly and monthly performance summary reports, delivered automatically</span></div>
+    </div>
+  </div>
+
+  <div class="pagenum">08</div>
+</section>
+
+<!-- PAGE 9 : THANK YOU -->
+<section class="page dark">
+  <div class="blob" style="width:560px;height:560px;background:radial-gradient(circle at 40% 40%, #3B1D74, transparent 70%); top:-180px; right:-180px;"></div>
+  <div class="blob" style="width:420px;height:420px;background:radial-gradient(circle at 60% 60%, #2E1657, transparent 70%); bottom:-140px; left:-120px;"></div>
+  <div class="center-page" style="position:relative; z-index:1;">
+    <div class="mark-big">C</div>
+    <h1>Thank You</h1>
+    <p class="sub">Let's build the future of content creation together.</p>
+    <div class="contact-row">
+      <div class="contact-item">
+        <div class="label">Website</div>
+        <div class="value">carouselabs.com</div>
+      </div>
+      <div class="contact-item">
+        <div class="label">Contact</div>
+        <div class="value">support@carouselabs.com</div>
+      </div>
+    </div>
+  </div>
+  <div class="pagenum">09</div>
+</section>
+
+</body>
+</html>

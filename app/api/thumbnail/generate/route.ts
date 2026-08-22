@@ -392,9 +392,13 @@ export async function POST(req: Request) {
     )
   }
 
-  // 1280x720 (16:9) isn't a supported gpt-image-2 size — 1536x1024 is the
-  // closest supported size that keeps a landscape (wide) aspect ratio.
-  const openaiSize = "1536x1024" as const
+  // True 16:9, requested natively — gpt-image-2 accepts custom WIDTHxHEIGHT
+  // beyond the 3 "standard" sizes as long as both edges are divisible by 16,
+  // the longer edge is ≤3840px, the aspect ratio is between 1:3 and 3:1, and
+  // total pixels fall between 655,360 and 8,294,400. 1280x720 satisfies all
+  // of those (1280/16=80, 720/16=45, ratio 1.78:1, 921,600px), so no
+  // post-generation crop is needed.
+  const openaiSize = "1280x720" as const
 
   let finalPrompt: string
   let imageB64: string

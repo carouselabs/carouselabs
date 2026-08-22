@@ -8,6 +8,13 @@ import { getCurrentUser } from "@/lib/auth"
 import { THUMBNAIL_MASTER_SYSTEM_PROMPT } from "@/lib/ai/prompts/thumbnailPrompt"
 import { validateReferenceImage } from "@/lib/validateImage"
 import { hasGenerationBalance } from "@/lib/credits"
+import type {
+  ThumbnailBlueprint,
+  ThumbnailMainTextRegion,
+  ThumbnailSecondaryTextRegion,
+  ThumbnailReferenceComposition,
+  ThumbnailAdaptedContent,
+} from "@/lib/types/thumbnail"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -29,24 +36,6 @@ interface HistoryTurn {
   content: string
   imageBase64?: string
   imageMediaType?: string
-}
-
-interface ThumbnailBlueprint {
-  canvasFormat: string
-  mainSubject: string
-  secondarySubject: string
-  subjectPositions: string
-  emotion: string
-  importantObjects: string
-  background: string
-  lighting: string
-  colorPalette: string
-  contrast: string
-  text: string
-  textPlacement: string
-  visualEffects: string
-  focalPoint: string
-  storyBeingCommunicated: string
 }
 
 interface ThumbnailChatResponse {
@@ -77,26 +66,67 @@ function isRefusal(text: string): boolean {
   )
 }
 
+function isNullableString(val: unknown): val is string | null {
+  return val === null || typeof val === "string"
+}
+
+function isValidMainText(val: unknown): val is ThumbnailMainTextRegion {
+  if (typeof val !== "object" || val === null) return false
+  const v = val as Record<string, unknown>
+  return typeof v.position === "string" && typeof v.size === "string" && typeof v.color === "string"
+}
+
+function isValidSecondaryText(val: unknown): val is ThumbnailSecondaryTextRegion {
+  if (typeof val !== "object" || val === null) return false
+  const v = val as Record<string, unknown>
+  return isNullableString(v.position) && isNullableString(v.size) && isNullableString(v.color)
+}
+
+function isValidReferenceComposition(val: unknown): val is ThumbnailReferenceComposition {
+  if (typeof val !== "object" || val === null) return false
+  const v = val as Record<string, unknown>
+  return (
+    typeof v.subjectCount === "number" &&
+    typeof v.subjectPosition === "string" &&
+    typeof v.subjectScale === "string" &&
+    typeof v.background === "string" &&
+    isValidMainText(v.mainText) &&
+    (v.secondaryText === null || v.secondaryText === undefined || isValidSecondaryText(v.secondaryText)) &&
+    typeof v.additionalObjects === "string" &&
+    typeof v.compositionRule === "string"
+  )
+}
+
+function isValidAdaptedContent(val: unknown): val is ThumbnailAdaptedContent {
+  if (typeof val !== "object" || val === null) return false
+  const v = val as Record<string, unknown>
+  return (
+    typeof v.mainSubjectDescription === "string" &&
+    typeof v.mainHeadlineText === "string" &&
+    (v.secondaryText === undefined || isNullableString(v.secondaryText)) &&
+    typeof v.emotion === "string"
+  )
+}
+
 function isValidBlueprint(val: unknown): val is ThumbnailBlueprint {
   if (typeof val !== "object" || val === null) return false
-  const keys: (keyof ThumbnailBlueprint)[] = [
-    "canvasFormat",
-    "mainSubject",
-    "secondarySubject",
-    "subjectPositions",
-    "emotion",
-    "importantObjects",
-    "background",
-    "lighting",
-    "colorPalette",
-    "contrast",
-    "text",
-    "textPlacement",
-    "visualEffects",
-    "focalPoint",
-    "storyBeingCommunicated",
-  ]
-  return keys.every((k) => typeof (val as Record<string, unknown>)[k] === "string")
+  const v = val as Record<string, unknown>
+  return isValidReferenceComposition(v.referenceComposition) && isValidAdaptedContent(v.adaptedContent)
+}
+
+// Fills optional-but-required-shape fields (secondaryText's null defaults)
+// so downstream consumers never have to distinguish "omitted" from "null".
+function normalizeBlueprint(bp: ThumbnailBlueprint): ThumbnailBlueprint {
+  return {
+    referenceComposition: {
+      ...bp.referenceComposition,
+      secondaryText: bp.referenceComposition.secondaryText ?? null,
+    },
+    adaptedContent: {
+      ...bp.adaptedContent,
+      secondaryText: bp.adaptedContent.secondaryText ?? null,
+    },
+  }
 }
 
 function isValidQuestion(val: unknown): val is { topic: string; options: string[] } {
@@ -124,7 +154,7 @@ function normalizeResponse(val: ThumbnailChatResponse): ThumbnailChatResponse {
     status: val.status,
     message: val.message,
     question: val.status === "asking" ? val.question ?? null : null,
-    blueprint: val.status === "ready" ? val.blueprint ?? null : null,
+    blueprint: val.status === "ready" && val.blueprint ? normalizeBlueprint(val.blueprint) : null,
   }
 }
 

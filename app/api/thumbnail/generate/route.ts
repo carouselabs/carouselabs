@@ -12,7 +12,14 @@ import { hasGenerationBalance } from "@/lib/credits"
 import { chargeCreditsForAction } from "@/lib/chargeCredits"
 import { refundCreditsForAction } from "@/lib/refundCredits"
 import { validateReferenceImage } from "@/lib/validateImage"
-import { THUMBNAIL_ASSET_DESCRIPTION_SYSTEM_PROMPT } from "@/lib/ai/prompts/thumbnailPrompt"
+import { THUMBNAIL_SUBJECT_DESCRIPTION_SYSTEM_PROMPT } from "@/lib/ai/prompts/thumbnailPrompt"
+import type {
+  ThumbnailBlueprint,
+  ThumbnailMainTextRegion,
+  ThumbnailSecondaryTextRegion,
+  ThumbnailReferenceComposition,
+  ThumbnailAdaptedContent,
+} from "@/lib/types/thumbnail"
 import type { Prisma } from "@prisma/client"
 
 export const maxDuration = 300
@@ -27,81 +34,58 @@ const ratelimit = new Ratelimit({
   analytics: false,
 })
 
-interface ThumbnailBlueprint {
-  canvasFormat: string
-  mainSubject: string
-  secondarySubject: string
-  subjectPositions: string
-  emotion: string
-  importantObjects: string
-  background: string
-  lighting: string
-  colorPalette: string
-  contrast: string
-  text: string
-  textPlacement: string
-  visualEffects: string
-  focalPoint: string
-  storyBeingCommunicated: string
-}
-
 interface UploadedAsset {
   base64: string
   mediaType: string
   label: string
 }
 
+function isNullableString(val: unknown): val is string | null {
+  return val === null || typeof val === "string"
+}
+
+function isValidMainText(val: unknown): val is ThumbnailMainTextRegion {
+  if (typeof val !== "object" || val === null) return false
+  const v = val as Record<string, unknown>
+  return typeof v.position === "string" && typeof v.size === "string" && typeof v.color === "string"
+}
+
+function isValidSecondaryText(val: unknown): val is ThumbnailSecondaryTextRegion {
+  if (typeof val !== "object" || val === null) return false
+  const v = val as Record<string, unknown>
+  return isNullableString(v.position) && isNullableString(v.size) && isNullableString(v.color)
+}
+
+function isValidReferenceComposition(val: unknown): val is ThumbnailReferenceComposition {
+  if (typeof val !== "object" || val === null) return false
+  const v = val as Record<string, unknown>
+  return (
+    typeof v.subjectCount === "number" &&
+    typeof v.subjectPosition === "string" &&
+    typeof v.subjectScale === "string" &&
+    typeof v.background === "string" &&
+    isValidMainText(v.mainText) &&
+    (v.secondaryText === null || v.secondaryText === undefined || isValidSecondaryText(v.secondaryText)) &&
+    typeof v.additionalObjects === "string" &&
+    typeof v.compositionRule === "string"
+  )
+}
+
+function isValidAdaptedContent(val: unknown): val is ThumbnailAdaptedContent {
+  if (typeof val !== "object" || val === null) return false
+  const v = val as Record<string, unknown>
+  return (
+    typeof v.mainSubjectDescription === "string" &&
+    typeof v.mainHeadlineText === "string" &&
+    (v.secondaryText === undefined || isNullableString(v.secondaryText)) &&
+    typeof v.emotion === "string"
+  )
+}
+
 function isValidBlueprint(val: unknown): val is ThumbnailBlueprint {
   if (typeof val !== "object" || val === null) return false
-  const keys: (keyof ThumbnailBlueprint)[] = [
-    "canvasFormat",
-    "mainSubject",
-    "secondarySubject",
-    "subjectPositions",
-    "emotion",
-    "importantObjects",
-    "background",
-    "lighting",
-    "colorPalette",
-    "contrast",
-    "text",
-    "textPlacement",
-    "visualEffects",
-    "focalPoint",
-    "storyBeingCommunicated",
-  ]
-  return keys.every((k) => typeof (val as Record<string, unknown>)[k] === "string")
-}
-
-function blueprintBlock(blueprint: ThumbnailBlueprint): string {
-  return `CANVAS FORMAT: ${blueprint.canvasFormat}
-MAIN SUBJECT: ${blueprint.mainSubject}
-SECONDARY SUBJECT: ${blueprint.secondarySubject}
-SUBJECT POSITIONS: ${blueprint.subjectPositions}
-EMOTION / FACIAL EXPRESSION: ${blueprint.emotion}
-IMPORTANT OBJECTS: ${blueprint.importantObjects}
-BACKGROUND: ${blueprint.background}
-LIGHTING: ${blueprint.lighting}
-COLOR PALETTE: ${blueprint.colorPalette}
-CONTRAST: ${blueprint.contrast}
-TEXT ON THUMBNAIL: ${blueprint.text}
-TEXT PLACEMENT: ${blueprint.textPlacement}
-VISUAL EFFECTS: ${blueprint.visualEffects}
-FOCAL POINT: ${blueprint.focalPoint}
-STORY BEING COMMUNICATED: ${blueprint.storyBeingCommunicated}`
-}
-
-// No-replacement-assets path: gpt-image-2 edits the reference image directly,
-// so the reference's own style AND subjects are both visible to the model —
-// safe only when nothing needs to be swapped out.
-function buildEditPrompt(blueprint: ThumbnailBlueprint): string {
-  return `Create a YouTube thumbnail image (${blueprint.canvasFormat}).
-
-${blueprintBlock(blueprint)}
-
-The attached image is a style reference only — a YouTube thumbnail whose composition, subject placement, visual hierarchy, emotional intensity, lighting, color relationships, contrast, and typography treatment you should match. Do NOT copy its literal subjects, text content, logos, or specific scene — build an entirely new thumbnail using the fields above, adapted to fit the reference's visual structure and design language. Reproduce the reference's headline text styling (weight, casing, emphasis technique, color) for the new text specified above. High click-through-rate design, mobile-readable at small size, bold and clear.
-
-Keep the same background tone as the reference — a light reference background stays light, a dark one stays dark. Keep the same headline text color, font style (weight, width, casing), and accent color proportions as the reference. Reproduce the reference's headline emphasis technique (highlighter swipe, color block, underline, or colored word) in the same color the reference uses. Sample the background tone, text colors, and accent colors directly from the reference image. Match its illustration and rendering style. Create a completely new composition; do not copy its literal content, layout, or text. Wherever the reference shows a logo, wordmark, or watermark, render clean empty background instead — zero logos and zero brand names on the finished image; the only text is the text specified in this prompt.`
+  const v = val as Record<string, unknown>
+  return isValidReferenceComposition(v.referenceComposition) && isValidAdaptedContent(v.adaptedContent)
 }
 
 // GPT-4o/Claude sometimes refuse the task outright instead of erroring. A real
@@ -125,10 +109,12 @@ function isRefusal(text: string): boolean {
   )
 }
 
-function parseDescribedPrompt(raw: string): string | null {
+function parseDescribedSubject(raw: string): string | null {
   try {
     const parsed = JSON.parse(raw)
-    if (typeof parsed.imagePrompt === "string" && parsed.imagePrompt.trim()) return parsed.imagePrompt
+    if (typeof parsed.mainSubjectDescription === "string" && parsed.mainSubjectDescription.trim()) {
+      return parsed.mainSubjectDescription
+    }
   } catch {}
 
   try {
@@ -136,7 +122,9 @@ function parseDescribedPrompt(raw: string): string | null {
     const end = raw.lastIndexOf("}")
     if (start !== -1 && end !== -1 && end > start) {
       const parsed = JSON.parse(raw.slice(start, end + 1))
-      if (typeof parsed.imagePrompt === "string" && parsed.imagePrompt.trim()) return parsed.imagePrompt
+      if (typeof parsed.mainSubjectDescription === "string" && parsed.mainSubjectDescription.trim()) {
+        return parsed.mainSubjectDescription
+      }
     }
   } catch {}
 
@@ -144,11 +132,13 @@ function parseDescribedPrompt(raw: string): string | null {
     const match = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
     if (match) {
       const parsed = JSON.parse(match[1].trim())
-      if (typeof parsed.imagePrompt === "string" && parsed.imagePrompt.trim()) return parsed.imagePrompt
+      if (typeof parsed.mainSubjectDescription === "string" && parsed.mainSubjectDescription.trim()) {
+        return parsed.mainSubjectDescription
+      }
     }
   } catch {}
 
-  const manual = raw.match(new RegExp(`"imagePrompt"\\s*:\\s*"((?:[^"\\\\]|\\\\[\\s\\S])*)"`, "s"))
+  const manual = raw.match(new RegExp(`"mainSubjectDescription"\\s*:\\s*"((?:[^"\\\\]|\\\\[\\s\\S])*)"`, "s"))
   if (manual) {
     try {
       return JSON.parse(`"${manual[1]}"`)
@@ -160,33 +150,25 @@ function parseDescribedPrompt(raw: string): string | null {
   return null
 }
 
-// Describes the reference's style + each uploaded replacement photo's REAL
-// appearance in text, for a text-only images.generate() call downstream.
-// GPT-4o primary, Claude Sonnet 4.5 fallback — same pattern as the chat route.
-async function describeReplacementPrompt(
-  blueprint: ThumbnailBlueprint,
-  referenceImageBase64: string,
-  referenceImageMediaType: string,
+// Rewrites blueprint.adaptedContent.mainSubjectDescription to describe the
+// uploaded replacement photo(s)' REAL appearance instead of the reference's
+// original subject. GPT-4o primary, Claude Sonnet 4.5 fallback — same pattern
+// as the chat route. The final image still comes from images.edit() with the
+// reference attached (buildThumbnailPrompt below), so this step only needs to
+// fix the described identity, not write a whole new prompt.
+async function describeReplacementSubjects(
+  currentDescription: string,
   uploadedAssets: UploadedAsset[],
 ): Promise<string> {
-  const instructionText = `Thumbnail Blueprint (finalized):
-${blueprintBlock(blueprint)}
+  const instructionText = `Current mainSubjectDescription (describes the reference's original subject — to be replaced): ${currentDescription}
 
-Write the final image-generation prompt now, following the system instructions.`
+Rewrite it now, following the system instructions.`
 
   let raw = ""
   let usedFallback = false
 
   try {
     const content: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
-      { type: "text" as const, text: "REFERENCE THUMBNAIL (style reference only — do not copy its subjects):" },
-      {
-        type: "image_url" as const,
-        image_url: {
-          url: `data:${referenceImageMediaType};base64,${referenceImageBase64}`,
-          detail: "high" as const,
-        },
-      },
       ...uploadedAssets.flatMap((asset) => [
         { type: "text" as const, text: `REPLACEMENT PHOTO for: ${asset.label}` },
         {
@@ -202,9 +184,9 @@ Write the final image-generation prompt now, following the system instructions.`
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
-      max_tokens: 2048,
+      max_tokens: 1024,
       messages: [
-        { role: "system" as const, content: THUMBNAIL_ASSET_DESCRIPTION_SYSTEM_PROMPT },
+        { role: "system" as const, content: THUMBNAIL_SUBJECT_DESCRIPTION_SYSTEM_PROMPT },
         { role: "user" as const, content },
       ],
     })
@@ -224,15 +206,6 @@ Write the final image-generation prompt now, following the system instructions.`
 
   if (usedFallback) {
     const claudeContent: Anthropic.MessageParam["content"] = [
-      { type: "text" as const, text: "REFERENCE THUMBNAIL (style reference only — do not copy its subjects):" },
-      {
-        type: "image" as const,
-        source: {
-          type: "base64" as const,
-          media_type: referenceImageMediaType as "image/jpeg" | "image/png" | "image/webp",
-          data: referenceImageBase64,
-        },
-      },
       ...uploadedAssets.flatMap((asset) => [
         { type: "text" as const, text: `REPLACEMENT PHOTO for: ${asset.label}` },
         {
@@ -249,8 +222,8 @@ Write the final image-generation prompt now, following the system instructions.`
 
     const claudeResponse = await anthropic.messages.create({
       model: "claude-sonnet-4-5",
-      max_tokens: 2048,
-      system: THUMBNAIL_ASSET_DESCRIPTION_SYSTEM_PROMPT,
+      max_tokens: 1024,
+      system: THUMBNAIL_SUBJECT_DESCRIPTION_SYSTEM_PROMPT,
       messages: [{ role: "user", content: claudeContent }],
     })
 
@@ -260,9 +233,85 @@ Write the final image-generation prompt now, following the system instructions.`
       .join("")
   }
 
-  const parsed = parseDescribedPrompt(raw)
-  if (!parsed) throw new Error("Failed to describe replacement assets")
+  const parsed = parseDescribedSubject(raw)
+  if (!parsed) throw new Error("Failed to describe replacement subjects")
   return parsed
+}
+
+// REFERENCE COMPOSITION IS THE PRIMARY VISUAL CONSTRAINT — this prompt is fed
+// to images.edit() alongside the reference image, so the model's job is to
+// swap in adaptedContent while preserving referenceComposition's exact
+// structure, not invent a new thumbnail concept.
+function buildThumbnailPrompt(blueprint: ThumbnailBlueprint, videoContent: string): string {
+  const rc = blueprint.referenceComposition
+  const ac = blueprint.adaptedContent
+
+  const secondaryTextBlock = rc.secondaryText
+    ? `
+
+SECONDARY TEXT AREA:
+Position: ${rc.secondaryText.position}
+Size: ${rc.secondaryText.size}
+Color: ${rc.secondaryText.color}
+Text to display: "${ac.secondaryText ?? ""}"`
+    : ""
+
+  const noExtraObjectsLine =
+    rc.additionalObjects.trim().toLowerCase() === "none"
+      ? "\nDo NOT add any extra objects, scenery, signs, or additional elements not present in this list."
+      : ""
+
+  return `REFERENCE COMPOSITION IS THE PRIMARY VISUAL CONSTRAINT.
+
+Create a new YouTube thumbnail using the uploaded reference image as the layout and composition guide.
+
+IMPORTANT: Do not invent a completely new thumbnail concept or change the composition.
+
+Preserve the reference's visual structure as closely as possible:
+- Keep the same overall composition and layout.
+- Keep the same number and approximate placement of major subjects: ${rc.subjectCount} subject(s), positioned at ${rc.subjectPosition}.
+- Preserve the same visual hierarchy.
+- Preserve the approximate subject scale and cropping: ${rc.subjectScale}.
+- Preserve the same text regions and approximate text hierarchy.
+- Preserve the background simplicity or complexity level: ${rc.background}.
+- Preserve the same spacing and negative space.
+- Preserve the same overall mood, contrast, and thumbnail readability.
+- Composition rule to maintain: ${rc.compositionRule}
+
+Only replace the CONTENT inside the composition to match the user's video topic.
+
+For this reference specifically, the structure is:
+
+MAIN SUBJECT AREA:
+Position: ${rc.subjectPosition}
+Scale: ${rc.subjectScale}
+Replace with: ${ac.mainSubjectDescription}
+
+MAIN TEXT AREA:
+Position: ${rc.mainText.position}
+Size: ${rc.mainText.size}
+Color: ${rc.mainText.color}
+Text to display: "${ac.mainHeadlineText}"${secondaryTextBlock}
+
+BACKGROUND:
+${rc.background}
+
+ADDITIONAL OBJECTS IN REFERENCE: ${rc.additionalObjects}${noExtraObjectsLine}
+
+Do NOT add:
+- Houses, outdoor scenery, or backgrounds different from what's specified above
+- Wooden signs or unrelated props
+- Extra people beyond the specified subject count
+- Random objects not listed in "additional objects"
+- Additional paragraphs of text beyond the specified text areas
+- New layouts not present in the reference structure above
+
+The output should immediately feel like the SAME thumbnail composition and visual format as the reference, but adapted with new relevant content.
+
+USER VIDEO CONTENT:
+${videoContent}
+
+If the user's content does not naturally fit the reference structure exactly, adapt the content to fit the existing structure instead of redesigning the thumbnail from scratch.`
 }
 
 export async function POST(req: Request) {
@@ -286,6 +335,7 @@ export async function POST(req: Request) {
   let referenceImageBase64: string
   let referenceImageMediaType: string
   let uploadedAssets: UploadedAsset[]
+  let videoContent: string
 
   try {
     const body = await req.json()
@@ -295,6 +345,7 @@ export async function POST(req: Request) {
     referenceImageMediaType =
       typeof body.referenceImageMediaType === "string" ? body.referenceImageMediaType : "image/jpeg"
     if (!referenceImageBase64) throw new Error("Missing referenceImageBase64")
+    videoContent = typeof body.videoContent === "string" ? body.videoContent.trim() : ""
     uploadedAssets = Array.isArray(body.uploadedAssets)
       ? body.uploadedAssets.filter(
           (a: unknown): a is UploadedAsset =>
@@ -318,12 +369,11 @@ export async function POST(req: Request) {
   referenceImageBase64 = refCheck.data
   referenceImageMediaType = refCheck.mediaType
 
-  // Every uploaded asset is about to be sent to vision APIs (and potentially
-  // gpt-image-2) — validate + clean each one, the same way the reference
-  // image and the chat route's mid-conversation uploads are validated. This
-  // request is independent of any earlier /api/thumbnail/chat calls, so the
-  // client's bytes can't be trusted just because they were "already checked"
-  // there.
+  // Every uploaded asset is about to be sent to vision APIs — validate + clean
+  // each one, the same way the reference image and the chat route's
+  // mid-conversation uploads are validated. This request is independent of any
+  // earlier /api/thumbnail/chat calls, so the client's bytes can't be trusted
+  // just because they were "already checked" there.
   for (const asset of uploadedAssets) {
     const check = validateReferenceImage(asset.base64, asset.mediaType)
     if (!check.ok) {
@@ -345,63 +395,47 @@ export async function POST(req: Request) {
   // 1280x720 (16:9) isn't a supported gpt-image-2 size — 1536x1024 is the
   // closest supported size that keeps a landscape (wide) aspect ratio.
   const openaiSize = "1536x1024" as const
-  const hasReplacementAssets = uploadedAssets.length > 0
 
   let finalPrompt: string
   let imageB64: string
   try {
-    if (hasReplacementAssets) {
-      // gpt-image-2's images.edit() only accepts ONE base image. Editing the
-      // ORIGINAL reference here would keep the reference's own person, since
-      // the uploaded replacement photo would never actually reach the model —
-      // this is the bug being fixed. Instead: describe the reference's style
-      // AND the replacement photos' real appearance in text (a vision call
-      // that DOES see all the images), then generate fresh from that text
-      // alone via images.generate() — no reference attached, no risk of the
-      // model falling back to what it's "editing".
-      finalPrompt = await describeReplacementPrompt(
-        blueprint,
-        referenceImageBase64,
-        referenceImageMediaType,
+    // If the user uploaded replacement photos, rewrite the described subject
+    // to their REAL appearance before building the prompt — everything else
+    // about the blueprint (composition, text, background) is unaffected.
+    if (uploadedAssets.length > 0) {
+      const describedSubject = await describeReplacementSubjects(
+        blueprint.adaptedContent.mainSubjectDescription,
         uploadedAssets,
       )
-
-      const imageResponse = await openai.images.generate({
-        model: "gpt-image-2",
-        prompt: finalPrompt,
-        n: 1,
-        size: openaiSize,
-        quality: "medium",
-      })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data = (imageResponse as any).data as Array<{ b64_json?: string }> | undefined
-      const b64 = data?.[0]?.b64_json
-      if (!b64) throw new Error("No image data returned")
-      imageB64 = b64
-    } else {
-      // No replacement assets — the reference has nothing conflicting to
-      // guard against, so editing it directly (previous behavior) is safe
-      // and gives the strongest style fidelity.
-      finalPrompt = buildEditPrompt(blueprint)
-
-      const imageResponse = await openai.images.edit({
-        model: "gpt-image-2",
-        image: await toFile(
-          Buffer.from(referenceImageBase64, "base64"),
-          referenceImageMediaType === "image/png" ? "reference.png" : "reference.jpg",
-          { type: referenceImageMediaType || "image/jpeg" },
-        ),
-        prompt: finalPrompt,
-        n: 1,
-        size: openaiSize,
-        quality: "medium",
-      })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data = (imageResponse as any).data as Array<{ b64_json?: string }> | undefined
-      const b64 = data?.[0]?.b64_json
-      if (!b64) throw new Error("No image data returned")
-      imageB64 = b64
+      blueprint = {
+        ...blueprint,
+        adaptedContent: { ...blueprint.adaptedContent, mainSubjectDescription: describedSubject },
+      }
     }
+
+    finalPrompt = buildThumbnailPrompt(blueprint, videoContent)
+
+    // Always edit the reference image directly — the structural prompt above
+    // explicitly locks composition/scale/background/text-region constraints
+    // pulled from the reference's own analysis, so it's strong enough to
+    // override just the subject identity without losing the reference layout.
+    const imageResponse = await openai.images.edit({
+      model: "gpt-image-2",
+      image: await toFile(
+        Buffer.from(referenceImageBase64, "base64"),
+        referenceImageMediaType === "image/png" ? "reference.png" : "reference.jpg",
+        { type: referenceImageMediaType || "image/jpeg" },
+      ),
+      prompt: finalPrompt,
+      n: 1,
+      size: openaiSize,
+      quality: "medium",
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = (imageResponse as any).data as Array<{ b64_json?: string }> | undefined
+    const b64 = data?.[0]?.b64_json
+    if (!b64) throw new Error("No image data returned")
+    imageB64 = b64
   } catch (err) {
     console.error("[thumbnail/generate] generation error:", err)
     await refundCreditsForAction(user.id, "thumbnail")
@@ -433,21 +467,17 @@ export async function POST(req: Request) {
   const post = await db.post.create({
     data: {
       userId: user.id,
-      title: blueprint.storyBeingCommunicated || "Thumbnail",
+      title: blueprint.adaptedContent.mainHeadlineText || "Thumbnail",
       format: "THUMBNAIL",
       status: "READY",
       imageUrls: [imageUrl],
       r2Keys: [filename],
-      metadata: {
-        blueprint,
-        prompt: finalPrompt,
-        generationMode: hasReplacementAssets ? "generate-with-described-assets" : "edit-reference",
-      } as unknown as Prisma.InputJsonValue,
+      metadata: { blueprint, prompt: finalPrompt } as unknown as Prisma.InputJsonValue,
       slides: {
         create: {
           role: "COVER",
           order: 0,
-          headline: blueprint.text,
+          headline: blueprint.adaptedContent.mainHeadlineText,
           imageUrl,
           r2Key: filename,
         },

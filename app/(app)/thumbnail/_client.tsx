@@ -5,6 +5,7 @@ import { Sparkles, Upload, Send, Download, Loader2, RotateCcw, ImageIcon } from 
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
 import { LoadingGame } from "@/components/generate/LoadingGame"
 import { useCreditStore } from "@/lib/store/creditStore"
+import type { ThumbnailBlueprint } from "@/lib/types/thumbnail"
 
 // ── Shared shapes (mirror the API routes) ──────────────────────────
 interface HistoryTurn {
@@ -12,24 +13,6 @@ interface HistoryTurn {
   content: string
   imageBase64?: string
   imageMediaType?: string
-}
-
-interface ThumbnailBlueprint {
-  canvasFormat: string
-  mainSubject: string
-  secondarySubject: string
-  subjectPositions: string
-  emotion: string
-  importantObjects: string
-  background: string
-  lighting: string
-  colorPalette: string
-  contrast: string
-  text: string
-  textPlacement: string
-  visualEffects: string
-  focalPoint: string
-  storyBeingCommunicated: string
 }
 
 interface ThumbnailChatResponse {
@@ -53,23 +36,41 @@ interface DisplayMessage {
 
 type Screen = "input" | "chat" | "review" | "result"
 
-const BLUEPRINT_FIELDS: { label: string; key: keyof ThumbnailBlueprint }[] = [
-  { label: "Canvas Format", key: "canvasFormat" },
-  { label: "Main Subject", key: "mainSubject" },
-  { label: "Secondary Subject", key: "secondarySubject" },
-  { label: "Subject Positions", key: "subjectPositions" },
-  { label: "Emotion", key: "emotion" },
-  { label: "Important Objects", key: "importantObjects" },
-  { label: "Background", key: "background" },
-  { label: "Lighting", key: "lighting" },
-  { label: "Color Palette", key: "colorPalette" },
-  { label: "Contrast", key: "contrast" },
-  { label: "Text", key: "text" },
-  { label: "Text Placement", key: "textPlacement" },
-  { label: "Visual Effects", key: "visualEffects" },
-  { label: "Focal Point", key: "focalPoint" },
-  { label: "Story", key: "storyBeingCommunicated" },
-]
+// Blueprint review rows, grouped to mirror the two-part schema: a precise
+// structural read of the reference (never touched by user content) and the
+// user-specific content that fills that fixed structure.
+function referenceCompositionRows(blueprint: ThumbnailBlueprint): { label: string; value: string }[] {
+  const rc = blueprint.referenceComposition
+  const rows = [
+    { label: "Subject Count", value: String(rc.subjectCount) },
+    { label: "Subject Position", value: rc.subjectPosition },
+    { label: "Subject Scale", value: rc.subjectScale },
+    { label: "Background", value: rc.background },
+    { label: "Main Text", value: `${rc.mainText.position}, ${rc.mainText.size}, ${rc.mainText.color}` },
+  ]
+  if (rc.secondaryText) {
+    rows.push({
+      label: "Secondary Text Region",
+      value: `${rc.secondaryText.position ?? "—"}, ${rc.secondaryText.size ?? "—"}, ${rc.secondaryText.color ?? "—"}`,
+    })
+  }
+  rows.push(
+    { label: "Additional Objects", value: rc.additionalObjects },
+    { label: "Composition Rule", value: rc.compositionRule },
+  )
+  return rows
+}
+
+function adaptedContentRows(blueprint: ThumbnailBlueprint): { label: string; value: string }[] {
+  const ac = blueprint.adaptedContent
+  const rows = [
+    { label: "Main Subject", value: ac.mainSubjectDescription },
+    { label: "Main Headline Text", value: ac.mainHeadlineText },
+  ]
+  if (ac.secondaryText) rows.push({ label: "Secondary Text", value: ac.secondaryText })
+  rows.push({ label: "Emotion", value: ac.emotion })
+  return rows
+}
 
 // Downscale + re-encode to JPEG before sending, same treatment as
 // ReferenceUploader — mid-chat asset photos don't need full resolution either.
@@ -277,6 +278,7 @@ export function ThumbnailClient() {
           referenceImageBase64: referenceImage,
           referenceImageMediaType: referenceMediaType,
           uploadedAssets: uploadedAssetsRef.current,
+          videoContent,
         }),
       })
       const data = await res.json()
@@ -507,15 +509,34 @@ export function ThumbnailClient() {
           </p>
         </div>
 
-        <div className="flex flex-col gap-3 p-5 rounded-2xl bg-white border border-[#E5E3DE]">
-          {BLUEPRINT_FIELDS.map(({ label, key }) => (
-            <div key={key} className="flex flex-col gap-0.5">
-              <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
-                {label}
-              </p>
-              <p className="text-[13px] text-[#374151] leading-[1.5]">{blueprint[key] || "—"}</p>
-            </div>
-          ))}
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3 p-5 rounded-2xl bg-white border border-[#E5E3DE]">
+            <p className="text-[11px] font-semibold text-[#7C3AED] uppercase tracking-widest">
+              Reference Structure (preserved)
+            </p>
+            {referenceCompositionRows(blueprint).map(({ label, value }) => (
+              <div key={label} className="flex flex-col gap-0.5">
+                <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
+                  {label}
+                </p>
+                <p className="text-[13px] text-[#374151] leading-[1.5]">{value || "—"}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-3 p-5 rounded-2xl bg-white border border-[#E5E3DE]">
+            <p className="text-[11px] font-semibold text-[#7C3AED] uppercase tracking-widest">
+              Your Content (fills the structure)
+            </p>
+            {adaptedContentRows(blueprint).map(({ label, value }) => (
+              <div key={label} className="flex flex-col gap-0.5">
+                <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
+                  {label}
+                </p>
+                <p className="text-[13px] text-[#374151] leading-[1.5]">{value || "—"}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         {error && (

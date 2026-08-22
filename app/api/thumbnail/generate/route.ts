@@ -85,7 +85,11 @@ function isValidAdaptedContent(val: unknown): val is ThumbnailAdaptedContent {
 function isValidBlueprint(val: unknown): val is ThumbnailBlueprint {
   if (typeof val !== "object" || val === null) return false
   const v = val as Record<string, unknown>
-  return isValidReferenceComposition(v.referenceComposition) && isValidAdaptedContent(v.adaptedContent)
+  return (
+    isValidReferenceComposition(v.referenceComposition) &&
+    isValidAdaptedContent(v.adaptedContent) &&
+    (v.additionalGuidance === undefined || isNullableString(v.additionalGuidance))
+  )
 }
 
 // GPT-4o/Claude sometimes refuse the task outright instead of erroring. A real
@@ -261,6 +265,10 @@ Text to display: "${ac.secondaryText ?? ""}"`
       ? "\nDo NOT add any extra objects, scenery, signs, or additional elements not present in this list."
       : ""
 
+  const additionalGuidanceBlock = blueprint.additionalGuidance?.trim()
+    ? `\n\nADDITIONAL USER GUIDANCE: ${blueprint.additionalGuidance.trim()}`
+    : ""
+
   return `REFERENCE COMPOSITION IS THE PRIMARY VISUAL CONSTRAINT.
 
 Create a new YouTube thumbnail using the uploaded reference image as the layout and composition guide.
@@ -309,7 +317,7 @@ Do NOT add:
 The output should immediately feel like the SAME thumbnail composition and visual format as the reference, but adapted with new relevant content.
 
 USER VIDEO CONTENT:
-${videoContent}
+${videoContent}${additionalGuidanceBlock}
 
 If the user's content does not naturally fit the reference structure exactly, adapt the content to fit the existing structure instead of redesigning the thumbnail from scratch.`
 }

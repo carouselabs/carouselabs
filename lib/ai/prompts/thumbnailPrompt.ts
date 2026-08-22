@@ -166,6 +166,10 @@ Provide:
 **Option 2:** Suggest text options for me
 **Option 3:** Decide the best text automatically
 
+If the user selects "Suggest text options for me," you MUST respond with status: "asking" and present 2-3 concrete, specific text suggestions as the question's options — NOT silently decide and move to status: "ready". Format the question like: question.topic = "Choose your thumbnail text", question.options = ["[Specific suggested text 1]", "[Specific suggested text 2]", "[Specific suggested text 3]", "Write my own instead"]. Only after the user picks one of these (or chooses to write their own) should you proceed to status: "ready" with that finalized text in the blueprint.
+
+If the user selects "I will provide the text" (or "Write my own instead" from the suggestions), respond with status: "asking" and a question with topic "Enter your thumbnail text" — the frontend will render this as a free-text input field, not button options. Signal this by setting question.options to an empty array [] (empty options array = frontend shows a text input instead of buttons).
+
 If the user asks you to decide, create short, emotionally strong, curiosity-driven thumbnail text.
 
 The text should:
@@ -247,6 +251,20 @@ Adapted structure:
 > User's main person on left → relevant person/product/topic on right → important visual symbol in center → new text based on the user's video.
 
 The subjects and content should be original and relevant to the user's video.
+
+---
+
+# Step 6.5: Final Open Guidance Check
+
+Before moving to status: "ready", ask ONE final open-ended question (unless the user has already given this kind of input naturally):
+
+> Is there anything else you'd like to guide the design — any specific style preference, element you want included or avoided, or detail I should know?
+
+Present this with question.topic = "Any additional guidance?" and question.options = ["No, proceed with what we have", "Yes, let me add a note"] (empty array trick doesn't apply here — always show these 2 button options first).
+
+If the user selects "Yes, let me add a note," follow up with an empty options array [] question so they can type free text.
+
+If the user selects "No, proceed with what we have," OR after they've submitted their free-text note, THEN proceed to status: "ready" with the finalized blueprint, incorporating any additional guidance into blueprint.additionalGuidance.
 
 ---
 
@@ -389,7 +407,8 @@ Your response must ALWAYS be returned as valid JSON in exactly this shape, regar
       "mainHeadlineText": "string — the actual text to use in the main headline position",
       "secondaryText": "string or null — the actual text for the secondary text position, if the reference has one",
       "emotion": "string"
-    }
+    },
+    "additionalGuidance": "string or null — any extra free-form guidance the user gave in the Step 6.5 open question"
   } | null
 }
 
@@ -397,6 +416,7 @@ Your response must ALWAYS be returned as valid JSON in exactly this shape, regar
 - Use status: "ready" with a fully populated blueprint object and NO question, once you have enough information to proceed to generation
 - The "message" field always contains what should be shown to the user conversationally
 - Never include both a question and a populated blueprint in the same response
+- Set question.options to an empty array [] whenever the user should type free text instead of choosing a button (e.g. entering their own thumbnail text, or an open-ended guidance note) — the frontend renders an empty options array as a text input, not buttons
 - Return ONLY this JSON, no markdown fences, no extra text`
 
 // app/api/thumbnail/generate uses this ONLY when the user uploaded at least one

@@ -69,6 +69,9 @@ function adaptedContentRows(blueprint: ThumbnailBlueprint): { label: string; val
   ]
   if (ac.secondaryText) rows.push({ label: "Secondary Text", value: ac.secondaryText })
   rows.push({ label: "Emotion", value: ac.emotion })
+  if (blueprint.additionalGuidance) {
+    rows.push({ label: "Additional Guidance", value: blueprint.additionalGuidance })
+  }
   return rows
 }
 
@@ -112,6 +115,16 @@ function optionKind(option: string): "upload" | "text" | "decide" {
   return "decide"
 }
 
+// Cycled while the final image generates — the single POST call has no real
+// sub-stages to report, so this is a timed illusion of progress rather than
+// a status derived from the request (mirrors the "this can take a while"
+// treatment other generation flows in this app give a single long call).
+const GENERATION_STATUS_MESSAGES = [
+  "Analyzing your blueprint…",
+  "Generating your thumbnail…",
+  "Almost done…",
+]
+
 export function ThumbnailClient() {
   const [screen, setScreen] = useState<Screen>("input")
 
@@ -132,6 +145,7 @@ export function ThumbnailClient() {
   // Screen 3
   const [blueprint, setBlueprint] = useState<ThumbnailBlueprint | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [genStatusIndex, setGenStatusIndex] = useState(0)
 
   // Screen 4
   const [resultImageUrl, setResultImageUrl] = useState<string | null>(null)
@@ -147,6 +161,17 @@ export function ThumbnailClient() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, currentQuestion, isAnalyzing])
+
+  // Cycle the generation status message every few seconds while a
+  // generation is in flight (handleGenerate resets the index to 0 when it
+  // starts, so each run begins on the first message).
+  useEffect(() => {
+    if (!isGenerating) return
+    const interval = setInterval(() => {
+      setGenStatusIndex((i) => (i + 1) % GENERATION_STATUS_MESSAGES.length)
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [isGenerating])
 
   function resetAll() {
     setScreen("input")
@@ -267,6 +292,7 @@ export function ThumbnailClient() {
 
   async function handleGenerate() {
     if (!blueprint || !referenceImage) return
+    setGenStatusIndex(0)
     setIsGenerating(true)
     setError(null)
     try {
@@ -441,10 +467,17 @@ export function ThumbnailClient() {
           <div ref={chatEndRef} />
         </div>
 
-        {/* Question options / answer input — sticky at the bottom */}
+        {/* Question options / answer input — sticky at the bottom.
+            An empty options array is the model's signal to skip buttons
+            entirely and let the user type straight into a text field (e.g.
+            entering custom thumbnail text, or an open-ended guidance note). */}
         {currentQuestion && !isAnalyzing && (
           <div className="flex-shrink-0 flex flex-col gap-2.5 pt-2 border-t border-[#E5E3DE]">
-            {answerMode !== "text" && (
+            <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
+              {currentQuestion.topic}
+            </p>
+
+            {currentQuestion.options.length > 0 && answerMode !== "text" && (
               <div className="flex flex-col gap-2">
                 {currentQuestion.options.map((opt) => (
                   <button
@@ -459,7 +492,7 @@ export function ThumbnailClient() {
               </div>
             )}
 
-            {answerMode === "text" && (
+            {(currentQuestion.options.length === 0 || answerMode === "text") && (
               <div className="flex items-end gap-2">
                 <textarea
                   value={textAnswer}
@@ -495,6 +528,13 @@ export function ThumbnailClient() {
     if (isGenerating) {
       return (
         <div className="max-w-md mx-auto flex flex-col gap-6 items-center justify-center h-full">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <div className="h-10 w-10 rounded-full border-2 border-[rgba(124,58,237,0.25)] border-t-[#7C3AED] animate-spin" />
+            <p className="text-[13px] font-medium text-[#1A1A1A]">
+              {GENERATION_STATUS_MESSAGES[genStatusIndex]}
+            </p>
+            <p className="text-[11px] text-[#9CA3AF]">(this can take up to a minute)</p>
+          </div>
           <LoadingGame />
         </div>
       )

@@ -111,7 +111,11 @@ function isValidAdaptedContent(val: unknown): val is ThumbnailAdaptedContent {
 function isValidBlueprint(val: unknown): val is ThumbnailBlueprint {
   if (typeof val !== "object" || val === null) return false
   const v = val as Record<string, unknown>
-  return isValidReferenceComposition(v.referenceComposition) && isValidAdaptedContent(v.adaptedContent)
+  return (
+    isValidReferenceComposition(v.referenceComposition) &&
+    isValidAdaptedContent(v.adaptedContent) &&
+    (v.additionalGuidance === undefined || isNullableString(v.additionalGuidance))
+  )
 }
 
 // Fills optional-but-required-shape fields (secondaryText's null defaults)
@@ -126,6 +130,7 @@ function normalizeBlueprint(bp: ThumbnailBlueprint): ThumbnailBlueprint {
       ...bp.adaptedContent,
       secondaryText: bp.adaptedContent.secondaryText ?? null,
     },
+    additionalGuidance: bp.additionalGuidance ?? null,
   }
 }
 

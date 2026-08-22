@@ -40,4 +40,8 @@ export interface ThumbnailAdaptedContent {
 export interface ThumbnailBlueprint {
   referenceComposition: ThumbnailReferenceComposition
   adaptedContent: ThumbnailAdaptedContent
+  // Free-form guidance from the chat's final "anything else?" open question
+  // (Step 6.5 of the master prompt) — folded into the generation prompt
+  // verbatim when present.
+  additionalGuidance?: string | null
 }

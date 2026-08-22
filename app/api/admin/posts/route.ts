@@ -1,5 +1,5 @@
 // GET /api/admin/posts — all generated posts, server-side filtered/paginated.
-// Query: page (1-based), type (CAROUSEL|SINGLE_IMAGE|TEXT_ONLY), from, to
+// Query: page (1-based), type (CAROUSEL|SINGLE_IMAGE|TEXT_ONLY|THUMBNAIL), from, to
 // (YYYY-MM-DD), search (matches user email or idea hook/title).
 import { NextResponse } from "next/server"
 import type { Prisma, PostFormat } from "@prisma/client"
@@ -8,7 +8,7 @@ import { db } from "@/lib/db"
 import { postCreditCost } from "@/lib/adminStats"
 
 const PAGE_SIZE = 20
-const FORMATS: PostFormat[] = ["CAROUSEL", "SINGLE_IMAGE", "TEXT_ONLY"]
+const FORMATS: PostFormat[] = ["CAROUSEL", "SINGLE_IMAGE", "TEXT_ONLY", "THUMBNAIL"]
 
 export async function GET(req: Request) {
   const admin = await getAdminUser()

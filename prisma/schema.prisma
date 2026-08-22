@@ -37,6 +37,7 @@ enum PostFormat {
   CAROUSEL
   SINGLE_IMAGE
   TEXT_ONLY
+  THUMBNAIL
 }
 
 enum PostStatus {

@@ -1,6 +1,7 @@
 // lib/adminStats.ts
 // Shared aggregate queries for the admin overview page and /api/admin/stats.
 import { db } from "@/lib/db"
+import type { PostFormat } from "@prisma/client"
 
 // Average $ cost per credit (rough blend of Claude + gpt-image spend).
 export const COST_PER_CREDIT = 0.025
@@ -8,8 +9,11 @@ export const COST_PER_CREDIT = 0.025
 // There is no credit ledger table, so admin views derive a post's credit cost
 // from its format using the post-level weights in lib/creditActions.ts
 // (regenerations aren't attributable per-post and are excluded).
-export function postCreditCost(format: "CAROUSEL" | "SINGLE_IMAGE" | "TEXT_ONLY"): number {
-  return format === "CAROUSEL" ? 40 : format === "SINGLE_IMAGE" ? 15 : 5
+export function postCreditCost(format: PostFormat): number {
+  if (format === "CAROUSEL") return 40
+  if (format === "SINGLE_IMAGE") return 15
+  if (format === "THUMBNAIL") return 15
+  return 5
 }
 
 export async function getOverviewStats() {

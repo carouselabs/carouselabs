@@ -19,6 +19,7 @@ export const CREDIT_COSTS = {
   image_regen: 8,
   slide_regen: 8,
   text_regen: 1,
+  thumbnail: 15,
 } as const
 
 export type CreditAction = keyof typeof CREDIT_COSTS

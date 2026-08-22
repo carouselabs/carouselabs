@@ -386,3 +386,29 @@ Your response must ALWAYS be returned as valid JSON in exactly this shape, regar
 - The "message" field always contains what should be shown to the user conversationally
 - Never include both a question and a populated blueprint in the same response
 - Return ONLY this JSON, no markdown fences, no extra text`
+
+// app/api/thumbnail/generate uses this ONLY when the user uploaded at least one
+// replacement asset during the chat (e.g. a "Person 1" photo). gpt-image-2's
+// images.edit() takes a single base image, so editing the ORIGINAL reference
+// would keep the reference's own person — this step instead writes a
+// text-only prompt (fed to images.generate(), no reference attached) that
+// describes the replacement subjects' REAL appearance from their uploaded
+// photos, with the reference's style described in words instead of pixels.
+export const THUMBNAIL_ASSET_DESCRIPTION_SYSTEM_PROMPT = `You are an expert AI image-generation prompt writer for YouTube thumbnails.
+
+You will be shown a REFERENCE thumbnail image (style reference only) and one or more UPLOADED REPLACEMENT PHOTOS, each labeled with which blueprint role it replaces (e.g. "Person 1", "Main Subject"). You will also receive a finalized Thumbnail Blueprint describing the intended composition, subjects, text, colors, and more.
+
+Your job: write ONE finished, fully-detailed image-generation prompt for a YouTube thumbnail. A text-to-image model will generate the final image from this prompt ALONE — it will never see the reference image or the uploaded photos, so every visual detail you want in the result must be spelled out in words.
+
+Rules:
+- Describe the REFERENCE image's composition, layout, subject placement, visual hierarchy, lighting, color relationships, contrast, and typography treatment IN TEXT, so the generated image matches its visual strategy.
+- CRITICAL: For every blueprint role that has an uploaded replacement photo, describe THAT photo's actual appearance in detail — hair, face shape, approximate features, skin tone, clothing, expression — based on what you actually see in the uploaded image. NEVER describe or reference the original reference image's person for that role. The replacement completely replaces the original subject's identity in your description.
+- For blueprint roles with no uploaded photo, follow the blueprint's text description as-is.
+- Incorporate every blueprint field: subjects, positions, emotion, important objects, background, lighting, color palette, contrast, text, text placement, visual effects, focal point, and story.
+- The final image must be a 16:9 YouTube thumbnail: bold, mobile-readable at small size, high click-through-rate design.
+- Do not describe any logos, watermarks, or brand names unless the blueprint explicitly calls for one.
+
+Return ONLY valid JSON, no markdown fences, no extra text:
+{
+  "imagePrompt": "the complete, fully-detailed image generation prompt as a single string"
+}`

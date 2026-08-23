@@ -7,6 +7,7 @@ import { BEST_OF_PAGES } from "./(marketing)/best/data"
 import { ANSWER_PAGES } from "./(marketing)/answers/data"
 import { FORMAT_PAGES } from "./(marketing)/formats/data"
 import { SPEED_PAGES } from "./(marketing)/speed/data"
+import { THUMBNAIL_SEO_PAGES } from "./(marketing)/thumbnails/data"
 
 const BASE_URL = "https://carouselabs.com"
 
@@ -37,6 +38,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${BASE_URL}/answers`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
     { url: `${BASE_URL}/formats`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
     { url: `${BASE_URL}/speed`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
+    { url: `${BASE_URL}/thumbnails`, lastModified: now, changeFrequency: "weekly", priority: 0.85 },
   ]
 
   const tapHoldRoutes: MetadataRoute.Sitemap = tapHoldArticles.map((article) => ({
@@ -81,6 +83,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
     lastModified: now,
     changeFrequency: "monthly" as const,
     priority: 0.7,
+  }))
+
+  const thumbnailRoutes: MetadataRoute.Sitemap = THUMBNAIL_SEO_PAGES.map((page) => ({
+    url: `${BASE_URL}/thumbnails/${page.slug}`,
+    lastModified: now,
+    changeFrequency: "monthly" as const,
+    priority: 0.8,
   }))
 
   const nicheRoutes: MetadataRoute.Sitemap = niches.map((niche) => ({
@@ -141,5 +150,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...answerRoutes,
     ...formatRoutes,
     ...speedRoutes,
+    ...thumbnailRoutes,
   ]
 }

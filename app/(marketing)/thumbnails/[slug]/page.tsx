@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import Image from "next/image"
 import { notFound } from "next/navigation"
-import { ArrowRight, CheckCircle2, Sparkles } from "lucide-react"
+import { ArrowRight, CheckCircle2, Play } from "lucide-react"
 import {
   AnimatedSection,
   AnimatedFadeIn,
@@ -13,71 +13,29 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
-import {
-  GENERATOR_PAGES,
-  GENERATOR_PAGES_BY_CATEGORY,
-  type GeneratorPage,
-  type GeneratorCategory,
-} from "../data"
-import { ANSWER_PAGES, type AnswerPage } from "../../answers/data"
-import { GENERATOR_TO_ANSWER_SLUGS } from "../../answers/cross-link"
-import { THUMBNAIL_SEO_PAGES, type ThumbnailSeoPage } from "../../thumbnails/data"
-import { GENERATOR_TO_THUMBNAIL_SLUGS } from "../../thumbnails/generators-cross-link"
+import { THUMBNAIL_SEO_PAGES, type ThumbnailSeoPage } from "../data"
 
 const BASE_URL = "https://carouselabs.com"
 const SIGNUP_URL = "https://carouselabs.com/signup"
 
-// Each generator category maps to the single most relevant /best ranking,
-// so the cross-link always points somewhere genuinely on-topic rather than
-// a generic hub link.
-const CATEGORY_TO_BEST_SLUG: Record<GeneratorCategory, string> = {
-  Carousel: "best-ai-tools-for-linkedin-carousels",
-  Caption: "best-ai-caption-generators",
-  Image: "best-ai-image-generators-for-social-media",
-  "Ideas & Strategy": "best-linkedin-content-tools-2026",
-  Free: "best-free-linkedin-carousel-tools",
-  Format: "best-linkedin-carousel-generators",
-}
+const bySlug = new Map<string, ThumbnailSeoPage>(THUMBNAIL_SEO_PAGES.map((p) => [p.slug, p]))
 
-const categoryBySlug = new Map<string, GeneratorCategory>()
-for (const category of Object.keys(GENERATOR_PAGES_BY_CATEGORY) as GeneratorCategory[]) {
-  for (const p of GENERATOR_PAGES_BY_CATEGORY[category]) {
-    categoryBySlug.set(p.slug, category)
-  }
-}
-
-const bySlug = new Map<string, GeneratorPage>(GENERATOR_PAGES.map((p) => [p.slug, p]))
-const answerBySlug = new Map<string, AnswerPage>(ANSWER_PAGES.map((p) => [p.slug, p]))
-const thumbnailBySlug = new Map<string, ThumbnailSeoPage>(THUMBNAIL_SEO_PAGES.map((p) => [p.slug, p]))
-
-function getPage(slug: string): GeneratorPage | undefined {
+function getPage(slug: string): ThumbnailSeoPage | undefined {
   return bySlug.get(slug)
 }
 
-function getRelatedAnswers(slug: string): AnswerPage[] {
-  return (GENERATOR_TO_ANSWER_SLUGS[slug] ?? [])
-    .map((s) => answerBySlug.get(s))
-    .filter((p): p is AnswerPage => Boolean(p))
-}
-
-function getRelatedThumbnails(slug: string): ThumbnailSeoPage[] {
-  return (GENERATOR_TO_THUMBNAIL_SLUGS[slug] ?? [])
-    .map((s) => thumbnailBySlug.get(s))
-    .filter((p): p is ThumbnailSeoPage => Boolean(p))
-}
-
-function getRelated(page: GeneratorPage): GeneratorPage[] {
+function getRelated(page: ThumbnailSeoPage): ThumbnailSeoPage[] {
   return page.relatedSlugs
     .map((s) => bySlug.get(s))
-    .filter((p): p is GeneratorPage => Boolean(p))
+    .filter((p): p is ThumbnailSeoPage => Boolean(p))
     .slice(0, 4)
 }
 
-// Only the 40 slugs in GENERATOR_PAGES are valid; any other /generators/* path 404s.
+// Only the 10 slugs in THUMBNAIL_SEO_PAGES are valid; any other /thumbnails/* path 404s.
 export const dynamicParams = false
 
 export function generateStaticParams() {
-  return GENERATOR_PAGES.map((p) => ({ slug: p.slug }))
+  return THUMBNAIL_SEO_PAGES.map((p) => ({ slug: p.slug }))
 }
 
 export async function generateMetadata({
@@ -89,7 +47,7 @@ export async function generateMetadata({
   const page = getPage(slug)
   if (!page) return {}
 
-  const url = `${BASE_URL}/generators/${page.slug}`
+  const url = `${BASE_URL}/thumbnails/${page.slug}`
 
   return {
     title: page.metaTitle,
@@ -105,7 +63,7 @@ export async function generateMetadata({
           url: "/images/carouselabs-landing.png",
           width: 1920,
           height: 957,
-          alt: page.h1,
+          alt: page.headline,
         },
       ],
     },
@@ -118,7 +76,7 @@ export async function generateMetadata({
   }
 }
 
-function buildFaqJsonLd(page: GeneratorPage) {
+function buildFaqJsonLd(page: ThumbnailSeoPage) {
   return {
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -130,7 +88,7 @@ function buildFaqJsonLd(page: GeneratorPage) {
   }
 }
 
-export default async function GeneratorPageRoute({
+export default async function ThumbnailPageRoute({
   params,
 }: {
   params: Promise<{ slug: string }>
@@ -140,11 +98,7 @@ export default async function GeneratorPageRoute({
   if (!page) notFound()
 
   const related = getRelated(page)
-  const relatedAnswers = getRelatedAnswers(page.slug)
-  const relatedThumbnails = getRelatedThumbnails(page.slug)
   const faqJsonLd = buildFaqJsonLd(page)
-  const category = categoryBySlug.get(page.slug)
-  const bestSlug = category ? CATEGORY_TO_BEST_SLUG[category] : undefined
 
   return (
     <>
@@ -153,19 +107,19 @@ export default async function GeneratorPageRoute({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
       />
 
-      {/* ── SECTION 1 — HERO (clean cream, no purple gradient) ── */}
+      {/* ── SECTION 1 — HERO (clean cream, red play-icon accent nods to YouTube) ── */}
       <section className="relative px-6 pt-20 pb-16 sm:pt-24 sm:pb-20 bg-[#FBFAF6]">
         <div className="relative z-10 max-w-3xl mx-auto text-center flex flex-col items-center gap-6">
           <AnimatedSection delay={0}>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#E5E3DE] text-[12px] font-medium text-[#7C3AED]">
-              <Sparkles size={11} strokeWidth={2.2} />
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#E5E3DE] text-[12px] font-medium text-[#DC2626]">
+              <Play size={10} strokeWidth={2.2} fill="#DC2626" className="text-[#DC2626]" />
               Free to try · No credit card required
             </div>
           </AnimatedSection>
 
           <AnimatedSection delay={0.05}>
             <h1 className="text-[clamp(2.1rem,5.2vw,3.3rem)] font-extrabold leading-[1.1] tracking-[-0.03em] text-[#0A0A0A]">
-              {page.h1}
+              {page.headline}
             </h1>
           </AnimatedSection>
 
@@ -185,14 +139,58 @@ export default async function GeneratorPageRoute({
         </div>
       </section>
 
-      {/* ── SECTION 2 — PRODUCT SCREENSHOT ── */}
-      <section className="px-6 py-16">
+      {/* ── SECTION 2 — SEE IT IN ACTION (reference -> result), only where flagged ── */}
+      {page.hasVisualExample && (
+        <section className="px-6 py-16">
+          <AnimatedFadeIn className="max-w-4xl mx-auto flex flex-col gap-6">
+            <div className="text-center flex flex-col gap-2">
+              <h2 className="text-[clamp(1.5rem,3.2vw,2.1rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
+                See It In Action
+              </h2>
+              <p className="text-[14px] text-[#6B7280]">Reference thumbnail on the left, CarouseLabs result on the right.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <figure className="flex flex-col gap-2">
+                <div className="relative aspect-video rounded-2xl overflow-hidden border border-[#E5E3DE] bg-white">
+                  <Image
+                    src="/images/msedge_aZm3dU6Zug.png"
+                    alt="Reference YouTube thumbnail before recreation"
+                    fill
+                    sizes="(max-width: 640px) 100vw, 50vw"
+                    className="object-cover"
+                  />
+                </div>
+                <figcaption className="text-center text-[12.5px] font-semibold text-[#7C3AED]">
+                  Reference
+                </figcaption>
+              </figure>
+              <figure className="flex flex-col gap-2">
+                <div className="relative aspect-video rounded-2xl overflow-hidden border border-[#E5E3DE] bg-white">
+                  <Image
+                    src="/images/thumbnail-1787461618408.png"
+                    alt={`CarouseLabs result — ${page.headline}`}
+                    fill
+                    sizes="(max-width: 640px) 100vw, 50vw"
+                    className="object-cover"
+                  />
+                </div>
+                <figcaption className="text-center text-[12.5px] font-semibold text-[#7C3AED]">
+                  Result
+                </figcaption>
+              </figure>
+            </div>
+          </AnimatedFadeIn>
+        </section>
+      )}
+
+      {/* ── SECTION 3 — PRODUCT SCREENSHOT ── */}
+      <section className={`px-6 py-16 ${page.hasVisualExample ? "bg-[#FBFAF6]" : ""}`}>
         <AnimatedFadeIn className="max-w-[900px] mx-auto">
           <figure className="flex flex-col items-center gap-4">
             <div className="w-full rounded-2xl overflow-hidden border border-[#E5E3DE] shadow-[0_24px_60px_rgba(10,10,10,0.14)] bg-[#FFFDF8]">
               <Image
                 src="/images/carouselabs-landing.png"
-                alt={`CarouseLabs — the AI tool for ${page.keyword.toLowerCase()}`}
+                alt={`CarouseLabs — ${page.headline}`}
                 width={1920}
                 height={957}
                 priority
@@ -201,14 +199,14 @@ export default async function GeneratorPageRoute({
               />
             </div>
             <figcaption className="text-[13px] text-[#6B7280] text-center">
-              CarouseLabs — the AI tool for {page.keyword.toLowerCase()}
+              CarouseLabs — {page.headline.toLowerCase()}
             </figcaption>
           </figure>
         </AnimatedFadeIn>
       </section>
 
-      {/* ── SECTION 3 — HOW IT WORKS ── */}
-      <section className="px-6 py-16 sm:py-20 bg-[#FBFAF6]">
+      {/* ── SECTION 4 — HOW IT WORKS ── */}
+      <section className={`px-6 py-16 sm:py-20 ${page.hasVisualExample ? "" : "bg-[#FBFAF6]"}`}>
         <div className="max-w-3xl mx-auto flex flex-col gap-10">
           <AnimatedSection className="text-center">
             <h2 className="text-[clamp(1.7rem,3.8vw,2.6rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
@@ -236,23 +234,23 @@ export default async function GeneratorPageRoute({
         </div>
       </section>
 
-      {/* ── SECTION 4 — USE CASES / WHO USES THIS ── */}
+      {/* ── SECTION 5 — DIFFERENTIATORS ── */}
       <section className="px-6 py-16 sm:py-20">
         <div className="max-w-5xl mx-auto flex flex-col gap-10">
           <AnimatedSection className="text-center">
             <h2 className="text-[clamp(1.7rem,3.8vw,2.6rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
-              Who Uses This
+              What Makes This Different
             </h2>
           </AnimatedSection>
 
           <div className="grid sm:grid-cols-2 gap-5">
-            {page.useCases.map((useCase, i) => (
+            {page.differentiators.map((d, i) => (
               <AnimatedSection key={i} delay={i * 0.05}>
                 <div className="h-full flex items-start gap-4 p-6 rounded-2xl border border-[#E5E3DE] bg-[#FFFDF8]">
                   <div className="shrink-0 w-9 h-9 rounded-xl bg-[#EDE9FE] flex items-center justify-center">
                     <CheckCircle2 size={18} className="text-[#7C3AED]" strokeWidth={2.2} />
                   </div>
-                  <p className="text-[15px] leading-[1.65] text-[#3F3F46] pt-1">{useCase}</p>
+                  <p className="text-[15px] leading-[1.65] text-[#3F3F46] pt-1">{d}</p>
                 </div>
               </AnimatedSection>
             ))}
@@ -260,71 +258,8 @@ export default async function GeneratorPageRoute({
         </div>
       </section>
 
-      {/* ── SECTION 5 — PRODUCT SCREENSHOT 2 ── */}
-      <section className="px-6 py-16 bg-[#FBFAF6]">
-        <AnimatedFadeIn className="max-w-[900px] mx-auto">
-          <figure className="flex flex-col items-center gap-4">
-            <div className="w-full rounded-2xl overflow-hidden border border-[#E5E3DE] shadow-[0_24px_60px_rgba(10,10,10,0.14)] bg-white">
-              <Image
-                src="/images/carouselabs-ideas.png"
-                alt={`CarouseLabs idea generation — fueling ${page.keyword.toLowerCase()}`}
-                width={1920}
-                height={957}
-                sizes="(max-width: 900px) 100vw, 900px"
-                className="w-full h-auto"
-              />
-            </div>
-            <figcaption className="text-[13px] text-[#6B7280] text-center">
-              Never run out of ideas — CarouseLabs surfaces fresh angles daily
-            </figcaption>
-          </figure>
-        </AnimatedFadeIn>
-      </section>
-
-      {/* ── RELATED ANSWER (cross-link to /answers where topically relevant) ── */}
-      {relatedAnswers.length > 0 && (
-        <section className="px-6 pb-16 sm:pb-20">
-          <div className="max-w-3xl mx-auto flex flex-wrap items-center gap-x-6 gap-y-2">
-            <span className="text-[12.5px] font-semibold text-[#9CA3AF] uppercase tracking-wide">
-              Related answer
-            </span>
-            {relatedAnswers.map((a) => (
-              <Link
-                key={a.slug}
-                href={`/answers/${a.slug}`}
-                className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
-              >
-                {a.question}
-                <ArrowRight size={12} strokeWidth={2.2} />
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ── RELATED THUMBNAIL GUIDE (cross-link to /thumbnails where topically relevant) ── */}
-      {relatedThumbnails.length > 0 && (
-        <section className="px-6 pb-16 sm:pb-20">
-          <div className="max-w-3xl mx-auto flex flex-wrap items-center gap-x-6 gap-y-2">
-            <span className="text-[12.5px] font-semibold text-[#9CA3AF] uppercase tracking-wide">
-              Related thumbnail guide
-            </span>
-            {relatedThumbnails.map((t) => (
-              <Link
-                key={t.slug}
-                href={`/thumbnails/${t.slug}`}
-                className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
-              >
-                {t.headline}
-                <ArrowRight size={12} strokeWidth={2.2} />
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
       {/* ── SECTION 6 — FAQ ── */}
-      <section className="px-6 py-16 sm:py-20">
+      <section className="px-6 py-16 sm:py-20 bg-[#FBFAF6]">
         <div className="max-w-3xl mx-auto flex flex-col gap-10">
           <AnimatedSection className="text-center">
             <h2 className="text-[clamp(1.7rem,3.8vw,2.6rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
@@ -350,24 +285,24 @@ export default async function GeneratorPageRoute({
         </div>
       </section>
 
-      {/* ── SECTION 7 — RELATED TOOLS ── */}
+      {/* ── SECTION 7 — RELATED THUMBNAIL PAGES ── */}
       {related.length > 0 && (
-        <section className="px-6 pb-16 sm:pb-20 bg-[#FBFAF6]">
+        <section className="px-6 pb-16 sm:pb-20">
           <div className="max-w-5xl mx-auto flex flex-col gap-8 pt-16 sm:pt-20">
             <AnimatedSection className="text-center">
               <h2 className="text-[clamp(1.5rem,3.2vw,2.1rem)] font-bold tracking-[-0.025em] text-[#0A0A0A]">
-                Related Tools
+                Related Guides
               </h2>
             </AnimatedSection>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {related.map((r, i) => (
                 <AnimatedSection key={r.slug} delay={i * 0.05}>
                   <Link
-                    href={`/generators/${r.slug}`}
+                    href={`/thumbnails/${r.slug}`}
                     className="group h-full flex flex-col justify-between gap-4 p-5 rounded-2xl border border-[#E5E3DE] bg-white hover:border-[#C4B5FD] hover:shadow-[0_12px_30px_rgba(124,58,237,0.10)] transition-all"
                   >
                     <span className="text-[14px] font-semibold text-[#0A0A0A] leading-snug">
-                      {r.keyword}
+                      {r.headline}
                     </span>
                     <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#7C3AED]">
                       Explore
@@ -383,21 +318,12 @@ export default async function GeneratorPageRoute({
             </div>
             <AnimatedSection className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
               <Link
-                href="/generators"
+                href="/thumbnails"
                 className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
               >
-                Browse all AI tools
+                Browse all thumbnail guides
                 <ArrowRight size={13} strokeWidth={2.2} />
               </Link>
-              {bestSlug && (
-                <Link
-                  href={`/best/${bestSlug}`}
-                  className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
-                >
-                  See how we compare
-                  <ArrowRight size={13} strokeWidth={2.2} />
-                </Link>
-              )}
             </AnimatedSection>
           </div>
         </section>
@@ -416,11 +342,11 @@ export default async function GeneratorPageRoute({
           />
           <div className="relative flex flex-col items-center gap-6">
             <h2 className="max-w-2xl text-[clamp(1.9rem,4.5vw,3rem)] font-bold leading-[1.1] tracking-[-0.025em] text-white">
-              Try {page.keyword} Free
+              Recreate Your First Thumbnail Free
             </h2>
             <p className="max-w-xl text-[16px] text-white/85 leading-[1.65]">
-              Stop spending hours on content. CarouseLabs handles the ideas, captions, and visuals —
-              you just hit publish.
+              Upload a reference, answer a few questions, and see a real result — no credit card
+              required to start.
             </p>
             <Link
               href={SIGNUP_URL}

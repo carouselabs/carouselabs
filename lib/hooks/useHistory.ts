@@ -14,6 +14,7 @@ export type HistoryStatus =
   | "CAROUSEL_DONE"
 
 export interface HistoryEntry {
+  kind: "idea"
   id: string
   ideaId: string
   status: HistoryStatus
@@ -26,6 +27,21 @@ export interface HistoryEntry {
   captionPreview: string | null
   hasDraft: boolean
 }
+
+// Thumbnail generations have no Idea/Breakdown behind them (see
+// app/api/thumbnail/generate/route.ts — the Post is created standalone), so
+// they can't carry a HistoryStatus or resume via continueHref like the
+// idea-based flows. This is a separate, display-only entry shape merged
+// into the same list by /api/history.
+export interface ThumbnailHistoryEntry {
+  kind: "thumbnail"
+  id: string // Post id
+  imageUrl: string
+  videoContent: string
+  createdAt: string
+}
+
+export type AnyHistoryEntry = HistoryEntry | ThumbnailHistoryEntry
 
 // Maps a history status to the route the user should resume at — the core
 // "take me exactly where I left off" logic. Intent and _DONE share a route.
@@ -88,10 +104,10 @@ export async function duplicateIdea(ideaId: string): Promise<string> {
 // Small convenience hook bundling the client actions for components.
 export function useHistory() {
   return {
-    trackHistory: useCallback(trackHistory, []),
-    pinHistory: useCallback(pinHistory, []),
-    deleteHistory: useCallback(deleteHistory, []),
-    duplicateIdea: useCallback(duplicateIdea, []),
+    trackHistory: useCallback((ideaId: string, status: HistoryStatus) => trackHistory(ideaId, status), []),
+    pinHistory: useCallback((ideaId: string, isPinned: boolean) => pinHistory(ideaId, isPinned), []),
+    deleteHistory: useCallback((ideaId: string) => deleteHistory(ideaId), []),
+    duplicateIdea: useCallback((ideaId: string) => duplicateIdea(ideaId), []),
     continueHref,
   }
 }

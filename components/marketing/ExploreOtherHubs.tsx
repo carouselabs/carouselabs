@@ -10,6 +10,7 @@ const ALL_HUBS = [
   { href: "/answers", label: "Answers" },
   { href: "/formats", label: "Content Formats" },
   { href: "/speed", label: "Speed" },
+  { href: "/thumbnails", label: "Thumbnail Guides" },
 ] as const
 
 /**

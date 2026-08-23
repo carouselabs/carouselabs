@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, Wand2, Trophy, MessageCircleQuestion, LayoutGrid, Users, Scale, Lightbulb, BookOpen, Timer } from "lucide-react"
+import { ArrowRight, Wand2, Trophy, MessageCircleQuestion, LayoutGrid, Users, Scale, Lightbulb, BookOpen, Timer, Play } from "lucide-react"
 import { AnimatedSection, AnimatedScale } from "@/components/marketing/AnimatedSection"
 import { niches } from "@/app/(marketing)/for/data"
 import { competitors } from "@/app/(marketing)/vs/data"
@@ -9,6 +9,7 @@ import { ANSWER_PAGES } from "@/app/(marketing)/answers/data"
 import { FORMAT_PAGES } from "@/app/(marketing)/formats/data"
 import { FORMAT_LABELS } from "@/app/(marketing)/formats/types"
 import { SPEED_PAGES } from "@/app/(marketing)/speed/data"
+import { THUMBNAIL_SEO_PAGES } from "@/app/(marketing)/thumbnails/data"
 
 const NICHE_SLUGS = [
   "saas-founders",
@@ -60,6 +61,13 @@ const SPEED_SLUGS = [
   "post-ideas-in-5-minutes-for-saas-founders",
 ]
 
+const THUMBNAIL_SLUGS = [
+  "ai-youtube-thumbnail-generator-from-reference",
+  "youtube-thumbnail-generator-with-your-own-face",
+  "recreate-youtube-thumbnail-with-ai",
+  "ai-thumbnail-maker-free",
+]
+
 const nicheBySlug = new Map(niches.map((n) => [n.slug, n]))
 const competitorBySlug = new Map(competitors.map((c) => [c.slug, c]))
 const generatorBySlug = new Map(GENERATOR_PAGES.map((p) => [p.slug, p]))
@@ -67,6 +75,7 @@ const bestOfBySlug = new Map(BEST_OF_PAGES.map((p) => [p.slug, p]))
 const answerBySlug = new Map(ANSWER_PAGES.map((p) => [p.slug, p]))
 const formatBySlug = new Map(FORMAT_PAGES.map((p) => [p.slug, p]))
 const speedBySlug = new Map(SPEED_PAGES.map((p) => [p.slug, p]))
+const thumbnailBySlug = new Map(THUMBNAIL_SEO_PAGES.map((p) => [p.slug, p]))
 
 const COLUMNS = [
   {
@@ -168,6 +177,17 @@ const COLUMNS = [
     links: COMPARE_SLUGS.map((slug) => {
       const competitor = competitorBySlug.get(slug)
       return competitor ? { href: `/vs/${competitor.slug}`, label: `vs ${competitor.name}` } : null
+    }).filter((l): l is { href: string; label: string } => Boolean(l)),
+  },
+  {
+    icon: Play,
+    title: "Thumbnail Maker",
+    description: "Recreate any YouTube thumbnail's proven composition with AI.",
+    seeAllHref: "/thumbnails",
+    seeAllLabel: "Browse all thumbnail guides",
+    links: THUMBNAIL_SLUGS.map((slug) => {
+      const page = thumbnailBySlug.get(slug)
+      return page ? { href: `/thumbnails/${page.slug}`, label: page.headline } : null
     }).filter((l): l is { href: string; label: string } => Boolean(l)),
   },
 ]

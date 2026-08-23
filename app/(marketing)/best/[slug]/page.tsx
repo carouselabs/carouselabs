@@ -18,6 +18,8 @@ import { ANSWER_PAGES, type AnswerPage } from "../../answers/data"
 import { BEST_TO_ANSWER_SLUGS } from "../../answers/cross-link"
 import { GENERATOR_PAGES, type GeneratorPage } from "../../generators/data"
 import { BEST_TO_GENERATOR_SLUGS } from "../generators-cross-link"
+import { THUMBNAIL_SEO_PAGES, type ThumbnailSeoPage } from "../../thumbnails/data"
+import { BEST_TO_THUMBNAIL_SLUGS } from "../../thumbnails/best-cross-link"
 
 const BASE_URL = "https://carouselabs.com"
 const SIGNUP_URL = "https://carouselabs.com/signup"
@@ -25,6 +27,7 @@ const SIGNUP_URL = "https://carouselabs.com/signup"
 const bySlug = new Map<string, BestOfPage>(BEST_OF_PAGES.map((p) => [p.slug, p]))
 const answerBySlug = new Map<string, AnswerPage>(ANSWER_PAGES.map((p) => [p.slug, p]))
 const generatorBySlug = new Map<string, GeneratorPage>(GENERATOR_PAGES.map((p) => [p.slug, p]))
+const thumbnailBySlug = new Map<string, ThumbnailSeoPage>(THUMBNAIL_SEO_PAGES.map((p) => [p.slug, p]))
 
 function getPage(slug: string): BestOfPage | undefined {
   return bySlug.get(slug)
@@ -40,6 +43,12 @@ function getRelatedGenerators(slug: string): GeneratorPage[] {
   return (BEST_TO_GENERATOR_SLUGS[slug] ?? [])
     .map((s) => generatorBySlug.get(s))
     .filter((p): p is GeneratorPage => Boolean(p))
+}
+
+function getRelatedThumbnails(slug: string): ThumbnailSeoPage[] {
+  return (BEST_TO_THUMBNAIL_SLUGS[slug] ?? [])
+    .map((s) => thumbnailBySlug.get(s))
+    .filter((p): p is ThumbnailSeoPage => Boolean(p))
 }
 
 function getRelated(page: BestOfPage): BestOfPage[] {
@@ -132,6 +141,7 @@ export default async function BestOfPageRoute({
   const related = getRelated(page)
   const relatedAnswers = getRelatedAnswers(page.slug)
   const relatedGenerators = getRelatedGenerators(page.slug)
+  const relatedThumbnails = getRelatedThumbnails(page.slug)
   const faqJsonLd = buildFaqJsonLd(page)
   const itemListJsonLd = buildItemListJsonLd(page)
   const updatedMonth = new Date().toLocaleString("en-US", { month: "long" })
@@ -362,6 +372,27 @@ export default async function BestOfPageRoute({
                 className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
               >
                 {a.question}
+                <ArrowRight size={12} strokeWidth={2.2} />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── RELATED THUMBNAIL GUIDE (cross-link to /thumbnails where topically relevant) ── */}
+      {relatedThumbnails.length > 0 && (
+        <section className="px-6 pb-16 sm:pb-20">
+          <div className="max-w-3xl mx-auto flex flex-wrap items-center gap-x-6 gap-y-2">
+            <span className="text-[12.5px] font-semibold text-[#9CA3AF] uppercase tracking-wide">
+              Related thumbnail guide
+            </span>
+            {relatedThumbnails.map((t) => (
+              <Link
+                key={t.slug}
+                href={`/thumbnails/${t.slug}`}
+                className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
+              >
+                {t.headline}
                 <ArrowRight size={12} strokeWidth={2.2} />
               </Link>
             ))}

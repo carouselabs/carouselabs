@@ -484,7 +484,7 @@ export async function POST(req: Request) {
       status: "READY",
       imageUrls: [imageUrl],
       r2Keys: [filename],
-      metadata: { blueprint, prompt: finalPrompt } as unknown as Prisma.InputJsonValue,
+      metadata: { blueprint, prompt: finalPrompt, videoContent } as unknown as Prisma.InputJsonValue,
       slides: {
         create: {
           role: "COVER",

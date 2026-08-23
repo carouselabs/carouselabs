@@ -8,6 +8,7 @@ import { ANSWER_PAGES } from "@/app/(marketing)/answers/data"
 import { FORMAT_PAGES } from "@/app/(marketing)/formats/data"
 import { FORMAT_LABELS } from "@/app/(marketing)/formats/types"
 import { SPEED_PAGES } from "@/app/(marketing)/speed/data"
+import { THUMBNAIL_SEO_PAGES } from "@/app/(marketing)/thumbnails/data"
 
 const FOOTER_LINKS = [
   { href: "/#pricing", label: "Pricing" },
@@ -109,11 +110,22 @@ const SPEED_SLUGS = [
   "image-in-5-minutes-for-saas-founders",
 ]
 
+// A representative cross-section of the /thumbnails system.
+const THUMBNAIL_SLUGS = [
+  "ai-youtube-thumbnail-generator-from-reference",
+  "youtube-thumbnail-generator-with-your-own-face",
+  "recreate-youtube-thumbnail-with-ai",
+  "clone-youtube-thumbnail-style-ai",
+  "ai-thumbnail-maker-free",
+  "ai-thumbnail-generator-vs-canva",
+]
+
 const generatorBySlug = new Map(GENERATOR_PAGES.map((p) => [p.slug, p]))
 const bestOfBySlug = new Map(BEST_OF_PAGES.map((p) => [p.slug, p]))
 const answerBySlug = new Map(ANSWER_PAGES.map((p) => [p.slug, p]))
 const formatBySlug = new Map(FORMAT_PAGES.map((p) => [p.slug, p]))
 const speedBySlug = new Map(SPEED_PAGES.map((p) => [p.slug, p]))
+const thumbnailBySlug = new Map(THUMBNAIL_SEO_PAGES.map((p) => [p.slug, p]))
 
 const FORMAT_LINKS = FORMAT_SLUGS.map((slug) => {
   const page = formatBySlug.get(slug)
@@ -142,8 +154,13 @@ const SPEED_LINKS = SPEED_SLUGS.map((slug) => {
   return page ? { href: `/speed/${page.slug}`, label: page.headline } : null
 }).filter((l): l is { href: string; label: string } => Boolean(l))
 
-// The 9 link groups below render in a responsive grid (1 col mobile, 2 cols
-// tablet, 3 cols desktop — so 3 rows of 3 rather than a single tall stack).
+const THUMBNAIL_LINKS = THUMBNAIL_SLUGS.map((slug) => {
+  const page = thumbnailBySlug.get(slug)
+  return page ? { href: `/thumbnails/${page.slug}`, label: page.headline } : null
+}).filter((l): l is { href: string; label: string } => Boolean(l))
+
+// The 10 link groups below render in a responsive grid (1 col mobile, 2 cols
+// tablet, 3 cols desktop).
 const LINK_GROUPS = [
   { heading: "For Your Niche", links: NICHE_LINKS, viewAllHref: "/for" },
   { heading: "Carousel Ideas", links: IDEAS_LINKS, viewAllHref: "/ideas" },
@@ -155,6 +172,7 @@ const LINK_GROUPS = [
   { heading: "Content Formats", links: FORMAT_LINKS, viewAllHref: "/formats" },
   { heading: "Speed", links: SPEED_LINKS, viewAllHref: "/speed" },
   { heading: "Tap & Hold Guides", links: TAP_HOLD_LINKS, viewAllHref: "/tap-hold" },
+  { heading: "Thumbnails", links: THUMBNAIL_LINKS, viewAllHref: "/thumbnails" },
 ]
 
 export function Footer() {
@@ -211,6 +229,13 @@ export function Footer() {
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
           >
             Speed
+            <ArrowRight size={13} strokeWidth={2.4} />
+          </Link>
+          <Link
+            href="/thumbnails"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold text-[#7C3AED] bg-[#F3F0FF] hover:bg-[#EDE9FE] transition-colors"
+          >
+            Thumbnail Guides
             <ArrowRight size={13} strokeWidth={2.4} />
           </Link>
         </div>

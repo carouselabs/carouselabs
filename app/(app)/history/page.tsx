@@ -4,20 +4,22 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Clock, Search } from "lucide-react"
 import { HistoryCard } from "@/components/history/HistoryCard"
+import { ThumbnailHistoryCard } from "@/components/history/ThumbnailHistoryCard"
 import {
   pinHistory,
   deleteHistory,
   duplicateIdea,
-  type HistoryEntry,
+  type AnyHistoryEntry,
   type HistoryStatus,
 } from "@/lib/hooks/useHistory"
 
-type Filter = "All" | "Caption" | "Image" | "Carousel"
+type Filter = "All" | "Caption" | "Image" | "Carousel" | "Thumbnail"
 
-const FILTERS: Filter[] = ["All", "Caption", "Image", "Carousel"]
+const FILTERS: Filter[] = ["All", "Caption", "Image", "Carousel", "Thumbnail"]
 
-// Which statuses belong to each filter tab.
-const FILTER_STATUSES: Record<Exclude<Filter, "All">, HistoryStatus[]> = {
+// Which statuses belong to each filter tab (idea-based entries only —
+// Thumbnail is filtered separately below since it has no HistoryStatus).
+const FILTER_STATUSES: Record<Exclude<Filter, "All" | "Thumbnail">, HistoryStatus[]> = {
   Caption: ["CAPTION", "CAPTION_DONE"],
   Image: ["IMAGE", "IMAGE_DONE"],
   Carousel: ["CAROUSEL", "CAROUSEL_DONE"],
@@ -25,7 +27,7 @@ const FILTER_STATUSES: Record<Exclude<Filter, "All">, HistoryStatus[]> = {
 
 export default function HistoryPage() {
   const router = useRouter()
-  const [entries, setEntries] = useState<HistoryEntry[]>([])
+  const [entries, setEntries] = useState<AnyHistoryEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
@@ -50,41 +52,52 @@ export default function HistoryPage() {
     }
   }, [])
 
-  // ── Filtering: search by hook keyword + active filter tab ──────
+  // ── Filtering: search by hook/topic keyword + active filter tab ─
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase()
     return entries.filter((e) => {
-      const matchesSearch = !q || e.idea.hook.toLowerCase().includes(q)
+      const matchesSearch =
+        !q ||
+        (e.kind === "idea" ? e.idea.hook : e.videoContent).toLowerCase().includes(q)
       const matchesFilter =
-        filter === "All" || FILTER_STATUSES[filter].includes(e.status)
+        filter === "All"
+          ? true
+          : filter === "Thumbnail"
+            ? e.kind === "thumbnail"
+            : e.kind === "idea" && FILTER_STATUSES[filter].includes(e.status)
       return matchesSearch && matchesFilter
     })
   }, [entries, search, filter])
 
-  // ── Actions (optimistic) ───────────────────────────────────────
+  // ── Actions (optimistic) — idea-based entries only; Thumbnail entries
+  // aren't pinnable/deletable/duplicable (see ThumbnailHistoryCard). ──
   async function handlePin(ideaId: string, next: boolean) {
     setEntries((prev) => {
       const updated = prev.map((e) =>
-        e.ideaId === ideaId ? { ...e, isPinned: next } : e,
+        e.kind === "idea" && e.ideaId === ideaId ? { ...e, isPinned: next } : e,
       )
-      // Re-sort: pinned first, then most recently visited.
+      // Re-sort: pinned ideas first, then everything else by its own recency.
       return [...updated].sort((a, b) => {
-        if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1
-        return new Date(b.lastVisitedAt).getTime() - new Date(a.lastVisitedAt).getTime()
+        const aPinned = a.kind === "idea" && a.isPinned
+        const bPinned = b.kind === "idea" && b.isPinned
+        if (aPinned !== bPinned) return aPinned ? -1 : 1
+        const ta = new Date(a.kind === "idea" ? a.lastVisitedAt : a.createdAt).getTime()
+        const tb = new Date(b.kind === "idea" ? b.lastVisitedAt : b.createdAt).getTime()
+        return tb - ta
       })
     })
     try {
       await pinHistory(ideaId, next)
     } catch {
       setEntries((prev) =>
-        prev.map((e) => (e.ideaId === ideaId ? { ...e, isPinned: !next } : e)),
+        prev.map((e) => (e.kind === "idea" && e.ideaId === ideaId ? { ...e, isPinned: !next } : e)),
       )
     }
   }
 
   async function handleDelete(ideaId: string) {
     const snapshot = entries
-    setEntries((prev) => prev.filter((e) => e.ideaId !== ideaId))
+    setEntries((prev) => prev.filter((e) => !(e.kind === "idea" && e.ideaId === ideaId)))
     try {
       await deleteHistory(ideaId)
     } catch {
@@ -166,15 +179,19 @@ export default function HistoryPage() {
       {/* List */}
       {!loading && visible.length > 0 && (
         <div className="flex flex-col gap-3">
-          {visible.map((entry) => (
-            <HistoryCard
-              key={entry.id}
-              entry={entry}
-              onPin={handlePin}
-              onDelete={handleDelete}
-              onDuplicate={handleDuplicate}
-            />
-          ))}
+          {visible.map((entry) =>
+            entry.kind === "idea" ? (
+              <HistoryCard
+                key={entry.id}
+                entry={entry}
+                onPin={handlePin}
+                onDelete={handleDelete}
+                onDuplicate={handleDuplicate}
+              />
+            ) : (
+              <ThumbnailHistoryCard key={entry.id} entry={entry} />
+            ),
+          )}
         </div>
       )}
 

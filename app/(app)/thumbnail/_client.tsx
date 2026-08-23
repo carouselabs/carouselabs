@@ -1,7 +1,18 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Sparkles, Upload, Send, Download, Loader2, RotateCcw, ImageIcon } from "lucide-react"
+import {
+  Sparkles,
+  Upload,
+  Send,
+  Download,
+  Loader2,
+  RotateCcw,
+  ImageIcon,
+  FileText,
+  Plus,
+  X,
+} from "lucide-react"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
 import { LoadingGame } from "@/components/generate/LoadingGame"
 import { useCreditStore } from "@/lib/store/creditStore"
@@ -11,14 +22,22 @@ import type { ThumbnailBlueprint } from "@/lib/types/thumbnail"
 interface HistoryTurn {
   role: "user" | "assistant"
   content: string
-  imageBase64?: string
-  imageMediaType?: string
+  images?: { base64: string; mediaType: string }[]
+}
+
+type ThumbnailQuestionInputType = "single_image" | "multiple_images" | "text" | "choice"
+
+interface ThumbnailQuestion {
+  topic: string
+  inputType: ThumbnailQuestionInputType
+  options: string[]
+  maxImages: number | null
 }
 
 interface ThumbnailChatResponse {
   status: "asking" | "ready"
   message: string
-  question: { topic: string; options: string[] } | null
+  question: ThumbnailQuestion | null
   blueprint: ThumbnailBlueprint | null
 }
 
@@ -31,10 +50,19 @@ interface UploadedAsset {
 interface DisplayMessage {
   role: "user" | "assistant"
   text: string
-  imagePreview?: string
+  imagePreviews?: string[]
+}
+
+// A file the user has selected for a "multiple_images" question but hasn't
+// confirmed yet — lets them remove/replace before submitting.
+interface PendingImage {
+  base64: string
+  mediaType: string
+  previewUrl: string
 }
 
 type Screen = "input" | "chat" | "review" | "result"
+type VideoContentMode = "type" | "upload"
 
 // Blueprint review rows, grouped to mirror the two-part schema: a precise
 // structural read of the reference (never touched by user content) and the
@@ -108,13 +136,6 @@ async function compressImage(file: File, maxSize = 1024, quality = 0.8): Promise
   })
 }
 
-function optionKind(option: string): "upload" | "text" | "decide" {
-  const lower = option.toLowerCase()
-  if (lower.includes("upload")) return "upload"
-  if (lower.includes("tell me") || lower.includes("provide")) return "text"
-  return "decide"
-}
-
 // Cycled while the final image generates — the single POST call has no real
 // sub-stages to report, so this is a timed illusion of progress rather than
 // a status derived from the request (mirrors the "this can take a while"
@@ -132,14 +153,17 @@ export function ThumbnailClient() {
   const [referenceImage, setReferenceImage] = useState<string | null>(null)
   const [referenceMediaType, setReferenceMediaType] = useState("image/jpeg")
   const [videoContent, setVideoContent] = useState("")
+  const [contentMode, setContentMode] = useState<VideoContentMode>("type")
+  const [extractingDocument, setExtractingDocument] = useState(false)
+  const [documentName, setDocumentName] = useState<string | null>(null)
+  const [documentError, setDocumentError] = useState<string | null>(null)
 
   // Screen 2 — chat
   const [messages, setMessages] = useState<DisplayMessage[]>([])
-  const [currentQuestion, setCurrentQuestion] = useState<{ topic: string; options: string[] } | null>(
-    null,
-  )
+  const [currentQuestion, setCurrentQuestion] = useState<ThumbnailQuestion | null>(null)
   const [answerMode, setAnswerMode] = useState<"text" | null>(null)
   const [textAnswer, setTextAnswer] = useState("")
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
 
   // Screen 3
@@ -155,7 +179,9 @@ export function ThumbnailClient() {
 
   const apiHistoryRef = useRef<HistoryTurn[]>([])
   const uploadedAssetsRef = useRef<UploadedAsset[]>([])
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const singleFileInputRef = useRef<HTMLInputElement>(null)
+  const multiFileInputRef = useRef<HTMLInputElement>(null)
+  const docFileInputRef = useRef<HTMLInputElement>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -178,10 +204,15 @@ export function ThumbnailClient() {
     setReferenceImage(null)
     setReferenceMediaType("image/jpeg")
     setVideoContent("")
+    setContentMode("type")
+    setExtractingDocument(false)
+    setDocumentName(null)
+    setDocumentError(null)
     setMessages([])
     setCurrentQuestion(null)
     setAnswerMode(null)
     setTextAnswer("")
+    setPendingImages([])
     setIsAnalyzing(false)
     setBlueprint(null)
     setIsGenerating(false)
@@ -239,55 +270,108 @@ export function ThumbnailClient() {
     await callChat()
   }
 
-  function submitAnswer(text: string, imageBase64?: string, imageMediaType?: string) {
+  // Handles every answer type — plain text (choice/text questions) and one
+  // or more images (single_image/multiple_images questions) alike.
+  function submitAnswer(text: string, images?: UploadedAsset[]) {
     setMessages((prev) => [
       ...prev,
       {
         role: "user",
         text,
-        imagePreview: imageBase64 ? `data:${imageMediaType};base64,${imageBase64}` : undefined,
+        imagePreviews: images?.map((img) => `data:${img.mediaType};base64,${img.base64}`),
       },
     ])
-    apiHistoryRef.current.push({ role: "user", content: text, imageBase64, imageMediaType })
-    if (imageBase64 && imageMediaType) {
-      uploadedAssetsRef.current.push({
-        base64: imageBase64,
-        mediaType: imageMediaType,
-        label: currentQuestion?.topic ?? "Uploaded asset",
-      })
+    apiHistoryRef.current.push({
+      role: "user",
+      content: text,
+      images: images?.map((img) => ({ base64: img.base64, mediaType: img.mediaType })),
+    })
+    if (images) {
+      for (const img of images) {
+        uploadedAssetsRef.current.push(img)
+      }
     }
     setCurrentQuestion(null)
     setAnswerMode(null)
     setTextAnswer("")
+    setPendingImages([])
     void callChat()
   }
 
-  function handleOptionClick(option: string) {
-    const kind = optionKind(option)
-    if (kind === "upload") {
-      fileInputRef.current?.click()
-    } else if (kind === "text") {
-      setAnswerMode("text")
-    } else {
-      submitAnswer(option)
-    }
-  }
-
-  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleSingleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ""
-    if (!file || !file.type.startsWith("image/")) return
+    if (!file || !file.type.startsWith("image/") || !currentQuestion) return
     try {
       const base64 = await compressImage(file)
-      submitAnswer(`Uploaded a photo for: ${currentQuestion?.topic ?? "this"}`, base64, "image/jpeg")
+      submitAnswer(`Uploaded a photo for: ${currentQuestion.topic}`, [
+        { base64, mediaType: "image/jpeg", label: currentQuestion.topic },
+      ])
     } catch {
       setError("Failed to process the uploaded image. Please try a different file.")
     }
   }
 
+  async function handleMultiFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    e.target.value = ""
+    if (files.length === 0 || !currentQuestion) return
+    const maxImages = currentQuestion.maxImages ?? 1
+    const remaining = Math.max(0, maxImages - pendingImages.length)
+    const toAdd = files.slice(0, remaining).filter((f) => f.type.startsWith("image/"))
+    if (toAdd.length === 0) return
+    try {
+      const compressed = await Promise.all(
+        toAdd.map(async (file) => {
+          const base64 = await compressImage(file)
+          return { base64, mediaType: "image/jpeg", previewUrl: `data:image/jpeg;base64,${base64}` }
+        }),
+      )
+      setPendingImages((prev) => [...prev, ...compressed])
+    } catch {
+      setError("Failed to process one or more images. Please try different files.")
+    }
+  }
+
+  function removePendingImage(index: number) {
+    setPendingImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  function confirmMultiImages() {
+    if (pendingImages.length === 0 || !currentQuestion) return
+    const count = pendingImages.length
+    const images: UploadedAsset[] = pendingImages.map((img, i) => ({
+      base64: img.base64,
+      mediaType: img.mediaType,
+      label: count > 1 ? `${currentQuestion.topic} — item ${i + 1} of ${count}` : currentQuestion.topic,
+    }))
+    submitAnswer(`Uploaded ${count} image${count > 1 ? "s" : ""} for: ${currentQuestion.topic}`, images)
+  }
+
   function handleTextSubmit() {
     if (!textAnswer.trim()) return
     submitAnswer(textAnswer.trim())
+  }
+
+  async function handleDocumentSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+    setDocumentError(null)
+    setExtractingDocument(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await fetch("/api/thumbnail/extract-document", { method: "POST", body: formData })
+      const data = await res.json()
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to extract text")
+      setVideoContent((data as { extractedText: string }).extractedText)
+      setDocumentName(file.name)
+    } catch (err) {
+      setDocumentError(err instanceof Error ? err.message : "Failed to extract text from that file")
+    } finally {
+      setExtractingDocument(false)
+    }
   }
 
   async function handleGenerate() {
@@ -370,9 +454,73 @@ export function ThumbnailClient() {
           />
 
           <div className="flex flex-col gap-2">
-            <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
-              Tell us about your video
-            </p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
+                Tell us about your video
+              </p>
+              <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[#F4F2EC] border border-[#E5E3DE]">
+                <button
+                  onClick={() => setContentMode("type")}
+                  className={[
+                    "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors",
+                    contentMode === "type"
+                      ? "bg-white text-[#1A1A1A] shadow-sm"
+                      : "text-[#9CA3AF] hover:text-[#4B5563]",
+                  ].join(" ")}
+                >
+                  Type
+                </button>
+                <button
+                  onClick={() => setContentMode("upload")}
+                  className={[
+                    "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors",
+                    contentMode === "upload"
+                      ? "bg-white text-[#1A1A1A] shadow-sm"
+                      : "text-[#9CA3AF] hover:text-[#4B5563]",
+                  ].join(" ")}
+                >
+                  <FileText size={11} strokeWidth={2.2} />
+                  Upload a file
+                </button>
+              </div>
+            </div>
+
+            {contentMode === "upload" && (
+              <div className="flex flex-col gap-1.5">
+                <input
+                  ref={docFileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                  className="hidden"
+                  onChange={(e) => void handleDocumentSelected(e)}
+                />
+                <button
+                  onClick={() => docFileInputRef.current?.click()}
+                  disabled={extractingDocument}
+                  className="flex items-center justify-center gap-2 h-11 rounded-xl border border-dashed border-[#E5E3DE] bg-[#F6F4EE] hover:border-[#D6D3CC] hover:bg-[#F4F2EC] text-[12px] text-[#6B7280] transition-all disabled:opacity-60"
+                >
+                  {extractingDocument ? (
+                    <Loader2 size={13} className="animate-spin" strokeWidth={2.2} />
+                  ) : (
+                    <Upload size={13} strokeWidth={1.8} className="text-[#ADA99F]" />
+                  )}
+                  {extractingDocument
+                    ? "Extracting text…"
+                    : documentName
+                      ? `Replace "${documentName}"`
+                      : "Upload a script or document (PDF, DOC, DOCX, TXT)"}
+                </button>
+                {documentError && (
+                  <p className="text-[11px] text-[rgba(239,68,68,0.9)]">{documentError}</p>
+                )}
+                {documentName && !extractingDocument && !documentError && (
+                  <p className="text-[11px] text-[#9CA3AF]">
+                    Extracted from {documentName} — review and edit below before continuing.
+                  </p>
+                )}
+              </div>
+            )}
+
             <textarea
               value={videoContent}
               onChange={(e) => setVideoContent(e.target.value)}
@@ -408,14 +556,29 @@ export function ThumbnailClient() {
 
   // ── Screen 2: Conversational Q&A ─────────────────────────────────
   if (screen === "chat") {
+    const maxImages = currentQuestion?.maxImages ?? 1
+    const showTextInput = currentQuestion?.inputType === "text" || answerMode === "text"
+    const showImagePicker =
+      currentQuestion &&
+      answerMode !== "text" &&
+      (currentQuestion.inputType === "single_image" || currentQuestion.inputType === "multiple_images")
+
     return (
       <div className="max-w-2xl mx-auto flex flex-col h-full gap-4">
         <input
-          ref={fileInputRef}
+          ref={singleFileInputRef}
           type="file"
           accept="image/*"
           className="hidden"
-          onChange={(e) => void handleFileSelected(e)}
+          onChange={(e) => void handleSingleFileSelected(e)}
+        />
+        <input
+          ref={multiFileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => void handleMultiFilesSelected(e)}
         />
 
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 py-2">
@@ -424,13 +587,18 @@ export function ThumbnailClient() {
               key={i}
               className={`flex flex-col gap-1.5 max-w-[85%] ${m.role === "user" ? "self-end items-end" : "self-start items-start"}`}
             >
-              {m.imagePreview && (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={m.imagePreview}
-                  alt="Uploaded"
-                  className="w-20 h-20 rounded-lg object-cover border border-[#E5E3DE]"
-                />
+              {m.imagePreviews && m.imagePreviews.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 justify-end">
+                  {m.imagePreviews.map((src, idx) => (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      key={idx}
+                      src={src}
+                      alt="Uploaded"
+                      className="w-16 h-16 rounded-lg object-cover border border-[#E5E3DE]"
+                    />
+                  ))}
+                </div>
               )}
               <div
                 className={[
@@ -467,32 +635,95 @@ export function ThumbnailClient() {
           <div ref={chatEndRef} />
         </div>
 
-        {/* Question options / answer input — sticky at the bottom.
-            An empty options array is the model's signal to skip buttons
-            entirely and let the user type straight into a text field (e.g.
-            entering custom thumbnail text, or an open-ended guidance note). */}
+        {/* Question input — sticky at the bottom. The control shown adapts to
+            question.inputType: choice buttons, a single-photo upload, a
+            multi-photo picker (up to maxImages), or a text field. */}
         {currentQuestion && !isAnalyzing && (
           <div className="flex-shrink-0 flex flex-col gap-2.5 pt-2 border-t border-[#E5E3DE]">
             <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
               {currentQuestion.topic}
             </p>
 
-            {currentQuestion.options.length > 0 && answerMode !== "text" && (
+            {currentQuestion.inputType === "choice" && answerMode !== "text" && (
               <div className="flex flex-col gap-2">
                 {currentQuestion.options.map((opt) => (
                   <button
                     key={opt}
-                    onClick={() => handleOptionClick(opt)}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#E5E3DE] bg-white hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] text-[13px] font-medium text-[#374151] text-left transition-all"
+                    onClick={() => submitAnswer(opt)}
+                    className="px-4 py-2.5 rounded-xl border border-[#E5E3DE] bg-white hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] text-[13px] font-medium text-[#374151] text-left transition-all"
                   >
-                    {optionKind(opt) === "upload" && <Upload size={13} className="text-[#7C3AED]" />}
                     {opt}
                   </button>
                 ))}
               </div>
             )}
 
-            {(currentQuestion.options.length === 0 || answerMode === "text") && (
+            {currentQuestion.inputType === "single_image" && answerMode !== "text" && (
+              <button
+                onClick={() => singleFileInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 h-11 rounded-xl border border-dashed border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.03)] hover:bg-[rgba(124,58,237,0.06)] text-[13px] font-medium text-[#7C3AED] transition-all"
+              >
+                <Upload size={14} strokeWidth={2} />
+                Upload a photo
+              </button>
+            )}
+
+            {showImagePicker && currentQuestion.inputType === "multiple_images" && (
+              <div className="flex flex-col gap-2.5">
+                <div className="grid grid-cols-4 gap-2">
+                  {pendingImages.map((img, i) => (
+                    <div
+                      key={i}
+                      className="relative aspect-square rounded-lg overflow-hidden border border-[#E5E3DE]"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={img.previewUrl}
+                        alt={`Selected ${i + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        onClick={() => removePendingImage(i)}
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[rgba(0,0,0,0.65)] flex items-center justify-center hover:bg-[rgba(0,0,0,0.85)] transition-colors"
+                      >
+                        <X size={10} className="text-white" strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  ))}
+                  {pendingImages.length < maxImages && (
+                    <button
+                      onClick={() => multiFileInputRef.current?.click()}
+                      className="aspect-square rounded-lg border border-dashed border-[#E5E3DE] flex items-center justify-center hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.03)] transition-all"
+                    >
+                      <Plus size={16} className="text-[#9CA3AF]" strokeWidth={2} />
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={confirmMultiImages}
+                    disabled={pendingImages.length === 0}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-40 disabled:cursor-not-allowed text-[12px] font-semibold text-white transition-colors"
+                  >
+                    Use {pendingImages.length || ""} image{pendingImages.length === 1 ? "" : "s"}
+                  </button>
+                  <span className="text-[11px] text-[#ADA99F]">
+                    {pendingImages.length} / {maxImages} selected
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {showImagePicker && (
+              <button
+                onClick={() => setAnswerMode("text")}
+                className="self-start text-[11px] text-[#9CA3AF] hover:text-[#6B7280] underline transition-colors"
+              >
+                Answer in your own words instead
+              </button>
+            )}
+
+            {showTextInput && (
               <div className="flex items-end gap-2">
                 <textarea
                   value={textAnswer}

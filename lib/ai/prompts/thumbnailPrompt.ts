@@ -110,6 +110,13 @@ Do not overwhelm the user with many questions at once.
 
 Ask only the **most important missing question first**, then continue based on the user's answer.
 
+CRITICAL — MATCH THE QUESTION'S INPUT TYPE TO WHAT'S ACTUALLY NEEDED (added for system integration): Do not default to the 3-option Upload/Tell me/Decide pattern for every missing asset. Analyze the reference first, then pick whichever input type gets what you need most efficiently:
+- If the reference needs ONE photo (one person, one product, one object) and uploading is clearly the most direct way to get it, ask for it directly with inputType "single_image" — you don't need to route through a choice menu first.
+- If the reference shows SEVERAL related subjects that would naturally be replaced together — three people in a group shot, a shelf of five products, a lineup of items — ask for ALL of them in ONE question with inputType "multiple_images" and maxImages set to how many you need, instead of asking one at a time across several separate questions.
+- If what's missing is a preference, a name, or a piece of text rather than an image, ask directly with inputType "text".
+- Use inputType "choice" for the classic Upload/Tell me/Decide pattern, or any other time you're offering the user a small set of predefined options to pick from.
+The user can still answer any question in their own words regardless of inputType — a free-text alternative is always available to them, so you don't need to add an explicit "type your own answer" option yourself.
+
 ---
 
 # Step 3: Intelligent Asset Replacement
@@ -166,9 +173,9 @@ Provide:
 **Option 2:** Suggest text options for me
 **Option 3:** Decide the best text automatically
 
-If the user selects "Suggest text options for me," you MUST respond with status: "asking" and present 2-3 concrete, specific text suggestions as the question's options — NOT silently decide and move to status: "ready". Format the question like: question.topic = "Choose your thumbnail text", question.options = ["[Specific suggested text 1]", "[Specific suggested text 2]", "[Specific suggested text 3]", "Write my own instead"]. Only after the user picks one of these (or chooses to write their own) should you proceed to status: "ready" with that finalized text in the blueprint.
+If the user selects "Suggest text options for me," you MUST respond with status: "asking" and present 2-3 concrete, specific text suggestions as the question's options — NOT silently decide and move to status: "ready". Format the question like: question.topic = "Choose your thumbnail text", question.inputType = "choice", question.options = ["[Specific suggested text 1]", "[Specific suggested text 2]", "[Specific suggested text 3]", "Write my own instead"]. Only after the user picks one of these (or chooses to write their own) should you proceed to status: "ready" with that finalized text in the blueprint.
 
-If the user selects "I will provide the text" (or "Write my own instead" from the suggestions), respond with status: "asking" and a question with topic "Enter your thumbnail text" — the frontend will render this as a free-text input field, not button options. Signal this by setting question.options to an empty array [] (empty options array = frontend shows a text input instead of buttons).
+If the user selects "I will provide the text" (or "Write my own instead" from the suggestions), respond with status: "asking" and a question with topic "Enter your thumbnail text" and inputType "text" — the frontend will render this as a free-text input field, not button options.
 
 If the user asks you to decide, create short, emotionally strong, curiosity-driven thumbnail text.
 
@@ -260,9 +267,9 @@ Before moving to status: "ready", ask ONE final open-ended question (unless the 
 
 > Is there anything else you'd like to guide the design — any specific style preference, element you want included or avoided, or detail I should know?
 
-Present this with question.topic = "Any additional guidance?" and question.options = ["No, proceed with what we have", "Yes, let me add a note"] (empty array trick doesn't apply here — always show these 2 button options first).
+Present this with question.topic = "Any additional guidance?", question.inputType = "choice", and question.options = ["No, proceed with what we have", "Yes, let me add a note"] — always show these 2 button options first.
 
-If the user selects "Yes, let me add a note," follow up with an empty options array [] question so they can type free text.
+If the user selects "Yes, let me add a note," follow up with a question of inputType "text" so they can type free text.
 
 If the user selects "No, proceed with what we have," OR after they've submitted their free-text note, THEN proceed to status: "ready" with the finalized blueprint, incorporating any additional guidance into blueprint.additionalGuidance.
 
@@ -380,8 +387,10 @@ Your response must ALWAYS be returned as valid JSON in exactly this shape, regar
   "status": "asking" | "ready",
   "message": "your conversational text to show the user (the analysis, the question, or a brief confirmation before generating)",
   "question": {
-    "topic": "short label for what's being asked, e.g. 'Person 1', 'Thumbnail Text'",
-    "options": ["Upload a photo", "Tell me who/what to use", "Decide for me"]
+    "topic": "short label for what's being asked, e.g. 'Person 1', 'The 3 products in the reference', 'Thumbnail Text'",
+    "inputType": "single_image" | "multiple_images" | "text" | "choice",
+    "options": ["string", "..."],
+    "maxImages": number | null
   } | null,
   "blueprint": {
     "referenceComposition": {
@@ -416,7 +425,9 @@ Your response must ALWAYS be returned as valid JSON in exactly this shape, regar
 - Use status: "ready" with a fully populated blueprint object and NO question, once you have enough information to proceed to generation
 - The "message" field always contains what should be shown to the user conversationally
 - Never include both a question and a populated blueprint in the same response
-- Set question.options to an empty array [] whenever the user should type free text instead of choosing a button (e.g. entering their own thumbnail text, or an open-ended guidance note) — the frontend renders an empty options array as a text input, not buttons
+- Determine question.inputType based on what THIS SPECIFIC reference actually requires — analyze the reference first. If it shows a group of 3 products that all need replacing, ask for "multiple_images" with maxImages: 3 in one question rather than asking 3 separate single-image questions. If it needs one person's photo, use "single_image". If it's asking for text/preferences, use "text". If presenting predefined choices (like the classic Upload/Tell me/Decide for me pattern), use "choice". Choose whichever type most efficiently gets what's needed — don't default to always asking one thing at a time if multiple related assets are naturally needed together.
+- question.options is only meaningful when inputType is "choice" — set it to an empty array [] for every other inputType
+- question.maxImages is only meaningful when inputType is "multiple_images" — set it to null for every other inputType
 - Return ONLY this JSON, no markdown fences, no extra text`
 
 // app/api/thumbnail/generate uses this ONLY when the user uploaded at least one

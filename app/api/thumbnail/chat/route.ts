@@ -34,14 +34,25 @@ const ratelimit = new Ratelimit({
 interface HistoryTurn {
   role: "user" | "assistant"
   content: string
-  imageBase64?: string
-  imageMediaType?: string
+  // 0 or more images attached to this turn — a single-photo answer sends one,
+  // a "multiple_images" answer (e.g. 3 products replaced at once) sends
+  // several in the same turn instead of spanning multiple round-trips.
+  images?: { base64: string; mediaType: string }[]
+}
+
+type ThumbnailQuestionInputType = "single_image" | "multiple_images" | "text" | "choice"
+
+interface ThumbnailQuestion {
+  topic: string
+  inputType: ThumbnailQuestionInputType
+  options: string[]
+  maxImages: number | null
 }
 
 interface ThumbnailChatResponse {
   status: "asking" | "ready"
   message: string
-  question: { topic: string; options: string[] } | null
+  question: ThumbnailQuestion | null
   blueprint: ThumbnailBlueprint | null
 }
 
@@ -134,14 +145,33 @@ function normalizeBlueprint(bp: ThumbnailBlueprint): ThumbnailBlueprint {
   }
 }
 
-function isValidQuestion(val: unknown): val is { topic: string; options: string[] } {
+function isValidQuestion(val: unknown): val is ThumbnailQuestion {
   if (typeof val !== "object" || val === null) return false
-  const q = val as { topic?: unknown; options?: unknown }
-  return (
-    typeof q.topic === "string" &&
-    Array.isArray(q.options) &&
-    q.options.every((o) => typeof o === "string")
-  )
+  const q = val as Record<string, unknown>
+  if (typeof q.topic !== "string") return false
+  if (
+    q.inputType !== "single_image" &&
+    q.inputType !== "multiple_images" &&
+    q.inputType !== "text" &&
+    q.inputType !== "choice"
+  ) {
+    return false
+  }
+  if (!Array.isArray(q.options) || !q.options.every((o) => typeof o === "string")) return false
+  if (q.maxImages !== null && typeof q.maxImages !== "number") return false
+  return true
+}
+
+// Normalizes options/maxImages to their "not applicable" default for the
+// current inputType, so the client never has to guess whether a stray value
+// (e.g. the model setting maxImages on a "text" question) means anything.
+function normalizeQuestion(q: ThumbnailQuestion): ThumbnailQuestion {
+  return {
+    topic: q.topic,
+    inputType: q.inputType,
+    options: q.inputType === "choice" ? q.options : [],
+    maxImages: q.inputType === "multiple_images" ? (q.maxImages ?? 1) : null,
+  }
 }
 
 function isValidResponse(val: unknown): val is ThumbnailChatResponse {
@@ -158,7 +188,7 @@ function normalizeResponse(val: ThumbnailChatResponse): ThumbnailChatResponse {
   return {
     status: val.status,
     message: val.message,
-    question: val.status === "asking" ? val.question ?? null : null,
+    question: val.status === "asking" && val.question ? normalizeQuestion(val.question) : null,
     blueprint: val.status === "ready" && val.blueprint ? normalizeBlueprint(val.blueprint) : null,
   }
 }
@@ -201,37 +231,29 @@ function parseThumbnailResponse(raw: string): ThumbnailChatResponse {
   throw new Error("All parsing strategies exhausted")
 }
 
-// Builds the OpenAI content parts for a single history turn.
+// Builds the OpenAI content parts for a single history turn — every image
+// attached to the turn goes in first (in order), then the text.
 function turnToOpenAIContent(turn: HistoryTurn): OpenAI.Chat.Completions.ChatCompletionContentPart[] {
-  const parts: OpenAI.Chat.Completions.ChatCompletionContentPart[] = []
-  if (turn.imageBase64) {
-    parts.push({
-      type: "image_url" as const,
-      image_url: {
-        url: `data:${turn.imageMediaType || "image/jpeg"};base64,${turn.imageBase64}`,
-        detail: "high" as const,
-      },
-    })
-  }
+  const parts: OpenAI.Chat.Completions.ChatCompletionContentPart[] = (turn.images ?? []).map((img) => ({
+    type: "image_url" as const,
+    image_url: {
+      url: `data:${img.mediaType || "image/jpeg"};base64,${img.base64}`,
+      detail: "high" as const,
+    },
+  }))
   parts.push({ type: "text" as const, text: turn.content })
   return parts
 }
 
 function turnToClaudeContent(turn: HistoryTurn): Anthropic.MessageParam["content"] {
-  const parts: Anthropic.MessageParam["content"] = []
-  if (turn.imageBase64) {
-    parts.push({
-      type: "image" as const,
-      source: {
-        type: "base64" as const,
-        media_type: (turn.imageMediaType || "image/jpeg") as
-          | "image/jpeg"
-          | "image/png"
-          | "image/webp",
-        data: turn.imageBase64,
-      },
-    })
-  }
+  const parts: Anthropic.MessageParam["content"] = (turn.images ?? []).map((img) => ({
+    type: "image" as const,
+    source: {
+      type: "base64" as const,
+      media_type: (img.mediaType || "image/jpeg") as "image/jpeg" | "image/png" | "image/webp",
+      data: img.base64,
+    },
+  }))
   parts.push({ type: "text" as const, text: turn.content })
   return parts
 }
@@ -281,16 +303,18 @@ export async function POST(req: Request) {
   referenceImageBase64 = refCheck.data
   referenceImageMediaType = refCheck.mediaType
 
-  // Validate + clean any image the user uploaded mid-conversation (e.g. a
-  // "Person 1" photo answering a question) before it reaches vision APIs.
+  // Validate + clean every image the user uploaded mid-conversation (e.g. a
+  // "Person 1" photo, or several product photos answering one
+  // "multiple_images" question) before any of it reaches vision APIs.
   for (const turn of conversationHistory) {
-    if (turn.role === "user" && turn.imageBase64) {
-      const check = validateReferenceImage(turn.imageBase64, turn.imageMediaType || "image/jpeg")
+    if (turn.role !== "user" || !turn.images) continue
+    for (const img of turn.images) {
+      const check = validateReferenceImage(img.base64, img.mediaType || "image/jpeg")
       if (!check.ok) {
         return NextResponse.json({ error: check.error }, { status: 400 })
       }
-      turn.imageBase64 = check.data
-      turn.imageMediaType = check.mediaType
+      img.base64 = check.data
+      img.mediaType = check.mediaType
     }
   }
 
@@ -300,8 +324,7 @@ export async function POST(req: Request) {
   const initialTurn: HistoryTurn = {
     role: "user",
     content: `Video content (title/script/topic/key points): ${videoContent}`,
-    imageBase64: referenceImageBase64,
-    imageMediaType: referenceImageMediaType,
+    images: [{ base64: referenceImageBase64, mediaType: referenceImageMediaType }],
   }
   const allTurns = [initialTurn, ...conversationHistory]
 

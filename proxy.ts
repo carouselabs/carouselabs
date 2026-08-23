@@ -30,6 +30,13 @@ const isPublicRoute = createRouteMatcher([
   "/api/webhooks/clerk(.*)",
   "/api/webhooks/lemonsqueezy(.*)",
   "/api/maintenance-status(.*)",
+  // Vercel Cron invokes these server-to-server with a CRON_SECRET header —
+  // never a Clerk session. Without this exemption, Clerk's own
+  // auth.protect() intercepts the request first and returns a 404 (its
+  // documented behavior for unauthenticated non-page requests) before the
+  // route's own CRON_SECRET check ever runs. Each cron route still
+  // authenticates itself independently — this only lets that check happen.
+  "/api/cron(.*)",
 ])
 
 const handler = clerkMiddleware(

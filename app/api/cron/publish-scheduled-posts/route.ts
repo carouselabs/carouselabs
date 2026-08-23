@@ -127,17 +127,28 @@ async function fulfillRecurringSlots(now: Date): Promise<number> {
 }
 
 export async function GET(req: Request) {
+  const now = new Date()
+  // TEMP DIAGNOSTIC — remove once cron firing is confirmed healthy in
+  // production logs. Logs booleans only, never the actual secret value.
+  console.log(`[cron/publish-scheduled-posts] invoked at ${now.toISOString()}`)
+
   // Secret gate — same convention as the other cron routes (Vercel Cron
   // sends `Authorization: Bearer <CRON_SECRET>`; a `?secret=` query param
   // covers manual runs).
   const secret = process.env.CRON_SECRET
   const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
   const provided = bearer ?? new URL(req.url).searchParams.get("secret")
-  if (!secret || provided !== secret) {
+  const authorized = !!secret && provided === secret
+  // TEMP DIAGNOSTIC — this line alone will tell us if CRON_SECRET is even
+  // set in this environment, which is the #1 suspect for a cron that never
+  // fires: cronSecretSet=false means every invocation, including Vercel's
+  // own, gets rejected here before anything else in this file ever runs.
+  console.log(
+    `[cron/publish-scheduled-posts] auth check: cronSecretSet=${!!secret} authHeaderPresent=${!!bearer} authorized=${authorized}`,
+  )
+  if (!authorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-
-  const now = new Date()
 
   // Job #0 — reclaim anything stuck "publishing" from a crashed prior run
   // before doing anything else, so it's eligible for job #2 below in this
@@ -146,10 +157,14 @@ export async function GET(req: Request) {
     where: { status: "publishing", updatedAt: { lt: new Date(now.getTime() - STUCK_PUBLISHING_MS) } },
     data: { status: "queued" },
   })
+  // TEMP DIAGNOSTIC
+  console.log(`[cron/publish-scheduled-posts] reclaimed ${reclaimed.count} stuck "publishing" row(s)`)
 
   // Job #1, so anything it creates gets picked up by job #2 below in this
   // same tick instead of waiting another 5 minutes.
   const recurringCreated = await fulfillRecurringSlots(now)
+  // TEMP DIAGNOSTIC
+  console.log(`[cron/publish-scheduled-posts] recurring slots created ${recurringCreated} new queued post(s)`)
 
   const due = await db.scheduledPost.findMany({
     where: { status: "queued", scheduledFor: { lte: now } },
@@ -160,6 +175,16 @@ export async function GET(req: Request) {
       user: { include: { linkedIn: true, profile: true } },
     },
   })
+
+  // TEMP DIAGNOSTIC — the key visibility the user asked for: exactly what
+  // the due-post query found (or didn't) on this tick, before any publish
+  // attempt runs.
+  console.log(`[cron/publish-scheduled-posts] found ${due.length} due post(s)`)
+  for (const d of due) {
+    console.log(
+      `[cron/publish-scheduled-posts]   due id=${d.id} status=${d.status} platform=${d.platform} scheduledFor=${d.scheduledFor.toISOString()} retryCount=${d.retryCount} linkedInConnected=${!!d.user.linkedIn}`,
+    )
+  }
 
   let published = 0
   let retried = 0

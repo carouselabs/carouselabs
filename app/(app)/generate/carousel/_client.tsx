@@ -8,6 +8,7 @@ import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
 import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { CarouselImageGrid, type SlideImage } from "@/components/generate/CarouselImageGrid"
 import { PostToLinkedInButton } from "@/components/generate/PostToLinkedInButton"
+import { ScheduleForLaterButton } from "@/components/generate/ScheduleForLaterButton"
 import { LoadingGame } from "@/components/generate/LoadingGame"
 import { RegenerationLimit } from "@/components/generate/RegenerationLimit"
 import {
@@ -119,6 +120,9 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   // Step 4b — actual slide images generated from the prompts (one at a time)
   const [slideImages, setSlideImages] = useState<SlideImage[]>([])
   const [isGeneratingImages, setIsGeneratingImages] = useState(false)
+  // Set once the whole carousel is persisted (see persistImages) — powers
+  // ScheduleForLaterButton's deep-link into Content Hub.
+  const [postId, setPostId] = useState<string | null>(null)
   const [regeneratingSlide, setRegeneratingSlide] = useState<number | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState("")
@@ -525,7 +529,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     // we send them directly (no fragile index-merge with the prompt slides).
     if (generatedImages.length > 0) {
       try {
-        await fetch("/api/generate/carousel-images", {
+        const persistRes = await fetch("/api/generate/carousel-images", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -535,6 +539,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
             persistOnly: true, // just save to DB, no image generation
           }),
         })
+        const persistData = await persistRes.json()
+        if (typeof persistData.postId === "string") setPostId(persistData.postId)
       } catch (err) {
         console.error("[carousel] DB persist failed:", err)
       }
@@ -592,6 +598,24 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     setLinkedInWarnOpen(false)
     linkedInResolve.current?.(proceed)
     linkedInResolve.current = null
+  }
+
+  // ScheduleForLaterButton's getPostId — the persisted Post is created with
+  // an empty caption (see persistOnly above), so this syncs the caption the
+  // user actually edited before handing back the id, same treatment as the
+  // image flow's getPostIdSynced.
+  async function getPostIdSynced(): Promise<string | null> {
+    if (!postId) return null
+    try {
+      await fetch(`/api/posts/${postId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caption }),
+      })
+    } catch {
+      // best-effort — worst case Content Hub shows the last-saved caption
+    }
+    return postId
   }
 
   // Regenerate a single slide's image. Sends persist:false so a regeneration
@@ -804,6 +828,9 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
               disabled={isGeneratingImages}
               beforePost={confirmLinkedInPost}
             />
+          )}
+          {slideImages.length > 0 && !isGeneratingImages && (
+            <ScheduleForLaterButton getPostId={getPostIdSynced} disabled={!postId} />
           )}
         </div>
       </div>

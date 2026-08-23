@@ -87,37 +87,39 @@ model User {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  profile      Profile?
-  ideas        Idea[]
-  posts        Post[]
-  subscription Subscription?
-  linkedIn     LinkedInAccount?
-  usage        UsageCounter?
-  history      IdeaHistory[]
+  profile        Profile?
+  ideas          Idea[]
+  posts          Post[]
+  subscription   Subscription?
+  linkedIn       LinkedInAccount?
+  usage          UsageCounter?
+  history        IdeaHistory[]
+  scheduledPosts ScheduledPost[]
+  recurringSlots RecurringSlot[]
 
   @@index([clerkId])
 }
 
 model Profile {
-  id               String   @id @default(cuid())
-  userId           String   @unique
-  name             String?
-  headline         String?
-  industry         String?
-  targetAudience   String?
-  contentPillars   String[]
-  writingStyle     String?
-  voiceGuidelines  String?  @db.Text
-  voicePresets     Json?
-  linkedInUrl      String?
-  timezone         String   @default("UTC")
-  onboardingDone   Boolean  @default(false)
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  name               String?
+  headline           String?
+  industry           String?
+  targetAudience     String?
+  contentPillars     String[]
+  writingStyle       String?
+  voiceGuidelines    String?  @db.Text
+  voicePresets       Json?
+  linkedInUrl        String?
+  timezone           String   @default("UTC")
+  onboardingDone     Boolean  @default(false)
   // Cached AI "what to post about" suggestions for the generate bar.
   // Regenerated only when ideaSuggestionsKey (a hash of profile inputs) changes.
   ideaSuggestions    String[] @default([])
   ideaSuggestionsKey String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -160,41 +162,91 @@ model Breakdown {
 }
 
 model Post {
-  id         String     @id @default(cuid())
-  userId     String
-  ideaId     String?
-  title      String
-  caption    String?
-  format     PostFormat
-  status     PostStatus @default(DRAFT)
-  imageUrls  String[]
-  r2Keys     String[]
-  metadata   Json?
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id          String     @id @default(cuid())
+  userId      String
+  ideaId      String?
+  title       String
+  caption     String?
+  format      PostFormat
+  status      PostStatus @default(DRAFT)
+  imageUrls   String[]
+  r2Keys      String[]
+  metadata    Json?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   publishedAt DateTime?
 
-  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  idea   Idea?   @relation(fields: [ideaId], references: [id], onDelete: SetNull)
-  slides Slide[]
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  idea           Idea?           @relation(fields: [ideaId], references: [id], onDelete: SetNull)
+  slides         Slide[]
+  scheduledPosts ScheduledPost[]
 
   @@index([userId])
   @@index([userId, status])
   @@index([userId, createdAt])
 }
 
+// Content Hub — a single generated Post scheduled to publish on one platform
+// at a given time. A Post can have more than one ScheduledPost (e.g. the same
+// carousel scheduled to both LinkedIn and Instagram, or resubmitted after
+// editing the time), so this is deliberately its own table rather than fields
+// bolted onto Post.
+model ScheduledPost {
+  id              String   @id @default(cuid())
+  userId          String
+  postId          String
+  platform        String // "linkedin" | "instagram"
+  scheduledFor    DateTime // stored UTC; the client renders it in local time
+  status          String   @default("queued") // "draft" | "queued" | "publishing" | "published" | "failed" | "cancelled"
+  publishedUrl    String?
+  failureReason   String?
+  retryCount      Int      @default(0)
+  // Set when created by the cron worker filling a RecurringSlot; null for a
+  // one-off scheduled post. No FK — the rule can be edited/deleted without
+  // touching posts it already generated.
+  recurringRuleId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, scheduledFor])
+  @@index([status, scheduledFor])
+  @@index([postId])
+}
+
+// Content Hub — "post automatically every [days] at [time] on [platform]".
+// The cron worker reads active slots and creates a queued ScheduledPost from
+// the user's most recent unscheduled content when a slot's time arrives.
+model RecurringSlot {
+  id         String   @id @default(cuid())
+  userId     String
+  label      String
+  daysOfWeek Int[] // 0=Sunday..6=Saturday
+  timeOfDay  String // "HH:mm", local to the user's profile timezone
+  platform   String // "linkedin" | "instagram"
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
 model Slide {
-  id         String    @id @default(cuid())
-  postId     String
-  role       SlideRole
-  order      Int
-  headline   String?
-  body       String?
-  imageUrl   String?
-  r2Key      String?
-  metadata   Json?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id        String    @id @default(cuid())
+  postId    String
+  role      SlideRole
+  order     Int
+  headline  String?
+  body      String?
+  imageUrl  String?
+  r2Key     String?
+  metadata  Json?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
@@ -222,28 +274,28 @@ model IdeaHistory {
 }
 
 model Subscription {
-  id                   String             @id @default(cuid())
-  userId               String             @unique
-  plan                 Plan               @default(FREE)
-  status               SubscriptionStatus @default(ACTIVE)
-  razorpaySubId        String?
-  razorpayCustomerId   String?
-  lsSubscriptionId     String?
-  lsCustomerId         String?
-  lsVariantId          String?
-  currentPeriodStart   DateTime?
-  currentPeriodEnd     DateTime?
-  cancelAtPeriodEnd    Boolean            @default(false)
+  id                 String             @id @default(cuid())
+  userId             String             @unique
+  plan               Plan               @default(FREE)
+  status             SubscriptionStatus @default(ACTIVE)
+  razorpaySubId      String?
+  razorpayCustomerId String?
+  lsSubscriptionId   String?
+  lsCustomerId       String?
+  lsVariantId        String?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean            @default(false)
   // Pro → Growth upgrade scheduled to take effect at next renewal (no charge
   // or credit change until then).
-  upgradeScheduled     Boolean            @default(false)
+  upgradeScheduled   Boolean            @default(false)
   // ── Credits ──
-  creditsUsed          Int                @default(0)
-  creditsTotal         Int                @default(1000)
-  extraCredits         Int                @default(0)
-  extraCreditsExpiry   DateTime?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
+  creditsUsed        Int                @default(0)
+  creditsTotal       Int                @default(1000)
+  extraCredits       Int                @default(0)
+  extraCreditsExpiry DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -253,16 +305,16 @@ model Subscription {
 }
 
 model LinkedInAccount {
-  id           String   @id @default(cuid())
-  userId       String   @unique
-  linkedInId   String   @unique
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  linkedInId   String    @unique
   accessToken  String
   refreshToken String?
   expiresAt    DateTime?
   name         String?
   pictureUrl   String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -270,13 +322,13 @@ model LinkedInAccount {
 }
 
 model UsageCounter {
-  id           String   @id @default(cuid())
-  userId       String   @unique
-  postsToday   Int      @default(0)
-  postsTotal   Int      @default(0)
-  lastResetAt  DateTime @default(now())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  postsToday  Int      @default(0)
+  postsTotal  Int      @default(0)
+  lastResetAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -335,21 +387,21 @@ model PredefinedTask {
 }
 
 model Intern {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   name           String
-  email          String   @unique
+  email          String    @unique
   phone          String?
-  clerkId        String?  @unique
+  clerkId        String?   @unique
   role           String? // e.g. "Marketing Intern", "Content Intern"
   department     String?
   photoUrl       String?
-  status         String   @default("active") // "active" | "completed" | "terminated" | "extended"
-  active         Boolean  @default(true)
-  joinDate       DateTime @default(now())
-  durationMonths Int      @default(3)
+  status         String    @default("active") // "active" | "completed" | "terminated" | "extended"
+  active         Boolean   @default(true)
+  joinDate       DateTime  @default(now())
+  durationMonths Int       @default(3)
   endDate        DateTime? // calculated on create/extend, stored for easy querying
-  leaveAllowance Int      @default(5)
-  createdAt      DateTime @default(now())
+  leaveAllowance Int       @default(5)
+  createdAt      DateTime  @default(now())
 
   entries       InternPointEntry[]
   attendance    InternAttendance[]

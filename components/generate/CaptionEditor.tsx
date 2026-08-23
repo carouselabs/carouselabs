@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Copy, Check, Save, RefreshCw, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PostToLinkedInButton } from "@/components/generate/PostToLinkedInButton"
+import { ScheduleForLaterButton } from "@/components/generate/ScheduleForLaterButton"
 
 const WARN_AT = 2500
 const MAX_CHARS = 3000
@@ -30,6 +31,11 @@ export function CaptionEditor({
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  // Caches the last-saved Post id against the caption it was saved for, so
+  // ScheduleForLaterButton and repeat "Save Draft" clicks on an unchanged
+  // caption reuse the same row instead of creating a new draft Post every time.
+  const savedPostIdRef = useRef<{ caption: string; postId: string } | null>(null)
+
   const charCount = caption.length
   const isOverLimit = charCount > MAX_CHARS
   const isNearLimit = charCount >= WARN_AT && !isOverLimit
@@ -41,20 +47,28 @@ export function CaptionEditor({
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // Saves the current caption as a Post (or reuses the cached one if the
+  // caption hasn't changed since) and returns its id.
+  async function savePost(): Promise<string | null> {
+    if (savedPostIdRef.current?.caption === caption) return savedPostIdRef.current.postId
+    const res = await fetch("/api/posts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ideaId, caption }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? "Failed to save")
+    const postId = typeof data.postId === "string" ? data.postId : null
+    if (postId) savedPostIdRef.current = { caption, postId }
+    return postId
+  }
+
   async function handleSave() {
     if (!caption || isOverLimit || saving) return
     setSaving(true)
     setSaveError(null)
     try {
-      const res = await fetch("/api/posts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId, caption }),
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error ?? "Failed to save")
-      }
+      await savePost()
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } catch (err) {
@@ -124,6 +138,10 @@ export function CaptionEditor({
 
           {/* Post to LinkedIn — text-only post (no images in this flow) */}
           <PostToLinkedInButton caption={caption} disabled={!caption || isGenerating} />
+
+          {/* Schedule for Later — saves (or reuses) the Post, then deep-links
+              into Content Hub with it pre-selected */}
+          <ScheduleForLaterButton getPostId={savePost} disabled={!caption || isGenerating} />
         </div>
       </div>
 

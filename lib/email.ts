@@ -16,6 +16,7 @@ import { InternWelcomeEmail } from "@/emails/InternWelcomeEmail"
 import { InternWeeklyDigestEmail, type InternDigestRow } from "@/emails/InternWeeklyDigestEmail"
 import { InternDailySummaryEmail, type DailySummaryTask } from "@/emails/InternDailySummaryEmail"
 import { InternAbsentWarningEmail } from "@/emails/InternAbsentWarningEmail"
+import { ScheduledPostFailedEmail } from "@/emails/ScheduledPostFailedEmail"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -73,6 +74,22 @@ export async function sendCreditsLowEmail(email: string, name: string, creditsLe
     to: email,
     subject: `You have ${creditsLeft} credits left this month ⚠️`,
     html: await render(CreditsLowEmail({ name, creditsLeft })),
+  })
+  if (error) throw new Error(`Resend: ${error.message}`)
+}
+
+export async function sendScheduledPostFailedEmail(
+  email: string,
+  name: string,
+  postTitle: string,
+  platform: string,
+  reason: string,
+) {
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: "A scheduled post didn't publish",
+    html: await render(ScheduledPostFailedEmail({ name, postTitle, platform, reason })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
 }

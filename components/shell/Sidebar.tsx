@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { Sparkles, Clock, Bookmark, Settings, Award, ImageIcon } from "lucide-react"
+import { Sparkles, Clock, Bookmark, Settings, Award, ImageIcon, Calendar } from "lucide-react"
 import { NavItem } from "./NavItem"
 import { UserMenu } from "./UserMenu"
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser"
@@ -11,6 +11,7 @@ import { useInternAccess } from "@/lib/hooks/useInternAccess"
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Generate", icon: Sparkles },
   { href: "/thumbnail", label: "Thumbnail", icon: ImageIcon },
+  { href: "/content-hub", label: "Content Hub", icon: Calendar },
   { href: "/history", label: "History", icon: Clock },
   { href: "/pinned", label: "Pinned", icon: Bookmark },
   { href: "/settings", label: "Settings", icon: Settings },

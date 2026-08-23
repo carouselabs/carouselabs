@@ -8,6 +8,7 @@ import { InstructionBox } from "@/components/generate/InstructionBox"
 import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { ImagePreview } from "@/components/generate/ImagePreview"
 import { PostToLinkedInButton } from "@/components/generate/PostToLinkedInButton"
+import { ScheduleForLaterButton } from "@/components/generate/ScheduleForLaterButton"
 import { LoadingGame } from "@/components/generate/LoadingGame"
 import { RegenerationLimit } from "@/components/generate/RegenerationLimit"
 import { trackHistory } from "@/lib/hooks/useHistory"
@@ -700,6 +701,23 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     }
   }
 
+  // ScheduleForLaterButton's getPostId — syncs whatever caption edits haven't
+  // been explicitly "Save Draft"-ed yet, so the Content Hub preview shows the
+  // actual current caption, not whatever was there at generation time.
+  async function getPostIdSynced(): Promise<string | null> {
+    if (!postId) return null
+    try {
+      await fetch(`/api/posts/${postId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caption }),
+      })
+    } catch {
+      // best-effort — worst case Content Hub shows the last-saved caption
+    }
+    return postId
+  }
+
   // ── Structure selection handlers (own-idea flow) ──────────────
   // Selection complete → log it and drop into the existing generation flow.
   // Values are passed explicitly because the setState calls haven't committed.
@@ -851,6 +869,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
                 imageUrls={imageUrl ? [imageUrl] : []}
                 disabled={!imageUrl}
               />
+              <ScheduleForLaterButton getPostId={getPostIdSynced} disabled={!imageUrl || !postId} />
             </div>
           </div>
         )}

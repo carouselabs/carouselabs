@@ -4,6 +4,7 @@ import { Hero } from "@/components/landing/Hero"
 import { HowItWorks } from "@/components/landing/HowItWorks"
 import { FeaturesGrid } from "@/components/landing/FeaturesGrid"
 import { ThumbnailFeature } from "@/components/landing/ThumbnailFeature"
+import { ContentHubFeature } from "@/components/landing/ContentHubFeature"
 import { Pricing } from "@/components/landing/Pricing"
 import { CTA } from "@/components/landing/CTA"
 import { ExploreResources } from "@/components/landing/ExploreResources"
@@ -19,6 +20,7 @@ export default async function Home() {
       <HowItWorks />
       <FeaturesGrid />
       <ThumbnailFeature />
+      <ContentHubFeature />
       <Pricing />
       <CTA />
       <ExploreResources />

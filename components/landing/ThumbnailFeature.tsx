@@ -60,8 +60,8 @@ export function ThumbnailFeature() {
               <figure className="flex flex-col gap-2">
                 <div className="relative aspect-video rounded-2xl overflow-hidden border border-[#E5E3DE] bg-white">
                   <Image
-                    src="/images/msedge_aZm3dU6Zug.png"
-                    alt="Reference YouTube thumbnail before recreation"
+                    src="/images/msedge_GxpOUT38VY.png"
+                    alt="Reference YouTube thumbnail before recreation — a coding course thumbnail"
                     fill
                     sizes="(max-width: 640px) 100vw, 50vw"
                     className="object-cover"
@@ -74,7 +74,7 @@ export function ThumbnailFeature() {
               <figure className="flex flex-col gap-2">
                 <div className="relative aspect-video rounded-2xl overflow-hidden border border-[#E5E3DE] bg-white">
                   <Image
-                    src="/images/thumbnail-1787461618408.png"
+                    src="/images/chrome_EVsJjSSheP.jpg"
                     alt="CarouseLabs-generated thumbnail result, same composition as the reference"
                     fill
                     sizes="(max-width: 640px) 100vw, 50vw"

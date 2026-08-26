@@ -194,7 +194,8 @@ export default async function InternPage() {
           <div className="mt-3 flex flex-col gap-1 border-t border-[#F1EFE9] pt-3">
             {intern.extensions.map((x) => (
               <p key={x.id} className="text-[12px] text-[#9CA3AF]">
-                Extended by {formatExtensionAmount(x.addedDays)} on {fmtDate(x.createdAt)}
+                {x.addedDays >= 0 ? "Extended" : "Reduced"} by {formatExtensionAmount(x.addedDays)} on{" "}
+                {fmtDate(x.createdAt)}
               </p>
             ))}
           </div>

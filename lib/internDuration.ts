@@ -36,13 +36,16 @@ export function monthsToDays(months: number): number {
 // Human-readable label for an extension amount stored in days — shows the
 // months-equivalent alongside when it's a clean multiple of 30, since that's
 // almost always how it was actually entered (e.g. "1 month (30 days)"),
-// otherwise just the day count (e.g. "5 days").
+// otherwise just the day count (e.g. "5 days"). Operates on magnitude only —
+// InternExtension.addedDays can be negative (a reduction), and callers
+// decide how to present the sign (e.g. "+"/"−", or "Extended"/"Reduced").
 export function formatExtensionAmount(days: number): string {
-  if (days > 0 && days % DAYS_PER_MONTH === 0) {
-    const months = days / DAYS_PER_MONTH
-    return `${months} month${months === 1 ? "" : "s"} (${days} days)`
+  const abs = Math.abs(days)
+  if (abs > 0 && abs % DAYS_PER_MONTH === 0) {
+    const months = abs / DAYS_PER_MONTH
+    return `${months} month${months === 1 ? "" : "s"} (${abs} days)`
   }
-  return `${days} day${days === 1 ? "" : "s"}`
+  return `${abs} day${abs === 1 ? "" : "s"}`
 }
 
 // Total internship length, computed directly from joinDate -> endDate rather

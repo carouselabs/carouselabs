@@ -93,6 +93,7 @@ export function OverviewTab({
   const { toast } = useToast()
 
   const [extendOpen, setExtendOpen] = useState(false)
+  const [extendDirection, setExtendDirection] = useState<"extend" | "reduce">("extend")
   const [extendMode, setExtendMode] = useState<"months" | "days">("months")
   const [extendMonths, setExtendMonths] = useState("1")
   const [extendDays, setExtendDays] = useState("5")
@@ -109,6 +110,7 @@ export function OverviewTab({
   const isEnded = intern.status === "completed" || intern.status === "terminated"
 
   const submitExtend = async () => {
+    const sign = extendDirection === "extend" ? 1 : -1
     let body: { months: number; reason?: string } | { days: number; reason?: string }
     let successLabel: string
 
@@ -118,7 +120,7 @@ export function OverviewTab({
         toast("Enter a whole number of months", "error")
         return
       }
-      body = { months, reason: extendReason.trim() || undefined }
+      body = { months: months * sign, reason: extendReason.trim() || undefined }
       successLabel = `${months} month${months === 1 ? "" : "s"}`
     } else {
       const days = Number(extendDays)
@@ -126,7 +128,7 @@ export function OverviewTab({
         toast("Enter a whole number of days", "error")
         return
       }
-      body = { days, reason: extendReason.trim() || undefined }
+      body = { days: days * sign, reason: extendReason.trim() || undefined }
       successLabel = `${days} day${days === 1 ? "" : "s"}`
     }
 
@@ -138,15 +140,24 @@ export function OverviewTab({
         body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error)
-      toast(`Extended by ${successLabel}`, "success")
+      toast(
+        `${extendDirection === "extend" ? "Extended" : "Reduced"} by ${successLabel}`,
+        "success",
+      )
       setExtendOpen(false)
+      setExtendDirection("extend")
       setExtendMode("months")
       setExtendMonths("1")
       setExtendDays("5")
       setExtendReason("")
       onRefresh()
     } catch (e) {
-      toast(e instanceof Error && e.message ? e.message : "Failed to extend internship", "error")
+      toast(
+        e instanceof Error && e.message
+          ? e.message
+          : `Failed to ${extendDirection === "extend" ? "extend" : "reduce"} internship`,
+        "error",
+      )
     } finally {
       setExtendBusy(false)
     }
@@ -226,7 +237,7 @@ export function OverviewTab({
           </div>
           <div className="flex flex-wrap gap-2 print:hidden">
             <AdminButton variant="secondary" onClick={() => setExtendOpen(true)}>
-              Extend Internship
+              Extend / Reduce
             </AdminButton>
             {!isEnded && (
               <>
@@ -283,7 +294,10 @@ export function OverviewTab({
           <ul className="space-y-2.5">
             {extensions.map((x) => (
               <li key={x.id} className="text-[12.5px] text-[#B0B0B0]">
-                <span className="font-semibold text-white">+{formatExtensionAmount(x.addedDays)}</span>{" "}
+                <span className="font-semibold text-white">
+                  {x.addedDays >= 0 ? "+" : "−"}
+                  {formatExtensionAmount(x.addedDays)}
+                </span>{" "}
                 — {fmtDate(x.previousEndDate)} → {fmtDate(x.newEndDate)}
                 {x.reason && <span className="text-[#8A8A8A]"> · &ldquo;{x.reason}&rdquo;</span>}
                 <span className="text-[#6A6A6A]">
@@ -296,9 +310,31 @@ export function OverviewTab({
         </AdminCard>
       )}
 
-      {/* Extend modal */}
-      <Modal open={extendOpen} onClose={() => setExtendOpen(false)} title="Extend Internship">
+      {/* Extend / reduce modal */}
+      <Modal
+        open={extendOpen}
+        onClose={() => setExtendOpen(false)}
+        title={extendDirection === "extend" ? "Extend Internship" : "Reduce Internship"}
+      >
         <div className="space-y-3">
+          <div className="flex gap-1 rounded-lg bg-[#141414] p-1">
+            {(["extend", "reduce"] as const).map((dir) => (
+              <button
+                key={dir}
+                type="button"
+                onClick={() => setExtendDirection(dir)}
+                className={`flex-1 rounded-md py-1.5 text-[12px] font-semibold capitalize transition-colors ${
+                  extendDirection === dir
+                    ? dir === "extend"
+                      ? "bg-[#7C3AED] text-white"
+                      : "bg-red-600 text-white"
+                    : "text-[#8A8A8A] hover:text-white"
+                }`}
+              >
+                {dir}
+              </button>
+            ))}
+          </div>
           <div className="flex gap-1 rounded-lg bg-[#141414] p-1">
             {(["months", "days"] as const).map((mode) => (
               <button
@@ -306,16 +342,18 @@ export function OverviewTab({
                 type="button"
                 onClick={() => setExtendMode(mode)}
                 className={`flex-1 rounded-md py-1.5 text-[12px] font-medium capitalize transition-colors ${
-                  extendMode === mode ? "bg-[#7C3AED] text-white" : "text-[#8A8A8A] hover:text-white"
+                  extendMode === mode ? "bg-[#2A2A2A] text-white" : "text-[#8A8A8A] hover:text-white"
                 }`}
               >
-                Extend by {mode}
+                By {mode}
               </button>
             ))}
           </div>
           {extendMode === "months" ? (
             <label className="block">
-              <span className="mb-1 block text-[11px] font-medium text-[#8A8A8A]">Additional months</span>
+              <span className="mb-1 block text-[11px] font-medium text-[#8A8A8A]">
+                Months to {extendDirection}
+              </span>
               <AdminSelect value={extendMonths} onChange={(e) => setExtendMonths(e.target.value)} className="w-full">
                 {DURATION_PRESETS.map((m) => (
                   <option key={m} value={m}>
@@ -326,7 +364,9 @@ export function OverviewTab({
             </label>
           ) : (
             <label className="block">
-              <span className="mb-1 block text-[11px] font-medium text-[#8A8A8A]">Additional days</span>
+              <span className="mb-1 block text-[11px] font-medium text-[#8A8A8A]">
+                Days to {extendDirection}
+              </span>
               <input
                 type="number"
                 min={1}
@@ -349,8 +389,12 @@ export function OverviewTab({
             <AdminButton variant="secondary" onClick={() => setExtendOpen(false)}>
               Cancel
             </AdminButton>
-            <AdminButton loading={extendBusy} onClick={submitExtend}>
-              Extend
+            <AdminButton
+              variant={extendDirection === "reduce" ? "danger" : "primary"}
+              loading={extendBusy}
+              onClick={submitExtend}
+            >
+              {extendDirection === "extend" ? "Extend" : "Reduce"}
             </AdminButton>
           </div>
         </div>

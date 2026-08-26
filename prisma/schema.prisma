@@ -425,17 +425,17 @@ model InternNote {
   @@index([internId])
 }
 
-// Audit trail of internship-length extensions — each row captures the
-// before/after endDate so the profile can show a full extension history
-// alongside the current duration. Stored in days regardless of how the
-// extension was entered (a day count typed directly, or a month preset
-// converted at creation time — 1 month = 30 days) so extensions of any
-// granularity share one consistent, precise unit.
+// Audit trail of internship-length adjustments — each row captures the
+// before/after endDate so the profile can show a full history alongside the
+// current duration. Stored in days regardless of how the adjustment was
+// entered (a day count typed directly, or a month preset converted at
+// creation time — 1 month = 30 days) so adjustments of any granularity share
+// one consistent, precise unit. Signed: positive extends, negative reduces.
 model InternExtension {
   id              String   @id @default(cuid())
   internId        String
   intern          Intern   @relation(fields: [internId], references: [id], onDelete: Cascade)
-  addedDays       Int
+  addedDays       Int // signed — positive = extension, negative = reduction
   reason          String?
   previousEndDate DateTime
   newEndDate      DateTime

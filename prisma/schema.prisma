@@ -398,8 +398,8 @@ model Intern {
   status         String    @default("active") // "active" | "completed" | "terminated" | "extended"
   active         Boolean   @default(true)
   joinDate       DateTime  @default(now())
-  durationMonths Int       @default(3)
-  endDate        DateTime? // calculated on create/extend, stored for easy querying
+  durationMonths Int       @default(3) // original planned duration at creation — NOT bumped by extensions (see InternExtension); the true current length is joinDate..endDate
+  endDate        DateTime? // calculated on create; on extend, moved forward by the extension's addedDays
   leaveAllowance Int       @default(5)
   createdAt      DateTime  @default(now())
 
@@ -427,12 +427,15 @@ model InternNote {
 
 // Audit trail of internship-length extensions — each row captures the
 // before/after endDate so the profile can show a full extension history
-// alongside the current duration.
+// alongside the current duration. Stored in days regardless of how the
+// extension was entered (a day count typed directly, or a month preset
+// converted at creation time — 1 month = 30 days) so extensions of any
+// granularity share one consistent, precise unit.
 model InternExtension {
   id              String   @id @default(cuid())
   internId        String
   intern          Intern   @relation(fields: [internId], references: [id], onDelete: Cascade)
-  addedMonths     Int
+  addedDays       Int
   reason          String?
   previousEndDate DateTime
   newEndDate      DateTime

@@ -6,6 +6,7 @@ import { useState } from "react"
 import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react"
 import { AdminButton, AdminCard, AdminSelect, ConfirmModal, Modal, StatCard, fmtDate } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
+import { formatExtensionAmount, formatInternshipDuration } from "@/lib/internDuration"
 import type { AttendanceFlag, AttendanceRecord, InternExtensionT, InternProfile } from "@/components/admin/intern/types"
 
 const STATUS_STYLES: Record<string, string> = {
@@ -92,7 +93,9 @@ export function OverviewTab({
   const { toast } = useToast()
 
   const [extendOpen, setExtendOpen] = useState(false)
+  const [extendMode, setExtendMode] = useState<"months" | "days">("months")
   const [extendMonths, setExtendMonths] = useState("1")
+  const [extendDays, setExtendDays] = useState("5")
   const [extendReason, setExtendReason] = useState("")
   const [extendBusy, setExtendBusy] = useState(false)
 
@@ -106,22 +109,40 @@ export function OverviewTab({
   const isEnded = intern.status === "completed" || intern.status === "terminated"
 
   const submitExtend = async () => {
-    const months = Number(extendMonths)
-    if (!Number.isInteger(months) || months < 1) {
-      toast("Enter a whole number of months", "error")
-      return
+    let body: { months: number; reason?: string } | { days: number; reason?: string }
+    let successLabel: string
+
+    if (extendMode === "months") {
+      const months = Number(extendMonths)
+      if (!Number.isInteger(months) || months < 1) {
+        toast("Enter a whole number of months", "error")
+        return
+      }
+      body = { months, reason: extendReason.trim() || undefined }
+      successLabel = `${months} month${months === 1 ? "" : "s"}`
+    } else {
+      const days = Number(extendDays)
+      if (!Number.isInteger(days) || days < 1) {
+        toast("Enter a whole number of days", "error")
+        return
+      }
+      body = { days, reason: extendReason.trim() || undefined }
+      successLabel = `${days} day${days === 1 ? "" : "s"}`
     }
+
     setExtendBusy(true)
     try {
       const res = await fetch(`/api/admin/interns/${intern.id}/extend`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ addedMonths: months, reason: extendReason.trim() || undefined }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error)
-      toast(`Extended by ${months} month${months === 1 ? "" : "s"}`, "success")
+      toast(`Extended by ${successLabel}`, "success")
       setExtendOpen(false)
+      setExtendMode("months")
       setExtendMonths("1")
+      setExtendDays("5")
       setExtendReason("")
       onRefresh()
     } catch (e) {
@@ -238,8 +259,8 @@ export function OverviewTab({
             />
           </div>
           <div className="mt-1 text-right text-[11px] text-[#6A6A6A]">
-            {intern.progress.percentComplete}% complete · {intern.durationMonths} month
-            {intern.durationMonths === 1 ? "" : "s"} total
+            {intern.progress.percentComplete}% complete ·{" "}
+            {formatInternshipDuration(new Date(intern.joinDate), new Date(intern.endDate))} total
           </div>
         </div>
       </AdminCard>
@@ -262,9 +283,7 @@ export function OverviewTab({
           <ul className="space-y-2.5">
             {extensions.map((x) => (
               <li key={x.id} className="text-[12.5px] text-[#B0B0B0]">
-                <span className="font-semibold text-white">
-                  +{x.addedMonths} month{x.addedMonths === 1 ? "" : "s"}
-                </span>{" "}
+                <span className="font-semibold text-white">+{formatExtensionAmount(x.addedDays)}</span>{" "}
                 — {fmtDate(x.previousEndDate)} → {fmtDate(x.newEndDate)}
                 {x.reason && <span className="text-[#8A8A8A]"> · &ldquo;{x.reason}&rdquo;</span>}
                 <span className="text-[#6A6A6A]">
@@ -280,16 +299,45 @@ export function OverviewTab({
       {/* Extend modal */}
       <Modal open={extendOpen} onClose={() => setExtendOpen(false)} title="Extend Internship">
         <div className="space-y-3">
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-medium text-[#8A8A8A]">Additional months</span>
-            <AdminSelect value={extendMonths} onChange={(e) => setExtendMonths(e.target.value)} className="w-full">
-              {DURATION_PRESETS.map((m) => (
-                <option key={m} value={m}>
-                  {m} month{m === 1 ? "" : "s"}
-                </option>
-              ))}
-            </AdminSelect>
-          </label>
+          <div className="flex gap-1 rounded-lg bg-[#141414] p-1">
+            {(["months", "days"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setExtendMode(mode)}
+                className={`flex-1 rounded-md py-1.5 text-[12px] font-medium capitalize transition-colors ${
+                  extendMode === mode ? "bg-[#7C3AED] text-white" : "text-[#8A8A8A] hover:text-white"
+                }`}
+              >
+                Extend by {mode}
+              </button>
+            ))}
+          </div>
+          {extendMode === "months" ? (
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-medium text-[#8A8A8A]">Additional months</span>
+              <AdminSelect value={extendMonths} onChange={(e) => setExtendMonths(e.target.value)} className="w-full">
+                {DURATION_PRESETS.map((m) => (
+                  <option key={m} value={m}>
+                    {m} month{m === 1 ? "" : "s"}
+                  </option>
+                ))}
+              </AdminSelect>
+            </label>
+          ) : (
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-medium text-[#8A8A8A]">Additional days</span>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={extendDays}
+                onChange={(e) => setExtendDays(e.target.value)}
+                placeholder="e.g. 5"
+                className="w-full rounded-lg border border-[#2A2A2A] bg-[#141414] p-2.5 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED]"
+              />
+            </label>
+          )}
           <textarea
             value={extendReason}
             onChange={(e) => setExtendReason(e.target.value)}

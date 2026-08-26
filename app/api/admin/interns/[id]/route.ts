@@ -86,7 +86,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const extensions = intern.extensions.map((x) => ({
     id: x.id,
-    addedMonths: x.addedMonths,
+    addedDays: x.addedDays,
     reason: x.reason,
     previousEndDate: x.previousEndDate.toISOString(),
     newEndDate: x.newEndDate.toISOString(),

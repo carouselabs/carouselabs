@@ -8,6 +8,7 @@
 import { Printer } from "lucide-react"
 import { AdminButton, AdminCard, fmtDate, fmtDateTime } from "@/components/admin/ui"
 import { AdminBarChart, AdminLineChart, CHART_COLORS } from "@/components/admin/charts"
+import { formatInternshipDuration } from "@/lib/internDuration"
 import type { AttendanceRecord, InternEntry, InternNoteT, InternProfile } from "@/components/admin/intern/types"
 
 function attendanceRate(attendance: AttendanceRecord[]): string {
@@ -87,7 +88,8 @@ export function ReportTab({
               {fmtDate(intern.joinDate)} → {fmtDate(intern.endDate)}
             </div>
             <div className="text-[#8A8A8A] print:text-black/70">
-              {intern.durationMonths} month{intern.durationMonths === 1 ? "" : "s"} · status: {intern.status}
+              {formatInternshipDuration(new Date(intern.joinDate), new Date(intern.endDate))} · status:{" "}
+              {intern.status}
             </div>
             <div className="text-[#8A8A8A] print:text-black/70">
               {intern.progress.isCompleted

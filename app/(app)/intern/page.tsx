@@ -11,6 +11,7 @@ import {
   getLeaveBalance,
   calculateEndDate,
   getInternshipProgress,
+  formatExtensionAmount,
 } from "@/lib/internPoints"
 import { PerformanceCalendar, type DayCell, type AttendanceStatus } from "@/components/intern/PerformanceCalendar"
 import { LeaveApplication } from "@/components/intern/LeaveApplication"
@@ -193,7 +194,7 @@ export default async function InternPage() {
           <div className="mt-3 flex flex-col gap-1 border-t border-[#F1EFE9] pt-3">
             {intern.extensions.map((x) => (
               <p key={x.id} className="text-[12px] text-[#9CA3AF]">
-                Extended by {x.addedMonths} month{x.addedMonths === 1 ? "" : "s"} on {fmtDate(x.createdAt)}
+                Extended by {formatExtensionAmount(x.addedDays)} on {fmtDate(x.createdAt)}
               </p>
             ))}
           </div>

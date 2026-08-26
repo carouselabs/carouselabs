@@ -58,7 +58,7 @@ export async function GET() {
       pointsThisWeek,
       extensions: intern.extensions.map((x) => ({
         id: x.id,
-        addedMonths: x.addedMonths,
+        addedDays: x.addedDays,
         reason: x.reason,
         previousEndDate: x.previousEndDate,
         newEndDate: x.newEndDate,

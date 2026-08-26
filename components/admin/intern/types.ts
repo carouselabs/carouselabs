@@ -51,7 +51,7 @@ export type InternNoteT = {
 
 export type InternExtensionT = {
   id: string
-  addedMonths: number
+  addedDays: number
   reason: string | null
   previousEndDate: string
   newEndDate: string

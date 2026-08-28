@@ -59,4 +59,13 @@ export type InternExtensionT = {
   createdAt: string
 }
 
+export type InternCertificateT = {
+  id: string
+  verificationCode: string
+  certificateUrl: string
+  issuedFor: string
+  issuedDate: string
+  createdAt: string
+}
+
 export type { AttendanceRecord, LeaveRequest, LeaveBalance }

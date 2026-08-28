@@ -16,6 +16,7 @@ const FOOTER_LINKS = [
   { href: "/terms", label: "Terms" },
   { href: "/privacy", label: "Privacy" },
   { href: "/refund", label: "Refund" },
+  { href: "/verify-certificate", label: "Verify Certificate" },
 ]
 
 const NICHE_LINKS = [

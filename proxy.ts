@@ -24,9 +24,11 @@ const isPublicRoute = createRouteMatcher([
   "/formats(.*)", // 216 content-format SEO pages + hub
   "/speed(.*)", // 500 speed-focused SEO pages + hub
   "/thumbnails(.*)", // 10 thumbnail-keyword SEO pages + hub
+  "/verify-certificate(.*)", // Public intern-certificate verification page
   "/sitemap.xml",
   "/robots.txt",
   "/api/contact(.*)",
+  "/api/verify-certificate(.*)", // Public — looks up a certificate by its own opaque code, no session
   "/api/webhooks/clerk(.*)",
   "/api/webhooks/lemonsqueezy(.*)",
   "/api/maintenance-status(.*)",

@@ -408,6 +408,7 @@ model Intern {
   leaveRequests InternLeaveRequest[]
   notes         InternNote[]
   extensions    InternExtension[]
+  certificates  InternCertificate[]
 }
 
 // Freeform notes/reviews an admin attaches to an intern's record — praise,
@@ -499,5 +500,23 @@ model InternLeaveRequest {
   reviewedAt  DateTime?
 
   @@unique([internId, date])
+  @@index([internId])
+}
+
+// A certificate an admin has issued to an intern, uploaded to R2. The
+// verificationCode is the only thing printed on the certificate itself and
+// the only thing the public /verify-certificate page ever looks up by —
+// it's deliberately independent of the intern's id so the certificate file
+// can be freely shared without exposing any internal identifier.
+model InternCertificate {
+  id               String   @id @default(cuid())
+  internId         String
+  intern           Intern   @relation(fields: [internId], references: [id], onDelete: Cascade)
+  verificationCode String   @unique // e.g. "CL-2026-A7X9"
+  certificateUrl   String // uploaded file (PDF or image), stored in R2
+  issuedFor        String // e.g. "Marketing Internship Completion" - admin enters this
+  issuedDate       DateTime @default(now())
+  createdAt        DateTime @default(now())
+
   @@index([internId])
 }

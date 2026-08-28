@@ -12,8 +12,10 @@ import { OverviewTab } from "@/components/admin/intern/OverviewTab"
 import { DailyLogTab } from "@/components/admin/intern/DailyLogTab"
 import { NotesTab } from "@/components/admin/intern/NotesTab"
 import { ReportTab } from "@/components/admin/intern/ReportTab"
+import { CertificatesTab } from "@/components/admin/intern/CertificatesTab"
 import type {
   AttendanceRecord,
+  InternCertificateT,
   InternEntry,
   InternExtensionT,
   InternNoteT,
@@ -28,6 +30,7 @@ const TABS = [
   { key: "daily-log", label: "Daily Log" },
   { key: "leave", label: "Leave & Attendance" },
   { key: "notes", label: "Notes" },
+  { key: "certificates", label: "Certificates" },
   { key: "report", label: "Performance Report" },
 ] as const
 type TabKey = (typeof TABS)[number]["key"]
@@ -39,6 +42,7 @@ export function InternDetail({
   leaveRequests: initialLeaveRequests,
   notes: initialNotes,
   extensions: initialExtensions,
+  certificates: initialCertificates,
 }: {
   intern: InternProfile
   entries: InternEntry[]
@@ -46,6 +50,7 @@ export function InternDetail({
   leaveRequests: LeaveRequest[]
   notes: InternNoteT[]
   extensions: InternExtensionT[]
+  certificates: InternCertificateT[]
 }) {
   const { toast } = useToast()
   const [tab, setTab] = useState<TabKey>("overview")
@@ -56,6 +61,7 @@ export function InternDetail({
   const [leaveRequests, setLeaveRequests] = useState(initialLeaveRequests)
   const [notes, setNotes] = useState(initialNotes)
   const [extensions, setExtensions] = useState(initialExtensions)
+  const [certificates, setCertificates] = useState(initialCertificates)
 
   const refresh = async () => {
     const res = await fetch(`/api/admin/interns/${intern.id}`)
@@ -70,6 +76,7 @@ export function InternDetail({
     setLeaveRequests(data.leaveRequests)
     setNotes(data.notes)
     setExtensions(data.extensions)
+    setCertificates(data.certificates)
   }
 
   return (
@@ -103,6 +110,9 @@ export function InternDetail({
         />
       )}
       {tab === "notes" && <NotesTab internId={intern.id} notes={notes} onRefresh={refresh} />}
+      {tab === "certificates" && (
+        <CertificatesTab internId={intern.id} certificates={certificates} onRefresh={refresh} />
+      )}
       {tab === "report" && (
         <ReportTab intern={intern} entries={entries} attendance={attendance} notes={notes} />
       )}

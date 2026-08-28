@@ -31,6 +31,7 @@ export default async function AdminInternDetailPage({
       leaveRequests: { orderBy: { date: "desc" } },
       notes: { orderBy: { createdAt: "desc" } },
       extensions: { orderBy: { createdAt: "desc" } },
+      certificates: { orderBy: { createdAt: "desc" } },
     },
   })
   if (!intern) notFound()
@@ -133,6 +134,14 @@ export default async function AdminInternDetailPage({
           newEndDate: x.newEndDate.toISOString(),
           extendedBy: x.extendedBy,
           createdAt: x.createdAt.toISOString(),
+        }))}
+        certificates={intern.certificates.map((c) => ({
+          id: c.id,
+          verificationCode: c.verificationCode,
+          certificateUrl: c.certificateUrl,
+          issuedFor: c.issuedFor,
+          issuedDate: c.issuedDate.toISOString(),
+          createdAt: c.createdAt.toISOString(),
         }))}
       />
     </div>

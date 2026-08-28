@@ -31,6 +31,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       leaveRequests: { orderBy: { date: "desc" } },
       notes: { orderBy: { createdAt: "desc" } },
       extensions: { orderBy: { createdAt: "desc" } },
+      certificates: { orderBy: { createdAt: "desc" } },
     },
   })
   if (!intern) return NextResponse.json({ error: "Intern not found" }, { status: 404 })
@@ -94,6 +95,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     createdAt: x.createdAt.toISOString(),
   }))
 
+  const certificates = intern.certificates.map((c) => ({
+    id: c.id,
+    verificationCode: c.verificationCode,
+    certificateUrl: c.certificateUrl,
+    issuedFor: c.issuedFor,
+    issuedDate: c.issuedDate.toISOString(),
+    createdAt: c.createdAt.toISOString(),
+  }))
+
   return NextResponse.json({
     intern: {
       id: intern.id,
@@ -122,6 +132,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     leaveRequests,
     notes,
     extensions,
+    certificates,
     // Entries + attendance merged by calendar day — lets the admin Daily
     // Log view (and any future consumer) render per-day rows, including
     // attendance-only days (e.g. "absent" with no points logged), without

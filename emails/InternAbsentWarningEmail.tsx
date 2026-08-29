@@ -1,6 +1,6 @@
 import * as React from "react"
 import { Heading, Text } from "@react-email/components"
-import { APP_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
+import { EMPLOYEE_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
 
 // Subject: "Attendance notice — [date]"
 export function InternAbsentWarningEmail({
@@ -31,7 +31,7 @@ export function InternAbsentWarningEmail({
         <li>Days absent: {absentDays}</li>
         <li>Attendance rate: {attendanceRate}%</li>
       </ul>
-      <EmailButton href={`${APP_URL}/intern`}>Review Your Record</EmailButton>
+      <EmailButton href={EMPLOYEE_URL}>Review Your Record</EmailButton>
     </EmailLayout>
   )
 }

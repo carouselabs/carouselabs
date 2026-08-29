@@ -1,6 +1,6 @@
 import * as React from "react"
 import { Heading, Text } from "@react-email/components"
-import { APP_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
+import { EMPLOYEE_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
 
 export type DailySummaryTask = { name: string; points: number }
 
@@ -56,7 +56,7 @@ export function InternDailySummaryEmail({
         {hasTasks ? "Great work today!" : "Let's aim to log some tasks tomorrow!"}
       </Text>
 
-      <EmailButton href={`${APP_URL}/intern`}>View Your Portal</EmailButton>
+      <EmailButton href={EMPLOYEE_URL}>View Your Portal</EmailButton>
     </EmailLayout>
   )
 }

@@ -15,7 +15,7 @@ import {
 } from "@/lib/internPoints"
 import { logAdminAction, getRequestIp } from "@/lib/auditLog"
 import { sendInternWelcomeEmail } from "@/lib/email"
-import { APP_URL } from "@/emails/EmailLayout"
+import { EMPLOYEE_URL } from "@/emails/EmailLayout"
 
 export async function GET() {
   const admin = await getAdminUser()
@@ -123,7 +123,14 @@ export async function POST(req: Request) {
         month: "long",
         day: "numeric",
       })
-      await sendInternWelcomeEmail(email, name, role, joinDateLabel, intern.leaveAllowance, `${APP_URL}/sign-in`)
+      await sendInternWelcomeEmail(
+        email,
+        name,
+        role,
+        joinDateLabel,
+        intern.leaveAllowance,
+        `${EMPLOYEE_URL}/sign-in`,
+      )
     } catch (err) {
       console.error("[api/admin/interns] welcome email failed:", err)
     }

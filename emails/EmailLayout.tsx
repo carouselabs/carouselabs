@@ -23,6 +23,10 @@ export const APP_URL =
     ? ENV_APP_URL
     : "https://carouselabs.com"
 
+// Intern-facing emails link here instead of APP_URL — employee.carouselabs.com
+// is the subdomain interns use to reach their portal (see proxy.ts).
+export const EMPLOYEE_URL = "https://employee.carouselabs.com"
+
 // Shared text styles reused across every template.
 export const emailStyles = {
   heading: {

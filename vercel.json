@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/publish-scheduled-posts",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/publish-scheduled-emails",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

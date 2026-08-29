@@ -3,7 +3,8 @@
 // /admin/broadcasts — compose + send an email broadcast, plus a history
 // table sourced from audit logs (action=SEND_BROADCAST).
 import { useCallback, useEffect, useState } from "react"
-import { Send, Eye, Mail } from "lucide-react"
+import Link from "next/link"
+import { Send, Eye, Mail, CalendarClock } from "lucide-react"
 import {
   AdminButton,
   AdminCard,
@@ -19,6 +20,15 @@ import { renderBroadcastEmailHtml } from "@/lib/broadcastRender"
 import { useToast } from "@/components/admin/Toast"
 
 type Audience = "all" | "pro" | "growth" | "free" | "custom"
+type SendMode = "now" | "schedule"
+
+// datetime-local's `min` — a few minutes out, so a schedule submitted right
+// at page-load doesn't immediately fail the "must be in the future" check.
+function minScheduleValue(): string {
+  const d = new Date(Date.now() + 5 * 60 * 1000)
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 type AuditLogRow = {
   id: string
@@ -41,6 +51,8 @@ export function BroadcastComposer() {
   const [subject, setSubject] = useState("")
   const [body, setBody] = useState("")
   const [showPreview, setShowPreview] = useState(false)
+  const [sendMode, setSendMode] = useState<SendMode>("now")
+  const [scheduledFor, setScheduledFor] = useState("")
   const [testing, setTesting] = useState(false)
   const [sending, setSending] = useState(false)
   const [confirmCount, setConfirmCount] = useState<number | null>(null)
@@ -63,7 +75,14 @@ export function BroadcastComposer() {
 
   const recipients = audience === "custom" ? parseCustomList(customList) : audience
 
-  const valid = subject.trim().length > 0 && body.trim().length > 0 && (audience !== "custom" || recipients.length > 0)
+  // contentValid gates actions that don't care about the schedule time
+  // (Preview, Send Test); valid additionally requires a future time picked
+  // when in schedule mode, and gates the actual Send/Schedule button.
+  const contentValid =
+    subject.trim().length > 0 && body.trim().length > 0 && (audience !== "custom" || recipients.length > 0)
+  // The picker's `min` (see minScheduleValue) already steers away from past
+  // times in the UI; the API route is the authoritative future-time check.
+  const valid = contentValid && (sendMode === "now" || scheduledFor.trim().length > 0)
 
   const sendRequest = (extra: Record<string, unknown>) =>
     fetch("/api/admin/broadcasts", {
@@ -72,8 +91,23 @@ export function BroadcastComposer() {
       body: JSON.stringify({ subject, body, recipients, ...extra }),
     })
 
+  const scheduleRequest = (extra: Record<string, unknown>) =>
+    fetch("/api/admin/scheduled-emails", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "user_broadcast",
+        subject,
+        body,
+        recipientType: audience,
+        recipientIds: audience === "custom" ? recipients : undefined,
+        scheduledFor: new Date(scheduledFor).toISOString(),
+        ...extra,
+      }),
+    })
+
   const sendTest = async () => {
-    if (!valid) {
+    if (!contentValid) {
       toast("Fill in subject, body, and recipients first", "error")
       return
     }
@@ -92,11 +126,16 @@ export function BroadcastComposer() {
 
   const openConfirm = async () => {
     if (!valid) {
-      toast("Fill in subject, body, and recipients first", "error")
+      toast(
+        sendMode === "schedule"
+          ? "Fill in subject, body, recipients, and a future time first"
+          : "Fill in subject, body, and recipients first",
+        "error",
+      )
       return
     }
     try {
-      const res = await sendRequest({ dryRun: true })
+      const res = await (sendMode === "now" ? sendRequest({ dryRun: true }) : scheduleRequest({ dryRun: true }))
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error)
       if (data.count === 0) {
@@ -112,14 +151,20 @@ export function BroadcastComposer() {
   const sendBroadcast = async () => {
     setSending(true)
     try {
-      const res = await sendRequest({})
+      const res = await (sendMode === "now" ? sendRequest({}) : scheduleRequest({}))
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error)
-      toast(`Broadcast sent — ${data.sent} delivered, ${data.failed} failed`, "success")
+      toast(
+        sendMode === "now"
+          ? `Broadcast sent — ${data.sent} delivered, ${data.failed} failed`
+          : `Scheduled for ${new Date(scheduledFor).toLocaleString()}`,
+        "success",
+      )
       setConfirmCount(null)
       setSubject("")
       setBody("")
       setCustomList("")
+      setScheduledFor("")
       await loadHistory()
     } catch (e) {
       toast(e instanceof Error && e.message ? e.message : "Broadcast failed", "error")
@@ -130,8 +175,49 @@ export function BroadcastComposer() {
 
   return (
     <div className="max-w-3xl space-y-6">
+      <div className="flex justify-end">
+        <Link
+          href="/admin/scheduled-emails"
+          className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#8A8A8A] hover:text-white transition-colors"
+        >
+          <CalendarClock className="h-3.5 w-3.5" />
+          View Scheduled Emails
+        </Link>
+      </div>
+
       <AdminCard title="Compose Broadcast">
         <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">When</label>
+            <div className="flex w-fit rounded-lg border border-[#2A2A2A] bg-[#141414] p-1">
+              {(
+                [
+                  { key: "now", label: "Send Now" },
+                  { key: "schedule", label: "Schedule for Later" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setSendMode(opt.key)}
+                  className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                    sendMode === opt.key ? "bg-[#7C3AED] text-white" : "text-[#8A8A8A] hover:text-white"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {sendMode === "schedule" && (
+              <AdminInput
+                type="datetime-local"
+                value={scheduledFor}
+                min={minScheduleValue()}
+                onChange={(e) => setScheduledFor(e.target.value)}
+                className="mt-1 w-fit"
+              />
+            )}
+          </div>
+
           <div className="space-y-1.5">
             <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">To</label>
             <AdminSelect value={audience} onChange={(e) => setAudience(e.target.value as Audience)} className="w-full">
@@ -178,17 +264,17 @@ export function BroadcastComposer() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            <AdminButton variant="secondary" onClick={() => setShowPreview(true)} disabled={!valid}>
+            <AdminButton variant="secondary" onClick={() => setShowPreview(true)} disabled={!contentValid}>
               <Eye className="h-3.5 w-3.5" />
               Preview
             </AdminButton>
-            <AdminButton variant="secondary" onClick={sendTest} loading={testing} disabled={!valid}>
+            <AdminButton variant="secondary" onClick={sendTest} loading={testing} disabled={!contentValid}>
               <Mail className="h-3.5 w-3.5" />
               Send Test to Admin
             </AdminButton>
-            <AdminButton onClick={openConfirm} disabled={!valid} className="ml-auto">
-              <Send className="h-3.5 w-3.5" />
-              Send Broadcast
+            <AdminButton onClick={() => void openConfirm()} disabled={!valid} className="ml-auto">
+              {sendMode === "now" ? <Send className="h-3.5 w-3.5" /> : <CalendarClock className="h-3.5 w-3.5" />}
+              {sendMode === "now" ? "Send Broadcast" : "Schedule Broadcast"}
             </AdminButton>
           </div>
           <p className="text-[11px] text-[#6A6A6A]">Limited to one real broadcast per hour. Test sends don&apos;t count.</p>
@@ -242,9 +328,15 @@ export function BroadcastComposer() {
         open={confirmCount !== null}
         onClose={() => setConfirmCount(null)}
         loading={sending}
-        title="Send this broadcast?"
-        body={`This will email ${confirmCount ?? 0} recipient${confirmCount === 1 ? "" : "s"}. This can't be undone.`}
-        confirmLabel={`Send to ${confirmCount ?? 0}`}
+        title={sendMode === "now" ? "Send this broadcast?" : "Schedule this broadcast?"}
+        body={
+          sendMode === "now"
+            ? `This will email ${confirmCount ?? 0} recipient${confirmCount === 1 ? "" : "s"}. This can't be undone.`
+            : `This will email ${confirmCount ?? 0} recipient${confirmCount === 1 ? "" : "s"} on ${
+                scheduledFor ? new Date(scheduledFor).toLocaleString() : ""
+              }.`
+        }
+        confirmLabel={sendMode === "now" ? `Send to ${confirmCount ?? 0}` : "Schedule"}
         onConfirm={sendBroadcast}
       />
     </div>

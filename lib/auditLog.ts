@@ -38,6 +38,9 @@ export type AdminAuditAction =
   | "DELETE_INTERN_NOTE"
   | "BROADCAST_INTERN_EMAIL"
   | "REPLY_INTERN_MESSAGE"
+  | "SCHEDULE_EMAIL"
+  | "RESCHEDULE_EMAIL"
+  | "CANCEL_SCHEDULED_EMAIL"
 
 export async function logAdminAction({
   adminEmail,

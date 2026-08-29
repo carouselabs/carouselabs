@@ -538,3 +538,36 @@ model InternMessage {
 
   @@index([internId])
 }
+
+// Shared "send later" queue for both broadcast features (Intern Broadcast
+// and the regular-user Broadcast), consumed by
+// app/api/cron/publish-scheduled-emails using the same claim/reclaim
+// pattern as ScheduledPost (see app/api/cron/publish-scheduled-posts).
+//
+// recipientType / recipientIds meaning depends on `type`:
+//   intern_broadcast: recipientType "all" | "specific"; recipientIds holds
+//     Intern cuids when "specific" (matches app/api/admin/interns/broadcast).
+//   user_broadcast: recipientType "all" | "pro" | "growth" | "free" |
+//     "custom"; recipientIds holds raw, validated email addresses when
+//     "custom" (matches lib/broadcast.ts's BroadcastRecipients — there's no
+//     per-user ID concept in the existing custom-list flow, so the same
+//     field carries emails for this type instead of IDs).
+// Non-"specific"/"custom" rows re-resolve their audience fresh at send time
+// (e.g. "all active interns" or "all Pro users" may have changed by then).
+model ScheduledEmail {
+  id            String   @id @default(cuid())
+  type          String // "intern_broadcast" | "user_broadcast"
+  subject       String
+  body          String   @db.Text
+  recipientType String
+  recipientIds  String[]
+  scheduledFor  DateTime
+  status        String   @default("queued") // "queued" | "sending" | "sent" | "failed"
+  sentCount     Int?
+  failedCount   Int?
+  createdBy     String // admin email
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt // drives the cron's stuck-"sending" reclaim, same role as ScheduledPost.updatedAt
+
+  @@index([status, scheduledFor])
+}

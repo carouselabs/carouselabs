@@ -21,6 +21,7 @@ import {
   Search,
   Award,
   ListChecks,
+  CalendarClock,
 } from "lucide-react"
 import { GlobalSearch } from "@/components/admin/GlobalSearch"
 
@@ -34,6 +35,7 @@ const NAV = [
   { href: "/admin/tasks", label: "Manage Tasks", icon: ListChecks },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone },
+  { href: "/admin/scheduled-emails", label: "Scheduled Emails", icon: CalendarClock },
   { href: "/admin/audit-logs", label: "Audit Logs", icon: ScrollText },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ]

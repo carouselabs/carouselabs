@@ -12,6 +12,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/history": "History",
   "/pinned": "Pinned",
   "/settings": "Settings",
+  "/intern": "Intern Points",
 }
 
 function getTitle(pathname: string): string {
@@ -19,7 +20,7 @@ function getTitle(pathname: string): string {
   return PAGE_TITLES[pathname] ?? ""
 }
 
-export function Topbar() {
+export function Topbar({ isEmployeeSubdomain = false }: { isEmployeeSubdomain?: boolean }) {
   const pathname = usePathname()
   const { user } = useCurrentUser()
   // Live balance — updated by generation clients after each charge, so the
@@ -34,7 +35,11 @@ export function Topbar() {
       <span className="text-[14px] font-semibold text-[#0A0A0A] tracking-[-0.2px]">{title}</span>
 
       <div className="flex items-center gap-4">
-        {user?.isAdmin && (
+        {/* Admin quick-link and credit balance are CarouseLabs-app-wide
+            concepts that don't apply to an intern-only account — and on
+            employee.carouselabs.com "/admin" would just bounce back here
+            (see proxy.ts), so hide it there entirely. */}
+        {!isEmployeeSubdomain && user?.isAdmin && (
           <Link
             href="/admin"
             className="inline-flex items-center gap-1 rounded-full bg-[#7C3AED]/10 px-2.5 py-1 text-[11px] font-semibold text-[#7C3AED] hover:bg-[#7C3AED]/15 transition-colors"
@@ -43,7 +48,8 @@ export function Topbar() {
             Admin
           </Link>
         )}
-        {user &&
+        {!isEmployeeSubdomain &&
+          user &&
           (() => {
             const left = liveCredits ?? user.creditsRemaining ?? 0
             const limit = user.freeLimit ?? 1

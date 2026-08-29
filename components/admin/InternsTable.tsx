@@ -7,7 +7,7 @@
 // already fetched for the leaderboard ranking).
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Trash2, UserPlus } from "lucide-react"
+import { Trash2, UserPlus, Megaphone } from "lucide-react"
 import {
   AdminButton,
   AdminInput,
@@ -245,7 +245,11 @@ export function InternsTable() {
             </button>
           ))}
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <AdminButton variant="secondary" onClick={() => router.push("/admin/interns/broadcast")}>
+            <Megaphone className="h-3.5 w-3.5" />
+            Send Announcement
+          </AdminButton>
           <AdminButton onClick={() => setAddOpen(true)}>
             <UserPlus className="h-3.5 w-3.5" />
             Add Intern

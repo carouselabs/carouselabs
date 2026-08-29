@@ -62,12 +62,6 @@ const isPublicRoute = createRouteMatcher([
 //  - /api/webhooks(.*), /api/cron(.*): these are always called server-to-
 //    server against the primary domain, never through these subdomains, but
 //    are excluded here too defensively.
-// Clerk's NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL (/dashboard) and
-// NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL (/onboarding/step-1) send the browser
-// there after auth no matter which host it started on. Neither route exists
-// under /admin or /intern, so both are mapped straight to the subdomain's
-// own root instead of being blindly prefixed — otherwise the very first
-// sign-in from a subdomain would 404.
 const ADMIN_HOST_PREFIX = "admin."
 const EMPLOYEE_HOST_PREFIX = "employee."
 const SUBDOMAIN_PASSTHROUGH_PREFIXES = [
@@ -78,10 +72,26 @@ const SUBDOMAIN_PASSTHROUGH_PREFIXES = [
   "/api/webhooks",
   "/api/cron",
 ]
-const POST_AUTH_REDIRECT_PATHS = new Set(["/dashboard", "/onboarding", "/onboarding/step-1"])
+// Clerk's NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL (/dashboard) and
+// NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL (/onboarding/step-1) send the browser
+// there after auth no matter which host it started on. Neither route exists
+// under /admin or /intern, so both bounce back to the subdomain's own root
+// instead of being blindly prefixed — otherwise the very first sign-in from
+// a subdomain would 404.
+const REDIRECT_TO_ROOT_PATHS = new Set(["/dashboard", "/onboarding", "/onboarding/step-1"])
+// CarouseLabs' content-creation pages — interns should never reach these
+// via employee.carouselabs.com, even by typing the URL directly. Listed
+// explicitly (rather than relying on the generic /intern-prefix-then-404
+// fallback below) so a direct hit lands back on the intern portal instead
+// of a bare 404.
+const EMPLOYEE_BLOCKED_PREFIXES = ["/generate", "/thumbnail", "/content-hub", "/history", "/pinned"]
+
+function matchesPrefix(pathname: string, prefixes: string[]): boolean {
+  return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+}
 
 function isSubdomainPassthrough(pathname: string): boolean {
-  return SUBDOMAIN_PASSTHROUGH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+  return matchesPrefix(pathname, SUBDOMAIN_PASSTHROUGH_PREFIXES)
 }
 
 const handler = clerkMiddleware(
@@ -95,19 +105,23 @@ const handler = clerkMiddleware(
       const root = isAdminHost ? "/admin" : "/intern"
       const otherRoot = isAdminHost ? "/intern" : "/admin"
 
-      if (originalPathname.startsWith(otherRoot)) {
-        // Cross-namespace attempt (e.g. /intern on admin.carouselabs.com) —
-        // bounce back to this subdomain's own root instead of 404ing.
+      const shouldBounceToRoot =
+        originalPathname.startsWith(otherRoot) ||
+        REDIRECT_TO_ROOT_PATHS.has(originalPathname) ||
+        (isEmployeeHost && matchesPrefix(originalPathname, EMPLOYEE_BLOCKED_PREFIXES))
+
+      if (shouldBounceToRoot) {
+        // Cross-namespace attempt (e.g. /intern on admin.carouselabs.com),
+        // a shared post-auth redirect target, or (on the employee host) a
+        // CarouseLabs content-creation page — bounce back to this
+        // subdomain's own root instead of 404ing or leaking the full app.
         const url = req.nextUrl.clone()
         url.pathname = "/"
         return NextResponse.redirect(url)
       }
 
       if (!originalPathname.startsWith(root) && !isSubdomainPassthrough(originalPathname)) {
-        req.nextUrl.pathname =
-          originalPathname === "/" || POST_AUTH_REDIRECT_PATHS.has(originalPathname)
-            ? root
-            : `${root}${originalPathname}`
+        req.nextUrl.pathname = originalPathname === "/" ? root : `${root}${originalPathname}`
       }
     }
 

@@ -16,6 +16,7 @@ import { InternWelcomeEmail } from "@/emails/InternWelcomeEmail"
 import { InternWeeklyDigestEmail, type InternDigestRow } from "@/emails/InternWeeklyDigestEmail"
 import { InternDailySummaryEmail, type DailySummaryTask } from "@/emails/InternDailySummaryEmail"
 import { InternAbsentWarningEmail } from "@/emails/InternAbsentWarningEmail"
+import { InternBroadcastEmail } from "@/emails/InternBroadcastEmail"
 import { ScheduledPostFailedEmail } from "@/emails/ScheduledPostFailedEmail"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -251,6 +252,23 @@ export async function sendInternAbsentWarningEmail(
     html: await render(
       InternAbsentWarningEmail({ name, date, presentDays, absentDays, attendanceRate }),
     ),
+  })
+  if (error) throw new Error(`Resend: ${error.message}`)
+}
+
+// Admin-authored announcement sent to one intern — see
+// app/api/admin/interns/broadcast, which loops this over the recipient list.
+export async function sendInternBroadcastEmail(
+  email: string,
+  name: string,
+  subject: string,
+  body: string,
+) {
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject,
+    html: await render(InternBroadcastEmail({ name, subject, body })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
 }

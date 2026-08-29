@@ -17,13 +17,22 @@ const NAV_ITEMS = [
   { href: "/settings", label: "Settings", icon: Settings },
 ]
 
-export function Sidebar() {
+// employee.carouselabs.com is restricted to the intern portal (see
+// proxy.ts) — interns should never see CarouseLabs' content-creation nav.
+// Settings is intentionally omitted: the full /settings area covers
+// billing/credits/voice guidelines that don't apply to an intern account,
+// and there's no intern-scoped settings page to link to instead.
+const EMPLOYEE_NAV_ITEMS = [{ href: "/intern", label: "Intern Points", icon: Award }]
+
+export function Sidebar({ isEmployeeSubdomain = false }: { isEmployeeSubdomain?: boolean }) {
   const pathname = usePathname()
   const { user } = useCurrentUser()
   const isIntern = useInternAccess()
-  const navItems = isIntern
-    ? [...NAV_ITEMS, { href: "/intern", label: "Intern Points", icon: Award }]
-    : NAV_ITEMS
+  const navItems = isEmployeeSubdomain
+    ? EMPLOYEE_NAV_ITEMS
+    : isIntern
+      ? [...NAV_ITEMS, { href: "/intern", label: "Intern Points", icon: Award }]
+      : NAV_ITEMS
 
   function isActive(href: string) {
     if (href === "/settings") return pathname.startsWith("/settings")

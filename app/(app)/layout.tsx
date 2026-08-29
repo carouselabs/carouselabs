@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import { Onest } from "next/font/google"
 import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
+import { headers } from "next/headers"
 import { getCurrentUser } from "@/lib/auth"
 import { Sidebar } from "@/components/shell/Sidebar"
 import { Topbar } from "@/components/shell/Topbar"
@@ -27,6 +28,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     redirect("/onboarding")
   }
 
+  // employee.carouselabs.com is the intern-only subdomain (see proxy.ts) —
+  // computed server-side so Sidebar/Topbar render the restricted nav on
+  // first paint, with no client-side flash of the full app nav.
+  const hostname = (await headers()).get("host") || ""
+  const isEmployeeSubdomain = hostname.startsWith("employee.")
+
   return (
     <div className={`${font.className} h-screen overflow-hidden flex flex-col bg-[#F9F7F2] text-[#0A0A0A]`}>
       {/* The root layout sets a dark body background; keep the app on cream. */}
@@ -38,8 +45,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           so the banner above can take its own height without breaking the
           56px-topbar/1fr-main row template. */}
       <div className="flex-1 min-h-0 flex flex-col md:grid md:grid-cols-[230px_1fr] md:grid-rows-[56px_1fr]">
-        <Sidebar />
-        <Topbar />
+        <Sidebar isEmployeeSubdomain={isEmployeeSubdomain} />
+        <Topbar isEmployeeSubdomain={isEmployeeSubdomain} />
         <main className="relative flex-1 min-h-0 overflow-y-auto bg-[#F9F7F2] px-6 py-8 md:px-10 pb-24 md:pb-10">
           {/* Page-aware floating stickers in the cream margins, behind content */}
           <AppStickers />

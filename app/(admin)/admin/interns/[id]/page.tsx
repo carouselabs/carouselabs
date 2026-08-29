@@ -1,9 +1,13 @@
 // /admin/interns/[id] — intern's full profile: overview, daily log, leave &
-// attendance, notes, and a printable performance report.
+// attendance, notes, Support thread, and a printable performance report.
+// Suspense wrapper is required for InternDetail's useSearchParams (the
+// support-message notification email deep-links to ?tab=support).
+import { Suspense } from "react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 import { db } from "@/lib/db"
+import { Spinner } from "@/components/admin/ui"
 import {
   summarizeEntries,
   predefinedTaskNames,
@@ -32,6 +36,7 @@ export default async function AdminInternDetailPage({
       notes: { orderBy: { createdAt: "desc" } },
       extensions: { orderBy: { createdAt: "desc" } },
       certificates: { orderBy: { createdAt: "desc" } },
+      messages: { orderBy: { createdAt: "asc" } },
     },
   })
   if (!intern) notFound()
@@ -70,80 +75,89 @@ export default async function AdminInternDetailPage({
         All interns
       </Link>
 
-      <InternDetail
-        intern={{
-          id: intern.id,
-          name: intern.name,
-          email: intern.email,
-          phone: intern.phone,
-          role: intern.role,
-          department: intern.department,
-          photoUrl: intern.photoUrl,
-          status: intern.status,
-          active: intern.active,
-          joinDate: intern.joinDate.toISOString(),
-          durationMonths: intern.durationMonths,
-          endDate: endDate.toISOString(),
-          totalPoints: total,
-          pointsToday,
-          pointsThisWeek,
-          leaveBalance,
-          progress,
-          rank: rank > 0 ? rank : null,
-          attendanceFlag,
-          consecutiveAbsences,
-        }}
-        entries={intern.entries.map((e) => ({
-          id: e.id,
-          date: e.date.toISOString(),
-          points: e.points,
-          category: e.category,
-          note: e.note,
-          source: e.source,
-          addedBy: e.addedBy,
-          isPredefinedTask: taskNames.has(e.category),
-        }))}
-        attendance={intern.attendance.map((a) => ({
-          id: a.id,
-          date: a.date.toISOString(),
-          status: a.status,
-          note: a.note,
-          markedBy: a.markedBy,
-        }))}
-        leaveRequests={intern.leaveRequests.map((r) => ({
-          id: r.id,
-          date: r.date.toISOString(),
-          reason: r.reason,
-          status: r.status,
-          requestedAt: r.requestedAt.toISOString(),
-          reviewedBy: r.reviewedBy,
-          reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : null,
-        }))}
-        notes={intern.notes.map((n) => ({
-          id: n.id,
-          content: n.content,
-          type: n.type,
-          addedBy: n.addedBy,
-          createdAt: n.createdAt.toISOString(),
-        }))}
-        extensions={intern.extensions.map((x) => ({
-          id: x.id,
-          addedDays: x.addedDays,
-          reason: x.reason,
-          previousEndDate: x.previousEndDate.toISOString(),
-          newEndDate: x.newEndDate.toISOString(),
-          extendedBy: x.extendedBy,
-          createdAt: x.createdAt.toISOString(),
-        }))}
-        certificates={intern.certificates.map((c) => ({
-          id: c.id,
-          verificationCode: c.verificationCode,
-          certificateUrl: c.certificateUrl,
-          issuedFor: c.issuedFor,
-          issuedDate: c.issuedDate.toISOString(),
-          createdAt: c.createdAt.toISOString(),
-        }))}
-      />
+      <Suspense fallback={<Spinner label="Loading…" />}>
+        <InternDetail
+          intern={{
+            id: intern.id,
+            name: intern.name,
+            email: intern.email,
+            phone: intern.phone,
+            role: intern.role,
+            department: intern.department,
+            photoUrl: intern.photoUrl,
+            status: intern.status,
+            active: intern.active,
+            joinDate: intern.joinDate.toISOString(),
+            durationMonths: intern.durationMonths,
+            endDate: endDate.toISOString(),
+            totalPoints: total,
+            pointsToday,
+            pointsThisWeek,
+            leaveBalance,
+            progress,
+            rank: rank > 0 ? rank : null,
+            attendanceFlag,
+            consecutiveAbsences,
+          }}
+          entries={intern.entries.map((e) => ({
+            id: e.id,
+            date: e.date.toISOString(),
+            points: e.points,
+            category: e.category,
+            note: e.note,
+            source: e.source,
+            addedBy: e.addedBy,
+            isPredefinedTask: taskNames.has(e.category),
+          }))}
+          attendance={intern.attendance.map((a) => ({
+            id: a.id,
+            date: a.date.toISOString(),
+            status: a.status,
+            note: a.note,
+            markedBy: a.markedBy,
+          }))}
+          leaveRequests={intern.leaveRequests.map((r) => ({
+            id: r.id,
+            date: r.date.toISOString(),
+            reason: r.reason,
+            status: r.status,
+            requestedAt: r.requestedAt.toISOString(),
+            reviewedBy: r.reviewedBy,
+            reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : null,
+          }))}
+          notes={intern.notes.map((n) => ({
+            id: n.id,
+            content: n.content,
+            type: n.type,
+            addedBy: n.addedBy,
+            createdAt: n.createdAt.toISOString(),
+          }))}
+          extensions={intern.extensions.map((x) => ({
+            id: x.id,
+            addedDays: x.addedDays,
+            reason: x.reason,
+            previousEndDate: x.previousEndDate.toISOString(),
+            newEndDate: x.newEndDate.toISOString(),
+            extendedBy: x.extendedBy,
+            createdAt: x.createdAt.toISOString(),
+          }))}
+          certificates={intern.certificates.map((c) => ({
+            id: c.id,
+            verificationCode: c.verificationCode,
+            certificateUrl: c.certificateUrl,
+            issuedFor: c.issuedFor,
+            issuedDate: c.issuedDate.toISOString(),
+            createdAt: c.createdAt.toISOString(),
+          }))}
+          messages={intern.messages.map((m) => ({
+            id: m.id,
+            sender: m.sender as "intern" | "admin",
+            message: m.message,
+            read: m.read,
+            createdAt: m.createdAt.toISOString(),
+          }))}
+        />
+      </Suspense>
     </div>
   )
 }

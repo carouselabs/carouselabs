@@ -27,6 +27,10 @@ export const APP_URL =
 // is the subdomain interns use to reach their portal (see proxy.ts).
 export const EMPLOYEE_URL = "https://employee.carouselabs.com"
 
+// Admin-facing notification emails (e.g. a new Support message) link here —
+// the admin subdomain, so the linked page opens directly in the admin panel.
+export const ADMIN_URL = "https://admin.carouselabs.com"
+
 // Shared text styles reused across every template.
 export const emailStyles = {
   heading: {

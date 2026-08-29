@@ -409,6 +409,7 @@ model Intern {
   notes         InternNote[]
   extensions    InternExtension[]
   certificates  InternCertificate[]
+  messages      InternMessage[]
 }
 
 // Freeform notes/reviews an admin attaches to an intern's record — praise,
@@ -517,6 +518,23 @@ model InternCertificate {
   issuedFor        String // e.g. "Marketing Internship Completion" - admin enters this
   issuedDate       DateTime @default(now())
   createdAt        DateTime @default(now())
+
+  @@index([internId])
+}
+
+// Two-way Support thread between an intern and admin. `read` is a single
+// shared flag interpreted relative to the OTHER party: an "intern" row is
+// unread until admin reads it (marked via the admin messages PATCH), an
+// "admin" row is unread until the intern reads it (marked via the intern
+// messages PATCH) — see the two /api/.../messages routes.
+model InternMessage {
+  id        String   @id @default(cuid())
+  internId  String
+  intern    Intern   @relation(fields: [internId], references: [id], onDelete: Cascade)
+  sender    String // "intern" | "admin"
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
 
   @@index([internId])
 }

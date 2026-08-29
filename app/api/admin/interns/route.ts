@@ -30,6 +30,15 @@ export async function GET() {
     },
   })
 
+  // Roster-wide "unread support message" indicator — a single lightweight
+  // query rather than including the full messages relation on every intern.
+  const unreadFrom = await db.internMessage.findMany({
+    where: { sender: "intern", read: false },
+    select: { internId: true },
+    distinct: ["internId"],
+  })
+  const unreadInternIds = new Set(unreadFrom.map((m) => m.internId))
+
   // Ranked by all-time total points, descending — this list doubles as the
   // admin leaderboard.
   const rows = interns
@@ -54,6 +63,7 @@ export async function GET() {
         role: i.role,
         status: i.status,
         active: i.active,
+        hasUnreadMessages: unreadInternIds.has(i.id),
         createdAt: i.createdAt,
         totalPoints: total,
         pointsToday,

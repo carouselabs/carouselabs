@@ -29,6 +29,7 @@ type InternRow = {
   role: string | null
   status: string
   active: boolean
+  hasUnreadMessages: boolean
   totalPoints: number
   pointsToday: number
   pointsThisWeek: number
@@ -57,6 +58,16 @@ function AttendanceDot({ flag }: { flag: AttendanceFlag }) {
       className={`inline-block h-2 w-2 shrink-0 rounded-full ${FLAG_DOT[flag]}`}
       title={FLAG_TITLE[flag]}
       aria-label={FLAG_TITLE[flag]}
+    />
+  )
+}
+
+function UnreadMessageDot() {
+  return (
+    <span
+      className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#7C3AED]"
+      title="Unread support message"
+      aria-label="Unread support message"
     />
   )
 }
@@ -299,6 +310,7 @@ export function InternsTable() {
                       <div className="flex items-center gap-1.5">
                         <AttendanceDot flag={r.attendanceFlag} />
                         <span className="text-white">{r.name}</span>
+                        {r.hasUnreadMessages && <UnreadMessageDot />}
                       </div>
                       <span className="text-[11px] text-[#8A8A8A]">{r.email}</span>
                       {r.consecutiveAbsences >= 3 && (

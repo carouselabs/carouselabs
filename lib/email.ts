@@ -17,6 +17,8 @@ import { InternWeeklyDigestEmail, type InternDigestRow } from "@/emails/InternWe
 import { InternDailySummaryEmail, type DailySummaryTask } from "@/emails/InternDailySummaryEmail"
 import { InternAbsentWarningEmail } from "@/emails/InternAbsentWarningEmail"
 import { InternBroadcastEmail } from "@/emails/InternBroadcastEmail"
+import { AdminNewSupportMessageEmail } from "@/emails/AdminNewSupportMessageEmail"
+import { InternSupportReplyEmail } from "@/emails/InternSupportReplyEmail"
 import { ScheduledPostFailedEmail } from "@/emails/ScheduledPostFailedEmail"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -269,6 +271,33 @@ export async function sendInternBroadcastEmail(
     to: email,
     subject,
     html: await render(InternBroadcastEmail({ name, subject, body })),
+  })
+  if (error) throw new Error(`Resend: ${error.message}`)
+}
+
+// Notifies ADMIN_EMAIL when an intern sends a new Support message.
+export async function sendAdminNewSupportMessageEmail(
+  adminEmail: string,
+  internName: string,
+  message: string,
+  detailUrl: string,
+) {
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: adminEmail,
+    subject: `New support message from ${internName}`,
+    html: await render(AdminNewSupportMessageEmail({ internName, message, detailUrl })),
+  })
+  if (error) throw new Error(`Resend: ${error.message}`)
+}
+
+// Notifies the intern when admin replies to their Support thread.
+export async function sendInternSupportReplyEmail(email: string, name: string) {
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: "You have a new reply from Support",
+    html: await render(InternSupportReplyEmail({ name })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
 }

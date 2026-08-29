@@ -68,4 +68,12 @@ export type InternCertificateT = {
   createdAt: string
 }
 
+export type InternMessageT = {
+  id: string
+  sender: "intern" | "admin"
+  message: string
+  read: boolean
+  createdAt: string
+}
+
 export type { AttendanceRecord, LeaveRequest, LeaveBalance }

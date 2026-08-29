@@ -15,6 +15,7 @@ import {
 } from "@/lib/internPoints"
 import { PerformanceCalendar, type DayCell, type AttendanceStatus } from "@/components/intern/PerformanceCalendar"
 import { LeaveApplication } from "@/components/intern/LeaveApplication"
+import { SupportChat } from "@/components/intern/SupportChat"
 
 export const dynamic = "force-dynamic"
 
@@ -201,6 +202,8 @@ export default async function InternPage() {
           </div>
         )}
       </div>
+
+      <SupportChat />
 
       {hasEnded && (
         <div className="rounded-2xl border border-[#E5E3DE] bg-[#F1EFE9] p-4 text-[13px] font-medium text-[#0A0A0A]">

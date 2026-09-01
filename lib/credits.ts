@@ -21,9 +21,13 @@ export function extraCreditsValid(sub: Pick<CreditSub, "extraCredits" | "extraCr
 
 // How many credits the user can still spend right now.
 export function availableCredits(sub: CreditSub): number {
-  if (sub.plan === "FREE") return Math.max(0, FREE_LIFETIME_POSTS - sub.creditsUsed)
-  const monthly = Math.max(0, sub.creditsTotal - sub.creditsUsed)
   const extra = extraCreditsValid(sub) ? sub.extraCredits : 0
+  // FREE users don't have a monthly allowance, but an admin can still grant
+  // them extraCredits directly (see app/api/admin/users/[userId]/credits) —
+  // those must count here too, on top of any lifetime post they have left,
+  // or a manual grant is stored but never actually usable.
+  if (sub.plan === "FREE") return Math.max(0, FREE_LIFETIME_POSTS - sub.creditsUsed) + extra
+  const monthly = Math.max(0, sub.creditsTotal - sub.creditsUsed)
   return monthly + extra
 }
 
@@ -42,8 +46,10 @@ export async function hasGenerationBalance(userId: string): Promise<boolean> {
 // Atomically consume `amount` credits (weighted credit system: different
 // actions cost different amounts — see lib/creditActions.ts).
 //
-// FREE users don't have weighted credits: any chargeable action consumes their
-// single lifetime post, whatever `amount` was requested.
+// FREE users don't have weighted credits for their single lifetime post: any
+// chargeable action consumes it, whatever `amount` was requested. Once that
+// post is spent, they fall back to weighted extraCredits (amount-based) if
+// an admin has granted any — otherwise they're blocked, same as before.
 //
 // PRO/GROWTH users spend their monthly allowance first, then valid extra credits.
 // Deduction is atomic via conditional updateMany guards so concurrent requests
@@ -64,6 +70,10 @@ export async function consumeCredits(
     return { ok: true, requiresUpgrade: false, remaining: availableCredits(sub) }
   }
 
+  const extraGuard = {
+    OR: [{ extraCreditsExpiry: null }, { extraCreditsExpiry: { gt: new Date() } }],
+  }
+
   if (sub.plan === "FREE") {
     // Atomic: only the row that still has a free post left is incremented, so
     // concurrent requests can't both slip past the lifetime limit.
@@ -71,12 +81,33 @@ export async function consumeCredits(
       where: { userId, creditsUsed: { lt: FREE_LIFETIME_POSTS } },
       data: { creditsUsed: { increment: 1 } },
     })
-    if (res.count === 0) return { ok: false, requiresUpgrade: true, remaining: 0 }
-    return {
-      ok: true,
-      requiresUpgrade: false,
-      remaining: availableCredits({ ...sub, creditsUsed: sub.creditsUsed + 1 }),
+    if (res.count > 0) {
+      return {
+        ok: true,
+        requiresUpgrade: false,
+        remaining: availableCredits({ ...sub, creditsUsed: sub.creditsUsed + 1 }),
+      }
     }
+
+    // Lifetime post already spent — a plain FREE user stops here exactly as
+    // before. But if an admin has manually granted extraCredits, spend those
+    // instead of blocking outright, weighted the same way PRO/GROWTH extras
+    // are spent (amount, not a flat 1).
+    if (extraCreditsValid(sub) && sub.extraCredits >= amount) {
+      const extraRes = await db.subscription.updateMany({
+        where: { userId, extraCredits: { gte: amount }, ...extraGuard },
+        data: { extraCredits: { decrement: amount } },
+      })
+      if (extraRes.count > 0) {
+        return {
+          ok: true,
+          requiresUpgrade: false,
+          remaining: availableCredits({ ...sub, extraCredits: sub.extraCredits - amount }),
+        }
+      }
+    }
+
+    return { ok: false, requiresUpgrade: true, remaining: availableCredits(sub) }
   }
 
   // PRO/GROWTH — 1) try the whole amount from the monthly allowance. The
@@ -91,10 +122,6 @@ export async function consumeCredits(
       requiresUpgrade: false,
       remaining: availableCredits({ ...sub, creditsUsed: sub.creditsUsed + amount }),
     }
-  }
-
-  const extraGuard = {
-    OR: [{ extraCreditsExpiry: null }, { extraCreditsExpiry: { gt: new Date() } }],
   }
 
   // 2) try the whole amount from valid extra credits.

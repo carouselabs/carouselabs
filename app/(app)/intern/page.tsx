@@ -7,7 +7,6 @@ import { db } from "@/lib/db"
 import {
   summarizeEntries,
   predefinedTaskNames,
-  getLeaderboard,
   getLeaveBalance,
   calculateEndDate,
   getInternshipProgress,
@@ -16,10 +15,9 @@ import {
 import { PerformanceCalendar, type DayCell, type AttendanceStatus } from "@/components/intern/PerformanceCalendar"
 import { LeaveApplication } from "@/components/intern/LeaveApplication"
 import { SupportChat } from "@/components/intern/SupportChat"
+import { LeaderboardCard } from "@/components/intern/LeaderboardCard"
 
 export const dynamic = "force-dynamic"
-
-const MEDALS = ["🥇", "🥈", "🥉"]
 
 const STATUS_BADGE_STYLES: Record<string, string> = {
   active: "bg-emerald-50 text-emerald-700",
@@ -108,7 +106,6 @@ export default async function InternPage() {
 
   const { total, pointsToday, pointsThisWeek } = summarizeEntries(intern.entries)
   const taskNames = await predefinedTaskNames()
-  const leaderboard = await getLeaderboard()
 
   const approvedLeaveCount = intern.leaveRequests.filter((r) => r.status === "approved").length
   const leaveBalance = getLeaveBalance(intern, approvedLeaveCount)
@@ -284,43 +281,7 @@ export default async function InternPage() {
       )}
 
       {/* Leaderboard */}
-      <div className="rounded-2xl border border-[#E5E3DE] bg-white p-4 sm:p-5">
-        <h2 className="mb-4 text-[13px] font-semibold text-[#0A0A0A]">Leaderboard</h2>
-        {leaderboard.length === 0 ? (
-          <p className="text-[13px] text-[#9CA3AF]">No active interns yet.</p>
-        ) : (
-          <ul className="flex flex-col divide-y divide-[#F1EFE9]">
-            {leaderboard.map((entry, i) => {
-              const isMe = entry.id === intern.id
-              return (
-                <li
-                  key={entry.id}
-                  className={`flex items-center gap-3 py-2.5 px-2.5 -mx-2.5 rounded-lg ${
-                    isMe ? "bg-[#7C3AED]/[0.06] border border-[#7C3AED]/30" : "border border-transparent"
-                  }`}
-                >
-                  <span className="w-6 shrink-0 text-center text-[14px] leading-none">
-                    {MEDALS[i] ?? (
-                      <span className="text-[12px] font-semibold text-[#9CA3AF] tabular-nums">{i + 1}</span>
-                    )}
-                  </span>
-                  <span
-                    className={`text-[13px] flex-1 min-w-0 truncate ${
-                      isMe ? "font-semibold text-[#7C3AED]" : "font-medium text-[#0A0A0A]"
-                    }`}
-                  >
-                    {entry.name}
-                    {isMe && " (you)"}
-                  </span>
-                  <span className="text-[13px] font-bold tabular-nums text-[#0A0A0A]">
-                    {entry.totalPoints}
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </div>
+      <LeaderboardCard internId={intern.id} />
 
       {/* Calendar */}
       <PerformanceCalendar cells={cells} monthLabel={monthLabel} />

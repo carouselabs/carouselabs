@@ -1,10 +1,12 @@
 "use client"
 
 // /admin/interns — intern roster doubling as the leaderboard: ranked by
-// all-time points descending (server-sorted), with medal badges for the top
-// 3. "Add Intern" opens a create modal; clicking a row goes to the intern's
-// detail page. Status filter narrows the list client-side (all rows are
-// already fetched for the leaderboard ranking).
+// points within the selected period, descending (server-sorted), with medal
+// badges for the top 3. A period toggle (All-Time / This Month / This Week)
+// re-fetches from the API and re-sorts. "Add Intern" opens a create modal;
+// clicking a row goes to the intern's detail page. Status filter narrows the
+// list client-side (all rows are already fetched for the leaderboard
+// ranking).
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Trash2, UserPlus, Megaphone } from "lucide-react"
@@ -22,6 +24,9 @@ import { useToast } from "@/components/admin/Toast"
 type Progress = { percentComplete: number; daysRemaining: number; isCompleted: boolean }
 type AttendanceFlag = "good" | "warning" | "critical"
 
+type Period = "all" | "month" | "week"
+type DateRange = { start: string; end: string }
+
 type InternRow = {
   id: string
   name: string
@@ -31,6 +36,7 @@ type InternRow = {
   active: boolean
   hasUnreadMessages: boolean
   totalPoints: number
+  periodPoints: number
   pointsToday: number
   pointsThisWeek: number
   lastEntryDate: string | null
@@ -39,6 +45,21 @@ type InternRow = {
   progress: Progress
   attendanceFlag: AttendanceFlag
   consecutiveAbsences: number
+}
+
+const PERIODS: { key: Period; label: string; pointsLabel: string }[] = [
+  { key: "all", label: "All-Time", pointsLabel: "Total Points" },
+  { key: "month", label: "This Month", pointsLabel: "Points (Month)" },
+  { key: "week", label: "This Week", pointsLabel: "Points (Week)" },
+]
+
+function fmtRangeLabel(range: DateRange): string {
+  const start = new Date(range.start)
+  const end = new Date(range.end)
+  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()
+  const startLabel = start.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  const endLabel = end.toLocaleDateString("en-US", sameMonth ? { day: "numeric" } : { month: "short", day: "numeric" })
+  return `${startLabel} - ${endLabel}`
 }
 
 const FLAG_DOT: Record<AttendanceFlag, string> = {
@@ -126,6 +147,8 @@ export function InternsTable() {
 
   const [rows, setRows] = useState<InternRow[] | null>(null)
   const [filter, setFilter] = useState<StatusFilter>("all")
+  const [period, setPeriod] = useState<Period>("all")
+  const [range, setRange] = useState<DateRange | null>(null)
 
   const [addOpen, setAddOpen] = useState(false)
   const [name, setName] = useState("")
@@ -143,19 +166,20 @@ export function InternsTable() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
   const [deleteBusy, setDeleteBusy] = useState(false)
 
-  const load = async () => {
+  const load = async (p: Period) => {
     try {
-      const res = await fetch("/api/admin/interns")
+      const res = await fetch(`/api/admin/interns?period=${p}`)
       if (!res.ok) throw new Error()
       const data = await res.json()
       setRows(data.interns)
+      setRange(data.range)
     } catch {
       toast("Failed to load interns", "error")
       setRows([])
     }
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
-  useEffect(() => void load(), [])
+  useEffect(() => void load(period), [period])
 
   const visibleRows = useMemo(() => {
     if (!rows) return rows
@@ -206,7 +230,7 @@ export function InternsTable() {
       toast("Intern added", "success")
       setAddOpen(false)
       resetForm()
-      await load()
+      await load(period)
     } catch (e) {
       toast(e instanceof Error && e.message ? e.message : "Failed to add intern", "error")
     } finally {
@@ -227,7 +251,7 @@ export function InternsTable() {
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error)
       toast(`${deleting.name} and all their data were deleted`, "success")
       setDeleting(null)
-      await load()
+      await load(period)
     } catch (e) {
       toast(e instanceof Error && e.message ? e.message : "Failed to delete intern", "error")
     } finally {
@@ -268,6 +292,27 @@ export function InternsTable() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex rounded-lg border border-[#2A2A2A] bg-[#141414] p-1">
+          {PERIODS.map((p) => (
+            <button
+              key={p.key}
+              onClick={() => setPeriod(p.key)}
+              className={`rounded-md px-3 py-1 text-[12px] font-semibold transition-colors ${
+                period === p.key ? "bg-[#7C3AED] text-white" : "text-[#8A8A8A] hover:text-white"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {range && period !== "all" && (
+          <span className="text-[12px] text-[#6A6A6A]">
+            {PERIODS.find((p) => p.key === period)?.label} ({fmtRangeLabel(range)})
+          </span>
+        )}
+      </div>
+
       <div className={tableCls.wrap}>
         <table className={tableCls.table}>
           <thead>
@@ -278,7 +323,7 @@ export function InternsTable() {
               <th className={tableCls.th}>Status</th>
               <th className={tableCls.th}>Progress</th>
               <th className={tableCls.th}>Days Left</th>
-              <th className={tableCls.th}>Total Points</th>
+              <th className={tableCls.th}>{PERIODS.find((p) => p.key === period)?.pointsLabel}</th>
               <th className={tableCls.th}>Leave</th>
               <th className={tableCls.th}>Last Active</th>
               <th className={tableCls.th} />
@@ -331,7 +376,7 @@ export function InternsTable() {
                 <td className={`${tableCls.td} tabular-nums`}>
                   {r.progress.isCompleted ? "—" : r.progress.daysRemaining}
                 </td>
-                <td className={`${tableCls.td} tabular-nums font-semibold text-white`}>{r.totalPoints}</td>
+                <td className={`${tableCls.td} tabular-nums font-semibold text-white`}>{r.periodPoints}</td>
                 <td className={`${tableCls.td} tabular-nums`}>
                   {r.leaveUsed}/{r.leaveAllowance} used
                 </td>

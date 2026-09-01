@@ -1,5 +1,7 @@
-// GET  /api/admin/interns — all interns with computed point totals, shaped
-// for the admin interns table.
+// GET  /api/admin/interns?period=all|month|week — all interns with computed
+// point totals, shaped for the admin interns table. `period` controls which
+// window periodPoints (and the sort order) reflects; totalPoints is always
+// all-time.
 // POST /api/admin/interns — create a new intern (clerkId linked later on
 // first matching sign-in).
 import { NextResponse } from "next/server"
@@ -12,14 +14,24 @@ import {
   getInternshipProgress,
   getAttendanceFlag,
   getConsecutiveAbsences,
+  getPeriodRange,
+  type LeaderboardPeriod,
 } from "@/lib/internPoints"
 import { logAdminAction, getRequestIp } from "@/lib/auditLog"
 import { sendInternWelcomeEmail } from "@/lib/email"
 import { EMPLOYEE_URL } from "@/emails/EmailLayout"
 
-export async function GET() {
+const PERIODS = new Set<LeaderboardPeriod>(["all", "month", "week"])
+
+export async function GET(req: Request) {
   const admin = await getAdminUser()
   if (!admin) return adminForbidden()
+
+  const periodParam = new URL(req.url).searchParams.get("period")
+  const period: LeaderboardPeriod = PERIODS.has(periodParam as LeaderboardPeriod)
+    ? (periodParam as LeaderboardPeriod)
+    : "all"
+  const range = getPeriodRange(period)
 
   const interns = await db.intern.findMany({
     orderBy: { createdAt: "desc" },
@@ -39,11 +51,18 @@ export async function GET() {
   })
   const unreadInternIds = new Set(unreadFrom.map((m) => m.internId))
 
-  // Ranked by all-time total points, descending — this list doubles as the
-  // admin leaderboard.
+  // Ranked by points within the requested period, descending — this list
+  // doubles as the admin leaderboard. All-time total is always included too
+  // (roster columns like progress/leave aren't period-scoped).
   const rows = interns
     .map((i) => {
       const { total, pointsToday, pointsThisWeek } = summarizeEntries(i.entries)
+      const periodPoints = range
+        ? i.entries.reduce(
+            (sum, e) => (e.date >= range.start && e.date <= range.end ? sum + e.points : sum),
+            0,
+          )
+        : total
       const lastEntryDate = i.entries.reduce<Date | null>(
         (max, e) => (!max || e.date > max ? e.date : max),
         null,
@@ -66,6 +85,7 @@ export async function GET() {
         hasUnreadMessages: unreadInternIds.has(i.id),
         createdAt: i.createdAt,
         totalPoints: total,
+        periodPoints,
         pointsToday,
         pointsThisWeek,
         lastEntryDate,
@@ -76,9 +96,13 @@ export async function GET() {
         consecutiveAbsences,
       }
     })
-    .sort((a, b) => b.totalPoints - a.totalPoints)
+    .sort((a, b) => b.periodPoints - a.periodPoints)
 
-  return NextResponse.json({ interns: rows })
+  return NextResponse.json({
+    interns: rows,
+    period,
+    range: range ? { start: range.start.toISOString(), end: range.end.toISOString() } : null,
+  })
 }
 
 export async function POST(req: Request) {

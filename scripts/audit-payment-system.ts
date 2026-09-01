@@ -166,6 +166,22 @@ async function main() {
     0,
   )
   check(
+    "FREE user, lifetime post spent + 200 admin-granted extraCredits → 200 available",
+    availableCredits({ plan: "FREE", creditsUsed: 1, creditsTotal: 0, extraCredits: 200, extraCreditsExpiry: null }),
+    200,
+  )
+  check(
+    "FREE user, lifetime post spent + EXPIRED extraCredits → 0 available",
+    availableCredits({
+      plan: "FREE",
+      creditsUsed: 1,
+      creditsTotal: 0,
+      extraCredits: 200,
+      extraCreditsExpiry: new Date(Date.now() - 86400000),
+    }),
+    0,
+  )
+  check(
     "PRO user, half of 1000 used → 500 remaining",
     availableCredits({ plan: "PRO", creditsUsed: 500, creditsTotal: 1000, extraCredits: 0, extraCreditsExpiry: null }),
     500,

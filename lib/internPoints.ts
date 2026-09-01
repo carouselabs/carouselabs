@@ -40,14 +40,49 @@ export function summarizeEntries(entries: { points: number; date: Date }[]) {
   return { total, pointsToday, pointsThisWeek }
 }
 
-// Active interns ranked by all-time total points, descending — the
+export type LeaderboardPeriod = "all" | "month" | "week"
+
+// Calendar-aligned period boundaries for the leaderboard — every intern is
+// compared against the same 1st-of-month or Mon-Sun window regardless of
+// when they joined. Distinct from startOfWeek() above (a rolling 7-day
+// window used for the intern portal's "This Week" stat tile), which is
+// intentionally NOT calendar-aligned.
+export function getPeriodRange(period: LeaderboardPeriod, now: Date = new Date()): { start: Date; end: Date } | null {
+  if (period === "month") {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1)
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    end.setHours(23, 59, 59, 999)
+    return { start, end }
+  }
+  if (period === "week") {
+    const dayOfWeek = now.getDay() // 0 = Sunday, 1 = Monday, etc.
+    const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+    const start = startOfDay(now)
+    start.setDate(start.getDate() - daysSinceMonday)
+    const end = new Date(start)
+    end.setDate(start.getDate() + 6)
+    end.setHours(23, 59, 59, 999)
+    return { start, end }
+  }
+  return null
+}
+
+// Active interns ranked by points within `period`, descending — the
 // leaderboard shown in both the admin panel and the intern portal. Only
 // name + total are exposed here; callers that need per-intern detail (email,
 // today/week splits) should compute those separately.
-export async function getLeaderboard(): Promise<{ id: string; name: string; totalPoints: number }[]> {
+export async function getLeaderboard(
+  period: LeaderboardPeriod = "all",
+): Promise<{ id: string; name: string; totalPoints: number }[]> {
+  const range = getPeriodRange(period)
   const interns = await db.intern.findMany({
     where: { active: true },
-    include: { entries: { select: { points: true } } },
+    include: {
+      entries: {
+        where: range ? { date: { gte: range.start, lte: range.end } } : undefined,
+        select: { points: true },
+      },
+    },
   })
   return interns
     .map((i) => ({

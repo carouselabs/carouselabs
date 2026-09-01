@@ -67,14 +67,14 @@ export function getPeriodRange(period: LeaderboardPeriod, now: Date = new Date()
   return null
 }
 
-// Active interns ranked by points within `period`, descending — the
-// leaderboard shown in both the admin panel and the intern portal. Only
-// name + total are exposed here; callers that need per-intern detail (email,
-// today/week splits) should compute those separately.
-export async function getLeaderboard(
-  period: LeaderboardPeriod = "all",
+// Active interns ranked by points within an arbitrary date range, descending
+// (null range = all-time). Split out from getLeaderboard() so callers that
+// need a range getPeriodRange() doesn't produce directly — e.g. "last
+// calendar week" for the weekly performance email (see
+// lib/internWeeklyEmail.ts) — can still reuse the same query/sort.
+export async function getLeaderboardForRange(
+  range: { start: Date; end: Date } | null,
 ): Promise<{ id: string; name: string; totalPoints: number }[]> {
-  const range = getPeriodRange(period)
   const interns = await db.intern.findMany({
     where: { active: true },
     include: {
@@ -91,6 +91,16 @@ export async function getLeaderboard(
       totalPoints: i.entries.reduce((sum, e) => sum + e.points, 0),
     }))
     .sort((a, b) => b.totalPoints - a.totalPoints)
+}
+
+// Active interns ranked by points within `period`, descending — the
+// leaderboard shown in both the admin panel and the intern portal. Only
+// name + total are exposed here; callers that need per-intern detail (email,
+// today/week splits) should compute those separately.
+export async function getLeaderboard(
+  period: LeaderboardPeriod = "all",
+): Promise<{ id: string; name: string; totalPoints: number }[]> {
+  return getLeaderboardForRange(getPeriodRange(period))
 }
 
 // Names of every PredefinedTask (active and inactive — tasks are never

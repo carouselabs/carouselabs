@@ -9,7 +9,7 @@
 // ranking).
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Trash2, UserPlus, Megaphone } from "lucide-react"
+import { Trash2, UserPlus, Megaphone, Mail, Loader2 } from "lucide-react"
 import {
   AdminButton,
   AdminInput,
@@ -166,6 +166,8 @@ export function InternsTable() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
   const [deleteBusy, setDeleteBusy] = useState(false)
 
+  const [testEmailBusyId, setTestEmailBusyId] = useState<string | null>(null)
+
   const load = async (p: Period) => {
     try {
       const res = await fetch(`/api/admin/interns?period=${p}`)
@@ -256,6 +258,24 @@ export function InternsTable() {
       toast(e instanceof Error && e.message ? e.message : "Failed to delete intern", "error")
     } finally {
       setDeleteBusy(false)
+    }
+  }
+
+  // Previews that intern's real Weekly Performance email (see
+  // lib/internWeeklyEmail.ts) by mailing it to the logged-in admin instead
+  // of the intern — lets any tone (top/moved-up/steady/needs-a-push) be
+  // checked without waiting for the Monday cron.
+  const sendTestWeeklyEmail = async (r: InternRow) => {
+    setTestEmailBusyId(r.id)
+    try {
+      const res = await fetch(`/api/cron/intern-weekly-performance-email?test=${r.id}`)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error)
+      toast(`Sent a preview of ${r.name}'s weekly email to ${data.sentTo}`, "success")
+    } catch (e) {
+      toast(e instanceof Error && e.message ? e.message : "Failed to send test email", "error")
+    } finally {
+      setTestEmailBusyId(null)
     }
   }
 
@@ -382,16 +402,34 @@ export function InternsTable() {
                 </td>
                 <td className={tableCls.td}>{r.lastEntryDate ? fmtDate(r.lastEntryDate) : "—"}</td>
                 <td className={tableCls.td}>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      openDelete(r)
-                    }}
-                    className="rounded-md p-1.5 text-[#8A8A8A] hover:bg-red-500/15 hover:text-red-400 transition-colors"
-                    aria-label={`Delete ${r.name}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void sendTestWeeklyEmail(r)
+                      }}
+                      disabled={testEmailBusyId === r.id}
+                      className="rounded-md p-1.5 text-[#8A8A8A] hover:bg-[#7C3AED]/15 hover:text-[#A78BFA] transition-colors disabled:opacity-50"
+                      aria-label={`Send test weekly email for ${r.name} to myself`}
+                      title="Send Test Weekly Email to Myself"
+                    >
+                      {testEmailBusyId === r.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Mail className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openDelete(r)
+                      }}
+                      className="rounded-md p-1.5 text-[#8A8A8A] hover:bg-red-500/15 hover:text-red-400 transition-colors"
+                      aria-label={`Delete ${r.name}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

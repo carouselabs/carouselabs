@@ -14,6 +14,11 @@ import { RenewalReminderEmail } from "@/emails/RenewalReminderEmail"
 import { SubscriptionCancelledEmail } from "@/emails/SubscriptionCancelledEmail"
 import { InternWelcomeEmail } from "@/emails/InternWelcomeEmail"
 import { InternWeeklyDigestEmail, type InternDigestRow } from "@/emails/InternWeeklyDigestEmail"
+import {
+  InternWeeklyPerformanceEmail,
+  type WeeklyPerformanceEmailProps,
+  type WeeklyPerformanceTone,
+} from "@/emails/InternWeeklyPerformanceEmail"
 import { InternDailySummaryEmail, type DailySummaryTask } from "@/emails/InternDailySummaryEmail"
 import { InternAbsentWarningEmail } from "@/emails/InternAbsentWarningEmail"
 import { InternBroadcastEmail } from "@/emails/InternBroadcastEmail"
@@ -254,6 +259,29 @@ export async function sendInternAbsentWarningEmail(
     html: await render(
       InternAbsentWarningEmail({ name, date, presentDays, absentDays, attendanceRate }),
     ),
+  })
+  if (error) throw new Error(`Resend: ${error.message}`)
+}
+
+// Subject adapts to the intern's tone for this week (see
+// lib/internWeeklyEmail.ts's decideTone) so the inbox preview line already
+// signals whether it's a celebration or a gentle nudge.
+const WEEKLY_PERFORMANCE_SUBJECT: Record<WeeklyPerformanceTone, (d: WeeklyPerformanceEmailProps) => string> = {
+  top: (d) => `🏆 You're #${d.rankThisWeek} this week!`,
+  moved_up: (d) => `📈 You moved up to #${d.rankThisWeek} this week`,
+  steady: (d) => `Your Week in Review — #${d.rankThisWeek}`,
+  needs_push: (d) => `Your Week in Review — ${d.weekLabel}`,
+}
+
+// Sent weekly to every active intern — see
+// app/api/cron/intern-weekly-performance-email, which generates `data` via
+// lib/internWeeklyEmail.ts's generateWeeklyPerformanceData() per intern.
+export async function sendInternWeeklyPerformanceEmail(email: string, data: WeeklyPerformanceEmailProps) {
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: WEEKLY_PERFORMANCE_SUBJECT[data.tone](data),
+    html: await render(InternWeeklyPerformanceEmail(data)),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
 }

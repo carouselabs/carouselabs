@@ -72,9 +72,14 @@ export function getPeriodRange(period: LeaderboardPeriod, now: Date = new Date()
 // need a range getPeriodRange() doesn't produce directly — e.g. "last
 // calendar week" for the weekly performance email (see
 // lib/internWeeklyEmail.ts) — can still reuse the same query/sort.
+//
+// entryCount is exposed alongside totalPoints so callers can tell "logged
+// entries that net to 0 points" apart from "logged nothing at all" — the
+// latter get sorted to the bottom of any 0-point tie below, rather than
+// landing at an arbitrary rank via findMany()'s incidental db order.
 export async function getLeaderboardForRange(
   range: { start: Date; end: Date } | null,
-): Promise<{ id: string; name: string; totalPoints: number }[]> {
+): Promise<{ id: string; name: string; totalPoints: number; entryCount: number }[]> {
   const interns = await db.intern.findMany({
     where: { active: true },
     include: {
@@ -89,8 +94,15 @@ export async function getLeaderboardForRange(
       id: i.id,
       name: i.name,
       totalPoints: i.entries.reduce((sum, e) => sum + e.points, 0),
+      entryCount: i.entries.length,
     }))
-    .sort((a, b) => b.totalPoints - a.totalPoints)
+    .sort((a, b) => {
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints
+      // Tied on points: interns who actually logged something outrank ones
+      // who logged nothing at all (both net to 0 in that case).
+      if (a.entryCount === 0 !== (b.entryCount === 0)) return a.entryCount === 0 ? 1 : -1
+      return a.name.localeCompare(b.name)
+    })
 }
 
 // Active interns ranked by points within `period`, descending — the

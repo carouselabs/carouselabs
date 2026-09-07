@@ -271,6 +271,7 @@ const WEEKLY_PERFORMANCE_SUBJECT: Record<WeeklyPerformanceTone, (d: WeeklyPerfor
   moved_up: (d) => `📈 You moved up to #${d.rankThisWeek} this week`,
   steady: (d) => `Your Week in Review — #${d.rankThisWeek}`,
   needs_push: (d) => `Your Week in Review — ${d.weekLabel}`,
+  no_activity: (d) => `Your Week in Review — ${d.weekLabel}`,
 }
 
 // Sent weekly to every active intern — see

@@ -2,7 +2,7 @@ import * as React from "react"
 import { Heading, Text, Section } from "@react-email/components"
 import { EMPLOYEE_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
 
-export type WeeklyPerformanceTone = "top" | "moved_up" | "steady" | "needs_push"
+export type WeeklyPerformanceTone = "top" | "moved_up" | "steady" | "needs_push" | "no_activity"
 
 // Everything the template needs to render one intern's personalized weekly
 // email. lib/internWeeklyEmail.ts's WeeklyPerformanceData extends this with
@@ -82,6 +82,14 @@ function TonedMessage(props: WeeklyPerformanceEmailProps) {
       </Text>
     )
   }
+  if (tone === "no_activity") {
+    return (
+      <Text style={emailStyles.text}>
+        {name}, we didn&apos;t see any activity logged for you this week — make sure to check in with your
+        admin if there&apos;s anything blocking you, or jump back in this week!
+      </Text>
+    )
+  }
   return (
     <Text style={emailStyles.text}>
       {name}, some weeks are busier than others, and that&apos;s completely okay. This week&apos;s a fresh
@@ -95,6 +103,7 @@ const CLOSING_LINE: Record<WeeklyPerformanceTone, string> = {
   moved_up: "Keep this momentum going into next week.",
   steady: "Small, consistent wins add up — let's build on this next week.",
   needs_push: "Whenever you're ready, we're here — let's make next week a good one.",
+  no_activity: "We'd love to see you back on the board next week.",
 }
 
 // Subject is chosen in lib/email.ts (per-tone), based on the same `tone`.
@@ -107,6 +116,25 @@ export function InternWeeklyPerformanceEmail(props: WeeklyPerformanceEmailProps)
     perfectAttendance && "✅ Perfect attendance",
     isMostImproved && "📈 Most improved",
   ].filter((b): b is string => !!b)
+
+  // TONE E ("no_activity"): there's no real rank, badge, or attendance
+  // signal to report for a week with zero logged entries and zero
+  // attendance records — showing them anyway would just be noise computed
+  // from nothing. Skip straight to the neutral message (see Step 2).
+  if (tone === "no_activity") {
+    return (
+      <EmailLayout preview={`Your week in review — ${weekLabel}`}>
+        <Heading style={emailStyles.heading}>Your week in review</Heading>
+        <Text style={emailStyles.text}>Hi {name}, here&apos;s how your week went ({weekLabel}):</Text>
+
+        <TonedMessage {...props} />
+
+        <Text style={emailStyles.text}>{CLOSING_LINE[tone]}</Text>
+
+        <EmailButton href={`${EMPLOYEE_URL}/intern`}>View Full Leaderboard</EmailButton>
+      </EmailLayout>
+    )
+  }
 
   return (
     <EmailLayout preview={`Your week: #${rankThisWeek}, ${pointsThisWeek} pts — ${weekLabel}`}>

@@ -4,6 +4,7 @@ import type { WebhookEvent } from "@clerk/nextjs/server"
 import { db } from "@/lib/db"
 import { sendWelcomeEmail } from "@/lib/email"
 import { applyPendingPrefill } from "@/lib/profile/pendingPrefill"
+import { createReferralForSignup } from "@/lib/referral"
 
 export async function POST(req: Request) {
   const secret = process.env.CLERK_WEBHOOK_SECRET
@@ -75,6 +76,21 @@ export async function POST(req: Request) {
         await applyPendingPrefill(newUser.id, email)
       } catch (err) {
         console.error("[webhooks/clerk] pending prefill apply failed:", err)
+      }
+
+      // Referral attribution — the code rode along on the SignUp attempt's
+      // unsafeMetadata (see app/(auth)/sign-up/[[...sign-up]]/page.tsx,
+      // which read it from the cookie proxy.ts sets on ?ref= clicks).
+      // createReferralForSignup owns every fraud guard from the spec
+      // (unknown code, self-referral, duplicate-referral race) and never
+      // throws — best-effort, same reasoning as the prefill apply above.
+      const referralCode = event.data.unsafe_metadata?.referralCode
+      if (typeof referralCode === "string" && referralCode.trim()) {
+        try {
+          await createReferralForSignup(newUser.id, referralCode)
+        } catch (err) {
+          console.error("[webhooks/clerk] referral attribution failed:", err)
+        }
       }
 
       // Welcome email — best-effort, never fail the webhook on email errors.

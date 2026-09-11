@@ -8,6 +8,7 @@ const TABS = [
   { href: "/settings/profile", label: "Profile" },
   { href: "/settings/voice-presets", label: "Voice Presets" },
   { href: "/settings/billing", label: "Billing" },
+  { href: "/settings/referrals", label: "Referrals" },
   { href: "/settings/account", label: "Account" },
 ]
 

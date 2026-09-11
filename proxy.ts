@@ -1,6 +1,11 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import type { NextFetchEvent, NextRequest } from "next/server"
+import {
+  REFERRAL_CODE_PATTERN,
+  REFERRAL_COOKIE_MAX_AGE_SECONDS,
+  REFERRAL_COOKIE_NAME,
+} from "@/lib/referralConstants"
 
 const isPublicRoute = createRouteMatcher([
   "/",
@@ -139,9 +144,49 @@ const handler = clerkMiddleware(
   { signInUrl: "/sign-in", signUpUrl: "/sign-up" },
 )
 
-export function proxy(request: NextRequest, event: NextFetchEvent) {
-  return handler(request, event)
+// ── Referral link capture ────────────────────────────────────────────
+// ?ref=CODE on any page (not just "/", in case a referral link ever points
+// deeper) is captured into an httpOnly cookie so it survives the sign-up
+// flow — Clerk's webhook runs server-to-server and can never see the
+// browser's cookies directly, so the actual hand-off to that webhook
+// happens via the sign-up page reading this cookie server-side and passing
+// it to Clerk's <SignUp unsafeMetadata={{ referralCode }}> (see
+// app/(auth)/sign-up/[[...sign-up]]/page.tsx) — Clerk carries unsafeMetadata
+// through to the user.created webhook payload's data.unsafe_metadata,
+// confirmed against the installed @clerk/backend types (UserJSON.unsafe_metadata).
+// First-touch attribution: never overwrite an already-set cookie, so a
+// later (possibly bad-faith) ?ref= link can't hijack an earlier legitimate
+// referral before signup completes.
+function withReferralCapture(request: NextRequest, response: Response): Response {
+  // clerkMiddleware's return type is the generic NextMiddlewareResult
+  // (NextResponse | Response | null | undefined) — only NextResponse
+  // exposes .cookies. Every path in `handler` above actually returns a
+  // NextResponse (or falls through to the NextResponse.next() default), so
+  // this narrowing never skips a real response in practice; it's just a
+  // safe no-op if that ever changes.
+  if (!(response instanceof NextResponse)) return response
+
+  const ref = request.nextUrl.searchParams.get("ref")
+  if (!ref || request.cookies.has(REFERRAL_COOKIE_NAME)) return response
+
+  const code = ref.trim().toUpperCase()
+  if (!REFERRAL_CODE_PATTERN.test(code)) return response // malformed — ignore, don't cookie garbage
+
+  response.cookies.set(REFERRAL_COOKIE_NAME, code, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: REFERRAL_COOKIE_MAX_AGE_SECONDS,
+    path: "/",
+  })
+  return response
 }
+
+export async function proxy(request: NextRequest, event: NextFetchEvent) {
+  const response = (await handler(request, event)) ?? NextResponse.next()
+  return withReferralCapture(request, response)
+}
+
 
 export const config = {
   matcher: [

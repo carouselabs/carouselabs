@@ -41,6 +41,7 @@ export type AdminAuditAction =
   | "SCHEDULE_EMAIL"
   | "RESCHEDULE_EMAIL"
   | "CANCEL_SCHEDULED_EMAIL"
+  | "REFERRAL_PAYOUT_RECORDED"
 
 export async function logAdminAction({
   adminEmail,

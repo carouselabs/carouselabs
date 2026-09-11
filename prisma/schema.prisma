@@ -97,6 +97,13 @@ model User {
   scheduledPosts ScheduledPost[]
   recurringSlots RecurringSlot[]
 
+  // ── Referral program ──
+  referralCode       String?              @unique
+  referralsMade      Referral[]           @relation("ReferralsMade")
+  referredByRelation Referral?            @relation("ReferredBy")
+  commissions        ReferralCommission[]
+  payouts            ReferralPayout[]
+
   @@index([clerkId])
 }
 
@@ -597,4 +604,62 @@ model ScheduledEmail {
   updatedAt     DateTime @updatedAt // drives the cron's stuck-"sending" reclaim, same role as ScheduledPost.updatedAt
 
   @@index([status, scheduledFor])
+}
+
+// ── Referral program ──────────────────────────────────────────────
+// One row per successfully-attributed signup — created once in the Clerk
+// user.created webhook (see lib/referral.ts + app/api/webhooks/clerk) after
+// its fraud guards pass. @@unique on referredUserId is the hard backstop
+// against a person ever having two referrers, enforced at the DB level (not
+// just in application code) even if the webhook were ever called twice.
+model Referral {
+  id               String   @id @default(cuid())
+  referrerId       String
+  referrer         User     @relation("ReferralsMade", fields: [referrerId], references: [id])
+  referredUserId   String   @unique
+  referredUser     User     @relation("ReferredBy", fields: [referredUserId], references: [id])
+  freeBonusGranted Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  @@index([referrerId])
+}
+
+// One row per commission-worthy payment event on a referred user's
+// subscription (see subscription_payment_success in
+// app/api/webhooks/lemonsqueezy). sourceOrderId is @unique specifically so a
+// Lemon Squeezy webhook redelivery for the same invoice can't double-pay the
+// referrer — the duplicate insert fails cleanly (see lib/referral.ts's
+// createCommissionForPayment, which catches exactly that P2002 case).
+model ReferralCommission {
+  id             String    @id @default(cuid())
+  referrerId     String
+  referrer       User      @relation(fields: [referrerId], references: [id])
+  referredUserId String
+  sourceOrderId  String    @unique // the Lemon Squeezy order/subscription invoice ID — prevents duplicate commission creation for the same payment event
+  amount         Float
+  sourceEvent    String
+  status         String    @default("pending") // "pending" | "paid" | "reversed"
+  createdAt      DateTime  @default(now())
+  paidAt         DateTime?
+  paidBy         String?
+  reversedAt     DateTime? // set if the underlying payment was later refunded
+  reversedReason String?
+
+  @@index([referrerId, status])
+}
+
+// One row per admin-recorded manual payout to a referrer (there's no
+// automated payout rail yet — see the admin dashboard's "Record Payout").
+// Recording a payout also flips every currently-"pending" commission for
+// that referrer to "paid" in the same transaction (see
+// app/api/admin/referrals/[userId]/route.ts) — this table itself is just the
+// payment record, not a ledger of which commissions it covered.
+model ReferralPayout {
+  id         String   @id @default(cuid())
+  referrerId String
+  referrer   User     @relation(fields: [referrerId], references: [id])
+  amount     Float
+  method     String?
+  paidBy     String
+  createdAt  DateTime @default(now())
 }

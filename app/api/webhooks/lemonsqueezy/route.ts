@@ -8,6 +8,7 @@ import {
   sendMonthlyResetEmail,
   sendTopUpEmail,
 } from "@/lib/email"
+import { createCommissionForPayment } from "@/lib/referral"
 
 // Lemon Squeezy events are signed with HMAC-SHA256 over the raw body, so this
 // route must read req.text() (not req.json()) before parsing.
@@ -312,6 +313,46 @@ export async function POST(req: Request) {
           },
         })
         await safeEmail(() => sendMonthlyResetEmail(user.email, name, credits))
+
+        // Referral commission — recurring, 8% of this invoice's pre-tax
+        // subtotal, only if the paying user was themselves referred.
+        // subscription_payment_success firing at all IS the "this payment
+        // genuinely succeeded" signal (Lemon Squeezy fires
+        // subscription_payment_failed instead when it doesn't) — the same
+        // rigor as the isPaid check above, just expressed by the event type
+        // rather than a status field, since this event has no separate
+        // "pending" variant the way subscription_created/updated do for
+        // trial signups. A later refund is handled by reversal (see the
+        // gap noted in the case default / STEP 6 comment below), not by
+        // withholding the commission now — we can't know about a future
+        // refund at this moment.
+        //
+        // payload.data.id is this specific invoice/charge's id (confirmed
+        // unique per billing cycle, same field already reused as
+        // lsSubscriptionId elsewhere in this file for the resource id) —
+        // that's the sourceOrderId whose @unique constraint makes a
+        // redelivery a clean no-op instead of a double payout.
+        try {
+          const subtotalCents = attrs.subtotal ?? attrs.total ?? 0
+          const result = await createCommissionForPayment({
+            referredUserId: user.id,
+            sourceOrderId: payload.data.id,
+            subtotalCents,
+            sourceEvent: eventName,
+          })
+          if (result === "created") {
+            console.log(`[webhooks/lemonsqueezy] referral commission created for user ${user.id}`)
+          } else if (result === "duplicate") {
+            console.log(
+              `[webhooks/lemonsqueezy] referral commission already processed for order ${payload.data.id}, skipped`,
+            )
+          }
+        } catch (err) {
+          // Best-effort — a commission-creation failure must not roll back
+          // the credit reset / email above, which already succeeded.
+          console.error("[webhooks/lemonsqueezy] referral commission creation failed:", err)
+        }
+
         break
       }
 
@@ -326,6 +367,21 @@ export async function POST(req: Request) {
         break
       }
 
+      // KNOWN GAP — referral commission reversal on refund (see the
+      // referral-program spec's STEP 6): no refund/dispute event of any
+      // kind is handled anywhere in this file today (verified — grepped
+      // this whole route for "refund" before writing this comment; nothing
+      // exists to hook into). Lemon Squeezy's actual event name for this
+      // (something like "order_refunded", possibly also a
+      // subscription-invoice-level refunded flag) is NOT verified against
+      // their real webhook docs here — intentionally not guessed. The
+      // reversal logic itself is already written and ready to wire up:
+      // lib/referral.ts's reverseCommissionForOrder(sourceOrderId, reason)
+      // finds the ReferralCommission by sourceOrderId and flips it to
+      // "reversed" (idempotent — no-ops on an already-reversed or
+      // already-paid-out row). Once the correct event name + the field that
+      // carries the refunded order/invoice id are confirmed, add a case
+      // here that calls it.
       default:
         console.log("[webhooks/lemonsqueezy] unhandled event:", eventName)
     }

@@ -23,6 +23,7 @@ import {
   ListChecks,
   CalendarClock,
   UserPlus,
+  Gift,
 } from "lucide-react"
 import { GlobalSearch } from "@/components/admin/GlobalSearch"
 
@@ -33,6 +34,7 @@ const NAV = [
   { href: "/admin/subscriptions", label: "Subscriptions", icon: CreditCard },
   { href: "/admin/posts", label: "Posts", icon: FileText },
   { href: "/admin/credits", label: "Credits", icon: Coins },
+  { href: "/admin/referrals", label: "Referrals", icon: Gift },
   { href: "/admin/interns", label: "Interns", icon: Award },
   { href: "/admin/tasks", label: "Manage Tasks", icon: ListChecks },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },

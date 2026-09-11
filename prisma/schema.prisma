@@ -108,33 +108,39 @@ model User {
 }
 
 model Profile {
-  id                     String   @id @default(cuid())
-  userId                 String   @unique
-  name                   String?
-  headline               String?
-  industry               String?
-  targetAudience         String?
-  contentPillars         String[]
-  writingStyle           String?
-  voiceGuidelines        String?  @db.Text
-  voicePresets           Json?
-  linkedInUrl            String?
-  timezone               String   @default("UTC")
-  onboardingDone         Boolean  @default(false)
+  id                        String    @id @default(cuid())
+  userId                    String    @unique
+  name                      String?
+  headline                  String?
+  industry                  String?
+  targetAudience            String?
+  contentPillars            String[]
+  writingStyle              String?
+  voiceGuidelines           String?   @db.Text
+  voicePresets              Json?
+  linkedInUrl               String?
+  timezone                  String    @default("UTC")
+  onboardingDone            Boolean   @default(false)
   // Set when this Profile was written by an admin via /admin/prefill-user
   // (either applied directly, or carried over from a PendingProfilePrefill
   // at signup) rather than filled in by the user themselves through
   // onboarding. Drives the "please review your profile" dashboard banner.
-  prefilledByAdmin       Boolean  @default(false)
+  prefilledByAdmin          Boolean   @default(false)
   // Cleared (see app/api/profile PATCH) once the user dismisses that banner
   // or actually edits their profile in Settings — whichever comes first.
-  profileReviewDismissed Boolean  @default(false)
+  profileReviewDismissed    Boolean   @default(false)
+  // Last time the weekly "check out your referral program" dashboard banner
+  // was shown to this user — see app/api/referrals/reminder. Stamped the
+  // moment that route decides to show it (not on a separate dismiss call),
+  // so it's set exactly once per calendar week regardless of whether the
+  // user interacts with the banner at all.
+  lastReferralReminderShown DateTime?
   // Cached AI "what to post about" suggestions for the generate bar.
   // Regenerated only when ideaSuggestionsKey (a hash of profile inputs) changes.
-  ideaSuggestions        String[] @default([])
-  ideaSuggestionsKey     String?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  ideaSuggestions           String[]  @default([])
+  ideaSuggestionsKey        String?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

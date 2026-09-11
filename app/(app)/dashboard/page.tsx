@@ -5,6 +5,7 @@ import { Sparkles, Pencil, ArrowRight } from "lucide-react"
 import { motion } from "framer-motion"
 import { GenerateBar } from "@/components/dashboard/GenerateBar"
 import { IdeaFeed } from "@/components/dashboard/IdeaFeed"
+import { ReferralReminderBanner } from "@/components/dashboard/ReferralReminderBanner"
 import { useIdeaSessionStore } from "@/lib/store/ideaSessionStore"
 import type { SessionIdea } from "@/lib/store/ideaSessionStore"
 
@@ -111,6 +112,10 @@ export default function DashboardPage() {
       <div className="relative z-10 h-full max-w-2xl mx-auto flex flex-col">
         {/* Scrollable region — ideas drop in here (scrollbar hidden) */}
         <div className="order-2 flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-3 py-1">
+          {/* Weekly referral-program nudge — self-contained, renders nothing
+              until it confirms it hasn't been shown yet this calendar week. */}
+          {!isGenerating && <ReferralReminderBanner />}
+
           {/* Work on Own Idea — always first, before trending ideas */}
           {!isGenerating && (
             <Link

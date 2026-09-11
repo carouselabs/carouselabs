@@ -12,6 +12,7 @@ import { THUMBNAIL_SEO_PAGES } from "@/app/(marketing)/thumbnails/data"
 
 const FOOTER_LINKS = [
   { href: "/#pricing", label: "Pricing" },
+  { href: "/#referrals", label: "Referrals" },
   { href: "/#contact", label: "Contact" },
   { href: "/terms", label: "Terms" },
   { href: "/privacy", label: "Privacy" },

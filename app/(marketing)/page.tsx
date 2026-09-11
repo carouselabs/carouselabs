@@ -6,6 +6,7 @@ import { FeaturesGrid } from "@/components/landing/FeaturesGrid"
 import { ThumbnailFeature } from "@/components/landing/ThumbnailFeature"
 import { ContentHubFeature } from "@/components/landing/ContentHubFeature"
 import { Pricing } from "@/components/landing/Pricing"
+import { ReferralFeature } from "@/components/landing/ReferralFeature"
 import { CTA } from "@/components/landing/CTA"
 import { ExploreResources } from "@/components/landing/ExploreResources"
 import { ContactSection } from "@/components/landing/ContactSection"
@@ -22,6 +23,7 @@ export default async function Home() {
       <ThumbnailFeature />
       <ContentHubFeature />
       <Pricing />
+      <ReferralFeature />
       <CTA />
       <ExploreResources />
       <ContactSection />

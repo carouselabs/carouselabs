@@ -8,6 +8,9 @@ import { ScheduleForLaterButton } from "@/components/generate/ScheduleForLaterBu
 
 const WARN_AT = 2500
 const MAX_CHARS = 3000
+// Same widths used by the image/carousel flows' streaming placeholder, so
+// all three generate flows show visually consistent loading feedback.
+const SKELETON_WIDTHS = ["88%", "72%", "95%", "65%", "80%", "55%", "70%", "40%"]
 
 interface CaptionEditorProps {
   caption: string
@@ -164,11 +167,14 @@ export function CaptionEditor({
           )}
         />
         {isGenerating && caption.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="flex items-center gap-2 text-[13px] text-[#ADA99F]">
-              <Loader2 size={14} className="animate-spin" />
-              Generating…
-            </div>
+          <div className="absolute inset-0 p-4 flex flex-col gap-2.5 pointer-events-none">
+            {SKELETON_WIDTHS.map((w, i) => (
+              <div
+                key={i}
+                className="h-3.5 rounded-full bg-[#ECEAE4] animate-pulse"
+                style={{ width: w }}
+              />
+            ))}
           </div>
         )}
       </div>

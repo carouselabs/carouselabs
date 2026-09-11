@@ -165,6 +165,10 @@ export function ThumbnailClient() {
   const [textAnswer, setTextAnswer] = useState("")
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  // True while an uploaded photo is being canvas-resized/re-encoded
+  // (compressImage) — covers the gap between file-select and the moment the
+  // preview/chat bubble actually appears.
+  const [processingImage, setProcessingImage] = useState(false)
 
   // Screen 3
   const [blueprint, setBlueprint] = useState<ThumbnailBlueprint | null>(null)
@@ -302,6 +306,7 @@ export function ThumbnailClient() {
     const file = e.target.files?.[0]
     e.target.value = ""
     if (!file || !file.type.startsWith("image/") || !currentQuestion) return
+    setProcessingImage(true)
     try {
       const base64 = await compressImage(file)
       submitAnswer(`Uploaded a photo for: ${currentQuestion.topic}`, [
@@ -309,6 +314,8 @@ export function ThumbnailClient() {
       ])
     } catch {
       setError("Failed to process the uploaded image. Please try a different file.")
+    } finally {
+      setProcessingImage(false)
     }
   }
 
@@ -320,6 +327,7 @@ export function ThumbnailClient() {
     const remaining = Math.max(0, maxImages - pendingImages.length)
     const toAdd = files.slice(0, remaining).filter((f) => f.type.startsWith("image/"))
     if (toAdd.length === 0) return
+    setProcessingImage(true)
     try {
       const compressed = await Promise.all(
         toAdd.map(async (file) => {
@@ -330,6 +338,8 @@ export function ThumbnailClient() {
       setPendingImages((prev) => [...prev, ...compressed])
     } catch {
       setError("Failed to process one or more images. Please try different files.")
+    } finally {
+      setProcessingImage(false)
     }
   }
 
@@ -661,10 +671,15 @@ export function ThumbnailClient() {
             {currentQuestion.inputType === "single_image" && answerMode !== "text" && (
               <button
                 onClick={() => singleFileInputRef.current?.click()}
-                className="flex items-center justify-center gap-2 h-11 rounded-xl border border-dashed border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.03)] hover:bg-[rgba(124,58,237,0.06)] text-[13px] font-medium text-[#7C3AED] transition-all"
+                disabled={processingImage}
+                className="flex items-center justify-center gap-2 h-11 rounded-xl border border-dashed border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.03)] hover:bg-[rgba(124,58,237,0.06)] text-[13px] font-medium text-[#7C3AED] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Upload size={14} strokeWidth={2} />
-                Upload a photo
+                {processingImage ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Upload size={14} strokeWidth={2} />
+                )}
+                {processingImage ? "Processing photo…" : "Upload a photo"}
               </button>
             )}
 
@@ -693,9 +708,14 @@ export function ThumbnailClient() {
                   {pendingImages.length < maxImages && (
                     <button
                       onClick={() => multiFileInputRef.current?.click()}
-                      className="aspect-square rounded-lg border border-dashed border-[#E5E3DE] flex items-center justify-center hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.03)] transition-all"
+                      disabled={processingImage}
+                      className="aspect-square rounded-lg border border-dashed border-[#E5E3DE] flex items-center justify-center hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.03)] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <Plus size={16} className="text-[#9CA3AF]" strokeWidth={2} />
+                      {processingImage ? (
+                        <Loader2 size={16} className="text-[#9CA3AF] animate-spin" />
+                      ) : (
+                        <Plus size={16} className="text-[#9CA3AF]" strokeWidth={2} />
+                      )}
                     </button>
                   )}
                 </div>

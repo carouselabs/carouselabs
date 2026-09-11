@@ -51,11 +51,20 @@ export function DailyChecklist({ internId, internRole }: { internId: string; int
 
   const [date, setDate] = useState(todayStr())
   const [tasks, setTasks] = useState<Task[]>([])
+  // Which role-key the current `tasks` reflect — null until the first load
+  // lands. `tasksLoading` is derived (not its own setState) so resetting it
+  // on a dependency change never needs a synchronous setState in the effect
+  // body below.
+  const [tasksLoadedForRole, setTasksLoadedForRole] = useState<string | null>(null)
+  const tasksLoading = tasksLoadedForRole !== (internRole ?? "")
   const [checked, setChecked] = useState<Record<string, boolean>>({})
   const [quantities, setQuantities] = useState<Record<string, string>>({})
   const [customRows, setCustomRows] = useState<CustomRow[]>([])
 
   const [existing, setExisting] = useState<{ count: number; totalPoints: number } | null>(null)
+  // Same derived-loading approach, keyed on intern+date.
+  const [existingLoadedForKey, setExistingLoadedForKey] = useState<string | null>(null)
+  const existingLoading = existingLoadedForKey !== `${internId}:${date}`
   const [existingAttendance, setExistingAttendance] = useState<AttendanceInfo>(null)
   const [attendanceStatus, setAttendanceStatus] = useState("")
   const [attendanceNote, setAttendanceNote] = useState("")
@@ -66,6 +75,7 @@ export function DailyChecklist({ internId, internRole }: { internId: string; int
     // role-scoped: server returns tasks with role IS NULL (everyone) OR role
     // matching this intern's role, so an "HR Intern" doesn't see tasks meant
     // for other roles.
+    const roleKey = internRole ?? ""
     const url = internRole
       ? `/api/admin/tasks?active=true&role=${encodeURIComponent(internRole)}`
       : "/api/admin/tasks?active=true"
@@ -73,10 +83,12 @@ export function DailyChecklist({ internId, internRole }: { internId: string; int
       .then((r) => (r.ok ? r.json() : { tasks: [] }))
       .then((d: { tasks?: Task[] }) => setTasks(d.tasks ?? []))
       .catch(() => setTasks([]))
+      .finally(() => setTasksLoadedForRole(roleKey))
   }, [internRole])
 
   useEffect(() => {
     let cancelled = false
+    const key = `${internId}:${date}`
     fetch(`/api/admin/interns/${internId}/checklist?date=${date}`)
       .then((r) => (r.ok ? r.json() : null))
       .then(
@@ -100,6 +112,9 @@ export function DailyChecklist({ internId, internRole }: { internId: string; int
         setExistingAttendance(null)
         setAttendanceStatus("")
         setAttendanceNote("")
+      })
+      .finally(() => {
+        if (!cancelled) setExistingLoadedForKey(key)
       })
     return () => {
       cancelled = true
@@ -205,12 +220,17 @@ export function DailyChecklist({ internId, internRole }: { internId: string; int
           />
           <span className="text-[12.5px] text-[#B0B0B0]">{fmtDateLabel(date)}</span>
         </div>
-        {existing !== null && existing.count > 0 && (
-          <p className="mt-3 text-[12px] text-amber-400">
-            {existing.count} {existing.count === 1 ? "entry" : "entries"} already logged for this date
-            ({existing.totalPoints >= 0 ? "+" : ""}
-            {existing.totalPoints} pts). Saving again will ADD to that total.
-          </p>
+        {existingLoading ? (
+          <p className="mt-3 text-[12px] text-[#6A6A6A]">Checking for existing entries…</p>
+        ) : (
+          existing !== null &&
+          existing.count > 0 && (
+            <p className="mt-3 text-[12px] text-amber-400">
+              {existing.count} {existing.count === 1 ? "entry" : "entries"} already logged for this date
+              ({existing.totalPoints >= 0 ? "+" : ""}
+              {existing.totalPoints} pts). Saving again will ADD to that total.
+            </p>
+          )
         )}
       </AdminCard>
 
@@ -246,7 +266,9 @@ export function DailyChecklist({ internId, internRole }: { internId: string; int
       </AdminCard>
 
       <AdminCard title="Tasks">
-        {tasks.length === 0 ? (
+        {tasksLoading ? (
+          <p className="text-[12.5px] text-[#6A6A6A]">Loading tasks…</p>
+        ) : tasks.length === 0 ? (
           <p className="text-[12.5px] text-[#6A6A6A]">
             No active predefined tasks. Add some on the Manage Tasks page.
           </p>

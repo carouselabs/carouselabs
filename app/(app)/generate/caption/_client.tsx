@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, History, Sparkles } from "lucide-react"
+import { ArrowLeft, History, Sparkles, Loader2 } from "lucide-react"
 import { CAPTION_TEMPLATES, CATEGORY_ORDER, getTemplatesByCategory } from "@/lib/captionTemplates"
 import { CAPTION_PLATFORMS } from "@/lib/captionPlatforms"
 import { CaptionEditor } from "@/components/generate/CaptionEditor"
@@ -71,6 +71,10 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [restored, setRestored] = useState(false)
+  // True until init()'s session-restore check resolves — avoids flashing the
+  // platform-select screen before a restored session flips captionStep away
+  // from its "platform-select" default.
+  const [initializing, setInitializing] = useState(true)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [instruction, setInstruction] = useState("")
   // Opt-in flag: apply the user's saved voice guidelines on the next generation.
@@ -110,6 +114,8 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
       }
     } catch {
       // fall through — user generates manually below
+    } finally {
+      setInitializing(false)
     }
     // No auto-generation on mount: the user picks their voice-guidelines
     // preference first, then clicks "Generate Caption" (see the button below).
@@ -315,6 +321,17 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
   const customWordCount = customStructure.trim()
     ? customStructure.trim().split(/\s+/).length
     : 0
+
+  // Session-restore check still in flight — avoids flashing the
+  // platform-select screen before a restored session takes over.
+  if (initializing) {
+    return (
+      <div className="max-w-2xl mx-auto flex flex-col items-center justify-center min-h-[50vh] gap-3">
+        <div className="w-6 h-6 border-[3px] border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
+        <p className="text-[13px] text-[#6B7280]">Checking for a saved session...</p>
+      </div>
+    )
+  }
 
   // ── Structure selection screens ───────────────────────────────
   if (captionStep !== "generating") {
@@ -612,10 +629,11 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
       {!caption && !isGenerating && (
         <button
           onClick={() => void generate(tone).catch(() => {})}
-          className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
+          disabled={isGenerating}
+          className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Sparkles size={14} strokeWidth={2} />
-          Generate Caption
+          {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} strokeWidth={2} />}
+          {isGenerating ? "Generating…" : "Generate Caption"}
         </button>
       )}
 

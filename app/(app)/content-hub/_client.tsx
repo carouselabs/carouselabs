@@ -242,10 +242,12 @@ function ScheduledRow({
   item,
   onReschedule,
   onRemove,
+  isRemoving = false,
 }: {
   item: ScheduledItem
   onReschedule: (item: ScheduledItem) => void
   onRemove: (item: ScheduledItem) => void
+  isRemoving?: boolean
 }) {
   return (
     <div className="group flex items-center gap-3 p-3 rounded-xl border border-[#E5E3DE] bg-white hover:border-[rgba(124,58,237,0.35)] transition-colors">
@@ -293,10 +295,15 @@ function ScheduledRow({
             )}
             <button
               onClick={() => onRemove(item)}
-              className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.08)] transition-colors"
+              disabled={isRemoving}
+              className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.08)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Remove"
             >
-              <Trash2 size={13} strokeWidth={2} />
+              {isRemoving ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Trash2 size={13} strokeWidth={2} />
+              )}
             </button>
           </>
         )}
@@ -310,11 +317,13 @@ function GroupSection({
   items,
   onReschedule,
   onRemove,
+  removingId,
 }: {
   title: string
   items: ScheduledItem[]
   onReschedule: (item: ScheduledItem) => void
   onRemove: (item: ScheduledItem) => void
+  removingId?: string | null
 }) {
   if (items.length === 0) return null
   return (
@@ -322,7 +331,13 @@ function GroupSection({
       <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">{title}</p>
       <div className="flex flex-col gap-2">
         {items.map((item) => (
-          <ScheduledRow key={item.id} item={item} onReschedule={onReschedule} onRemove={onRemove} />
+          <ScheduledRow
+            key={item.id}
+            item={item}
+            onReschedule={onReschedule}
+            onRemove={onRemove}
+            isRemoving={removingId === item.id}
+          />
         ))}
       </div>
     </div>
@@ -577,6 +592,13 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
   const [dateValue, setDateValue] = useState("")
   const [timeValue, setTimeValue] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  // Distinguishes which of the two footer buttons (Schedule vs. Save as
+  // Draft) is the one in flight, so only the clicked button shows its own
+  // spinner/text-change while `submitting` disables both.
+  const [savingAsDraft, setSavingAsDraft] = useState(false)
+  // Which scheduled item's Remove is currently in flight — a real DELETE
+  // (not optimistic), so the clicked row/button needs its own loading state.
+  const [removingId, setRemovingId] = useState<string | null>(null)
   const [panelError, setPanelError] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState<SuggestionSlot[]>([])
 
@@ -905,6 +927,7 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
       return
     }
     setSubmitting(true)
+    if (asDraft) setSavingAsDraft(true)
     setPanelError(null)
     try {
       if (panel?.mode === "edit") {
@@ -941,16 +964,21 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
       setPanelError(err instanceof Error ? err.message : "Something went wrong")
     } finally {
       setSubmitting(false)
+      setSavingAsDraft(false)
     }
   }
 
   async function handleRemove(item: ScheduledItem) {
+    if (removingId) return
+    setRemovingId(item.id)
     try {
       await fetch(`/api/content-hub/scheduled/${item.id}`, { method: "DELETE" })
       setScheduled((prev) => prev.filter((s) => s.id !== item.id))
       if (panel?.mode === "edit" && panel.item.id === item.id) closePanel()
     } catch {
       setError("Failed to remove — please try again")
+    } finally {
+      setRemovingId(null)
     }
   }
 
@@ -1152,24 +1180,28 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
                 items={grouped.thisWeek}
                 onReschedule={openEditPanel}
                 onRemove={(item) => void handleRemove(item)}
+                removingId={removingId}
               />
               <GroupSection
                 title="Next Week"
                 items={grouped.nextWeek}
                 onReschedule={openEditPanel}
                 onRemove={(item) => void handleRemove(item)}
+                removingId={removingId}
               />
               <GroupSection
                 title="Later"
                 items={grouped.later}
                 onReschedule={openEditPanel}
                 onRemove={(item) => void handleRemove(item)}
+                removingId={removingId}
               />
               <GroupSection
                 title="Past"
                 items={grouped.past}
                 onReschedule={openEditPanel}
                 onRemove={(item) => void handleRemove(item)}
+                removingId={removingId}
               />
             </div>
           )}
@@ -1250,6 +1282,7 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
                   item={item}
                   onReschedule={openEditPanel}
                   onRemove={(i) => void handleRemove(i)}
+                  isRemoving={removingId === item.id}
                 />
               ))}
             </div>
@@ -1429,6 +1462,7 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
                           item={item}
                           onReschedule={openEditPanel}
                           onRemove={(i) => void handleRemove(i)}
+                          isRemoving={removingId === item.id}
                         />
                       ))}
                     </div>
@@ -1624,7 +1658,7 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
                   disabled={submitting}
                   className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 shadow-[0_0_18px_rgba(124,58,237,0.25)] transition-colors"
                 >
-                  {submitting ? (
+                  {submitting && !savingAsDraft ? (
                     <Loader2 size={14} className="animate-spin" strokeWidth={2.2} />
                   ) : panel.mode === "edit" ? (
                     panel.item.status === "draft" ? "Schedule" : "Save New Time"
@@ -1635,18 +1669,21 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
                 {panel.mode === "edit" && (
                   <button
                     onClick={() => void handleRemove(panel.item)}
-                    className="px-3.5 py-2.5 rounded-xl border border-[#E5E3DE] bg-white hover:bg-[rgba(239,68,68,0.06)] hover:border-[rgba(239,68,68,0.3)] text-[12px] font-medium text-[#6B7280] hover:text-[rgba(239,68,68,0.9)] transition-colors"
+                    disabled={removingId === panel.item.id}
+                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-[#E5E3DE] bg-white hover:bg-[rgba(239,68,68,0.06)] hover:border-[rgba(239,68,68,0.3)] text-[12px] font-medium text-[#6B7280] hover:text-[rgba(239,68,68,0.9)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Remove
+                    {removingId === panel.item.id && <Loader2 size={12} className="animate-spin" />}
+                    {removingId === panel.item.id ? "Removing…" : "Remove"}
                   </button>
                 )}
                 {panel.mode === "new" && (
                   <button
                     onClick={() => void handleSchedule(true)}
                     disabled={submitting}
-                    className="px-3.5 py-2.5 rounded-xl border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[12px] font-medium text-[#6B7280] transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[12px] font-medium text-[#6B7280] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Save as Draft
+                    {savingAsDraft && <Loader2 size={12} className="animate-spin" />}
+                    {savingAsDraft ? "Saving…" : "Save as Draft"}
                   </button>
                 )}
               </div>

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Plus, Pencil, Trash2, Check } from "lucide-react"
+import { Plus, Pencil, Trash2, Check, Loader2 } from "lucide-react"
 import { SettingsTabs } from "@/components/settings/SettingsTabs"
 import { SavedToast } from "@/components/settings/SavedToast"
 import { countWords } from "@/lib/wordCount"
@@ -34,6 +34,8 @@ export default function VoicePresetsPage() {
 
   // Editor state — non-null when adding or editing.
   const [editing, setEditing] = useState<VoicePreset | null>(null)
+  const [savingPreset, setSavingPreset] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -59,7 +61,9 @@ export default function VoicePresetsPage() {
   }, [])
 
   // Persist the full list, with optimistic update + revert on failure.
-  async function persist(next: VoicePreset[]) {
+  // Returns whether the save actually succeeded, so callers with their own
+  // loading state (deletePreset, saveEditing) know whether to proceed.
+  async function persist(next: VoicePreset[]): Promise<boolean> {
     const snapshot = presets
     setPresets(next)
     try {
@@ -71,9 +75,11 @@ export default function VoicePresetsPage() {
       if (!res.ok) throw new Error()
       setSavedMsg("Presets saved")
       setSaved(true)
+      return true
     } catch {
       setPresets(snapshot)
       setError("Failed to save preset")
+      return false
     }
   }
 
@@ -105,17 +111,24 @@ export default function VoicePresetsPage() {
   function startEdit(preset: VoicePreset) {
     setEditing({ ...preset })
   }
-  function deletePreset(id: string) {
-    persist(presets.filter((p) => p.id !== id))
+  async function deletePreset(id: string) {
+    if (deletingId) return
+    setDeletingId(id)
+    await persist(presets.filter((p) => p.id !== id))
+    setDeletingId(null)
   }
-  function saveEditing() {
-    if (!editing || !editing.name.trim() || editing.tones.length === 0) return
+  async function saveEditing() {
+    if (!editing || !editing.name.trim() || editing.tones.length === 0 || savingPreset) return
     const exists = presets.some((p) => p.id === editing.id)
     const next = exists
       ? presets.map((p) => (p.id === editing.id ? editing : p))
       : [...presets, editing]
-    persist(next)
-    setEditing(null)
+    setSavingPreset(true)
+    const ok = await persist(next)
+    setSavingPreset(false)
+    // Only dismiss the editor once the save actually landed — on failure the
+    // user's draft (and the error above) stay visible so they can retry.
+    if (ok) setEditing(null)
   }
 
   const atMax = presets.length >= MAX_VOICE_PRESETS
@@ -169,17 +182,23 @@ export default function VoicePresetsPage() {
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <button
                   onClick={() => startEdit(preset)}
-                  className="p-2 rounded-lg text-[#9CA3AF] hover:text-[#1A1A1A] hover:bg-[#ECEAE4] transition-colors"
+                  disabled={deletingId === preset.id}
+                  className="p-2 rounded-lg text-[#9CA3AF] hover:text-[#1A1A1A] hover:bg-[#ECEAE4] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   aria-label="Edit preset"
                 >
                   <Pencil size={14} strokeWidth={2} />
                 </button>
                 <button
-                  onClick={() => deletePreset(preset.id)}
-                  className="p-2 rounded-lg text-[#9CA3AF] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.08)] transition-colors"
+                  onClick={() => void deletePreset(preset.id)}
+                  disabled={deletingId === preset.id}
+                  className="p-2 rounded-lg text-[#9CA3AF] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.08)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   aria-label="Delete preset"
                 >
-                  <Trash2 size={14} strokeWidth={2} />
+                  {deletingId === preset.id ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={14} strokeWidth={2} />
+                  )}
                 </button>
               </div>
             </div>
@@ -236,15 +255,17 @@ export default function VoicePresetsPage() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={saveEditing}
-                  disabled={!editing.name.trim() || editing.tones.length === 0}
-                  className="px-4 py-2 rounded-lg bg-[#1A1A1A] hover:bg-[#000000] text-[12px] font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => void saveEditing()}
+                  disabled={!editing.name.trim() || editing.tones.length === 0 || savingPreset}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#1A1A1A] hover:bg-[#000000] text-[12px] font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Save preset
+                  {savingPreset && <Loader2 size={12} className="animate-spin" />}
+                  {savingPreset ? "Saving…" : "Save preset"}
                 </button>
                 <button
                   onClick={() => setEditing(null)}
-                  className="px-4 py-2 rounded-lg text-[12px] font-medium text-[#6B7280] hover:text-[#1A1A1A] hover:bg-[#ECEAE4] transition-colors"
+                  disabled={savingPreset}
+                  className="px-4 py-2 rounded-lg text-[12px] font-medium text-[#6B7280] hover:text-[#1A1A1A] hover:bg-[#ECEAE4] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>

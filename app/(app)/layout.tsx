@@ -15,6 +15,17 @@ const font = Onest({
   weight: ["400", "500", "600", "700", "800"],
 })
 
+// KNOWN LIMITATION (loading-state audit): this layout's own auth/db work
+// below (auth(), getCurrentUser()) has no Suspense boundary of its own, and
+// a child route's loading.tsx does NOT cover a shared layout's fetch above
+// it — per Next.js's loading.js semantics, "without Cache Components,
+// navigation blocks until the layout finishes rendering." So every
+// navigation into anything under (app) — /dashboard, /settings/*, /intern,
+// etc. — blocks on this check first, invisibly, before any page-level
+// loading.tsx even gets a chance to render. Not fixed here: it's a bigger
+// architectural change (move the check later, wrap it in its own Suspense,
+// or adopt Cache Components) than a simple loading.tsx addition. Flagging
+// for whoever picks this up next.
 export default async function AppLayout({ children }: { children: ReactNode }) {
   // Step 1: require a live Clerk session — no session means not logged in
   const { userId } = await auth()

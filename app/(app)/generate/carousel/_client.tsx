@@ -133,6 +133,10 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   const [error, setError] = useState<string | null>(null)
   const [captionCopied, setCaptionCopied] = useState(false)
   const [restored, setRestored] = useState(false)
+  // True until init()'s session-restore check resolves — avoids flashing the
+  // platform-select screen before a restored session flips carouselFlowStep
+  // away from its "platform-select" default.
+  const [initializing, setInitializing] = useState(true)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [captionInstruction, setCaptionInstruction] = useState("")
   // Opt-in flag: apply the user's saved voice guidelines on caption regeneration.
@@ -252,6 +256,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     // No auto-generation on mount. A brand-new idea lands on step 1 with the
     // voice-guidelines toggle + a "Generate Caption" button, so the user can set
     // their preference before the first caption is generated.
+    setInitializing(false)
   }
 
   async function streamCaption(userInstruction?: string, currentCaption?: string, isRegen = false) {
@@ -872,6 +877,17 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
       </div>
     </div>
   )
+
+  // Session-restore check still in flight — avoids flashing the
+  // platform-select screen before a restored session takes over.
+  if (initializing) {
+    return (
+      <div className="max-w-2xl mx-auto flex flex-col items-center justify-center min-h-[50vh] gap-3">
+        <div className="w-6 h-6 border-[3px] border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
+        <p className="text-[13px] text-[#6B7280]">Checking for a saved session...</p>
+      </div>
+    )
+  }
 
   // ── Platform + structure selection screens (every idea) ──
   if (carouselFlowStep !== "generating") {

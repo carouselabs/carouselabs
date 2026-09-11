@@ -3,7 +3,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Pin, Trash2, Copy, RotateCcw, ArrowRight } from "lucide-react"
+import { Pin, Trash2, Copy, RotateCcw, ArrowRight, Loader2 } from "lucide-react"
 import { ProgressBadge } from "./ProgressBadge"
 import { continueHref, type HistoryEntry } from "@/lib/hooks/useHistory"
 import type { RawCategory } from "@/lib/ai/parsers/ideas"
@@ -34,9 +34,10 @@ interface HistoryCardProps {
   onPin: (ideaId: string, next: boolean) => void
   onDelete: (ideaId: string) => void
   onDuplicate: (ideaId: string) => void
+  isDuplicating?: boolean
 }
 
-export function HistoryCard({ entry, onPin, onDelete, onDuplicate }: HistoryCardProps) {
+export function HistoryCard({ entry, onPin, onDelete, onDuplicate, isDuplicating = false }: HistoryCardProps) {
   const router = useRouter()
   const [hovered, setHovered] = useState(false)
   const cat = CATEGORY_COLORS[entry.idea.category]
@@ -99,10 +100,15 @@ export function HistoryCard({ entry, onPin, onDelete, onDuplicate }: HistoryCard
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => onDuplicate(entry.ideaId)}
+            disabled={isDuplicating}
             title="Duplicate as new session"
-            className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#ECEAE4] transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#ECEAE4] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Copy size={13} strokeWidth={2} />
+            {isDuplicating ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Copy size={13} strokeWidth={2} />
+            )}
           </button>
           <button
             onClick={() => router.push(`/idea/${entry.ideaId}`)}

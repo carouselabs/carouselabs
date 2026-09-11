@@ -102,7 +102,12 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
   const [captionCopied, setCaptionCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [savingDraft, setSavingDraft] = useState(false)
   const [restored, setRestored] = useState(false)
+  // True until init()'s session-restore check resolves — avoids flashing the
+  // platform-select screen before a restored session flips imageFlowStep
+  // away from its "platform-select" default.
+  const [initializing, setInitializing] = useState(true)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [captionInstruction, setCaptionInstruction] = useState("")
   // Opt-in flag: apply the user's saved voice guidelines on caption regeneration.
@@ -222,6 +227,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     // No auto-generation on mount. A brand-new idea lands on step 1 with the
     // voice-guidelines toggle + a "Generate Caption" button, so the user can set
     // their preference before the first caption is generated.
+    setInitializing(false)
   }
 
   async function streamCaption(userInstruction?: string, currentCaption?: string, isRegen = false) {
@@ -687,7 +693,8 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
   }
 
   async function handleSaveDraft() {
-    if (!postId) return
+    if (!postId || savingDraft) return
+    setSavingDraft(true)
     try {
       await fetch(`/api/posts/${postId}`, {
         method: "PATCH",
@@ -698,6 +705,8 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
       setTimeout(() => setSaved(false), 2500)
     } catch {
       // post already saved on generation
+    } finally {
+      setSavingDraft(false)
     }
   }
 
@@ -823,9 +832,11 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
           {postId && (
             <button
               onClick={handleSaveDraft}
-              className="px-3.5 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] hover:bg-[#E9E7E1] text-[12px] font-medium text-[#6B7280] transition-colors"
+              disabled={savingDraft}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] hover:bg-[#E9E7E1] text-[12px] font-medium text-[#6B7280] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {saved ? "Saved!" : "Save Draft"}
+              {savingDraft && <Loader2 size={12} className="animate-spin" />}
+              {savingDraft ? "Saving…" : saved ? "Saved!" : "Save Draft"}
             </button>
           )}
         </div>
@@ -906,6 +917,17 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
       </div>
     </div>
   )
+
+  // Session-restore check still in flight — avoids flashing the
+  // platform-select screen before a restored session takes over.
+  if (initializing) {
+    return (
+      <div className="max-w-2xl mx-auto flex flex-col items-center justify-center min-h-[50vh] gap-3">
+        <div className="w-6 h-6 border-[3px] border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
+        <p className="text-[13px] text-[#6B7280]">Checking for a saved session...</p>
+      </div>
+    )
+  }
 
   // ── Platform + structure selection screens (every idea) ──
   if (imageFlowStep !== "generating") {

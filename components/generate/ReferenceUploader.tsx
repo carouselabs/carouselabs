@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useCallback } from "react"
-import { Upload, X } from "lucide-react"
+import { Upload, X, Loader2 } from "lucide-react"
 
 interface ReferenceUploaderProps {
   value: string | null
@@ -54,11 +54,13 @@ async function compressImage(
 export function ReferenceUploader({ value, onChange, onClear }: ReferenceUploaderProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleFile = useCallback(
     async (file: File) => {
-      if (!file.type.startsWith("image/")) return
+      if (!file.type.startsWith("image/") || isProcessing) return
+      setIsProcessing(true)
       try {
         // Compression always re-encodes to JPEG, so report that media type.
         const base64 = await compressImage(file)
@@ -66,9 +68,11 @@ export function ReferenceUploader({ value, onChange, onClear }: ReferenceUploade
         onChange(base64, "image/jpeg")
       } catch (err) {
         console.error("[ReferenceUploader] image compression failed:", err)
+      } finally {
+        setIsProcessing(false)
       }
     },
-    [onChange],
+    [onChange, isProcessing],
   )
 
   const handleDrop = useCallback(
@@ -132,21 +136,33 @@ export function ReferenceUploader({ value, onChange, onClear }: ReferenceUploade
         }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
-        className={`flex flex-col items-center justify-center gap-2 h-24 rounded-xl border border-dashed cursor-pointer transition-all duration-150 ${
+        onClick={() => !isProcessing && inputRef.current?.click()}
+        className={`flex flex-col items-center justify-center gap-2 h-24 rounded-xl border border-dashed transition-all duration-150 ${
+          isProcessing ? "cursor-wait" : "cursor-pointer"
+        } ${
           isDragging
             ? "border-[rgba(26,26,26,0.55)] bg-[rgba(26,26,26,0.08)]"
             : "border-[#E5E3DE] bg-[#F6F4EE] hover:border-[#D6D3CC] hover:bg-[#F4F2EC]"
         }`}
       >
-        <Upload size={15} className="text-[#ADA99F]" strokeWidth={1.8} />
-        <p className="text-[12px] text-[#9CA3AF]">
-          Drag an image or click to upload a style reference
-        </p>
+        {isProcessing ? (
+          <>
+            <Loader2 size={15} className="text-[#ADA99F] animate-spin" />
+            <p className="text-[12px] text-[#9CA3AF]">Processing image…</p>
+          </>
+        ) : (
+          <>
+            <Upload size={15} className="text-[#ADA99F]" strokeWidth={1.8} />
+            <p className="text-[12px] text-[#9CA3AF]">
+              Drag an image or click to upload a style reference
+            </p>
+          </>
+        )}
         <input
           ref={inputRef}
           type="file"
           accept="image/*"
+          disabled={isProcessing}
           className="hidden"
           onChange={handleInputChange}
         />

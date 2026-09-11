@@ -44,13 +44,21 @@ export default function AccountSettingsPage() {
     let active = true
     ;(async () => {
       try {
-        const res = await fetch("/api/profile")
-        const data = await res.json()
-        if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to load")
+        // Fetched together so `loading` doesn't clear (and the LinkedIn card
+        // render) until BOTH resolve — otherwise linkedin stays null for a
+        // moment after the skeleton disappears and the card flashes
+        // "disconnected" before flipping to "Connected as…".
+        const [profileRes, linkedinRes] = await Promise.all([
+          fetch("/api/profile"),
+          fetch("/api/linkedin/status"),
+        ])
+        const data = await profileRes.json()
+        if (!profileRes.ok) throw new Error((data as { error?: string }).error ?? "Failed to load")
         if (!active) return
         const p: ProfileData = data.profile
         setEmail(p.email)
         setPlan(p.plan)
+        if (linkedinRes.ok) setLinkedin((await linkedinRes.json()) as LinkedInStatus)
       } catch (err) {
         if (active) setError(err instanceof Error ? err.message : "Something went wrong")
       } finally {
@@ -62,7 +70,8 @@ export default function AccountSettingsPage() {
     }
   }, [])
 
-  // Load LinkedIn status + surface the ?linkedin= result from the OAuth redirect.
+  // Surface the ?linkedin= result from the OAuth redirect (status itself is
+  // fetched above, alongside the profile).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const result = params.get("linkedin")
@@ -73,6 +82,8 @@ export default function AccountSettingsPage() {
       // Clean the query param so a refresh doesn't re-show the banner.
       window.history.replaceState({}, "", window.location.pathname)
     }
+    // Re-fetch (the initial status came in already, above, alongside the
+    // profile) in case this mount is a fresh OAuth-redirect landing.
     void refreshLinkedIn()
   }, [])
 

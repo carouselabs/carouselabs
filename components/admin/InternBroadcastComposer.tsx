@@ -34,6 +34,7 @@ export function InternBroadcastComposer() {
   const [testing, setTesting] = useState(false)
   const [sending, setSending] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [resolvingRecipients, setResolvingRecipients] = useState(false)
 
   useEffect(() => {
     fetch("/api/admin/interns")
@@ -128,6 +129,7 @@ export function InternBroadcastComposer() {
 
     // Schedule mode — resolve + validate via dryRun before confirming, same
     // pattern as the immediate-send path's recipientCount check.
+    setResolvingRecipients(true)
     try {
       const res = await scheduleRequest({ dryRun: true })
       const data = await res.json().catch(() => ({}))
@@ -139,6 +141,8 @@ export function InternBroadcastComposer() {
       setConfirmOpen(true)
     } catch (e) {
       toast(e instanceof Error && e.message ? e.message : "Couldn't validate this schedule", "error")
+    } finally {
+      setResolvingRecipients(false)
     }
   }
 
@@ -295,7 +299,12 @@ export function InternBroadcastComposer() {
               <Mail className="h-3.5 w-3.5" />
               Send Test to Myself
             </AdminButton>
-            <AdminButton onClick={() => void openConfirm()} disabled={!valid} className="ml-auto">
+            <AdminButton
+              onClick={() => void openConfirm()}
+              disabled={!valid}
+              loading={resolvingRecipients}
+              className="ml-auto"
+            >
               {sendMode === "now" ? <Send className="h-3.5 w-3.5" /> : <CalendarClock className="h-3.5 w-3.5" />}
               {sendMode === "now" ? "Send Broadcast" : "Schedule Broadcast"}
             </AdminButton>

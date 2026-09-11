@@ -32,6 +32,7 @@ export default function HistoryPage() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<Filter>("All")
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -106,11 +107,14 @@ export default function HistoryPage() {
   }
 
   async function handleDuplicate(ideaId: string) {
+    if (duplicatingId) return
+    setDuplicatingId(ideaId)
     try {
       const newId = await duplicateIdea(ideaId)
       router.push(`/idea/${newId}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to duplicate")
+      setDuplicatingId(null)
     }
   }
 
@@ -187,6 +191,7 @@ export default function HistoryPage() {
                 onPin={handlePin}
                 onDelete={handleDelete}
                 onDuplicate={handleDuplicate}
+                isDuplicating={duplicatingId === entry.ideaId}
               />
             ) : (
               <ThumbnailHistoryCard key={entry.id} entry={entry} />

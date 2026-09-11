@@ -55,6 +55,7 @@ export function BroadcastComposer() {
   const [scheduledFor, setScheduledFor] = useState("")
   const [testing, setTesting] = useState(false)
   const [sending, setSending] = useState(false)
+  const [resolvingRecipients, setResolvingRecipients] = useState(false)
   const [confirmCount, setConfirmCount] = useState<number | null>(null)
 
   const [history, setHistory] = useState<AuditLogRow[] | null>(null)
@@ -134,6 +135,7 @@ export function BroadcastComposer() {
       )
       return
     }
+    setResolvingRecipients(true)
     try {
       const res = await (sendMode === "now" ? sendRequest({ dryRun: true }) : scheduleRequest({ dryRun: true }))
       const data = await res.json().catch(() => ({}))
@@ -145,6 +147,8 @@ export function BroadcastComposer() {
       setConfirmCount(data.count)
     } catch (e) {
       toast(e instanceof Error && e.message ? e.message : "Couldn't resolve recipients", "error")
+    } finally {
+      setResolvingRecipients(false)
     }
   }
 
@@ -272,7 +276,12 @@ export function BroadcastComposer() {
               <Mail className="h-3.5 w-3.5" />
               Send Test to Admin
             </AdminButton>
-            <AdminButton onClick={() => void openConfirm()} disabled={!valid} className="ml-auto">
+            <AdminButton
+              onClick={() => void openConfirm()}
+              disabled={!valid}
+              loading={resolvingRecipients}
+              className="ml-auto"
+            >
               {sendMode === "now" ? <Send className="h-3.5 w-3.5" /> : <CalendarClock className="h-3.5 w-3.5" />}
               {sendMode === "now" ? "Send Broadcast" : "Schedule Broadcast"}
             </AdminButton>

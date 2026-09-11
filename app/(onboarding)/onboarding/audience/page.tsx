@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useOnboardingStore } from "@/lib/store/onboardingStore"
 import { StepNav } from "@/components/onboarding/StepNav"
@@ -24,8 +25,22 @@ export default function AudiencePage() {
   const setAudienceSeniority = useOnboardingStore((s) => s.setAudienceSeniority)
   const setAudienceIndustry = useOnboardingStore((s) => s.setAudienceIndustry)
   const setCoreProblem = useOnboardingStore((s) => s.setCoreProblem)
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false)
 
   const next = () => router.push("/onboarding/goals")
+
+  const missingFields = [
+    !audienceRole && "their job role",
+    !audienceSeniority && "their seniority level",
+    !audienceIndustry.trim() && "their industry",
+    !coreProblem.trim() && "the core problem they face",
+  ].filter((f): f is string => !!f)
+  const canContinue = missingFields.length === 0
+  const highlight = (missing: boolean) => attemptedSubmit && missing
+  const validationMessage =
+    missingFields.length > 0
+      ? `Please fill in ${missingFields.length === 1 ? missingFields[0] : missingFields.slice(0, -1).join(", ") + " and " + missingFields[missingFields.length - 1]} to continue.`
+      : ""
 
   return (
     <div>
@@ -46,7 +61,9 @@ export default function AudiencePage() {
             maxWords={5}
             warnWithin={2}
             placeholder="e.g. Marketing Manager, CTO, Founder…"
-            className="w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors"
+            className={`w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors ${
+              highlight(!audienceRole) ? "border-red-400" : "border-[#E5E3DE]"
+            }`}
           />
         </div>
 
@@ -54,7 +71,11 @@ export default function AudiencePage() {
           <label className="block text-xs font-medium text-[#6B7280] mb-3 uppercase tracking-wide">
             Seniority Level
           </label>
-          <div className="flex flex-wrap gap-2">
+          <div
+            className={`flex flex-wrap gap-2 p-1 -m-1 rounded-xl ${
+              highlight(!audienceSeniority) ? "ring-1 ring-red-400" : ""
+            }`}
+          >
             {SENIORITY.map((opt) => (
               <button
                 key={opt}
@@ -82,7 +103,9 @@ export default function AudiencePage() {
             maxWords={5}
             warnWithin={2}
             placeholder="e.g. B2B SaaS, Healthcare, Finance…"
-            className="w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors"
+            className={`w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors ${
+              highlight(!audienceIndustry.trim()) ? "border-red-400" : "border-[#E5E3DE]"
+            }`}
           />
         </div>
 
@@ -97,7 +120,9 @@ export default function AudiencePage() {
             maxWords={200}
             rows={3}
             placeholder="e.g. Struggling to generate leads on LinkedIn, building a brand without time…"
-            className="w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors resize-none"
+            className={`w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors resize-none ${
+              highlight(!coreProblem.trim()) ? "border-red-400" : "border-[#E5E3DE]"
+            }`}
           />
         </div>
       </div>
@@ -105,12 +130,9 @@ export default function AudiencePage() {
       <StepNav
         backHref="/onboarding/topics"
         onContinue={next}
-        canContinue={
-          !!audienceRole &&
-          !!audienceSeniority &&
-          !!audienceIndustry.trim() &&
-          !!coreProblem.trim()
-        }
+        canContinue={canContinue}
+        validationMessage={validationMessage}
+        onInvalid={() => setAttemptedSubmit(true)}
       />
     </div>
   )

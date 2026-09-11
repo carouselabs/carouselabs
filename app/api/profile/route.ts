@@ -4,46 +4,7 @@ import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 import { sendOnboardingCompleteEmail } from "@/lib/email"
 import type { ProfileData, VoicePreset } from "@/lib/profile/options"
-
-const INDUSTRY_SEP = " — "
-
-// Derive the role/industry/niche/audience/writingStyle DB columns from the
-// onboarding-style field payload. Shared by POST (onboarding) and PATCH.
-function buildProfileColumns(body: Record<string, unknown>) {
-  const role = typeof body.role === "string" ? body.role : ""
-  const industry = typeof body.industry === "string" ? body.industry : ""
-  const niche = typeof body.niche === "string" ? body.niche : ""
-  const topics = Array.isArray(body.topics) ? (body.topics as string[]) : []
-  const tones = Array.isArray(body.tones) ? (body.tones as string[]) : []
-  const goals = Array.isArray(body.goals) ? (body.goals as string[]) : []
-
-  return {
-    headline: role,
-    industry: niche ? `${industry}${INDUSTRY_SEP}${niche}` : industry,
-    targetAudience: JSON.stringify({
-      role: typeof body.audienceRole === "string" ? body.audienceRole : "",
-      seniority: typeof body.audienceSeniority === "string" ? body.audienceSeniority : "",
-      industry: typeof body.audienceIndustry === "string" ? body.audienceIndustry : "",
-      problem: typeof body.coreProblem === "string" ? body.coreProblem : "",
-    }),
-    contentPillars: topics,
-    writingStyle: JSON.stringify({
-      role,
-      tones,
-      goals,
-      primaryGoal: typeof body.primaryGoal === "string" ? body.primaryGoal : "",
-    }),
-  }
-}
-
-function safeParse<T>(value: unknown, fallback: T): T {
-  if (typeof value !== "string") return fallback
-  try {
-    return JSON.parse(value) as T
-  } catch {
-    return fallback
-  }
-}
+import { INDUSTRY_SEP, buildProfileColumns, safeParseJSON } from "@/lib/profile/columns"
 
 // GET /api/profile — normalized profile for the settings pages (+ email/plan).
 export async function GET() {
@@ -51,13 +12,13 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const p = user.profile
-  const ws = safeParse(p?.writingStyle, { role: "", tones: [], goals: [], primaryGoal: "" } as {
+  const ws = safeParseJSON(p?.writingStyle, { role: "", tones: [], goals: [], primaryGoal: "" } as {
     role: string
     tones: string[]
     goals: string[]
     primaryGoal: string
   })
-  const aud = safeParse(p?.targetAudience, { role: "", seniority: "", industry: "", problem: "" } as {
+  const aud = safeParseJSON(p?.targetAudience, { role: "", seniority: "", industry: "", problem: "" } as {
     role: string
     seniority: string
     industry: string
@@ -124,9 +85,13 @@ export async function POST(req: Request) {
 }
 
 // PATCH /api/profile — settings updates. Handles independent sections:
-//   • profile fields    (when `industry` is present)
+//   • profile fields    (when `industry` is present) — also clears the
+//     "review your pre-filled profile" banner (see Profile.prefilledByAdmin):
+//     actually editing profile fields counts as reviewing them.
 //   • voice presets     (when `voicePresets` is present)
 //   • voice guidelines  (when `voiceGuidelines` is present)
+//   • dismissProfileReview (when `true`) — the banner's own dismiss button,
+//     for a user who reviewed the pre-filled values and left them as-is.
 // Any combination may be sent. Never touches onboardingDone.
 export async function PATCH(req: Request) {
   const user = await getCurrentUser()
@@ -140,6 +105,7 @@ export async function PATCH(req: Request) {
 
   if (typeof body.industry === "string") {
     Object.assign(data, buildProfileColumns(body))
+    data.profileReviewDismissed = true
   }
   if (Array.isArray(body.voicePresets)) {
     data.voicePresets = (body.voicePresets as VoicePreset[]).slice(0, 5)
@@ -147,6 +113,9 @@ export async function PATCH(req: Request) {
   // Voice guidelines — free-form, no maximum. An empty string clears them.
   if (typeof body.voiceGuidelines === "string") {
     data.voiceGuidelines = body.voiceGuidelines
+  }
+  if (body.dismissProfileReview === true) {
+    data.profileReviewDismissed = true
   }
 
   if (Object.keys(data).length === 0) {

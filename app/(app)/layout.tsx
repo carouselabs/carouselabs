@@ -8,6 +8,7 @@ import { Sidebar } from "@/components/shell/Sidebar"
 import { Topbar } from "@/components/shell/Topbar"
 import { AppStickers } from "@/components/shell/AppStickers"
 import { MaintenanceBanner } from "@/components/shared/MaintenanceBanner"
+import { ProfileReviewBanner } from "@/components/shell/ProfileReviewBanner"
 
 const font = Onest({
   subsets: ["latin"],
@@ -41,6 +42,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       {/* Fetches its own visibility client-side — see MaintenanceBanner for why
           this isn't a server-side getAppSettings() call. */}
       <MaintenanceBanner />
+      <ProfileReviewBanner
+        show={!!user.profile?.prefilledByAdmin && !user.profile?.profileReviewDismissed}
+      />
       {/* Grid lives in its own flex-1 wrapper (rather than h-screen directly)
           so the banner above can take its own height without breaking the
           56px-topbar/1fr-main row template. */}

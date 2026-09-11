@@ -101,29 +101,56 @@ model User {
 }
 
 model Profile {
-  id                 String   @id @default(cuid())
-  userId             String   @unique
-  name               String?
-  headline           String?
-  industry           String?
-  targetAudience     String?
-  contentPillars     String[]
-  writingStyle       String?
-  voiceGuidelines    String?  @db.Text
-  voicePresets       Json?
-  linkedInUrl        String?
-  timezone           String   @default("UTC")
-  onboardingDone     Boolean  @default(false)
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  name                   String?
+  headline               String?
+  industry               String?
+  targetAudience         String?
+  contentPillars         String[]
+  writingStyle           String?
+  voiceGuidelines        String?  @db.Text
+  voicePresets           Json?
+  linkedInUrl            String?
+  timezone               String   @default("UTC")
+  onboardingDone         Boolean  @default(false)
+  // Set when this Profile was written by an admin via /admin/prefill-user
+  // (either applied directly, or carried over from a PendingProfilePrefill
+  // at signup) rather than filled in by the user themselves through
+  // onboarding. Drives the "please review your profile" dashboard banner.
+  prefilledByAdmin       Boolean  @default(false)
+  // Cleared (see app/api/profile PATCH) once the user dismisses that banner
+  // or actually edits their profile in Settings — whichever comes first.
+  profileReviewDismissed Boolean  @default(false)
   // Cached AI "what to post about" suggestions for the generate bar.
   // Regenerated only when ideaSuggestionsKey (a hash of profile inputs) changes.
-  ideaSuggestions    String[] @default([])
-  ideaSuggestionsKey String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  ideaSuggestions        String[] @default([])
+  ideaSuggestionsKey     String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// An onboarding profile an admin pre-filled for someone by email BEFORE they
+// signed up (see app/api/admin/prefill-user). Keyed by email rather than a
+// User relation because no User row exists yet — mirrors how Intern.clerkId
+// starts null and gets linked on first login, except here linking happens by
+// consuming (and deleting) this row into a real Profile the moment a User
+// with a matching email is created (see lib/profile/pendingPrefill.ts),
+// rather than by filling in a nullable FK.
+model PendingProfilePrefill {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  headline       String?
+  industry       String?
+  targetAudience String?
+  contentPillars String[]
+  writingStyle   String?
+  createdBy      String // admin's email, for audit
+  createdAt      DateTime @default(now())
 }
 
 model Idea {

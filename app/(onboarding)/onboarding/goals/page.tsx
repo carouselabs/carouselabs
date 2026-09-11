@@ -121,6 +121,7 @@ export default function GoalsPage() {
         backHref="/onboarding/audience"
         onContinue={next}
         canContinue={!!primaryGoal}
+        validationMessage="Please select at least one content goal, or tap Skip to continue."
         showSkip
         onSkip={next}
       />

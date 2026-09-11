@@ -1,6 +1,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 import { db } from "@/lib/db"
+import { applyPendingPrefill } from "@/lib/profile/pendingPrefill"
 
 export async function getCurrentUser() {
   const { userId } = await auth()
@@ -49,7 +50,7 @@ export async function getCurrentUser() {
     }
   }
 
-  return db.user.upsert({
+  const created = await db.user.upsert({
     where: { clerkId: userId },
     create: {
       clerkId: userId,
@@ -58,6 +59,23 @@ export async function getCurrentUser() {
       usage: { create: {} },
     },
     update: {},
+  })
+
+  // Reaching here means no User row existed for this clerkId (nor for this
+  // email, handled above) before this call — a genuinely new signup. Apply
+  // any admin pre-filled profile (see /admin/prefill-user) instead of
+  // sending them through onboarding. Best-effort — worst case they just see
+  // the normal onboarding flow.
+  if (email) {
+    try {
+      await applyPendingPrefill(created.id, email)
+    } catch (err) {
+      console.error("[auth] pending prefill apply failed:", err)
+    }
+  }
+
+  return db.user.findUnique({
+    where: { clerkId: userId },
     include: { profile: true, subscription: true },
   })
 }

@@ -22,12 +22,14 @@ import {
   Award,
   ListChecks,
   CalendarClock,
+  UserPlus,
 } from "lucide-react"
 import { GlobalSearch } from "@/components/admin/GlobalSearch"
 
 const NAV = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/prefill-user", label: "Pre-fill Profile", icon: UserPlus },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: CreditCard },
   { href: "/admin/posts", label: "Posts", icon: FileText },
   { href: "/admin/credits", label: "Credits", icon: Coins },

@@ -30,6 +30,7 @@ export default function TopicsPage() {
   const setTopics = useOnboardingStore((s) => s.setTopics)
   const [input, setInput] = useState("")
   const [manualTopics, setManualTopics] = useState<string[]>([])
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false)
 
   const addTopic = (tag: string, isManual: boolean) => {
     const t = tag.trim()
@@ -56,6 +57,7 @@ export default function TopicsPage() {
 
   const presetCount = topics.length - manualTopics.length
   const canContinue = manualTopics.length >= 1 || presetCount >= MIN
+  const missingTopics = attemptedSubmit && !canContinue
 
   return (
     <div>
@@ -65,7 +67,9 @@ export default function TopicsPage() {
       </p>
 
       <div
-        className="min-h-[112px] p-4 rounded-xl bg-[#F6F4EE] border border-[#E5E3DE] flex flex-wrap gap-2 cursor-text focus-within:border-[#1A1A1A] transition-colors mb-2"
+        className={`min-h-[112px] p-4 rounded-xl bg-[#F6F4EE] border flex flex-wrap gap-2 cursor-text focus-within:border-[#1A1A1A] transition-colors mb-2 ${
+          missingTopics ? "border-red-400" : "border-[#E5E3DE]"
+        }`}
         onClick={() => document.getElementById("tag-input")?.focus()}
       >
         {topics.map((tag) => (
@@ -123,6 +127,8 @@ export default function TopicsPage() {
         backHref="/onboarding/industry"
         onContinue={() => router.push("/onboarding/audience")}
         canContinue={canContinue}
+        validationMessage={`Please add at least ${MIN} topics (or type 1 of your own) to continue.`}
+        onInvalid={() => setAttemptedSubmit(true)}
       />
     </div>
   )

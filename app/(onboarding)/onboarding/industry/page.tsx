@@ -40,7 +40,17 @@ export default function IndustryPage() {
 
   const [query, setQuery] = useState(industry)
   const [open, setOpen] = useState(false)
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  const missingIndustry = attemptedSubmit && !industry
+  const missingNiche = attemptedSubmit && !niche.trim()
+  const validationMessage =
+    !industry && !niche.trim()
+      ? "Please select an industry and describe your business to continue."
+      : !industry
+        ? "Please select your industry to continue."
+        : "Please describe your business to continue."
 
   const filtered = INDUSTRIES.filter((i) =>
     i.toLowerCase().includes(query.toLowerCase())
@@ -84,7 +94,9 @@ export default function IndustryPage() {
             }}
             onFocus={() => setOpen(true)}
             placeholder="Search your industry…"
-            className="w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors"
+            className={`w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors ${
+              missingIndustry ? "border-red-400" : "border-[#E5E3DE]"
+            }`}
           />
           {open && filtered.length > 0 && (
             <div className="absolute z-20 mt-1 w-full rounded-xl bg-[#FFFFFF] border border-[#E5E3DE] shadow-2xl overflow-auto max-h-52">
@@ -115,7 +127,9 @@ export default function IndustryPage() {
             onChange={setNiche}
             maxWords={500}
             placeholder="e.g. I help B2B SaaS founders grow with content"
-            className="w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors"
+            className={`w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors ${
+              missingNiche ? "border-red-400" : "border-[#E5E3DE]"
+            }`}
           />
         </div>
       </div>
@@ -124,6 +138,8 @@ export default function IndustryPage() {
         backHref="/onboarding/identity"
         onContinue={() => router.push("/onboarding/topics")}
         canContinue={!!industry && !!niche.trim()}
+        validationMessage={validationMessage}
+        onInvalid={() => setAttemptedSubmit(true)}
       />
     </div>
   )

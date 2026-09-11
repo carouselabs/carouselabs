@@ -144,6 +144,7 @@ export default function VoicePage() {
         canContinue={tones.length > 0}
         continueLabel="Finish"
         loading={loading}
+        validationMessage="Please select at least one tone, or tap Skip to continue."
         showSkip
         onSkip={handleSkip}
       />

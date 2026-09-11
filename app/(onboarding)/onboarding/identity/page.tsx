@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useOnboardingStore } from "@/lib/store/onboardingStore"
 import { StepNav } from "@/components/onboarding/StepNav"
@@ -18,6 +19,7 @@ export default function IdentityPage() {
   const router = useRouter()
   const role = useOnboardingStore((s) => s.role)
   const setRole = useOnboardingStore((s) => s.setRole)
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false)
 
   return (
     <div>
@@ -26,7 +28,11 @@ export default function IdentityPage() {
         This helps us tailor your content strategy.
       </p>
 
-      <div className="flex flex-col gap-2.5">
+      <div
+        className={`flex flex-col gap-2.5 p-1 -m-1 rounded-xl ${
+          attemptedSubmit && !role ? "ring-1 ring-red-400" : ""
+        }`}
+      >
         {ROLES.map((r) => (
           <button
             key={r.id}
@@ -46,6 +52,8 @@ export default function IdentityPage() {
       <StepNav
         onContinue={() => router.push("/onboarding/industry")}
         canContinue={!!role}
+        validationMessage="Please select what best describes you to continue."
+        onInvalid={() => setAttemptedSubmit(true)}
       />
     </div>
   )

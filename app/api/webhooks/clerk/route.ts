@@ -3,6 +3,7 @@ import { Webhook } from "svix"
 import type { WebhookEvent } from "@clerk/nextjs/server"
 import { db } from "@/lib/db"
 import { sendWelcomeEmail } from "@/lib/email"
+import { applyPendingPrefill } from "@/lib/profile/pendingPrefill"
 
 export async function POST(req: Request) {
   const secret = process.env.CLERK_WEBHOOK_SECRET
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
         })
       }
     } else {
-      await db.user.create({
+      const newUser = await db.user.create({
         data: {
           clerkId,
           email,
@@ -64,6 +65,17 @@ export async function POST(req: Request) {
           usage: { create: {} },
         },
       })
+
+      // Admin pre-filled this person's onboarding profile before they signed
+      // up (see /admin/prefill-user) — apply it now instead of sending them
+      // through onboarding. Best-effort: a failure here shouldn't fail the
+      // webhook (or block the welcome email) — worst case they just see the
+      // normal onboarding flow.
+      try {
+        await applyPendingPrefill(newUser.id, email)
+      } catch (err) {
+        console.error("[webhooks/clerk] pending prefill apply failed:", err)
+      }
 
       // Welcome email — best-effort, never fail the webhook on email errors.
       // Only for genuinely new users, not re-linked or retried ones.

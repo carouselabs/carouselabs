@@ -14,7 +14,7 @@ import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { getPeriodRange } from "@/lib/internPoints"
-import { ensureReferralCode } from "@/lib/referral"
+import { ensureReferralCode, getSiteOrigin } from "@/lib/referral"
 
 export async function GET() {
   const user = await getCurrentUser()
@@ -38,7 +38,7 @@ export async function GET() {
   ])
 
   const earnedThisMonth = monthCommissions.reduce((sum, c) => sum + c.amount, 0)
-  const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://carouselabs.com"
+  const siteUrl = await getSiteOrigin()
 
   // Best-effort: if this write fails, worst case the banner shows again on
   // the next page load today — never a reason to fail the response itself.

@@ -3,6 +3,7 @@
 // operations (grant the one-time free-signup bonus, create a paid-referral
 // commission), both written to be safe to call from a webhook: idempotent,
 // guarded against self-referral, and never throwing on a benign duplicate.
+import { headers } from "next/headers"
 import { db } from "@/lib/db"
 import type { Prisma } from "@prisma/client"
 import {
@@ -17,6 +18,25 @@ import {
 export { REFERRAL_CODE_PATTERN, REFERRAL_COOKIE_MAX_AGE_SECONDS, REFERRAL_COOKIE_NAME }
 
 const MAX_GENERATION_ATTEMPTS = 5
+
+// Server-side equivalent of `window.location.origin` for building the
+// referral link (see app/api/referrals/me and .../reminder) — derived from
+// the actual incoming request's Host header (same `headers()` pattern
+// app/(app)/layout.tsx already uses for its subdomain check), NOT from
+// NEXT_PUBLIC_APP_URL. That env var defaults to http://localhost:3000 in
+// .env.example; if that value were ever copied into a real deployment's env
+// vars and forgotten, every referral link generated there would silently
+// point at localhost. Reading the request's own Host header instead means
+// the link is always correct for wherever it's actually being served from —
+// localhost in dev, the real preview URL on a Vercel preview deploy, and
+// carouselabs.com in production — with no env var to get wrong.
+export async function getSiteOrigin(): Promise<string> {
+  const h = await headers()
+  const host = h.get("host")
+  if (!host) return "https://carouselabs.com" // no Host header at all — should never happen
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https")
+  return `${proto}://${host}`
+}
 
 function randomCode(): string {
   let code = ""

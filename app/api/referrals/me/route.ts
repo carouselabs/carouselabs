@@ -7,7 +7,7 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { ensureReferralCode } from "@/lib/referral"
+import { ensureReferralCode, getSiteOrigin } from "@/lib/referral"
 
 export async function GET() {
   const user = await getCurrentUser()
@@ -45,7 +45,7 @@ export async function GET() {
     .filter((c) => c.status !== "reversed")
     .reduce((sum, c) => sum + c.amount, 0)
 
-  const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://carouselabs.com"
+  const siteUrl = await getSiteOrigin()
 
   return NextResponse.json({
     referralCode,
@@ -55,6 +55,8 @@ export async function GET() {
     stayedFree,
     pendingBalance,
     totalLifetimeEarned,
+    payoutMethod: user.payoutMethod,
+    payoutDetails: user.payoutDetails,
     payouts: payouts.map((p) => ({
       id: p.id,
       amount: p.amount,
@@ -62,4 +64,38 @@ export async function GET() {
       createdAt: p.createdAt,
     })),
   })
+}
+
+const PAYOUT_METHODS = new Set(["bank", "paypal"])
+
+// PATCH /api/referrals/me — the referrer self-reporting where to send their
+// payout (see Settings > Referrals' "Payout Details" form). Admin-readable
+// only (see components/admin/ReferralsTable.tsx) — nothing here is ever
+// passed to a payment API, so validation just needs to reject garbage, not
+// a real bank/PayPal schema.
+export async function PATCH(req: Request) {
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  let payoutMethod: string
+  let payoutDetails: string
+  try {
+    const body = await req.json()
+    payoutMethod = body.payoutMethod
+    payoutDetails = typeof body.payoutDetails === "string" ? body.payoutDetails.trim() : ""
+    if (!PAYOUT_METHODS.has(payoutMethod)) throw new Error()
+    if (!payoutDetails || payoutDetails.length > 2000) throw new Error()
+  } catch {
+    return NextResponse.json(
+      { error: "Expected { payoutMethod: \"bank\" | \"paypal\", payoutDetails: non-empty string }" },
+      { status: 400 },
+    )
+  }
+
+  await db.user.update({
+    where: { id: user.id },
+    data: { payoutMethod, payoutDetails },
+  })
+
+  return NextResponse.json({ ok: true })
 }

@@ -32,6 +32,7 @@ export async function GET() {
         totalReferrals: u.referralsMade.length,
         pendingCommission,
         totalPaid,
+        hasPayoutDetails: !!(u.payoutMethod && u.payoutDetails),
       }
     })
     .sort((a, b) => b.pendingCommission - a.pendingCommission)

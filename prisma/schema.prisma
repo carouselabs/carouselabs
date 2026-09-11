@@ -103,6 +103,13 @@ model User {
   referredByRelation Referral?            @relation("ReferredBy")
   commissions        ReferralCommission[]
   payouts            ReferralPayout[]
+  // Where to actually send a referrer's payout — self-reported via
+  // Settings > Referrals (see app/api/referrals/me PATCH), admin-readable
+  // only (see components/admin/ReferralsTable.tsx). Free text rather than
+  // structured bank fields on purpose: this is read by a human arranging a
+  // manual transfer, not consumed by any payment API.
+  payoutMethod       String? // "bank" | "paypal"
+  payoutDetails      String?              @db.Text
 
   @@index([clerkId])
 }

@@ -35,7 +35,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
     .reduce((sum, c) => sum + c.amount, 0)
 
   return NextResponse.json({
-    referrer: { id: referrer.id, name: referrer.profile?.name ?? null, email: referrer.email },
+    referrer: {
+      id: referrer.id,
+      name: referrer.profile?.name ?? null,
+      email: referrer.email,
+      payoutMethod: referrer.payoutMethod,
+      payoutDetails: referrer.payoutDetails,
+    },
     pendingBalance,
     commissions,
     payouts,

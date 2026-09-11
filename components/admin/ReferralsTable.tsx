@@ -16,6 +16,7 @@ interface ReferrerRow {
   totalReferrals: number
   pendingCommission: number
   totalPaid: number
+  hasPayoutDetails: boolean
 }
 
 interface CommissionRow {
@@ -38,10 +39,21 @@ interface PayoutRow {
 }
 
 interface ReferrerDetail {
-  referrer: { id: string; name: string | null; email: string }
+  referrer: {
+    id: string
+    name: string | null
+    email: string
+    payoutMethod: string | null
+    payoutDetails: string | null
+  }
   pendingBalance: number
   commissions: CommissionRow[]
   payouts: PayoutRow[]
+}
+
+const PAYOUT_METHOD_LABEL: Record<string, string> = {
+  bank: "Bank Transfer",
+  paypal: "PayPal",
 }
 
 function fmtMoney(n: number): string {
@@ -145,12 +157,13 @@ export function ReferralsTable() {
                 <th className={tableCls.th}>Referrals</th>
                 <th className={tableCls.th}>Pending</th>
                 <th className={tableCls.th}>Paid</th>
+                <th className={tableCls.th}>Payout Info</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td className={tableCls.td} colSpan={5}>
+                  <td className={tableCls.td} colSpan={6}>
                     No referrals yet.
                   </td>
                 </tr>
@@ -166,6 +179,17 @@ export function ReferralsTable() {
                   <td className={`${tableCls.td} tabular-nums`}>{r.totalReferrals}</td>
                   <td className={`${tableCls.td} tabular-nums`}>{fmtMoney(r.pendingCommission)}</td>
                   <td className={`${tableCls.td} tabular-nums`}>{fmtMoney(r.totalPaid)}</td>
+                  <td className={tableCls.td}>
+                    {r.hasPayoutDetails ? (
+                      <span className="inline-flex rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-400">
+                        On file
+                      </span>
+                    ) : (
+                      <span className="inline-flex rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[11px] font-medium text-[#8A8A8A]">
+                        Not set
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -197,6 +221,27 @@ export function ReferralsTable() {
               ) : (
                 <>
                   <p className="text-[12.5px] text-[#8A8A8A]">{detail.referrer.email}</p>
+
+                  {/* Payout details the referrer self-reported (Settings > Referrals) */}
+                  <div className="rounded-lg border border-[#2A2A2A] bg-[#141414] p-4 space-y-2">
+                    <span className="text-[12px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+                      Payout Details
+                    </span>
+                    {detail.referrer.payoutMethod && detail.referrer.payoutDetails ? (
+                      <div className="space-y-1">
+                        <span className="inline-flex rounded-full bg-[#7C3AED]/15 px-2 py-0.5 text-[11px] font-semibold text-[#A78BFA]">
+                          {PAYOUT_METHOD_LABEL[detail.referrer.payoutMethod] ?? detail.referrer.payoutMethod}
+                        </span>
+                        <p className="text-[13px] text-white whitespace-pre-wrap break-words">
+                          {detail.referrer.payoutDetails}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-[12.5px] text-[#6A6A6A]">
+                        Not provided yet — this referrer hasn&apos;t added payout details in Settings.
+                      </p>
+                    )}
+                  </div>
 
                   {/* Record payout */}
                   <div className="rounded-lg border border-[#2A2A2A] bg-[#141414] p-4 space-y-3">

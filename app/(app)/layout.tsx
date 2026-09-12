@@ -9,6 +9,8 @@ import { Topbar } from "@/components/shell/Topbar"
 import { AppStickers } from "@/components/shell/AppStickers"
 import { MaintenanceBanner } from "@/components/shared/MaintenanceBanner"
 import { ProfileReviewBanner } from "@/components/shell/ProfileReviewBanner"
+import { UpgradeRequiredBanner } from "@/components/shell/UpgradeRequiredBanner"
+import { FREE_LIFETIME_POSTS } from "@/lib/credits"
 
 const font = Onest({
   subsets: ["latin"],
@@ -46,6 +48,15 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const hostname = (await headers()).get("host") || ""
   const isEmployeeSubdomain = hostname.startsWith("employee.")
 
+  // Same fields lib/credits.ts's availableCredits() checks to gate
+  // generation itself — this banner is purely the visibility layer on top,
+  // not a second source of truth. Computed fresh on every request (this
+  // layout has no caching/revalidate config and already uses the dynamic
+  // auth()/headers() APIs), so the very next page load after a webhook
+  // upgrades the user's plan stops rendering it — no extra invalidation needed.
+  const sub = user.subscription
+  const showUpgradeBanner = sub?.plan === "FREE" && sub.creditsUsed >= FREE_LIFETIME_POSTS
+
   return (
     <div className={`${font.className} h-screen overflow-hidden flex flex-col bg-[#F9F7F2] text-[#0A0A0A]`}>
       {/* The root layout sets a dark body background; keep the app on cream. */}
@@ -53,6 +64,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       {/* Fetches its own visibility client-side — see MaintenanceBanner for why
           this isn't a server-side getAppSettings() call. */}
       <MaintenanceBanner />
+      <UpgradeRequiredBanner show={!!showUpgradeBanner} />
       <ProfileReviewBanner
         show={!!user.profile?.prefilledByAdmin && !user.profile?.profileReviewDismissed}
       />

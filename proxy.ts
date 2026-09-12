@@ -37,6 +37,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/verify-certificate(.*)", // Public — looks up a certificate by its own opaque code, no session
   "/api/webhooks/clerk(.*)",
   "/api/webhooks/lemonsqueezy(.*)",
+  "/api/webhooks/resend(.*)",
   "/api/maintenance-status(.*)",
   // Vercel Cron invokes these server-to-server with a CRON_SECRET header —
   // never a Clerk session. Without this exemption, Clerk's own

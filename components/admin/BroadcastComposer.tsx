@@ -2,9 +2,9 @@
 
 // /admin/broadcasts — compose + send an email broadcast, plus a history
 // table sourced from audit logs (action=SEND_BROADCAST).
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { Send, Eye, Mail, CalendarClock } from "lucide-react"
+import { Send, Eye, Mail, CalendarClock, Braces, UserSearch } from "lucide-react"
 import {
   AdminButton,
   AdminCard,
@@ -16,10 +16,12 @@ import {
   fmtDateTime,
   tableCls,
 } from "@/components/admin/ui"
-import { renderBroadcastEmailHtml } from "@/lib/broadcastRender"
+import { renderBroadcastEmailHtml, applyVariables, AVAILABLE_VARIABLES, type VariableValues } from "@/lib/broadcastRender"
 import { useToast } from "@/components/admin/Toast"
+import { TemplatePicker } from "@/components/admin/TemplatePicker"
+import { SEGMENT_TYPES } from "@/lib/segments"
 
-type Audience = "all" | "pro" | "growth" | "free" | "custom"
+type Audience = (typeof SEGMENT_TYPES)[number]["value"] | "custom"
 type SendMode = "now" | "schedule"
 
 // datetime-local's `min` — a few minutes out, so a schedule submitted right
@@ -47,6 +49,7 @@ function parseCustomList(raw: string): string[] {
 export function BroadcastComposer() {
   const { toast } = useToast()
   const [audience, setAudience] = useState<Audience>("all")
+  const [segmentValue, setSegmentValue] = useState("")
   const [customList, setCustomList] = useState("")
   const [subject, setSubject] = useState("")
   const [body, setBody] = useState("")
@@ -59,6 +62,21 @@ export function BroadcastComposer() {
   const [confirmCount, setConfirmCount] = useState<number | null>(null)
 
   const [history, setHistory] = useState<AuditLogRow[] | null>(null)
+
+  // Dynamic variables — "Insert Variable" writes {{key}} into whichever
+  // field (subject/body) was last focused, at the caret position, via a
+  // stored input/textarea ref rather than tracking selection in state
+  // (selection offsets go stale the instant the user types elsewhere).
+  const subjectRef = useRef<HTMLInputElement>(null)
+  const bodyRef = useRef<HTMLTextAreaElement>(null)
+  const [lastFocused, setLastFocused] = useState<"subject" | "body">("body")
+  const [showVariableMenu, setShowVariableMenu] = useState(false)
+
+  // "Preview As [user]" — resolves real {{variable}} values for one actual
+  // user by email, so Preview shows exactly what that person would receive.
+  const [previewEmail, setPreviewEmail] = useState("")
+  const [previewVariables, setPreviewVariables] = useState<VariableValues | null>(null)
+  const [loadingPreviewVars, setLoadingPreviewVars] = useState(false)
 
   const loadHistory = useCallback(async () => {
     try {
@@ -75,6 +93,7 @@ export function BroadcastComposer() {
   useEffect(() => void loadHistory(), [loadHistory])
 
   const recipients = audience === "custom" ? parseCustomList(customList) : audience
+  const selectedSegment = SEGMENT_TYPES.find((s) => s.value === audience)
 
   // contentValid gates actions that don't care about the schedule time
   // (Preview, Send Test); valid additionally requires a future time picked
@@ -89,7 +108,13 @@ export function BroadcastComposer() {
     fetch("/api/admin/broadcasts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subject, body, recipients, ...extra }),
+      body: JSON.stringify({
+        subject,
+        body,
+        recipients,
+        recipientValue: selectedSegment?.needsValue ? segmentValue.trim() || undefined : undefined,
+        ...extra,
+      }),
     })
 
   const scheduleRequest = (extra: Record<string, unknown>) =>
@@ -102,10 +127,59 @@ export function BroadcastComposer() {
         body,
         recipientType: audience,
         recipientIds: audience === "custom" ? recipients : undefined,
+        recipientValue: selectedSegment?.needsValue ? segmentValue.trim() || undefined : undefined,
         scheduledFor: new Date(scheduledFor).toISOString(),
         ...extra,
       }),
     })
+
+  function insertVariable(key: string) {
+    const token = `{{${key}}}`
+    const ref = lastFocused === "subject" ? subjectRef.current : bodyRef.current
+    const setValue = lastFocused === "subject" ? setSubject : setBody
+    if (!ref) {
+      // No known caret position (menu opened without focusing a field first)
+      // — append rather than silently do nothing.
+      setValue((prev) => prev + token)
+      setShowVariableMenu(false)
+      return
+    }
+    const start = ref.selectionStart ?? ref.value.length
+    const end = ref.selectionEnd ?? ref.value.length
+    const next = ref.value.slice(0, start) + token + ref.value.slice(end)
+    setValue(next)
+    setShowVariableMenu(false)
+    // Restore focus + caret after the inserted token on the next tick (the
+    // ref's value hasn't re-rendered with `next` yet on this tick).
+    requestAnimationFrame(() => {
+      ref.focus()
+      const caret = start + token.length
+      ref.setSelectionRange(caret, caret)
+    })
+  }
+
+  async function loadPreviewVariables() {
+    if (!previewEmail.trim()) {
+      toast("Enter an email to preview as", "error")
+      return
+    }
+    setLoadingPreviewVars(true)
+    try {
+      const res = await fetch("/api/admin/broadcasts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ previewFor: previewEmail.trim() }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? "Failed to load that user")
+      setPreviewVariables(data.variables as VariableValues)
+      setShowPreview(true)
+    } catch (e) {
+      toast(e instanceof Error && e.message ? e.message : "Failed to load that user", "error")
+    } finally {
+      setLoadingPreviewVars(false)
+    }
+  }
 
   const sendTest = async () => {
     if (!contentValid) {
@@ -224,13 +298,33 @@ export function BroadcastComposer() {
 
           <div className="space-y-1.5">
             <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">To</label>
-            <AdminSelect value={audience} onChange={(e) => setAudience(e.target.value as Audience)} className="w-full">
-              <option value="all">All Users</option>
-              <option value="pro">Pro Users</option>
-              <option value="growth">Growth Users</option>
-              <option value="free">Free Users</option>
-              <option value="custom">Custom List</option>
-            </AdminSelect>
+            <div className="flex flex-wrap items-center gap-2">
+              <AdminSelect
+                value={audience}
+                onChange={(e) => setAudience(e.target.value as Audience)}
+                className="flex-1 min-w-[160px]"
+              >
+                {SEGMENT_TYPES.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+                <option value="custom">Custom List</option>
+              </AdminSelect>
+              {selectedSegment?.needsValue && (
+                <AdminInput
+                  type="number"
+                  min={1}
+                  value={segmentValue}
+                  onChange={(e) => setSegmentValue(e.target.value)}
+                  placeholder={selectedSegment.valuePlaceholder}
+                  className="w-32"
+                />
+              )}
+            </div>
+            {selectedSegment?.needsValue && (
+              <p className="text-[11px] text-[#6A6A6A]">Defaults to {selectedSegment.valuePlaceholder} if left blank.</p>
+            )}
           </div>
 
           {audience === "custom" && (
@@ -250,8 +344,52 @@ export function BroadcastComposer() {
           )}
 
           <div className="space-y-1.5">
-            <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">Subject</label>
-            <AdminInput value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full" placeholder="What's new at CarouseLabs" />
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">Subject</label>
+              <div className="flex items-center gap-3">
+                <TemplatePicker
+                  currentSubject={subject}
+                  currentBody={body}
+                  onLoad={(s, b) => {
+                    setSubject(s)
+                    setBody(b)
+                  }}
+                />
+                <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowVariableMenu((v) => !v)}
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-[#8A8A8A] hover:text-white transition-colors"
+                >
+                  <Braces className="h-3 w-3" />
+                  Insert Variable
+                </button>
+                {showVariableMenu && (
+                  <div className="absolute right-0 z-10 mt-1 w-64 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] shadow-2xl py-1">
+                    {AVAILABLE_VARIABLES.map((v) => (
+                      <button
+                        key={v.key}
+                        type="button"
+                        onClick={() => insertVariable(v.key)}
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[#232323] transition-colors"
+                      >
+                        <span className="text-[12.5px] font-medium text-white">{`{{${v.key}}}`}</span>
+                        <span className="text-[11px] text-[#6A6A6A]">{v.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                </div>
+              </div>
+            </div>
+            <AdminInput
+              ref={subjectRef}
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              onFocus={() => setLastFocused("subject")}
+              className="w-full"
+              placeholder="What's new at CarouseLabs"
+            />
           </div>
 
           <div className="space-y-1.5">
@@ -259,16 +397,55 @@ export function BroadcastComposer() {
               Body <span className="font-normal normal-case text-[#6A6A6A]">— **bold**, *italic*, [link](https://…)</span>
             </label>
             <textarea
+              ref={bodyRef}
               value={body}
               onChange={(e) => setBody(e.target.value)}
+              onFocus={() => setLastFocused("body")}
               rows={8}
               placeholder="Write your announcement…"
               className="w-full rounded-lg border border-[#2A2A2A] bg-[#141414] p-3 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED]"
             />
+            <p className="text-[11px] text-[#6A6A6A]">
+              Use <code className="text-[#8A8A8A]">{"{{firstName}}"}</code> etc. — see Insert
+              Variable above for every available field. Unresolved variables (e.g. a custom-list
+              email with no account) are sent as literal text.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex-1 min-w-[220px] space-y-1.5">
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+                Preview As (real user email)
+              </label>
+              <div className="flex items-center gap-2">
+                <AdminInput
+                  value={previewEmail}
+                  onChange={(e) => setPreviewEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  className="flex-1"
+                />
+                <AdminButton
+                  variant="secondary"
+                  onClick={() => void loadPreviewVariables()}
+                  loading={loadingPreviewVars}
+                  disabled={!contentValid}
+                >
+                  <UserSearch className="h-3.5 w-3.5" />
+                  Preview As
+                </AdminButton>
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            <AdminButton variant="secondary" onClick={() => setShowPreview(true)} disabled={!contentValid}>
+            <AdminButton
+              variant="secondary"
+              onClick={() => {
+                setPreviewVariables(null)
+                setShowPreview(true)
+              }}
+              disabled={!contentValid}
+            >
               <Eye className="h-3.5 w-3.5" />
               Preview
             </AdminButton>
@@ -326,10 +503,21 @@ export function BroadcastComposer() {
         )}
       </AdminCard>
 
-      <Modal open={showPreview} onClose={() => setShowPreview(false)} title="Email Preview">
+      <Modal
+        open={showPreview}
+        onClose={() => setShowPreview(false)}
+        title={previewVariables ? `Email Preview — as ${previewEmail.trim()}` : "Email Preview"}
+      >
         <div
           className="max-h-[60vh] overflow-y-auto rounded-lg bg-white"
-          dangerouslySetInnerHTML={{ __html: renderBroadcastEmailHtml(subject, body) }}
+          dangerouslySetInnerHTML={{
+            __html: previewVariables
+              ? renderBroadcastEmailHtml(
+                  applyVariables(subject, previewVariables),
+                  applyVariables(body, previewVariables),
+                )
+              : renderBroadcastEmailHtml(subject, body),
+          }}
         />
       </Modal>
 

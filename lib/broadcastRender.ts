@@ -4,6 +4,36 @@
 // Minimal, dependency-free markdown subset (bold/italic/links/paragraphs) —
 // not a full CommonMark parser, just enough for a quick announcement email.
 
+// ── Dynamic variables ───────────────────────────────────────────────
+// The catalog lives here (not lib/broadcastVariables.ts) specifically so
+// this stays importable from "use client" components — lib/broadcastVariables.ts
+// resolves these against the database (imports @/lib/db) and would break a
+// client bundle if imported there directly. That file re-exports both of
+// these for server-side callers, so admin routes/cron only need one import.
+export const AVAILABLE_VARIABLES = [
+  { key: "firstName", label: "First Name", example: "Alex" },
+  { key: "email", label: "Email", example: "alex@example.com" },
+  { key: "plan", label: "Plan", example: "PRO" },
+  { key: "referralCode", label: "Referral Code", example: "AB3XQ9K" },
+  { key: "referralLink", label: "Referral Link", example: "https://carouselabs.com/?ref=AB3XQ9K" },
+  { key: "creditsRemaining", label: "Credits Remaining", example: "850" },
+  { key: "daysSinceSignup", label: "Days Since Signup", example: "42" },
+] as const
+
+export type VariableKey = (typeof AVAILABLE_VARIABLES)[number]["key"]
+export type VariableValues = Record<VariableKey, string>
+
+// Substitutes {{key}} (whitespace-tolerant) with a resolved value. Unknown
+// keys and recipients with no resolvable values (e.g. a custom-list email
+// with no matching User row) are left as literal {{key}} text rather than
+// silently blanked — an admin who sees a stray {{firstName}} in a sent email
+// knows exactly what happened, instead of a confusing empty gap.
+export function applyVariables(template: string, values: Partial<VariableValues>): string {
+  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key: string) =>
+    key in values ? (values[key as VariableKey] as string) : match,
+  )
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

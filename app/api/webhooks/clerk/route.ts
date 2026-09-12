@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { sendWelcomeEmail } from "@/lib/email"
 import { applyPendingPrefill } from "@/lib/profile/pendingPrefill"
 import { createReferralForSignup } from "@/lib/referral"
+import { enrollUserInMatchingSequences } from "@/lib/emailSequences"
 
 export async function POST(req: Request) {
   const secret = process.env.CLERK_WEBHOOK_SECRET
@@ -100,6 +101,18 @@ export async function POST(req: Request) {
         await sendWelcomeEmail(email, name)
       } catch (err) {
         console.error("[webhooks/clerk] welcome email failed:", err)
+      }
+
+      // Instant enrollment into any active sequence matching this brand-new
+      // signup (typically an "all" or "free" segment — a "pro"/"growth"
+      // sequence can never match at this exact moment, since every new
+      // signup starts on FREE). The periodic sweep (see
+      // app/api/cron/process-email-sequences) is the backstop for segment
+      // changes later on. Best-effort, same reasoning as the two calls above.
+      try {
+        await enrollUserInMatchingSequences(newUser.id)
+      } catch (err) {
+        console.error("[webhooks/clerk] sequence enrollment failed:", err)
       }
     }
   }

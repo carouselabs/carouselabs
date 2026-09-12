@@ -17,6 +17,8 @@ import { NextResponse } from "next/server"
 import { Resend } from "resend"
 import { db } from "@/lib/db"
 import { resolveRecipients, renderBroadcastEmailHtml, type BroadcastRecipients } from "@/lib/broadcast"
+import { applyVariables } from "@/lib/broadcastRender"
+import { resolveVariables } from "@/lib/broadcastVariables"
 import { sendInternBroadcastEmail } from "@/lib/email"
 
 export const maxDuration = 300
@@ -47,16 +49,29 @@ async function sendUserBroadcast(
   body: string,
   recipientType: string,
   recipientIds: string[],
+  recipientValue: string | null,
 ): Promise<{ sent: number; failed: number }> {
-  const emails =
-    recipientType === "custom" ? recipientIds : await resolveRecipients(recipientType as BroadcastRecipients)
-  const html = renderBroadcastEmailHtml(subject, body)
+  // "custom" froze a raw email list at schedule time (see the ScheduledEmail
+  // model comment) — resolveRecipients still looks each one up for a userId
+  // so a scheduled broadcast personalizes exactly like an immediate one.
+  const recipients =
+    recipientType === "custom"
+      ? await resolveRecipients(recipientIds)
+      : await resolveRecipients(recipientType as BroadcastRecipients, recipientValue)
 
   let sent = 0
   let failed = 0
-  for (const to of emails) {
+  for (const r of recipients) {
     const ok = await safeSend(async () => {
-      const { error } = await resend.emails.send({ from: FROM, to, subject, html })
+      const variables = r.userId ? await resolveVariables(r.userId) : null
+      const finalSubject = variables ? applyVariables(subject, variables) : subject
+      const finalBody = variables ? applyVariables(body, variables) : body
+      const { error } = await resend.emails.send({
+        from: FROM,
+        to: r.email,
+        subject: finalSubject,
+        html: renderBroadcastEmailHtml(finalSubject, finalBody),
+      })
       if (error) throw new Error(error.message)
     })
     if (ok) sent++
@@ -136,7 +151,13 @@ export async function GET(req: Request) {
               scheduled.recipientType,
               scheduled.recipientIds,
             )
-          : await sendUserBroadcast(scheduled.subject, scheduled.body, scheduled.recipientType, scheduled.recipientIds)
+          : await sendUserBroadcast(
+              scheduled.subject,
+              scheduled.body,
+              scheduled.recipientType,
+              scheduled.recipientIds,
+              scheduled.recipientValue,
+            )
 
       await db.scheduledEmail.update({
         where: { id: scheduled.id },

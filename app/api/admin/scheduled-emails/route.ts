@@ -17,8 +17,10 @@ import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
 import { resolveRecipients, type BroadcastRecipients } from "@/lib/broadcast"
 import { logAdminAction, getRequestIp } from "@/lib/auditLog"
+import { SEGMENT_TYPES } from "@/lib/segments"
 
 const MAX_USER_RECIPIENTS = 5000
+const VALID_USER_SEGMENTS = new Set<string>([...SEGMENT_TYPES.map((s): string => s.value), "custom"])
 
 // Same config/key as app/api/admin/broadcasts — a separately-instantiated
 // Ratelimit with an identical Redis connection + key shares the same
@@ -56,6 +58,7 @@ export async function POST(req: Request) {
   let body: string
   let recipientType: string
   let recipientIds: string[] = []
+  let recipientValue: string | null = null
   let scheduledFor: Date
   let dryRun = false
   try {
@@ -78,12 +81,15 @@ export async function POST(req: Request) {
         throw new Error()
       }
     } else {
-      if (!["all", "pro", "growth", "free", "custom"].includes(json.recipientType)) throw new Error()
+      if (!VALID_USER_SEGMENTS.has(json.recipientType)) throw new Error()
       recipientType = json.recipientType
       if (recipientType === "custom") {
         if (!Array.isArray(json.recipientIds) || json.recipientIds.length === 0) throw new Error()
         if (!json.recipientIds.every((v: unknown) => typeof v === "string")) throw new Error()
         recipientIds = json.recipientIds
+      }
+      if (typeof json.recipientValue === "string" && json.recipientValue.trim()) {
+        recipientValue = json.recipientValue.trim()
       }
     }
 
@@ -114,9 +120,11 @@ export async function POST(req: Request) {
     const resolved =
       recipientType === "custom"
         ? await resolveRecipients(recipientIds)
-        : await resolveRecipients(recipientType as BroadcastRecipients)
+        : await resolveRecipients(recipientType as BroadcastRecipients, recipientValue)
     count = resolved.length
-    if (recipientType === "custom") recipientIds = resolved // normalized (deduped/lowercased)
+    // normalized (deduped/lowercased) — stored as plain emails; the cron
+    // re-resolves userIds itself at send time via resolveRecipients.
+    if (recipientType === "custom") recipientIds = resolved.map((r) => r.email)
   }
 
   if (count === 0) {
@@ -149,7 +157,7 @@ export async function POST(req: Request) {
   }
 
   const created = await db.scheduledEmail.create({
-    data: { type, subject, body, recipientType, recipientIds, scheduledFor, createdBy: admin.email },
+    data: { type, subject, body, recipientType, recipientIds, recipientValue, scheduledFor, createdBy: admin.email },
   })
 
   await logAdminAction({

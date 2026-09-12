@@ -111,6 +111,10 @@ model User {
   payoutMethod       String? // "bank" | "paypal"
   payoutDetails      String?              @db.Text
 
+  // ── Email marketing ──
+  sequenceEnrollments EmailSequenceEnrollment[]
+  emailEngagement     EmailEngagement[]
+
   @@index([clerkId])
 }
 
@@ -602,19 +606,24 @@ model InternMessage {
 // Non-"specific"/"custom" rows re-resolve their audience fresh at send time
 // (e.g. "all active interns" or "all Pro users" may have changed by then).
 model ScheduledEmail {
-  id            String   @id @default(cuid())
-  type          String // "intern_broadcast" | "user_broadcast"
-  subject       String
-  body          String   @db.Text
-  recipientType String
-  recipientIds  String[]
-  scheduledFor  DateTime
-  status        String   @default("queued") // "queued" | "sending" | "sent" | "failed"
-  sentCount     Int?
-  failedCount   Int?
-  createdBy     String // admin email
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt // drives the cron's stuck-"sending" reclaim, same role as ScheduledPost.updatedAt
+  id             String   @id @default(cuid())
+  type           String // "intern_broadcast" | "user_broadcast"
+  subject        String
+  body           String   @db.Text
+  recipientType  String
+  recipientIds   String[]
+  // Threshold for the extended segments ("inactive" days, "low_credits"
+  // amount — see lib/segments.ts) — not in the original field list, added
+  // so a scheduled broadcast can use them exactly like an instant one
+  // rather than only supporting them for immediate sends.
+  recipientValue String?
+  scheduledFor   DateTime
+  status         String   @default("queued") // "queued" | "sending" | "sent" | "failed"
+  sentCount      Int?
+  failedCount    Int?
+  createdBy      String // admin email
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt // drives the cron's stuck-"sending" reclaim, same role as ScheduledPost.updatedAt
 
   @@index([status, scheduledFor])
 }
@@ -675,4 +684,120 @@ model ReferralPayout {
   method     String?
   paidBy     String
   createdAt  DateTime @default(now())
+}
+
+// A reusable subject+body pair an admin can load into either the one-off
+// Broadcast composer or a Sequence step's editor (see
+// components/admin/TemplatePicker.tsx), instead of retyping common copy.
+// Deliberately just two text fields, no category/tagging system — the
+// admin panel doesn't have enough of these yet to need one.
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  subject   String
+  body      String   @db.Text
+  createdBy String
+  createdAt DateTime @default(now())
+}
+
+// ── Email marketing: sequences ──────────────────────────────────────
+// Multi-step drip campaigns, auto-enrolling users who match segmentType/
+// segmentValue (the same recipient-segment vocabulary as the one-off
+// Broadcast composer — see lib/broadcast.ts — plus the extended segments
+// added for this feature). Distinct from the existing one-off Broadcast +
+// ScheduledEmail system, which is unchanged and still the right tool for a
+// single announcement; sequences are for automated, multi-touch drips.
+model EmailSequence {
+  id           String   @id @default(cuid())
+  name         String
+  active       Boolean  @default(true)
+  segmentType  String // reuses existing recipient segment types (see lib/segments.ts)
+  segmentValue String?
+  // Exit condition checked before sending each step (see the cron in
+  // app/api/cron/process-email-sequences) — null means no auto-exit. Not in
+  // the original field list; added because Step 4/5 of the spec both
+  // require somewhere to store which rule a sequence uses. Only "upgraded"
+  // is wired to a real signal today — there's no support-ticket system for
+  // regular users (InternMessage is intern-only) to check a "replied to
+  // Support" condition against.
+  stopRule     String? // null | "upgraded" (exits when Subscription.plan leaves FREE)
+  createdBy    String
+  createdAt    DateTime @default(now())
+
+  steps           EmailSequenceStep[]
+  enrollments     EmailSequenceEnrollment[]
+  EmailEngagement EmailEngagement[]
+
+  @@index([active])
+}
+
+model EmailSequenceStep {
+  id         String        @id @default(cuid())
+  sequenceId String
+  sequence   EmailSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  stepOrder  Int
+  delayDays  Int // days after the PREVIOUS step (0 for the first step — sent on enrollment)
+  subject    String
+  subjectB   String? // optional A/B variant
+  body       String        @db.Text
+  bodyB      String? // optional A/B variant
+
+  engagement EmailEngagement[]
+
+  @@unique([sequenceId, stepOrder])
+}
+
+model EmailSequenceEnrollment {
+  id          String        @id @default(cuid())
+  sequenceId  String
+  sequence    EmailSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentStep Int           @default(0)
+  status      String        @default("active") // "active" | "completed" | "stopped" | "exited_by_rule"
+  // Assigned once at enrollment (see lib/emailSequences.ts) — 50/50 only when
+  // the sequence has any step with a B variant defined, otherwise always "A"
+  // so a sequence with no A/B content never wastes a random draw on it.
+  variant     String        @default("A") // "A" | "B"
+  enrolledAt  DateTime      @default(now())
+  nextSendAt  DateTime
+  lastSentAt  DateTime?
+
+  @@unique([sequenceId, userId])
+  @@index([status, nextSendAt])
+}
+
+// One row per tracked lifecycle event for one send — a step send, a step
+// open/click (via the Resend webhook), or a one-off Broadcast send. Exactly
+// one of sequenceId/stepId or broadcastId is meaningfully set per row in
+// practice, but the model itself doesn't enforce that (SQLite/Postgres has
+// no clean "exactly one of" constraint) — callers only ever populate the
+// pair that applies. broadcastId is a plain opaque string, not a relation:
+// one-off broadcasts aren't persisted as their own DB rows (they're a
+// Resend send + an AuditLog entry, or a ScheduledEmail row), so there's
+// nothing in this schema for it to reference yet.
+model EmailEngagement {
+  id            String             @id @default(cuid())
+  sequenceId    String?
+  sequence      EmailSequence?     @relation(fields: [sequenceId], references: [id], onDelete: SetNull)
+  stepId        String?
+  step          EmailSequenceStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
+  broadcastId   String? // for one-off broadcasts — see model comment
+  userId        String
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event         String // "sent" | "opened" | "clicked" | "bounced"
+  // Resend's own message id (CreateEmailResponseSuccess.id), set ONLY on the
+  // "sent" row for a given send — not in the original field list, but
+  // required to correlate an incoming Resend webhook event back to a
+  // sequence/step/user: the webhook payload identifies the email only by
+  // this id (BaseEmailEventData.email_id), never by our own ids. See
+  // app/api/webhooks/resend, which looks up the "sent" row by this field to
+  // learn which sequence/step/user an "opened"/"clicked"/"bounced" event
+  // belongs to, then writes a new row with the same sequenceId/stepId/userId.
+  resendEmailId String?            @unique
+  createdAt     DateTime           @default(now())
+
+  @@index([sequenceId])
+  @@index([stepId])
+  @@index([userId])
 }

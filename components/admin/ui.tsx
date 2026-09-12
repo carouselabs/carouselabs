@@ -3,7 +3,7 @@
 // Shared admin-panel primitives, hardcoded to the dark admin palette
 // (bg #0F0F0F, cards #1A1A1A, borders #2A2A2A, accent #7C3AED) so they don't
 // depend on the cream app theme's CSS variables.
-import { useEffect, type ReactNode } from "react"
+import { forwardRef, useEffect, type ReactNode } from "react"
 import { Loader2, X } from "lucide-react"
 
 export function AdminCard({
@@ -89,15 +89,18 @@ export function AdminButton({
   )
 }
 
-export function AdminInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  const { className = "", ...rest } = props
-  return (
-    <input
-      {...rest}
-      className={`h-9 rounded-lg border border-[#2A2A2A] bg-[#141414] px-3 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED] transition-colors ${className}`}
-    />
-  )
-}
+export const AdminInput = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  function AdminInput(props, ref) {
+    const { className = "", ...rest } = props
+    return (
+      <input
+        ref={ref}
+        {...rest}
+        className={`h-9 rounded-lg border border-[#2A2A2A] bg-[#141414] px-3 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED] transition-colors ${className}`}
+      />
+    )
+  },
+)
 
 export function AdminSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   const { className = "", children, ...rest } = props

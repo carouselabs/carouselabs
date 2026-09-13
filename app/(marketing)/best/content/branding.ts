@@ -25,7 +25,7 @@ export const brandingPages: BestOfPage[] = [
           "The only tool here that does both halves of consistency automatically — saved writing-voice guidelines apply to every future caption without re-prompting, and uploading a past post lets it extract your color palette, typography, and illustration style to match in new carousels and images, without copying the original content.",
         bestFor:
           "Creators who want their AI-generated posts to actually look and sound like the same person over time, without manually rebuilding a brand kit each time",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Taplio",
@@ -118,7 +118,7 @@ export const brandingPages: BestOfPage[] = [
         strength:
           "Covers the content-creation and consistency legs of the stack more completely than anything else here — one AI pass writes the caption and designs the carousel, saved voice guidelines apply automatically to future posts, and a reference image keeps visual style consistent — though it's a content-creation tool specifically, with direct one-click LinkedIn publishing rather than a forward-scheduling calendar.",
         bestFor: "Anyone whose personal brand bottleneck is producing consistent, on-brand content rather than managing a posting calendar",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Taplio",
@@ -211,7 +211,7 @@ export const brandingPages: BestOfPage[] = [
         strength:
           "The 'Work on Own Idea' feature takes your own notes or rough thinking and expands it into a researched deep dive before generating a caption or carousel, and with 30+ structural templates across 12 categories, it has real structural range for breaking a complex idea into a multi-slide argument rather than forcing it into one short post.",
         bestFor: "Experts and consultants who have raw knowledge or notes and want AI to help structure it into something substantive",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Jasper",
@@ -304,7 +304,7 @@ export const brandingPages: BestOfPage[] = [
         strength:
           "The fastest path from a raw idea to finished, on-brand LinkedIn content — captions tuned for LinkedIn's tone alongside seven other platforms, plus AI-generated carousel and image visuals in one pass — though it's focused on social content specifically, not long-form collateral like whitepapers or case studies.",
         bestFor: "B2B marketers whose main bottleneck is producing consistent LinkedIn social content at volume",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Jasper",
@@ -397,7 +397,7 @@ export const brandingPages: BestOfPage[] = [
         strength:
           "The broadest single-tool coverage of the actual content-creation half of LinkedIn work — one AI pass produces a platform-tuned caption plus a fully designed carousel or image, with reference-image style matching and saved voice guidelines keeping everything on-brand across posts.",
         bestFor: "Creators and marketers who want the most content-creation ground covered by a single AI tool",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Taplio",
@@ -490,7 +490,7 @@ export const brandingPages: BestOfPage[] = [
         strength:
           "The strongest content-creation engine on this list by far — caption, image, and carousel generation in one AI pass, with reference-image style matching and saved voice guidelines keeping everything on-brand — though it covers creation, not forward scheduling; pair it with a dedicated scheduler below if you need to queue posts across future dates.",
         bestFor: "Anyone whose real bottleneck is producing content, not queuing it — comfortable publishing immediately or exporting to schedule elsewhere",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Taplio",

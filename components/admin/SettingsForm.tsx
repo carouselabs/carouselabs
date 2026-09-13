@@ -115,7 +115,7 @@ export function SettingsForm() {
       <AdminCard title="Plans & Pricing">
         <div className="grid gap-4 sm:grid-cols-3">
           {numField("Pro price (USD/month)", "planPrice", "0.01")}
-          {numField("Free plan post limit", "freePostLimit")}
+          {numField("Free plan credit limit", "freePostLimit")}
           {numField("Pro monthly credits", "proCredits")}
         </div>
         <p className="mt-3 text-[11px] text-[#6A6A6A]">

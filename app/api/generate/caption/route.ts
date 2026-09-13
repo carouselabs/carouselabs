@@ -297,21 +297,19 @@ export async function POST(req: Request) {
   }
 
   const isRegenEffective = isRegen && !!currentCaption
-  // FREE users' regenerations stay free (session-capped in the UI); everything
-  // else — FREE first posts and all PRO actions — goes through the charge.
+  // Every plan, including FREE, goes through the same charge: the full flow
+  // price on a first generation, text_regen (1) on a regen. FREE users spend
+  // against their 25-credit lifetime pool the same way PRO/GROWTH spend their
+  // monthly allowance — no separate "regens are free" carve-out anymore.
   // chargedAction is kept so a failed generation can refund exactly what it
   // charged (see the stream catch below).
-  let chargedAction: CreditAction | null = null
-  if (!(plan === "FREE" && isRegenEffective)) {
-    const action: CreditAction = isRegenEffective ? "text_regen" : FLOW_ACTIONS[flow]
-    const charge = await chargeCreditsForAction(user, action)
-    if (!charge.ok) {
-      return NextResponse.json(
-        { error: "Insufficient credits", requiresUpgrade: charge.requiresUpgrade },
-        { status: 402 },
-      )
-    }
-    chargedAction = action
+  const chargedAction: CreditAction = isRegenEffective ? "text_regen" : FLOW_ACTIONS[flow]
+  const charge = await chargeCreditsForAction(user, chargedAction)
+  if (!charge.ok) {
+    return NextResponse.json(
+      { error: "Insufficient credits", requiresUpgrade: charge.requiresUpgrade },
+      { status: 402 },
+    )
   }
 
   const breakdown = idea.breakdowns[0].outline as unknown as BreakdownOutline
@@ -422,9 +420,7 @@ export async function POST(req: Request) {
       } catch (err) {
         console.error("[generate/caption] Claude stream error:", err)
         // Generation failed after the charge — give the credits back.
-        if (chargedAction) {
-          await refundCreditsForAction(user.id, chargedAction)
-        }
+        await refundCreditsForAction(user.id, chargedAction)
         controller.enqueue(encoder.encode("\n\n[Generation failed — please try again]"))
       } finally {
         controller.close()

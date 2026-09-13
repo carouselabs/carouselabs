@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { availableCredits, extraCreditsValid, FREE_LIFETIME_POSTS } from "@/lib/credits"
+import { availableCredits, extraCreditsValid, FREE_LIFETIME_CREDITS } from "@/lib/credits"
 import { isAdminEmail } from "@/lib/adminAuth"
 
 export async function GET() {
@@ -45,7 +45,7 @@ export async function GET() {
     postsTotal: user.usage?.postsTotal ?? 0,
     creditsRemaining,
     extraCredits,
-    freeLimit: FREE_LIFETIME_POSTS,
+    freeLimit: FREE_LIFETIME_CREDITS,
     onboardingDone: user.profile?.onboardingDone ?? false,
     isAdmin: isAdminEmail(user.email),
   })

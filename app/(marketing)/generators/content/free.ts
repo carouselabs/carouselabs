@@ -1,25 +1,26 @@
 // Category: FREE/BROAD — free-tier and broad positioning keywords. Every
-// "free" claim must stay honest: the FREE plan is exactly ONE lifetime post
-// (caption, or caption + image, or caption + carousel), not ongoing free use.
-// Never overclaim "unlimited free" — that's false advertising the moment a
-// real user hits the paywall on their second post.
+// "free" claim must stay honest: the FREE plan is a 25-credit lifetime pool
+// spendable on Caption Only or Image + Caption posts (Carousel is a paid-plan
+// feature), not ongoing free use and not a full free carousel.
+// Never overclaim "unlimited free" or "free carousel" — that's false
+// advertising the moment a real user checks the actual plan limits.
 import type { GeneratorPage } from "../types"
 
 export const freePages: GeneratorPage[] = [
   {
     slug: "free-linkedin-post-generator",
     keyword: "Free LinkedIn Post Generator",
-    h1: "Free LinkedIn Post Generator — Create Your First Post at No Cost",
+    h1: "Free LinkedIn Post Generator — Create Your First Posts at No Cost",
     metaTitle: "Free LinkedIn Post Generator — Try CarouseLabs at No Cost",
     metaDescription:
-      "Generate a full LinkedIn post — caption, and optionally an image or carousel — for free with CarouseLabs. No credit card required to create your first post.",
+      "Generate LinkedIn posts — caption, and optionally an image — for free with CarouseLabs. No credit card required: sign up and get 25 lifetime credits to spend.",
     intro:
-      "Searching for a free LinkedIn post generator usually means one of two things: you want to see whether AI-generated content actually sounds like something worth posting before paying for anything, or you just need a genuinely no-cost way to get your first post out the door today. CarouseLabs is built for exactly that — you can sign up without a credit card and generate a full post, complete caption included, at no cost. This page is deliberately upfront about what \"free\" means here: it's a real, complete first post, not a stripped-down demo, a watermarked sample, or a locked preview you have to pay to unlock. You choose your platform, your caption structure, and whether to add an image or a full carousel, exactly as a paying user would. Once you've seen the quality for yourself, upgrading for ongoing use is optional, not a requirement to see what the tool can actually do.",
+      "Searching for a free LinkedIn post generator usually means one of two things: you want to see whether AI-generated content actually sounds like something worth posting before paying for anything, or you just need a genuinely no-cost way to get a post out the door today. CarouseLabs is built for exactly that — you can sign up without a credit card and get 25 lifetime credits to spend on real output, complete captions included. This page is deliberately upfront about what \"free\" means here: it's real, complete output — not a stripped-down demo, a watermarked sample, or a locked preview you have to pay to unlock — spent across a caption-only post (5 credits) or a caption plus an AI image (15 credits), so most people get a few posts out of the free tier rather than just one. Full carousel generation is reserved for paid plans, since it's a heavier feature to generate. Once you've seen the quality for yourself, upgrading for ongoing use is optional, not a requirement to see what the tool can actually do.",
     howItWorks: [
       {
         step: "Sign up for free",
         description:
-          "Create an account with no credit card required — you're generating real output from the first step, not a locked trial that only shows you a blurred preview. There's no time limit ticking down either; the free post is yours whenever you're ready to use it.",
+          "Create an account with no credit card required — you get 25 lifetime credits from the first step, not a locked trial that only shows you a blurred preview. There's no time limit ticking down either; your credits are yours whenever you're ready to use them.",
       },
       {
         step: "Enter your idea or pick a trending one",
@@ -32,38 +33,38 @@ export const freePages: GeneratorPage[] = [
           "Get a complete, platform-aware LinkedIn caption built around your idea, with alternate hook options included so you're never stuck with only one version of the opening line. The caption respects LinkedIn's tone and length conventions rather than reading like generic filler text.",
       },
       {
-        step: "Optionally add an image or full carousel",
+        step: "Optionally add an AI image",
         description:
-          "Turn the same idea into a single AI-generated image or a full multi-slide carousel, depending on which format fits your post — this choice is what your one free post gets spent on, so pick whichever format you most want to evaluate.",
+          "Turn the same idea into a single AI-generated image for a richer post — this is what most of your credits get spent on if you choose it, so pick the format you most want to evaluate.",
       },
       {
         step: "Post directly or download",
         description:
-          "Publish straight to LinkedIn from CarouseLabs, or download your content to post manually whenever you're ready. Either way, what you end up with is the finished, ready-to-publish post, not a sample that still needs work before it's usable.",
+          "Publish straight to LinkedIn from CarouseLabs, or download your content to post manually whenever you're ready. Either way, what you end up with is finished, ready-to-publish output, not a sample that still needs work before it's usable.",
       },
     ],
     useCases: [
       "First-time users who want to see whether AI-generated content actually sounds like their voice before committing to a paid plan, rather than taking a sales page's word for it",
-      "Students and job seekers building a LinkedIn presence on a tight budget who need one genuinely polished post without spending anything to get it",
+      "Students and job seekers building a LinkedIn presence on a tight budget who need a few genuinely polished posts without spending anything to get them",
       "Small business owners testing content tools before deciding whether to invest in a subscription for their team or just themselves",
       "Freelancers evaluating whether to recommend the tool to clients before spending anything of their own money to find out if it's worth suggesting",
-      "Anyone who just wants to get one solid post published today without a paywall interrupting the process partway through",
+      "Anyone who just wants to get a solid post published today without a paywall interrupting the process partway through",
     ],
     faq: [
       {
         question: "Is this actually free, or is there a hidden paywall?",
         answer:
-          "It's genuinely free to create your first full post — caption, and your choice of an AI image or a complete carousel — with no credit card required to sign up. Continued use beyond that first post moves to a paid plan, which is stated plainly on this page and inside the product itself, rather than hidden behind a surprise paywall that appears mid-generation after you've already invested time. You'll always know before you generate anything whether it's going to count against your free post or not.",
+          "It's genuinely free to sign up and start creating — no credit card required. You get 25 lifetime credits to spend as you like: a caption-only post costs 5 credits, and a caption plus an AI image costs 15, so most people get a few posts out of the free tier. That's stated plainly on this page and inside the product itself, rather than hidden behind a surprise paywall that appears mid-generation after you've already invested time. You'll always know before you generate anything exactly what it'll cost.",
       },
       {
         question: "What's the difference between the free plan and a paid plan?",
         answer:
-          "The free plan gives you one full post on the house so you can evaluate the quality of the captions, images, and carousels for yourself, using the same generation system paid users get. Paid plans unlock ongoing monthly generation, ongoing carousel creation, and higher-volume use for creators and teams who need to post regularly rather than just once. Nothing about the free post is intentionally limited to nudge you toward upgrading — it's meant to be a fair, honest sample of the real product.",
+          "The free plan gives you 25 lifetime credits on the house so you can evaluate the quality of the captions and images for yourself, using the same generation system paid users get. Paid plans unlock ongoing monthly credits, full carousel creation, and higher-volume use for creators and teams who need to post regularly rather than just a few times. Nothing about the free credits is intentionally limited to nudge you toward upgrading — it's meant to be a fair, honest sample of the real product.",
       },
       {
         question: "Do I need a credit card to try it?",
         answer:
-          "No. You can sign up and generate your first LinkedIn post without entering any payment details at any point in the process. A card is only needed later, if and when you decide to move to a paid plan for ongoing use.",
+          "No. You can sign up and start generating LinkedIn posts without entering any payment details at any point in the process. A card is only needed later, if and when you decide to move to a paid plan for ongoing use.",
       },
     ],
     relatedSlugs: [
@@ -77,12 +78,12 @@ export const freePages: GeneratorPage[] = [
   {
     slug: "free-ai-caption-generator",
     keyword: "Free AI Caption Generator",
-    h1: "Free AI Caption Generator — Write Your First Caption at No Cost",
+    h1: "Free AI Caption Generator — Write Captions at No Cost",
     metaTitle: "Free AI Caption Generator — Try CarouseLabs at No Cost",
     metaDescription:
-      "Write a complete, platform-aware caption for free with CarouseLabs. No credit card required — your first caption (no image or carousel needed) is genuinely free.",
+      "Write complete, platform-aware captions for free with CarouseLabs. No credit card required — 25 lifetime credits to spend, caption-only posts included.",
     intro:
-      "If all you actually want right now is the words — no image, no carousel, just a caption that doesn't read like it came from a generic AI tool — CarouseLabs lets you generate that for free. Sign up without a credit card and write your first caption at no cost, choosing your platform and how you want it structured, exactly as you would on a paid plan. This page exists specifically for people who want to test caption quality in isolation: does the tone sound like a person, does the hook actually hold attention past the first line, is the structure something you'd genuinely publish as-is rather than heavily rewrite. You don't need to commit to an image or carousel to find that out, and you don't need to pay to see it either. Once you've judged the writing on its own merits, adding visuals or upgrading for ongoing use is a separate decision, made later, and entirely optional.",
+      "If all you actually want right now is the words — no image needed, just a caption that doesn't read like it came from a generic AI tool — CarouseLabs lets you generate that for free. Sign up without a credit card and get 25 lifetime credits, choosing your platform and how you want each caption structured, exactly as you would on a paid plan. A caption-only post costs 5 credits, so the free tier is enough for several captions, not just one. This page exists specifically for people who want to test caption quality in isolation: does the tone sound like a person, does the hook actually hold attention past the first line, is the structure something you'd genuinely publish as-is rather than heavily rewrite. You don't need to add an image to find that out, and you don't need to pay to see it either. Once you've judged the writing on its own merits, adding visuals or upgrading for ongoing use is a separate decision, made later, and entirely optional.",
     howItWorks: [
       {
         step: "Sign up for free",
@@ -107,13 +108,13 @@ export const freePages: GeneratorPage[] = [
       {
         step: "Review your free caption",
         description:
-          "Get a complete caption plus a few alternate hook options, at no cost. If you decide you want an image or carousel to go with it, or want to generate more captions later, that's when a paid plan comes into the picture — not before you've even seen a finished result.",
+          "Get a complete caption plus a few alternate hook options, for 5 of your 25 free credits. Since a caption-only post is the cheapest action, you'll have credits left to try a few more before deciding whether to add images or move to a paid plan.",
       },
     ],
     useCases: [
-      "Writers who specifically want to judge caption quality — tone, hook strength, structure — without an image or carousel complicating the evaluation",
+      "Writers who specifically want to judge caption quality — tone, hook strength, structure — without an image complicating the evaluation",
       "Freelancers testing whether the output sounds close enough to a client's voice before recommending the tool or committing to a subscription on the client's behalf",
-      "Job seekers and students who need one polished LinkedIn caption today and don't have budget for a content tool subscription right now",
+      "Job seekers and students who need a few polished LinkedIn captions today and don't have budget for a content tool subscription right now",
       "Marketers comparing several AI writing tools who want to see real, complete caption output rather than a locked demo or a sample screenshot on a landing page",
       "Anyone who wants to post today, in text only, without paying for image or carousel features they don't currently have a use for",
     ],
@@ -121,17 +122,17 @@ export const freePages: GeneratorPage[] = [
       {
         question: "Can I really generate a caption without paying anything?",
         answer:
-          "Yes. Your first post on CarouseLabs is free, no credit card required, and a caption-only post — no image or carousel — counts as that free post. You get the full caption-writing experience, including platform selection, structure choice, and alternate hooks, at no cost whatsoever.",
+          "Yes. Signing up gives you 25 lifetime credits, no credit card required, and a caption-only post costs just 5 of them — so the free tier covers several captions, not a single one-off freebie. You get the full caption-writing experience, including platform selection, structure choice, and alternate hooks, at no cost whatsoever.",
       },
       {
         question: "Is the free caption lower quality than what paid users get?",
         answer:
-          "No. The free caption is generated by the exact same system paid users get — there's no separate, watered-down free-tier model producing a lesser version. The only difference paid plans add is ongoing generation beyond that first free post, not any kind of quality downgrade on the one you get for free. That's a deliberate choice: a free tier that hands you a deliberately worse product isn't actually a fair trial, it's just a demo dressed up as one, and people can usually tell the difference.",
+          "No. Every caption is generated by the exact same system paid users get — there's no separate, watered-down free-tier model producing a lesser version. The only difference paid plans add is ongoing monthly credits and full carousel access, not any kind of quality downgrade on what you get for free. That's a deliberate choice: a free tier that hands you a deliberately worse product isn't actually a fair trial, it's just a demo dressed up as one, and people can usually tell the difference.",
       },
       {
-        question: "What if I want more than one free caption?",
+        question: "What happens once my 25 credits run out?",
         answer:
-          "The free plan covers one lifetime post. If a caption-only post is what you generate for that first post, further captions move to a paid plan, which unlocks ongoing monthly generation rather than offering a second one-off freebie down the line. Most people who land here decide within their first free caption whether the tone and structure are good enough to justify paying for ongoing use, which is exactly the question this free tier is designed to let you answer honestly, on your own topic, before spending anything.",
+          "The free plan is a one-time 25-credit pool, not a renewing allowance. Once it's spent — whether that's on a handful of caption-only posts, one or two caption-plus-image posts, or a mix — further generation moves to a paid plan, which unlocks a monthly credit refill plus full carousel creation. Most people land here decide within their first couple of free captions whether the tone and structure are good enough to justify paying for ongoing use, which is exactly the question this free tier is designed to let you answer honestly, on your own topic, before spending anything.",
       },
     ],
     relatedSlugs: [
@@ -145,61 +146,61 @@ export const freePages: GeneratorPage[] = [
   {
     slug: "free-linkedin-carousel-maker",
     keyword: "Free LinkedIn Carousel Maker",
-    h1: "Free LinkedIn Carousel Maker — Build Your First Carousel at No Cost",
-    metaTitle: "Free LinkedIn Carousel Maker — Try a Full Carousel at No Cost",
+    h1: "LinkedIn Carousel Maker — Try CarouseLabs Free, Then Unlock Full Carousels",
+    metaTitle: "LinkedIn Carousel Maker — Free to Try, Carousels on Pro | CarouseLabs",
     metaDescription:
-      "Generate a complete LinkedIn carousel — caption plus every slide — for free with CarouseLabs. No credit card required to see the full design quality for yourself.",
+      "See CarouseLabs' carousel quality for yourself: try the free tier (25 credits, no credit card) on captions and images, then unlock full multi-slide carousel generation on a paid plan.",
     intro:
-      "A carousel is a bigger commitment to evaluate than a single caption, which is exactly why CarouseLabs lets your one free post be a full carousel if that's what you want to test. Sign up without a credit card and generate a complete caption plus a full multi-slide carousel — structure, typography, and visual consistency across every slide — at no cost. This matters because carousel quality is genuinely hard to judge from a screenshot or a locked demo on a marketing page; the only real way to know if the slide-flow structure, the design consistency, and the writing all hold up together is to generate one yourself and look closely at the actual result. That's exactly what this free post is for. Ongoing carousel creation beyond that first one moves to a paid plan, since carousels are a heavier feature to generate than a caption alone, but seeing the quality firsthand, on your own topic, costs nothing at all.",
+      "A carousel is a bigger commitment to evaluate than a single caption, which is exactly why it's worth knowing upfront how CarouseLabs' free tier actually works before you start: signing up gives you 25 lifetime credits, no credit card required, spendable on caption-only posts or caption-plus-image posts — full multi-slide carousel generation itself is a paid-plan feature, since it's the most resource-intensive format to generate. That's a deliberate line, not a hidden catch: carousels take real design and generation work per slide, so rather than quietly capping carousel quality or slide count for a \"free\" version, CarouseLabs keeps the free tier focused on captions and images and reserves full carousel access — 7 to 9 slides, consistent typography and layout across every slide — for Pro and Growth. If a carousel is specifically what you want to evaluate, you can see the caption and image quality free first, on your own topic, and decide from there whether the workflow is worth a paid plan for full carousel access.",
     howItWorks: [
       {
         step: "Sign up for free",
         description:
-          "Create an account with no credit card required — your free post can be a full carousel, not just a caption or a single image, if that's the format you most want to see for yourself.",
+          "Create an account with no credit card required — you get 25 lifetime credits to spend on caption-only or caption-plus-image posts, using the same idea-to-content pipeline paid users get.",
       },
       {
         step: "Enter your topic or idea",
         description:
-          "Give it a lesson, a framework, or a story you want to turn into a carousel — a few sentences is enough to start from, and you don't need to pre-outline it into slides yourself before beginning.",
+          "Give it a lesson, a framework, or a story you're considering turning into a carousel — a few sentences is enough to start from, and this same idea carries over if you later generate a carousel on a paid plan.",
       },
       {
-        step: "Choose your carousel structure",
+        step: "Try a caption or image on the free tier",
         description:
-          "Pick from 30+ proven slide-flow templates, describe your own structure, or let AI design one based on your topic — the same full set of options available on a paid plan, with nothing held back for the free tier.",
+          "Generate a caption (5 credits) or a caption plus an AI image (15 credits) from your topic to see the writing and visual quality firsthand, before deciding whether to commit to a paid plan for carousels specifically.",
       },
       {
-        step: "Review your free carousel",
+        step: "Upgrade to unlock full carousel generation",
         description:
-          "Get a complete caption and a 7-9 slide carousel with consistent typography, color, and layout across every slide, generated at no cost and delivered as a finished, publishable set rather than a sample.",
+          "Pro and Growth unlock the full carousel builder: pick from 30+ proven slide-flow templates, describe your own structure, or let AI design one based on your topic, producing a complete 7-9 slide carousel with consistent typography, color, and layout throughout.",
       },
       {
-        step: "Post or decide what's next",
+        step: "Post or download",
         description:
-          "Publish directly to LinkedIn or download your carousel. If the quality convinces you, ongoing carousel creation is available on a paid plan whenever you're ready for it — nothing about seeing this first result requires paying anything.",
+          "Publish directly to LinkedIn or download your content, caption, image, or full carousel, whenever it's ready.",
       },
     ],
     useCases: [
-      "Creators deciding whether AI-generated carousels are actually good enough to replace hours of manual slide design, before spending anything at all to find out",
-      "Marketers evaluating carousel tools for a team and wanting to see one real, complete output rather than a sales demo, a sample gallery, or a case study written by someone else",
-      "Coaches and consultants who have one specific framework they want turned into a carousel and want to see it done well before committing to using the tool regularly",
-      "Freelancers testing the tool's design quality before recommending it to clients who'd be paying for ongoing use themselves, and who want to vouch for it honestly",
-      "Anyone who's tried other free tools that gate the actual carousel export behind a paywall, and wants a genuinely complete first result instead of another locked preview",
+      "Creators deciding whether AI-generated carousels are actually good enough to replace hours of manual slide design, who want to see the underlying caption and image quality before paying for carousel access specifically",
+      "Marketers evaluating carousel tools for a team and wanting to test real caption and image output first, rather than relying on a sales demo, a sample gallery, or a case study written by someone else",
+      "Coaches and consultants who have one specific framework they eventually want turned into a carousel and want to test the tool's writing quality on that topic before committing to a paid plan",
+      "Freelancers testing the tool's output quality before recommending it to clients who'd be paying for full carousel access themselves, and who want to vouch for it honestly",
+      "Anyone who's tried other tools that gate the actual carousel export behind a paywall regardless of what their \"free\" tier claims, and wants a plan that's upfront about where the free tier actually ends",
     ],
     faq: [
       {
-        question: "Does the free plan actually include a full carousel, not just a preview?",
+        question: "Does the free plan include full carousel generation?",
         answer:
-          "Yes. Your one free post can be a complete carousel — full caption plus every slide, typically 7 to 9, with consistent design across the whole set. It's not a watermarked preview or a partial export you have to pay to finish; it's the same finished output a paid user would get for a single carousel, start to end.",
+          "No — this is stated plainly rather than left to find out mid-generation. The free tier gives you 25 lifetime credits for caption-only or caption-plus-image posts; full multi-slide carousel generation (7-9 slides, consistent design throughout) is a Pro and Growth feature. If a carousel is specifically what you're evaluating CarouseLabs for, the free tier still lets you test the underlying caption and image quality on your own topic first, at no cost.",
       },
       {
-        question: "Why is carousel creation part of the free plan if it's a heavier feature?",
+        question: "Why isn't carousel generation part of the free plan?",
         answer:
-          "Carousels take more to generate than a caption alone, which is exactly why seeing one done well before paying matters most for this format specifically, more than it does for a simple caption. CarouseLabs' free plan lets that first carousel be the real, honest test, rather than asking you to commit to a subscription before you've seen full carousel quality at all.",
+          "Carousels take meaningfully more to generate per post than a caption or a single image — every slide needs its own layout, copy, and visual consistency with the rest of the set — so it's kept as a paid-plan feature rather than being included in a limited or lower-quality form for free. That keeps the free tier's caption and image output at full, unwatermarked quality instead of spreading a fixed free allowance thin across a heavier feature.",
       },
       {
-        question: "What happens after my free carousel?",
+        question: "What happens after my free credits are used?",
         answer:
-          "The free plan is one lifetime post. If you use it on a carousel, generating additional carousels afterward requires a paid plan, since ongoing carousel creation is a paid-tier feature — but that first complete carousel, generated entirely at no cost, is what actually lets you judge whether it's worth paying for before you spend anything. Because carousels take longer to build by hand than a caption alone, that one free carousel tends to be the single most convincing part of the whole free tier for people deciding whether to upgrade.",
+          "The free plan is a one-time 25-credit pool. Once it's spent on caption or image posts, generating more — of any format — requires a paid plan, which also unlocks full carousel creation, a monthly credit refill, and higher-volume use. Testing the caption and image quality free first is meant to give you a fair, honest basis for deciding whether the carousel builder is worth paying for, rather than asking you to commit before seeing anything.",
       },
     ],
     relatedSlugs: [
@@ -218,7 +219,7 @@ export const freePages: GeneratorPage[] = [
     metaDescription:
       "CarouseLabs is an AI content creation tool built around LinkedIn: idea generation, platform-aware captions, on-brand images, and full carousels, all from one workflow.",
     intro:
-      "Most people piece together LinkedIn content from several disconnected tools — one for ideas, one for writing, one for design — and end up spending as much time moving between them as they do actually creating anything. CarouseLabs is built as a single content creation tool that covers that whole pipeline instead: it surfaces AI-curated trending ideas, or expands your own rough notes into a researched deep dive, writes a platform-aware caption from whichever idea you pick, and turns the same idea into a single AI image or a full multi-slide carousel with consistent visual style, optionally matched to a past post you upload as a reference. The point isn't any one of those pieces working well in isolation — it's that they share one idea and one continuous workflow, so a post doesn't fall apart because the caption and the visual were made separately by two different tools that never actually talked to each other. Your first post is free to try before deciding whether the full workflow genuinely fits how you actually create content week to week.",
+      "Most people piece together LinkedIn content from several disconnected tools — one for ideas, one for writing, one for design — and end up spending as much time moving between them as they do actually creating anything. CarouseLabs is built as a single content creation tool that covers that whole pipeline instead: it surfaces AI-curated trending ideas, or expands your own rough notes into a researched deep dive, writes a platform-aware caption from whichever idea you pick, and turns the same idea into a single AI image or, on a paid plan, a full multi-slide carousel with consistent visual style, optionally matched to a past post you upload as a reference. The point isn't any one of those pieces working well in isolation — it's that they share one idea and one continuous workflow, so a post doesn't fall apart because the caption and the visual were made separately by two different tools that never actually talked to each other. Signing up is free, with no credit card required — you get 25 lifetime credits to try the caption and image side of the workflow before deciding whether the full pipeline, carousels included, fits how you actually create content week to week.",
     howItWorks: [
       {
         step: "Start with an idea",
@@ -236,9 +237,9 @@ export const freePages: GeneratorPage[] = [
           "Get a complete, platform-tuned caption with alternate hook options, built from the same idea you started with, not a separate rewritten input that's drifted from what you originally meant.",
       },
       {
-        step: "Add an image or full carousel",
+        step: "Add an image, or a full carousel on a paid plan",
         description:
-          "Turn the same idea into a single AI image or a 7-9 slide carousel, with visual style optionally matched to an uploaded reference image so it looks consistent with your existing posts rather than like a one-off experiment.",
+          "Turn the same idea into a single AI image on the free tier, or a 7-9 slide carousel once you're on Pro or Growth, with visual style optionally matched to an uploaded reference image so it looks consistent with your existing posts rather than like a one-off experiment.",
       },
       {
         step: "Publish or download",
@@ -257,7 +258,7 @@ export const freePages: GeneratorPage[] = [
       {
         question: "Is this a caption tool, an image tool, or a carousel tool?",
         answer:
-          "All three, built around one shared workflow rather than as separate standalone products bundled together. You start with a single idea, and from there generate a caption, a single image, a full carousel, or any combination, all built from that same source material rather than requiring you to re-explain your topic separately in different tools each time you switch formats.",
+          "All three, built around one shared workflow rather than as separate standalone products bundled together. You start with a single idea, and from there generate a caption, a single image (free tier), or a full carousel (paid plans), all built from that same source material rather than requiring you to re-explain your topic separately in different tools each time you switch formats.",
       },
       {
         question: "Does it only work for LinkedIn?",
@@ -267,7 +268,7 @@ export const freePages: GeneratorPage[] = [
       {
         question: "Can I try it before committing to a paid plan?",
         answer:
-          "Yes. Your first post — caption-only, caption plus an image, or caption plus a full carousel — is free, with no credit card required at any point. That's enough to evaluate whether the workflow and the output quality actually fit how you want to create content, before paying anything for ongoing use. Because the free post runs through the exact same idea-to-caption-to-visual pipeline as a paid post, what you see is a genuine preview of the full workflow, not a scaled-down version built just for the free tier.",
+          "Yes. Signing up is free, no credit card required, and gives you 25 lifetime credits — enough for a caption-only post (5 credits) or a caption plus an AI image (15 credits). That's enough to evaluate whether the writing and image quality actually fit how you want to create content, before paying anything for ongoing use or full carousel access. Because free-tier generation runs through the exact same idea-to-caption-to-visual pipeline as a paid post, what you see is a genuine preview of the full workflow, not a scaled-down version built just for the free tier.",
       },
     ],
     relatedSlugs: [

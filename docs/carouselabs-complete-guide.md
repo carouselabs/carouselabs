@@ -1,4 +1,4 @@
-# CarouseLabs — The Complete Guide
+hpw t# CarouseLabs — The Complete Guide
 
 > A full, feature-by-feature walkthrough of everything CarouseLabs is and does — every route, every flow, every prompt, every setting. Written from the actual codebase, not assumptions.
 
@@ -66,7 +66,7 @@ Generic AI tools help with #2 but not #1 or #3, and they don't know your voice o
 
 Key mechanics (from `lib/credits.ts`):
 - A **credit is consumed each time a NEW breakdown is generated** (either from a picked idea or the "My Own Idea" flow). Everything downstream of a breakdown — captions, images, carousel slides, regenerations — does **not** cost additional credits.
-- **Free** users get `FREE_LIFETIME_POSTS = 1` — a single lifetime breakdown, consumed atomically so it can't be double-spent.
+- **Free** users get `FREE_LIFETIME_CREDITS = 25` — a one-time lifetime pool, consumed atomically so it can't be overdrawn.
 - **Pro** users get `MONTHLY_CREDITS = 30`, spent first from the monthly allowance, then from any purchased "extra credits" (which can carry an expiry date).
 - Cached breakdowns are free — reopening an idea whose breakdown already exists never re-charges.
 
@@ -447,7 +447,7 @@ The client generates images **one slide at a time** (not in parallel, to respect
 
 ## Feature 11 — Credits System
 
-**Free plan:** `FREE_LIFETIME_POSTS = 1`. Exactly **one lifetime breakdown**, consumed atomically (concurrency-safe so it can't be double-spent). Free users can use **Caption Only** and **Image + Caption**, but **not carousels** (Pro-only, blocked at UI and API).
+**Free plan:** `FREE_LIFETIME_CREDITS = 25`. A one-time lifetime pool (not renewing), consumed atomically (concurrency-safe so it can't be overdrawn) across as many actions as it covers. Free users can use **Caption Only** and **Image + Caption**, but **not carousels** (Pro-only, blocked at UI and API).
 
 **Pro plan:** `MONTHLY_CREDITS = 30` per month. Spending order: monthly allowance first, then any valid (non-expired) **extra credits**.
 
@@ -459,7 +459,7 @@ The client generates images **one slide at a time** (not in parallel, to respect
 - **Monthly reset** (on successful renewal payment) → "Your 30 credits have been reset 🔄" (`MonthlyResetEmail`).
 - **Extra credits purchased** → "Your extra credits are ready! ✅" (`ExtraCreditsEmail`).
 
-(These monthly-allowance emails only fire for Pro users; a Free user simply hits 0 on their single lifetime post.)
+(These monthly-allowance emails only fire for Pro users; a Free user simply hits 0 once their 25-credit lifetime pool is spent.)
 
 **Where credits are shown:** Settings → Billing shows "Credits remaining" (with `/ 30 (+N extra)` for Pro), turning amber at ≤5 with an inline warning.
 
@@ -467,7 +467,7 @@ The client generates images **one slide at a time** (not in parallel, to respect
 
 ## Feature 12 — Billing
 
-**Free vs Pro comparison:** See Section 1. Free = $0, 1 lifetime post, no carousels. Pro = $24/month, 30 monthly credits, carousels + PDF export + priority support.
+**Free vs Pro comparison:** See Section 1. Free = $0, 25 lifetime credits, no carousels. Pro = $24/month, 30 monthly credits, carousels + PDF export + priority support.
 
 **Checkout flow (Lemon Squeezy):** Settings → Billing → **Upgrade to Pro** uses a `LemonSqueezyButton` (pre-filled with your email) to open Lemon Squeezy checkout. On successful purchase, the **`/api/webhooks/lemonsqueezy`** endpoint (HMAC-SHA256 signature-verified, idempotent via a `ProcessedWebhookEvent` table so redeliveries can't double-grant) handles:
 - **`subscription_created`** → set plan PRO, status ACTIVE, reset credits to 30, store LS ids + renewal date, send "Welcome to Pro! You have 30 credits ready 🚀."

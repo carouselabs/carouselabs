@@ -10,7 +10,7 @@ import { AppStickers } from "@/components/shell/AppStickers"
 import { MaintenanceBanner } from "@/components/shared/MaintenanceBanner"
 import { ProfileReviewBanner } from "@/components/shell/ProfileReviewBanner"
 import { UpgradeRequiredBanner } from "@/components/shell/UpgradeRequiredBanner"
-import { FREE_LIFETIME_POSTS } from "@/lib/credits"
+import { FREE_LIFETIME_CREDITS } from "@/lib/credits"
 
 const font = Onest({
   subsets: ["latin"],
@@ -55,7 +55,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   // auth()/headers() APIs), so the very next page load after a webhook
   // upgrades the user's plan stops rendering it — no extra invalidation needed.
   const sub = user.subscription
-  const showUpgradeBanner = sub?.plan === "FREE" && sub.creditsUsed >= FREE_LIFETIME_POSTS
+  const showUpgradeBanner = sub?.plan === "FREE" && sub.creditsUsed >= FREE_LIFETIME_CREDITS
 
   return (
     <div className={`${font.className} h-screen overflow-hidden flex flex-col bg-[#F9F7F2] text-[#0A0A0A]`}>

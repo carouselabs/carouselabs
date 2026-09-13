@@ -117,11 +117,13 @@ export async function POST(req: Request) {
     select: { id: true },
   })
   const isRegenEffective = isRegen || !!priorPost
-  const plan = user.subscription?.plan ?? "FREE"
-  // FREE users pay with their single lifetime post at the caption route, and
-  // their regenerations stay free (session-capped in the UI) — so only PRO is
-  // charged here. chargedAction lets every failure path refund exactly what
-  // was taken.
+  // Charged here for every plan, including FREE: the caption route charges
+  // only the caption component (5), and this route charges the image
+  // component (image_first 10 / image_regen 8) on top — together they make up
+  // the 15-credit image_caption price. FREE users now spend against their
+  // 25-credit lifetime pool just like PRO/GROWTH spend their monthly
+  // allowance, so there's no plan carve-out here anymore. chargedAction lets
+  // every failure path refund exactly what was taken.
   //
   // image_first is IDEMPOTENT per idea via a Redis marker: the Post only
   // exists after a fully successful run, so without the marker a retry after a
@@ -130,40 +132,38 @@ export async function POST(req: Request) {
   // repeat pre-Post call is a free retry of an already-paid first image.
   const firstChargeKey = `image_first_charged:${user.id}:${ideaId}`
   let chargedAction: "image_first" | "image_regen" | null = null
-  if (plan === "PRO" || plan === "GROWTH") {
-    if (isRegenEffective) {
-      const charge = await chargeCreditsForAction(user, "image_regen")
+  if (isRegenEffective) {
+    const charge = await chargeCreditsForAction(user, "image_regen")
+    if (!charge.ok) {
+      return NextResponse.json(
+        { error: "Insufficient credits", requiresUpgrade: charge.requiresUpgrade },
+        { status: 402 },
+      )
+    }
+    chargedAction = "image_regen"
+  } else {
+    let alreadyPaid = false
+    try {
+      alreadyPaid = (await redis.get(firstChargeKey)) !== null
+    } catch (err) {
+      console.error("[generate/image] first-charge marker read failed:", err)
+    }
+    if (!alreadyPaid) {
+      const charge = await chargeCreditsForAction(user, "image_first")
       if (!charge.ok) {
         return NextResponse.json(
           { error: "Insufficient credits", requiresUpgrade: charge.requiresUpgrade },
           { status: 402 },
         )
       }
-      chargedAction = "image_regen"
-    } else {
-      let alreadyPaid = false
+      chargedAction = "image_first"
       try {
-        alreadyPaid = (await redis.get(firstChargeKey)) !== null
+        await redis.set(firstChargeKey, 1, { ex: 86400 })
       } catch (err) {
-        console.error("[generate/image] first-charge marker read failed:", err)
+        console.error("[generate/image] first-charge marker set failed:", err)
       }
-      if (!alreadyPaid) {
-        const charge = await chargeCreditsForAction(user, "image_first")
-        if (!charge.ok) {
-          return NextResponse.json(
-            { error: "Insufficient credits", requiresUpgrade: charge.requiresUpgrade },
-            { status: 402 },
-          )
-        }
-        chargedAction = "image_first"
-        try {
-          await redis.set(firstChargeKey, 1, { ex: 86400 })
-        } catch (err) {
-          console.error("[generate/image] first-charge marker set failed:", err)
-        }
-      }
-      // alreadyPaid → free retry of an already-charged first image
     }
+    // alreadyPaid → free retry of an already-charged first image
   }
 
   // Call OpenAI gpt-image-1. gpt-image-1 returns base64 (b64_json), never a URL,

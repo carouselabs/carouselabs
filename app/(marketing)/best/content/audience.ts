@@ -24,7 +24,7 @@ export const audiencePages: BestOfPage[] = [
         strength:
           "The only tool here that takes a coaching framework described in a few rough sentences and produces both a structured, on-brand carousel and a platform-tuned caption in one generation — no separate design step required for coaches without a design background.",
         bestFor: "Coaches turning frameworks, processes, or client lessons into teachable carousel content",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Taplio",
@@ -107,7 +107,7 @@ export const audiencePages: BestOfPage[] = [
         strength:
           "The only tool here that takes a few unstructured sentences about a lesson, metric, or mistake and produces both the slide copy and the visual design together in one generation, plus reference-image style matching that keeps every carousel looking like the same account as a founder's following grows.",
         bestFor: "Founders who want to post the same day a lesson happens without a separate design step",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Contentdrips",
@@ -199,7 +199,7 @@ export const audiencePages: BestOfPage[] = [
         strength:
           "Takes a described client win, framework, or data point and produces a structured carousel plus a platform-tuned caption together, with reference-style matching that keeps a consultant's LinkedIn presence looking consistent and polished across every post without hiring a separate designer.",
         bestFor: "Consultants who want case studies and frameworks turned into content without hiring a designer",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Visme",
@@ -291,7 +291,7 @@ export const audiencePages: BestOfPage[] = [
         strength:
           "Generates platform-tuned captions across LinkedIn, X, Instagram, and five other platforms from a single idea, alongside a fully designed carousel when the update warrants a multi-slide format — covering both the writing and visual-design half of a founder's personal brand without separate tools for each.",
         bestFor: "Founders who need one tool covering both writing and visual content across multiple platforms",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Taplio",
@@ -383,7 +383,7 @@ export const audiencePages: BestOfPage[] = [
         strength:
           "Takes a description of a service, offer, or lesson and produces both the carousel design and caption together in one pass, with reference-style matching that keeps every post looking like a professional, consistent one-person brand even without design experience.",
         bestFor: "Solopreneurs who need professional-looking carousels without a design skill set or a team",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "PostNitro",
@@ -475,7 +475,7 @@ export const audiencePages: BestOfPage[] = [
         strength:
           "Upload a past post from a specific client and CarouseLabs extracts that client's color palette, typography, and illustration style to apply to new content without copying it literally — letting one team produce visually distinct content per client from the same underlying workflow instead of rebuilding a template for each account by hand.",
         bestFor: "Agencies that need each client's feed to stay visually distinct without manually rebuilding templates",
-        pricing: "Free (1 lifetime post), then from $24.99/mo, GROWTH plan from $45.99/mo for higher volume",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo, GROWTH plan from $45.99/mo for higher volume",
       },
       {
         name: "Buffer",
@@ -567,7 +567,7 @@ export const audiencePages: BestOfPage[] = [
         strength:
           "Upload one reference post per client and CarouseLabs extracts that client's color palette, typography, and illustration style to apply automatically to every new carousel produced for them, plus writes the matching caption in the same pass — removing the manual re-templating step that otherwise slows down high-volume agency production.",
         bestFor: "Agencies producing a high volume of carousels who need brand-kit consistency without manual re-templating",
-        pricing: "Free (1 lifetime post), then from $24.99/mo, GROWTH plan from $45.99/mo built for higher-volume output",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo, GROWTH plan from $45.99/mo built for higher-volume output",
       },
       {
         name: "Contentdrips",
@@ -659,7 +659,7 @@ export const audiencePages: BestOfPage[] = [
         strength:
           "Generates a platform-tuned caption and a fully designed carousel from one idea, which helps reps post credible, expertise-signaling content quickly without design skills — worth being direct that CarouseLabs is a content tool only, with no CRM, lead-tracking, or pipeline features, so it covers the content half of social selling, not the relationship-tracking half.",
         bestFor: "Sales reps who need to produce credible content quickly without any lead-tracking needs",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Taplio",

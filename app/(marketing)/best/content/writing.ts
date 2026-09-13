@@ -23,7 +23,7 @@ export const writingPages: BestOfPage[] = [
         strength:
           "The only tool here that adjusts tone, length, and hashtag conventions for 8 distinct platforms out of the box — LinkedIn, Instagram, X, Facebook, Threads, TikTok, YouTube, and Pinterest each get real platform-specific rules rather than one generic caption reformatted six ways — and saved writing-voice guidelines apply automatically to every future caption without re-explaining your tone.",
         bestFor: "Creators who post across multiple platforms and want each caption to actually match that platform's norms",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Taplio",
@@ -116,7 +116,7 @@ export const writingPages: BestOfPage[] = [
         strength:
           "Generates LinkedIn posts with the platform's actual conventions baked in — 3,000-character-aware pacing and professional tone — and, unlike pure text tools, can take the same idea straight into a designed carousel or AI image in the same pass, which matters given how much LinkedIn's algorithm now favors visual posts.",
         bestFor: "LinkedIn creators who want text and visual post options from one idea without switching tools",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Taplio",
@@ -200,7 +200,7 @@ export const writingPages: BestOfPage[] = [
         strength:
           "The most complete single-workflow tool here: one idea produces a LinkedIn-tuned caption, a fully designed multi-slide carousel, or a standalone AI image, with saved voice guidelines and reference-image style matching keeping every output on-brand without exporting into a separate design tool.",
         bestFor: "Creators who want writing and visual design handled together for every LinkedIn post",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Taplio",
@@ -293,7 +293,7 @@ export const writingPages: BestOfPage[] = [
         strength:
           "Built specifically for social platforms rather than adapted from general copywriting — 8 platforms each get distinct tone, length, and hashtag handling automatically, and the same idea can also become a matching AI image or carousel, which pure writing tools can't produce.",
         bestFor: "Social-first creators who want platform-correct writing and matching visuals from one tool",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Jasper",
@@ -377,7 +377,7 @@ export const writingPages: BestOfPage[] = [
         strength:
           "Instagram gets its own dedicated caption profile — casual, visual-first tone with a 2,200-character ceiling and a 15-to-30 hashtag range built in — and the same idea can generate a matching 4:5 or 1:1 AI image in the same pass, so the caption and visual are never written separately.",
         bestFor: "Instagram creators who want caption tone and hashtags handled correctly by default",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Canva",
@@ -461,7 +461,7 @@ export const writingPages: BestOfPage[] = [
         strength:
           "Generates a full, visually consistent multi-slide sequence — copy and design together in one AI pass — that can be exported and posted as sequential image attachments on X; it's not a native X carousel feature, but the design consistency across slides holds up well when viewed as a connected set.",
         bestFor: "Creators who want a consistent, AI-designed image sequence to post as an X thread or multi-image tweet",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Canva",
@@ -545,7 +545,7 @@ export const writingPages: BestOfPage[] = [
         strength:
           "The \"Work on Own Idea\" feature takes notes or text you paste in directly and expands it into a researched, platform-tuned piece — for any of 8 platforms — including a matching carousel or image design, not just reformatted text; there's no automatic link-scraping involved, so you control exactly what source material goes in.",
         bestFor: "Creators who want to turn existing notes or drafts into multiple platform-ready posts, text and visual",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Jasper",
@@ -629,7 +629,7 @@ export const writingPages: BestOfPage[] = [
         strength:
           "Generates images in two social-ready sizes — 4:5 portrait (1080x1350px) and 1:1 square (1080x1080px) — and can match a new image's color palette, typography, and illustration style to a past post you upload as reference, without copying its literal content, in the same AI pass that can also produce the caption.",
         bestFor: "Creators who want on-brand, correctly-sized images generated alongside their caption",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Canva",

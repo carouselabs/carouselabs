@@ -25,7 +25,7 @@ export const carouselPages: BestOfPage[] = [
         strength:
           "The only tool here that writes the caption and designs every slide's copy and visuals from a single idea in one AI pass, including matching a new carousel's color palette and typography to a past post you upload as a reference.",
         bestFor: "Creators who want a complete, on-brand carousel without a manual design step afterward",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Contentdrips",
@@ -89,7 +89,7 @@ export const carouselPages: BestOfPage[] = [
       {
         question: "Is a free tool actually usable, or just a limited trial?",
         answer:
-          "It depends on the tool. CarouseLabs' free plan gives you one complete, full-quality carousel with no watermark or feature lock, so you can judge real output before paying anything. Some other free tiers listed here cap you at a small number of exports or lower-resolution downloads before requiring an upgrade — worth checking directly if a free tier is the deciding factor for you.",
+          "It depends on the tool. CarouseLabs' free plan gives you 25 lifetime credits to spend on complete, full-quality captions or AI images with no watermark or feature lock, so you can judge real output before paying anything (full carousel generation itself is a paid-plan feature). Some other free tiers listed here cap you at a small number of exports or lower-resolution downloads before requiring an upgrade — worth checking directly if a free tier is the deciding factor for you.",
       },
     ],
     relatedSlugs: [
@@ -118,7 +118,7 @@ export const carouselPages: BestOfPage[] = [
         strength:
           "The only tool here where the free carousel is genuinely complete — full caption, every slide, consistent design — with no watermark and no feature lock, rather than a capped or degraded preview of the paid product.",
         bestFor: "Anyone who wants to judge real carousel quality before paying anything at all",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Canva",
@@ -158,12 +158,12 @@ export const carouselPages: BestOfPage[] = [
       },
     ],
     verdict:
-      "If the goal is judging real output quality before spending anything, CarouseLabs' free tier is the most direct path — one full, unwatermarked carousel, not a limited preview, which means you're evaluating the actual product rather than a deliberately hobbled version of it. If you want an ongoing free plan you can keep using indefinitely rather than a one-time trial, Canva's free tier is the most generous long-term option, though it requires you to do the design work by hand every time rather than having AI generate the structure and copy for you. Gamma, Contentdrips, and PostNitro are worth trying specifically if you want to compare editor interfaces and template variety before paying for any of them, since their free tiers are more about letting you test the software than giving you a genuinely finished, publishable result. The practical distinction that matters most here is between tools whose free tier is capped by usage limits and tools whose free tier is capped by output quality — the first kind still lets you see what you're actually paying for, and the second kind doesn't.",
+      "If the goal is judging real output quality before spending anything, CarouseLabs' free tier is a direct path — 25 lifetime credits to spend on full, unwatermarked captions or AI images, not a limited preview, which means you're evaluating the actual product rather than a deliberately hobbled version of it (full carousel generation itself is reserved for paid plans). If you want an ongoing free plan you can keep using indefinitely rather than a one-time trial, Canva's free tier is the most generous long-term option, though it requires you to do the design work by hand every time rather than having AI generate the structure and copy for you. Gamma, Contentdrips, and PostNitro are worth trying specifically if you want to compare editor interfaces and template variety before paying for any of them, since their free tiers are more about letting you test the software than giving you a genuinely finished, publishable result. The practical distinction that matters most here is between tools whose free tier is capped by usage limits and tools whose free tier is capped by output quality — the first kind still lets you see what you're actually paying for, and the second kind doesn't.",
     faq: [
       {
         question: "Is CarouseLabs' free plan actually free, or is there a hidden catch?",
         answer:
-          "It's a genuinely free first post — no credit card required to sign up, and the output is a complete, unwatermarked carousel or caption, not a limited preview. The plan is one lifetime post; continued use afterward requires a paid plan, which is stated plainly rather than discovered as a surprise mid-export.",
+          "It's a genuinely free tier — no credit card required to sign up, and every FREE-plan output (caption, or caption plus an AI image) is the complete, unwatermarked result, not a limited preview. FREE comes with 25 lifetime credits usable across a few caption or image posts (not a one-shot trial), though full carousel generation is a paid-plan feature; that's stated plainly rather than discovered as a surprise mid-export.",
       },
       {
         question: "Which free tier is best if I want to keep using a tool for free long-term?",
@@ -202,7 +202,7 @@ export const carouselPages: BestOfPage[] = [
         strength:
           "Generates the full slide structure, slide-by-slide copy, and visual design from a single idea in one AI pass — including 30+ structural templates across 12 categories or a fully AI-decided structure — so there's no separate manual layout step before publishing.",
         bestFor: "Anyone who wants to type an idea once and get a genuinely finished, postable carousel",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Supergrow",
@@ -266,7 +266,7 @@ export const carouselPages: BestOfPage[] = [
       {
         question: "Is a free generator plan enough to judge quality before paying?",
         answer:
-          "It depends on what the free tier actually includes. CarouseLabs' free plan gives you one complete, unwatermarked carousel so you see full-quality output before deciding, while some other free tiers cap resolution or feature access in ways that make it harder to judge the real product from the free version alone.",
+          "It depends on what the free tier actually includes. CarouseLabs' free plan gives you 25 lifetime credits to spend on complete, unwatermarked captions or AI images so you see full-quality output before deciding, while some other free tiers cap resolution or feature access in ways that make it harder to judge the real product from the free version alone.",
       },
     ],
     relatedSlugs: [
@@ -295,7 +295,7 @@ export const carouselPages: BestOfPage[] = [
         strength:
           "Outputs carousels in both 4:5 portrait (1080x1350px) and 1:1 square (1080x1080px) — Instagram's actual native formats — and can match a new carousel's color palette and typography to a past post you upload, keeping a feed visually consistent slide to slide and post to post.",
         bestFor: "Creators who want feed-consistent, Instagram-native carousels without manual resizing or style-matching",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Canva",
@@ -393,7 +393,7 @@ export const carouselPages: BestOfPage[] = [
         strength:
           "Generates captions tuned to platform-specific tone, length, and hashtag conventions across 8 platforms — LinkedIn, Instagram, X, Facebook, Threads, TikTok, YouTube, and Pinterest — plus full carousel design in 4:5 or 1:1, so the same idea doesn't have to be manually reworked for each platform.",
         bestFor: "Creators and brands posting the same idea across multiple platforms",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Buffer",
@@ -491,7 +491,7 @@ export const carouselPages: BestOfPage[] = [
         strength:
           "Upload a past post and CarouseLabs extracts its color palette, typography, and illustration style, then applies that identity to new carousels automatically — without copying literal content — so a feed stays visually consistent without manually reselecting brand settings each time.",
         bestFor: "Creators and small teams who want automatic brand consistency without manual setup",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Canva",
@@ -589,7 +589,7 @@ export const carouselPages: BestOfPage[] = [
         strength:
           "The only tool here where a single AI pass covers all three stages — writing the slide copy, deciding the carousel's structure from 30+ templates across 12 categories (or a fully AI-decided structure), and designing the visuals — rather than automating one stage and leaving the rest manual.",
         bestFor: "Users who want the AI to genuinely handle the whole carousel, not just one part of it",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Gamma",
@@ -682,7 +682,7 @@ export const carouselPages: BestOfPage[] = [
         strength:
           "The Work on Own Idea feature lets you paste your blog post's key points or text directly in, and the AI expands that into a researched, structured deep dive before generating both the carousel copy and design — a genuine repurposing workflow, though it works from text you paste in rather than a URL it fetches automatically.",
         bestFor: "Writers turning existing long-form content into a structured, designed carousel",
-        pricing: "Free (1 lifetime post), then from $24.99/mo",
+        pricing: "Free (25 lifetime credits), then from $24.99/mo",
       },
       {
         name: "Jasper",

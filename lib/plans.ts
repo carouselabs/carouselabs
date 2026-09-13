@@ -31,11 +31,11 @@ export const FREE_PLAN: PlanDef = {
   name: "Free",
   price: 0,
   priceSuffix: "forever",
-  credits: "1 lifetime post",
+  credits: "25 lifetime credits",
   theme: "light",
   ctaLabel: "Get Started Free",
   features: [
-    { label: "1 lifetime post" },
+    { label: "25 lifetime credits" },
     { label: "Caption Only" },
     { label: "Image + Caption" },
     { label: "AI-powered captions" },

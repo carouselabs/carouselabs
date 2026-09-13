@@ -156,25 +156,30 @@ async function main() {
 
   section("6. availableCredits / extraCreditsValid — REAL functions imported from lib/credits.ts")
   check(
-    "FREE user, 0 used → 1 available",
+    "FREE user, 0 used → 25 available",
     availableCredits({ plan: "FREE", creditsUsed: 0, creditsTotal: 0, extraCredits: 0, extraCreditsExpiry: null }),
-    1,
+    25,
   )
   check(
-    "FREE user, 1 used → 0 available (lifetime post spent)",
-    availableCredits({ plan: "FREE", creditsUsed: 1, creditsTotal: 0, extraCredits: 0, extraCreditsExpiry: null }),
+    "FREE user, 10 used → 15 available (partway through lifetime pool)",
+    availableCredits({ plan: "FREE", creditsUsed: 10, creditsTotal: 0, extraCredits: 0, extraCreditsExpiry: null }),
+    15,
+  )
+  check(
+    "FREE user, 25 used → 0 available (lifetime pool spent)",
+    availableCredits({ plan: "FREE", creditsUsed: 25, creditsTotal: 0, extraCredits: 0, extraCreditsExpiry: null }),
     0,
   )
   check(
-    "FREE user, lifetime post spent + 200 admin-granted extraCredits → 200 available",
-    availableCredits({ plan: "FREE", creditsUsed: 1, creditsTotal: 0, extraCredits: 200, extraCreditsExpiry: null }),
+    "FREE user, lifetime pool spent + 200 admin-granted extraCredits → 200 available",
+    availableCredits({ plan: "FREE", creditsUsed: 25, creditsTotal: 0, extraCredits: 200, extraCreditsExpiry: null }),
     200,
   )
   check(
-    "FREE user, lifetime post spent + EXPIRED extraCredits → 0 available",
+    "FREE user, lifetime pool spent + EXPIRED extraCredits → 0 available",
     availableCredits({
       plan: "FREE",
-      creditsUsed: 1,
+      creditsUsed: 25,
       creditsTotal: 0,
       extraCredits: 200,
       extraCreditsExpiry: new Date(Date.now() - 86400000),

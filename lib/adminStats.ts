@@ -34,8 +34,8 @@ export async function getOverviewStats() {
     db.post.count(),
     db.post.count({ where: { format: "CAROUSEL" } }),
     db.post.count({ where: { format: "SINGLE_IMAGE" } }),
-    // FREE rows track lifetime posts (0/1) in creditsUsed, so only paid-plan
-    // rows represent real weighted credits.
+    // FREE rows track their 25-credit lifetime pool in creditsUsed, so only
+    // paid-plan rows represent real monthly weighted credits.
     db.subscription.aggregate({
       where: { plan: { in: ["PRO", "GROWTH"] } },
       _sum: { creditsUsed: true },

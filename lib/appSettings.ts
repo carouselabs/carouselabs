@@ -14,7 +14,7 @@ export type AppSettings = {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   planPrice: 24.99,
-  freePostLimit: 1,
+  freePostLimit: 25,
   proCredits: 1000,
   freeCarouselEnabled: false,
   linkedinPostingEnabled: true,

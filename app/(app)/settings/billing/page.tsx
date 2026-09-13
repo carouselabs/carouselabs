@@ -3,7 +3,7 @@ import type { ReactNode } from "react"
 import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 import { db } from "@/lib/db"
-import { availableCredits, FREE_LIFETIME_POSTS, MONTHLY_CREDITS } from "@/lib/credits"
+import { availableCredits, FREE_LIFETIME_CREDITS, MONTHLY_CREDITS } from "@/lib/credits"
 import { SettingsTabs } from "@/components/settings/SettingsTabs"
 import { LemonSqueezyButton } from "@/components/billing/LemonSqueezyButton"
 import { CancelSubscriptionButton } from "@/components/billing/CancelSubscriptionButton"
@@ -112,9 +112,9 @@ export default async function BillingPage() {
       })
     : null
 
-  // Free plan has no real "credits" concept — its progress bar tracks the
-  // single lifetime post instead of a monthly allowance.
-  const effectiveTotal = isPaid ? creditSub.creditsTotal : FREE_LIFETIME_POSTS
+  // Free plan has no monthly allowance — its progress bar tracks the
+  // 25-credit lifetime pool instead.
+  const effectiveTotal = isPaid ? creditSub.creditsTotal : FREE_LIFETIME_CREDITS
   const percentUsed = effectiveTotal > 0 ? (creditSub.creditsUsed / effectiveTotal) * 100 : 0
 
   const growthCheckoutUrl = process.env.NEXT_PUBLIC_LEMONSQUEEZY_GROWTH_CHECKOUT_URL

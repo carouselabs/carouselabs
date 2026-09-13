@@ -71,7 +71,7 @@ export function Topbar({ isEmployeeSubdomain = false }: { isEmployeeSubdomain?: 
                   )
                 ) : (
                   <span className={left === 0 ? "text-[#D97706]" : undefined}>
-                    {left} / {limit} free post{limit === 1 ? "" : "s"} left
+                    {left} / {limit} free credit{limit === 1 ? "" : "s"} left
                   </span>
                 )}
               </span>

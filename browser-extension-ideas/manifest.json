@@ -3,6 +3,11 @@
   "name": "CarouseLabs Ideas Board",
   "version": "1.0.0",
   "description": "Right-click any image, link, or selected text to save it to your CarouseLabs Ideas Board.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "permissions": ["contextMenus", "storage"],
   "host_permissions": [
     "https://carouselabs.com/*",
@@ -13,7 +18,12 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "CarouseLabs Ideas Board"
+    "default_title": "CarouseLabs Ideas Board",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
   "options_page": "options.html"
 }

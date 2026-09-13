@@ -148,7 +148,39 @@ export default function PrivacyPage() {
         </p>
       </LegalSection>
 
-      <LegalSection heading="9. Contact">
+      <LegalSection heading="9. Browser Extension (CarouseLabs Ideas Board)">
+        <p>If you install our Chrome browser extension, additional data practices apply:</p>
+        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-[#1A1A1A]">
+          <li>
+            <span className="text-[#0A0A0A] font-medium">Extension API Key</span> — the extension
+            stores a unique authentication key (generated from your CarouseLabs account settings)
+            locally in your browser, used solely to identify your account when saving content.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">Captured content</span> — when you right-click
+            and choose to save an image, link, or selected text from a webpage, that specific content
+            and its source URL are sent to CarouseLabs and stored in your Ideas Board, associated with
+            your account.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">No automatic browsing tracking</span> — the
+            extension does not monitor your general browsing activity, history, or any page content
+            beyond what you explicitly choose to save via the right-click menu.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">No third-party sharing</span> — captured
+            content is used solely to populate your personal Ideas Board within CarouseLabs and is
+            never sold or shared with third parties.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">Your control</span> — you can delete any saved
+            item from your Ideas Board at any time, and revoke or regenerate your Extension API Key from
+            your account settings, which immediately disconnects the extension from your account.
+          </li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection heading="10. Contact">
         <p>
           For privacy questions, requests, or concerns, email{" "}
           <a href="mailto:support@carouselabs.com" className="text-[#1A1A1A] hover:underline">

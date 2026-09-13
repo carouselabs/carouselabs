@@ -22,6 +22,7 @@ export async function POST(req: Request) {
   let platformCaptions: Record<string, string> | undefined
   let imageUrls: string[]
   let platforms: string[]
+  let tagIds: string[]
 
   try {
     const body = await req.json()
@@ -57,12 +58,25 @@ export async function POST(req: Request) {
       }
       if (Object.keys(cleaned).length > 0) platformCaptions = cleaned
     }
+
+    tagIds = Array.isArray(body.tagIds)
+      ? body.tagIds.filter((t: unknown): t is string => typeof t === "string")
+      : []
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Invalid request body" },
       { status: 400 },
     )
   }
+
+  // Only ever connect tags the requesting user actually owns — a tagId for
+  // someone else's tag (or a typo'd id) is silently dropped rather than
+  // erroring, same tolerance as an empty tagIds array.
+  const ownedTagIds = tagIds.length
+    ? (await db.postTag.findMany({ where: { id: { in: tagIds }, userId: user.id }, select: { id: true } })).map(
+        (t) => t.id,
+      )
+    : []
 
   const post = await db.post.create({
     data: {
@@ -78,6 +92,7 @@ export async function POST(req: Request) {
       // `platforms` is stored too so the picker/history views can show which
       // platforms this post was authored for even before it's scheduled.
       metadata: { platforms, ...(platformCaptions ? { platformCaptions } : {}) } as unknown as Prisma.InputJsonValue,
+      ...(ownedTagIds.length ? { tags: { connect: ownedTagIds.map((id) => ({ id })) } } : {}),
     },
   })
 

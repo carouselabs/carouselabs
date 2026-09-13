@@ -11,12 +11,20 @@
 //      queued ScheduledPost when that moment arrives.
 //   2. Publish every due "queued" ScheduledPost (including ones jobs #0/#1
 //      just created) via the same LinkedIn logic /api/linkedin/post uses,
-//      with up to 3 total attempts 5 min apart and a failure email once
-//      exhausted.
+//      with up to 3 total attempts 5 min apart, a success email, and a
+//      failure email once exhausted — both gated behind Settings > Account >
+//      Notifications (Profile.notifyPostPublished / notifyPostFailed).
+//
+// NOTE: Profile.notifyWeeklySummary is a stored preference (Settings >
+// Account) but nothing sends that email yet — there's no existing "weekly
+// referral/performance summary" job for regular users to gate (only an
+// in-app referral reminder banner and an unrelated intern-specific weekly
+// digest). Building that email is its own feature; this toggle is just
+// ready for it.
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { postToLinkedIn } from "@/lib/linkedin"
-import { sendScheduledPostFailedEmail } from "@/lib/email"
+import { sendScheduledPostFailedEmail, sendScheduledPostPublishedEmail } from "@/lib/email"
 import { isFunctionalPlatform, type Platform } from "@/lib/platforms"
 
 export const maxDuration = 300
@@ -221,6 +229,13 @@ export async function GET(req: Request) {
         }),
       ])
       published++
+      // Settings > Account > Notifications — default on, so this doesn't
+      // change behavior for anyone who hasn't touched the toggle.
+      if (user.email && (user.profile?.notifyPostPublished ?? true)) {
+        await safeEmail(() =>
+          sendScheduledPostPublishedEmail(user.email, name, post.title, scheduled.platform, postUrl),
+        )
+      }
     } catch (err) {
       const reason = err instanceof Error ? err.message : "Failed to publish"
       const nextAttempt = scheduled.retryCount + 1
@@ -242,7 +257,7 @@ export async function GET(req: Request) {
           data: { status: "failed", retryCount: nextAttempt, failureReason: reason },
         })
         failed++
-        if (user.email) {
+        if (user.email && (user.profile?.notifyPostFailed ?? true)) {
           await safeEmail(() =>
             sendScheduledPostFailedEmail(user.email, name, post.title, scheduled.platform, reason),
           )

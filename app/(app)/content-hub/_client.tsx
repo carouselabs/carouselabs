@@ -23,12 +23,25 @@ import {
   Play,
   ListOrdered,
   Lightbulb,
+  LibraryBig,
+  Tag,
+  Copy,
+  UploadCloud,
 } from "lucide-react"
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser"
 import { PLATFORM_META, PLATFORM_ORDER, type Platform } from "@/lib/platforms"
 import { PlatformBadge, PlatformIcon } from "@/components/content-hub/platforms"
 import { CustomPostComposer } from "@/components/content-hub/CustomPostComposer"
+import { PlatformPreview } from "@/components/content-hub/PlatformPreview"
+import { BulkUploadPanel } from "@/components/content-hub/BulkUploadPanel"
 import { QueueSettingsPanel, type QueueSlotSummary } from "@/components/content-hub/QueueSettingsPanel"
+import {
+  LibraryPanel,
+  type PostTemplateSummary,
+  type PostTagSummary,
+  type HashtagGroupSummary,
+  type ShortLinkSummary,
+} from "@/components/content-hub/LibraryPanel"
 
 // ── Shared shapes (mirror the API routes) ──────────────────────────
 type ScheduledStatus =
@@ -47,6 +60,9 @@ interface PostSummary {
   caption: string | null
   format: PostFormat
   imageUrls: string[]
+  // Only populated by /api/content-hub/scheduled (not the plain "pick
+  // content" picker) — see Step 3's tag display.
+  tags?: { id: string; name: string; color: string }[]
 }
 
 interface ScheduledItem {
@@ -101,6 +117,8 @@ type PanelState =
   | { mode: "day"; date: Date }
   | { mode: "recurring" }
   | { mode: "queue" }
+  | { mode: "library" }
+  | { mode: "bulk" }
   | null
 
 const FORMAT_LABELS: Record<PostFormat, string> = {
@@ -243,12 +261,16 @@ function ScheduledRow({
   item,
   onReschedule,
   onRemove,
+  onDuplicate,
   isRemoving = false,
+  isDuplicating = false,
 }: {
   item: ScheduledItem
   onReschedule: (item: ScheduledItem) => void
   onRemove: (item: ScheduledItem) => void
+  onDuplicate: (item: ScheduledItem) => void
   isRemoving?: boolean
+  isDuplicating?: boolean
 }) {
   return (
     <div className="group flex items-center gap-3 p-3 rounded-xl border border-[#E5E3DE] bg-white hover:border-[rgba(124,58,237,0.35)] transition-colors">
@@ -268,6 +290,19 @@ function ScheduledRow({
         <p className="text-[11px] text-[#9CA3AF]">
           {formatDateTime(item.scheduledFor)} · {FORMAT_LABELS[item.post.format]}
         </p>
+        {item.post.tags && item.post.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-0.5">
+            {item.post.tags.map((t) => (
+              <span
+                key={t.id}
+                className="px-1.5 py-0.5 rounded-full text-[9.5px] font-medium text-white"
+                style={{ backgroundColor: t.color }}
+              >
+                {t.name}
+              </span>
+            ))}
+          </div>
+        )}
         {item.status === "failed" && item.failureReason && (
           <p className="text-[11px] text-[rgba(239,68,68,0.9)]">{item.failureReason}</p>
         )}
@@ -278,7 +313,7 @@ function ScheduledRow({
         )}
       </div>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        {item.status === "published" && item.publishedUrl ? (
+        {item.status === "published" && item.publishedUrl && (
           <a
             href={item.publishedUrl}
             target="_blank"
@@ -288,30 +323,37 @@ function ScheduledRow({
           >
             <ExternalLink size={13} strokeWidth={2} />
           </a>
-        ) : (
-          <>
-            {(item.status === "queued" || item.status === "failed" || item.status === "draft") && (
-              <button
-                onClick={() => onReschedule(item)}
-                className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F4F2EC] transition-colors"
-                title={item.status === "draft" ? "Schedule" : "Reschedule"}
-              >
-                <Pencil size={13} strokeWidth={2} />
-              </button>
+        )}
+        {(item.status === "queued" || item.status === "failed" || item.status === "draft") && (
+          <button
+            onClick={() => onReschedule(item)}
+            className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F4F2EC] transition-colors"
+            title={item.status === "draft" ? "Schedule" : "Reschedule"}
+          >
+            <Pencil size={13} strokeWidth={2} />
+          </button>
+        )}
+        <button
+          onClick={() => onDuplicate(item)}
+          disabled={isDuplicating}
+          className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F4F2EC] transition-colors disabled:opacity-50"
+          title="Duplicate"
+        >
+          {isDuplicating ? <Loader2 size={13} className="animate-spin" /> : <Copy size={13} strokeWidth={2} />}
+        </button>
+        {!(item.status === "published" && item.publishedUrl) && (
+          <button
+            onClick={() => onRemove(item)}
+            disabled={isRemoving}
+            className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.08)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Remove"
+          >
+            {isRemoving ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Trash2 size={13} strokeWidth={2} />
             )}
-            <button
-              onClick={() => onRemove(item)}
-              disabled={isRemoving}
-              className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.08)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Remove"
-            >
-              {isRemoving ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : (
-                <Trash2 size={13} strokeWidth={2} />
-              )}
-            </button>
-          </>
+          </button>
         )}
       </div>
     </div>
@@ -323,13 +365,17 @@ function GroupSection({
   items,
   onReschedule,
   onRemove,
+  onDuplicate,
   removingId,
+  duplicatingId,
 }: {
   title: string
   items: ScheduledItem[]
   onReschedule: (item: ScheduledItem) => void
   onRemove: (item: ScheduledItem) => void
+  onDuplicate: (item: ScheduledItem) => void
   removingId?: string | null
+  duplicatingId?: string | null
 }) {
   if (items.length === 0) return null
   return (
@@ -342,7 +388,9 @@ function GroupSection({
             item={item}
             onReschedule={onReschedule}
             onRemove={onRemove}
+            onDuplicate={onDuplicate}
             isRemoving={removingId === item.id}
+            isDuplicating={duplicatingId === item.id}
           />
         ))}
       </div>
@@ -620,6 +668,7 @@ export function ContentHubClient({
   // Which scheduled item's Remove is currently in flight — a real DELETE
   // (not optimistic), so the clicked row/button needs its own loading state.
   const [removingId, setRemovingId] = useState<string | null>(null)
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
   const [panelError, setPanelError] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState<SuggestionSlot[]>([])
 
@@ -646,11 +695,31 @@ export function ContentHubClient({
   // Draft, so it needs its own in-flight flag (mirrors savingAsDraft).
   const [addingToQueue, setAddingToQueue] = useState(false)
 
+  // Library (Templates / Tags / Hashtag Groups) — loaded once and shared
+  // between the management panel and the composer/Step-3 pickers.
+  const [templates, setTemplates] = useState<PostTemplateSummary[]>([])
+  const [tags, setTags] = useState<PostTagSummary[]>([])
+  const [hashtagGroups, setHashtagGroups] = useState<HashtagGroupSummary[]>([])
+  const [shortLinks, setShortLinks] = useState<ShortLinkSummary[]>([])
+  // Step 3 — tags to assign to the post being scheduled (shared by both the
+  // pick-existing and custom flows).
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
+  const [tagFilter, setTagFilter] = useState<string | null>(null)
+  // Step 3 preview — which platform's tab is active, when more than one is
+  // selected (custom flow). Derived-with-override rather than reset-on-open
+  // state: falls back to the first selected platform whenever the override
+  // doesn't match one of the currently selected platforms.
+  const [previewPlatformOverride, setPreviewPlatformOverride] = useState<Platform | null>(null)
+
   useEffect(() => {
     void refreshScheduled()
     void loadSuggestion()
     void loadRecurringSlots()
     void loadQueueSlots()
+    void loadTemplates()
+    void loadTags()
+    void loadHashtagGroups()
+    void loadShortLinks()
     // Deep-link from a generation result's "Schedule for Later" button —
     // open straight into the Add panel with that post pre-selected.
     if (initialPostId) void openNewPanelForPost(initialPostId)
@@ -706,6 +775,163 @@ export function ContentHubClient({
     } catch {
       // best-effort — "Add to Queue" just surfaces its own error on click
     }
+  }
+
+  // ── Library: Templates / Tags / Hashtag Groups ───────────────────────
+  async function loadTemplates() {
+    try {
+      const res = await fetch("/api/post-templates")
+      const data = await res.json()
+      if (res.ok) setTemplates((data as { templates: PostTemplateSummary[] }).templates)
+    } catch {
+      // best-effort
+    }
+  }
+
+  async function loadTags() {
+    try {
+      const res = await fetch("/api/post-tags")
+      const data = await res.json()
+      if (res.ok) setTags((data as { tags: PostTagSummary[] }).tags)
+    } catch {
+      // best-effort
+    }
+  }
+
+  async function loadHashtagGroups() {
+    try {
+      const res = await fetch("/api/hashtag-groups")
+      const data = await res.json()
+      if (res.ok) setHashtagGroups((data as { groups: HashtagGroupSummary[] }).groups)
+    } catch {
+      // best-effort
+    }
+  }
+
+  async function createTemplate(name: string, caption: string) {
+    const res = await fetch("/api/post-templates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, caption }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to save template")
+    setTemplates((prev) => [(data as { template: PostTemplateSummary }).template, ...prev])
+  }
+
+  async function deleteTemplate(id: string) {
+    const snapshot = templates
+    setTemplates((prev) => prev.filter((t) => t.id !== id))
+    try {
+      const res = await fetch(`/api/post-templates/${id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error()
+    } catch {
+      setTemplates(snapshot)
+    }
+  }
+
+  async function createTag(name: string, color: string) {
+    const res = await fetch("/api/post-tags", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, color }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to create tag")
+    setTags((prev) => [...prev, (data as { tag: PostTagSummary }).tag].sort((a, b) => a.name.localeCompare(b.name)))
+  }
+
+  async function deleteTag(id: string) {
+    const snapshot = tags
+    setTags((prev) => prev.filter((t) => t.id !== id))
+    setSelectedTagIds((prev) => prev.filter((t) => t !== id))
+    if (tagFilter === id) setTagFilter(null)
+    try {
+      const res = await fetch(`/api/post-tags/${id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error()
+    } catch {
+      setTags(snapshot)
+    }
+  }
+
+  async function createHashtagGroup(name: string, hashtags: string[]) {
+    const res = await fetch("/api/hashtag-groups", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, hashtags }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to save group")
+    setHashtagGroups((prev) =>
+      [...prev, (data as { group: HashtagGroupSummary }).group].sort((a, b) => a.name.localeCompare(b.name)),
+    )
+  }
+
+  async function deleteHashtagGroup(id: string) {
+    const snapshot = hashtagGroups
+    setHashtagGroups((prev) => prev.filter((g) => g.id !== id))
+    try {
+      const res = await fetch(`/api/hashtag-groups/${id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error()
+    } catch {
+      setHashtagGroups(snapshot)
+    }
+  }
+
+  async function loadShortLinks() {
+    try {
+      const res = await fetch("/api/short-links")
+      const data = await res.json()
+      if (res.ok) setShortLinks((data as { links: ShortLinkSummary[] }).links)
+    } catch {
+      // best-effort
+    }
+  }
+
+  async function createShortLink(
+    targetUrl: string,
+    utm: { source?: string; medium?: string; campaign?: string },
+  ): Promise<ShortLinkSummary> {
+    const res = await fetch("/api/short-links", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetUrl, utmSource: utm.source, utmMedium: utm.medium, utmCampaign: utm.campaign }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to shorten link")
+    const link = (data as { link: ShortLinkSummary }).link
+    setShortLinks((prev) => [link, ...prev])
+    return link
+  }
+
+  async function deleteShortLink(id: string) {
+    const snapshot = shortLinks
+    setShortLinks((prev) => prev.filter((l) => l.id !== id))
+    try {
+      const res = await fetch(`/api/short-links/${id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error()
+    } catch {
+      setShortLinks(snapshot)
+    }
+  }
+
+  // Used by the Custom Post composer's "Insert Short Link" / paste-auto-
+  // shorten — creates the ShortLink then returns the full carouselabs.com/l/
+  // URL to insert into the caption.
+  async function shortenUrlForCaption(
+    url: string,
+    utm: { source?: string; medium?: string; campaign?: string },
+  ): Promise<string> {
+    const link = await createShortLink(url, utm)
+    return `${window.location.origin}/l/${link.slug}`
+  }
+
+  function openLibraryPanel() {
+    setPanel({ mode: "library" })
+  }
+
+  function toggleSelectedTag(id: string) {
+    setSelectedTagIds((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]))
   }
 
   // ── Recurring slots settings ────────────────────────────────────
@@ -898,6 +1124,20 @@ export function ContentHubClient({
     }
   }
 
+  async function pauseAllQueues(): Promise<number> {
+    const res = await fetch("/api/content-hub/queue/pause-all", { method: "POST" })
+    const data = await res.json()
+    await loadQueueSlots()
+    return res.ok ? ((data as { paused: number }).paused ?? 0) : 0
+  }
+
+  async function shuffleQueue(): Promise<number> {
+    const res = await fetch("/api/content-hub/queue/shuffle", { method: "POST" })
+    const data = await res.json()
+    await refreshScheduled()
+    return res.ok ? ((data as { shuffled: number }).shuffled ?? 0) : 0
+  }
+
   // ── Calendar navigation ─────────────────────────────────────────
   function goPrev() {
     setCursorDate((d) =>
@@ -963,6 +1203,7 @@ export function ContentHubClient({
     setSelectedPlatform(null)
     setPanelError(null)
     resetCustomComposer()
+    setSelectedTagIds([])
     const inputs = presetIso ? isoToLocalInputs(presetIso) : defaultInputs()
     setDateValue(inputs.date)
     setTimeValue(inputs.time)
@@ -1017,6 +1258,7 @@ export function ContentHubClient({
     setSelectedPlatform(null)
     setPanelError(null)
     setContentSource("pick")
+    setSelectedTagIds([])
     const inputs = defaultInputs()
     setDateValue(inputs.date)
     setTimeValue(inputs.time)
@@ -1045,6 +1287,7 @@ export function ContentHubClient({
     resetCustomComposer()
     setContentSource("custom")
     setCustomPlatforms(["linkedin"])
+    setSelectedTagIds([])
     const inputs = defaultInputs()
     setDateValue(inputs.date)
     setTimeValue(inputs.time)
@@ -1088,6 +1331,7 @@ export function ContentHubClient({
     setSelectedPlatform(item.platform)
     setPanelError(null)
     setContentSource("pick")
+    setSelectedTagIds(item.post.tags?.map((t) => t.id) ?? [])
     const inputs = isoToLocalInputs(item.scheduledFor)
     setDateValue(inputs.date)
     setTimeValue(inputs.time)
@@ -1189,6 +1433,7 @@ export function ContentHubClient({
             platformCaptions,
             imageUrls: customImages,
             platforms: customPlatforms,
+            tagIds: selectedTagIds,
           }),
         })
         const postData = await postRes.json()
@@ -1233,6 +1478,7 @@ export function ContentHubClient({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             scheduledFor: scheduledFor.toISOString(),
+            tagIds: selectedTagIds,
             ...(promotingDraft ? { status: "queued" } : {}),
           }),
         })
@@ -1247,6 +1493,7 @@ export function ContentHubClient({
             platform: selectedPlatform,
             scheduledFor: scheduledFor.toISOString(),
             status: asDraft ? "draft" : "queued",
+            tagIds: selectedTagIds,
           }),
         })
         const data = await res.json()
@@ -1292,6 +1539,7 @@ export function ContentHubClient({
             platformCaptions,
             imageUrls: customImages,
             platforms: customPlatforms,
+            tagIds: selectedTagIds,
           }),
         })
         const postData = await postRes.json()
@@ -1336,6 +1584,7 @@ export function ContentHubClient({
           useQueue: true,
           timeZone,
           status: "queued",
+          tagIds: selectedTagIds,
         }),
       })
       const data = await res.json()
@@ -1364,6 +1613,25 @@ export function ContentHubClient({
     }
   }
 
+  // "Duplicate" — copies the underlying post's caption/images/tags into a
+  // brand-new Post, then jumps straight into the existing "pick content"
+  // deep link (already built for Generate's "Schedule for Later" button) so
+  // the new copy lands pre-selected, ready for a new date/time or platform.
+  async function handleDuplicate(item: ScheduledItem) {
+    if (duplicatingId) return
+    setDuplicatingId(item.id)
+    try {
+      const res = await fetch(`/api/content-hub/posts/${item.post.id}/duplicate`, { method: "POST" })
+      const data = await res.json()
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to duplicate")
+      await openNewPanelForPost((data as { postId: string }).postId)
+    } catch {
+      setError("Failed to duplicate — please try again")
+    } finally {
+      setDuplicatingId(null)
+    }
+  }
+
   // ── Derived data ────────────────────────────────────────────────
   const filteredPickablePosts = useMemo(() => {
     const q = postSearch.trim().toLowerCase()
@@ -1372,6 +1640,15 @@ export function ContentHubClient({
       (p) => p.title.toLowerCase().includes(q) || (p.caption ?? "").toLowerCase().includes(q),
     )
   }, [pickablePosts, postSearch])
+
+  // Tag filter applies everywhere scheduled content is displayed (List,
+  // Month, Week, Drafts) — but never to hasAnythingInNext7Days below, since
+  // that banner is about whether anything is scheduled at all, not whether
+  // it matches the current filter.
+  const filteredScheduled = useMemo(() => {
+    if (!tagFilter) return scheduled
+    return scheduled.filter((s) => s.post.tags?.some((t) => t.id === tagFilter))
+  }, [scheduled, tagFilter])
 
   const grouped = useMemo(() => {
     const now = new Date()
@@ -1385,7 +1662,7 @@ export function ContentHubClient({
       nextWeek: [],
       later: [],
     }
-    for (const item of scheduled) {
+    for (const item of filteredScheduled) {
       if (item.status === "cancelled" || item.status === "draft") continue
       const d = new Date(item.scheduledFor)
       if (d < now) buckets.past.push(item)
@@ -1398,14 +1675,14 @@ export function ContentHubClient({
     buckets.nextWeek.sort((a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime())
     buckets.later.sort((a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime())
     return buckets
-  }, [scheduled])
+  }, [filteredScheduled])
 
   const draftItems = useMemo(
     () =>
-      scheduled
+      filteredScheduled
         .filter((s) => s.status === "draft")
         .sort((a, b) => new Date(b.scheduledFor).getTime() - new Date(a.scheduledFor).getTime()),
-    [scheduled],
+    [filteredScheduled],
   )
 
   const hasAnythingInNext7Days = useMemo(() => {
@@ -1496,6 +1773,20 @@ export function ContentHubClient({
             <ListOrdered size={15} strokeWidth={2} />
           </button>
           <button
+            onClick={openLibraryPanel}
+            title="Library — templates, tags, hashtags"
+            className="p-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[#6B7280] transition-colors"
+          >
+            <LibraryBig size={15} strokeWidth={2} />
+          </button>
+          <button
+            onClick={() => setPanel({ mode: "bulk" })}
+            title="Bulk upload (CSV)"
+            className="p-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[#6B7280] transition-colors"
+          >
+            <UploadCloud size={15} strokeWidth={2} />
+          </button>
+          <button
             onClick={() => openNewPanel()}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_18px_rgba(124,58,237,0.25)] transition-colors"
           >
@@ -1504,6 +1795,36 @@ export function ContentHubClient({
           </button>
         </div>
       </div>
+
+      {/* Tag filter — applies to List/Week/Month/Drafts below */}
+      {tags.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            onClick={() => setTagFilter(null)}
+            className={[
+              "px-2.5 py-1 rounded-full text-[11.5px] font-medium transition-colors",
+              tagFilter === null ? "bg-[#1A1A1A] text-white" : "bg-[#F4F2EC] text-[#9CA3AF] hover:text-[#4B5563]",
+            ].join(" ")}
+          >
+            All
+          </button>
+          {tags.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTagFilter((prev) => (prev === t.id ? null : t.id))}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-medium transition-all"
+              style={
+                tagFilter === t.id
+                  ? { backgroundColor: t.color, color: "white" }
+                  : { backgroundColor: "#F4F2EC", color: "#6B7280" }
+              }
+            >
+              <Tag size={10} strokeWidth={2.2} />
+              {t.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Empty-queue nudge — dismissible, once per session */}
       {showEmptyBanner && (
@@ -1550,7 +1871,7 @@ export function ContentHubClient({
       {/* List view */}
       {!loading && view === "list" && (
         <>
-          {scheduled.filter((s) => s.status !== "cancelled" && s.status !== "draft").length === 0 ? (
+          {filteredScheduled.filter((s) => s.status !== "cancelled" && s.status !== "draft").length === 0 ? (
             <div className="flex flex-col items-center justify-center min-h-[30vh] text-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-[rgba(124,58,237,0.1)] border border-[rgba(124,58,237,0.2)] flex items-center justify-center">
                 <CalendarIcon size={20} className="text-[#7C3AED]" strokeWidth={1.8} />
@@ -1576,28 +1897,36 @@ export function ContentHubClient({
                 items={grouped.thisWeek}
                 onReschedule={openEditPanel}
                 onRemove={(item) => void handleRemove(item)}
+                onDuplicate={(item) => void handleDuplicate(item)}
                 removingId={removingId}
+                duplicatingId={duplicatingId}
               />
               <GroupSection
                 title="Next Week"
                 items={grouped.nextWeek}
                 onReschedule={openEditPanel}
                 onRemove={(item) => void handleRemove(item)}
+                onDuplicate={(item) => void handleDuplicate(item)}
                 removingId={removingId}
+                duplicatingId={duplicatingId}
               />
               <GroupSection
                 title="Later"
                 items={grouped.later}
                 onReschedule={openEditPanel}
                 onRemove={(item) => void handleRemove(item)}
+                onDuplicate={(item) => void handleDuplicate(item)}
                 removingId={removingId}
+                duplicatingId={duplicatingId}
               />
               <GroupSection
                 title="Past"
                 items={grouped.past}
                 onReschedule={openEditPanel}
                 onRemove={(item) => void handleRemove(item)}
+                onDuplicate={(item) => void handleDuplicate(item)}
                 removingId={removingId}
+                duplicatingId={duplicatingId}
               />
             </div>
           )}
@@ -1634,7 +1963,7 @@ export function ContentHubClient({
           {view === "month" ? (
             <MonthGrid
               monthAnchor={cursorDate}
-              scheduled={scheduled}
+              scheduled={filteredScheduled}
               recurringSlots={recurringSlots}
               onDayClick={openDayPanel}
               onItemClick={openEditPanel}
@@ -1644,7 +1973,7 @@ export function ContentHubClient({
           ) : (
             <WeekGrid
               weekAnchor={cursorDate}
-              scheduled={scheduled}
+              scheduled={filteredScheduled}
               recurringSlots={recurringSlots}
               onDayClick={openDayPanel}
               onItemClick={openEditPanel}
@@ -1678,7 +2007,9 @@ export function ContentHubClient({
                   item={item}
                   onReschedule={openEditPanel}
                   onRemove={(i) => void handleRemove(i)}
+                  onDuplicate={(i) => void handleDuplicate(i)}
                   isRemoving={removingId === item.id}
+                  isDuplicating={duplicatingId === item.id}
                 />
               ))}
             </div>
@@ -1705,7 +2036,11 @@ export function ContentHubClient({
                       ? "Recurring Slots"
                       : panel.mode === "queue"
                         ? "Queue Settings"
-                        : "New Post"}
+                        : panel.mode === "library"
+                          ? "Library"
+                          : panel.mode === "bulk"
+                            ? "Bulk Upload"
+                            : "New Post"}
               </h2>
               <button
                 onClick={closePanel}
@@ -1878,8 +2213,31 @@ export function ContentHubClient({
                   onSubmit={() => void submitQueueForm()}
                   onToggleActive={(slot) => void toggleQueueSlotActive(slot)}
                   onDelete={(id) => void deleteQueueSlot(id)}
+                  onPauseAll={pauseAllQueues}
+                  onShuffle={shuffleQueue}
                 />
               )}
+
+              {/* Library mode — Templates / Tags / Hashtag Groups management */}
+              {panel.mode === "library" && (
+                <LibraryPanel
+                  templates={templates}
+                  tags={tags}
+                  hashtagGroups={hashtagGroups}
+                  onCreateTemplate={createTemplate}
+                  onDeleteTemplate={(id) => void deleteTemplate(id)}
+                  onCreateTag={createTag}
+                  onDeleteTag={(id) => void deleteTag(id)}
+                  onCreateHashtagGroup={createHashtagGroup}
+                  onDeleteHashtagGroup={(id) => void deleteHashtagGroup(id)}
+                  shortLinks={shortLinks}
+                  onCreateShortLink={createShortLink}
+                  onDeleteShortLink={(id) => void deleteShortLink(id)}
+                />
+              )}
+
+              {/* Bulk upload mode */}
+              {panel.mode === "bulk" && <BulkUploadPanel onDone={() => void refreshScheduled()} />}
 
               {/* Day mode — that day's full schedule, no wizard steps */}
               {panel.mode === "day" && (
@@ -1894,7 +2252,9 @@ export function ContentHubClient({
                           item={item}
                           onReschedule={openEditPanel}
                           onRemove={(i) => void handleRemove(i)}
+                          onDuplicate={(i) => void handleDuplicate(i)}
                           isRemoving={removingId === item.id}
+                          isDuplicating={duplicatingId === item.id}
                         />
                       ))}
                     </div>
@@ -1950,6 +2310,10 @@ export function ContentHubClient({
                       linkedInConnected={linkedInConnected}
                       error={panelError}
                       onBack={() => setContentSource(null)}
+                      templates={templates}
+                      onSaveTemplate={createTemplate}
+                      hashtagGroups={hashtagGroups}
+                      onShortenUrl={shortenUrlForCaption}
                     />
                   ) : (
                     <>
@@ -2105,59 +2469,97 @@ export function ContentHubClient({
                     </div>
                   )}
 
-                  <div className="flex flex-col gap-2">
-                    <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">Preview</p>
-                    <div className="rounded-xl border border-[#E5E3DE] bg-white p-4 flex flex-col gap-3">
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className="w-9 h-9 rounded-full flex items-center justify-center text-white text-[13px] font-bold flex-shrink-0"
-                          style={{
-                            background:
-                              contentSource === "custom"
-                                ? PLATFORM_META[customPlatforms[0]].color
-                                : PLATFORM_META[selectedPlatform!].color,
-                          }}
-                        >
-                          {(user?.name?.[0] ?? user?.email?.[0] ?? "U").toUpperCase()}
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-[13px] font-semibold text-[#0A0A0A] truncate">
-                            {user?.name || "You"}
-                          </span>
-                          <span className="text-[11px] text-[#9CA3AF]">Scheduled · 🌐</span>
-                        </div>
-                      </div>
-                      {(contentSource === "custom" ? customCaption : selectedPost?.caption) && (
-                        <p className="text-[13px] text-[#374151] leading-[1.5] whitespace-pre-wrap line-clamp-6">
-                          {contentSource === "custom" ? customCaption : selectedPost?.caption}
-                        </p>
-                      )}
-                      {(contentSource === "custom" ? customImages[0] : selectedPost?.imageUrls[0]) && (
-                        <div className="rounded-lg overflow-hidden border border-[#E5E3DE]">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={contentSource === "custom" ? customImages[0] : selectedPost?.imageUrls[0]}
-                            alt=""
-                            className="w-full h-auto"
-                          />
-                        </div>
-                      )}
-                      {contentSource === "custom" && (
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {customPlatforms.map((p) => (
-                            <span
-                              key={p}
-                              className="inline-flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-full bg-[#F4F2EC] text-[11px] font-medium text-[#4B5563]"
+                  {tags.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">Tags</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {tags.map((t) => {
+                          const checked = selectedTagIds.includes(t.id)
+                          return (
+                            <button
+                              key={t.id}
+                              onClick={() => toggleSelectedTag(t.id)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-medium transition-all"
+                              style={
+                                checked
+                                  ? { backgroundColor: t.color, color: "white" }
+                                  : { backgroundColor: "#F4F2EC", color: "#6B7280" }
+                              }
                             >
-                              <PlatformBadge platform={p} size={16} />
-                              {PLATFORM_META[p].label}
-                              {!PLATFORM_META[p].functional && <span className="text-[#D97706]">· pending</span>}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                              <Tag size={10} strokeWidth={2.2} />
+                              {t.name}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {(() => {
+                    const previewPlatforms =
+                      contentSource === "custom" ? customPlatforms : selectedPlatform ? [selectedPlatform] : []
+                    const activePreviewPlatform =
+                      (previewPlatformOverride && previewPlatforms.includes(previewPlatformOverride)
+                        ? previewPlatformOverride
+                        : previewPlatforms[0]) ?? null
+                    if (!activePreviewPlatform) return null
+                    const previewCaption =
+                      contentSource === "custom"
+                        ? (customizePerPlatform && customPlatformCaptions[activePreviewPlatform]?.trim()) ||
+                          customCaption
+                        : (selectedPost?.caption ?? "")
+                    const previewImage =
+                      contentSource === "custom" ? customImages[0] : selectedPost?.imageUrls[0]
+
+                    return (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">
+                            Preview
+                          </p>
+                          {previewPlatforms.length > 1 && (
+                            <div className="flex items-center gap-1">
+                              {previewPlatforms.map((p) => (
+                                <button
+                                  key={p}
+                                  onClick={() => setPreviewPlatformOverride(p)}
+                                  className={[
+                                    "p-1 rounded-full transition-all",
+                                    activePreviewPlatform === p
+                                      ? "ring-2 ring-offset-1 ring-[#7C3AED]"
+                                      : "opacity-50 hover:opacity-100",
+                                  ].join(" ")}
+                                  title={PLATFORM_META[p].label}
+                                >
+                                  <PlatformBadge platform={p} size={18} />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <PlatformPreview
+                          platform={activePreviewPlatform}
+                          caption={previewCaption}
+                          imageUrl={previewImage}
+                          userName={user?.name || user?.email || "You"}
+                        />
+                        {contentSource === "custom" && (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {customPlatforms.map((p) => (
+                              <span
+                                key={p}
+                                className="inline-flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-full bg-[#F4F2EC] text-[11px] font-medium text-[#4B5563]"
+                              >
+                                <PlatformBadge platform={p} size={16} />
+                                {PLATFORM_META[p].label}
+                                {!PLATFORM_META[p].functional && <span className="text-[#D97706]">· pending</span>}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
 
                   {panelError && (
                     <div className="px-3 py-2.5 rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[12px] text-[rgba(239,68,68,0.9)]">

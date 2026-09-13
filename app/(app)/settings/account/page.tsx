@@ -1,9 +1,52 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Download, Loader2 } from "lucide-react"
+import { useClerk } from "@clerk/nextjs"
+import { Download, Loader2, ShieldCheck } from "lucide-react"
 import { SettingsTabs } from "@/components/settings/SettingsTabs"
 import type { ProfileData } from "@/lib/profile/options"
+
+// Small self-contained toggle switch, same visual language as
+// components/admin/SettingsForm.tsx's Toggle (that one's admin-dark-themed;
+// this is the cream-app-theme equivalent).
+function NotificationToggle({
+  label,
+  hint,
+  checked,
+  onChange,
+  disabled,
+}: {
+  label: string
+  hint: string
+  checked: boolean
+  onChange: (v: boolean) => void
+  disabled?: boolean
+}) {
+  return (
+    <label className="flex items-center justify-between gap-4 px-4 py-3.5 cursor-pointer">
+      <div className="flex flex-col gap-0.5">
+        <span className="text-[13px] font-medium text-[#1A1A1A]">{label}</span>
+        <span className="text-[11.5px] text-[#9CA3AF]">{hint}</span>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`relative h-6 w-11 flex-shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+          checked ? "bg-[#7C3AED]" : "bg-[#D1D5DB]"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+            checked ? "left-[22px]" : "left-0.5"
+          }`}
+        />
+      </button>
+    </label>
+  )
+}
 
 // lucide-react dropped brand logos, so inline the LinkedIn "in" mark.
 function LinkedInIcon({ size = 20, className }: { size?: number; className?: string }) {
@@ -28,6 +71,7 @@ interface LinkedInStatus {
 }
 
 export default function AccountSettingsPage() {
+  const clerk = useClerk()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [email, setEmail] = useState("")
@@ -39,6 +83,12 @@ export default function AccountSettingsPage() {
   const [linkedin, setLinkedin] = useState<LinkedInStatus | null>(null)
   const [disconnecting, setDisconnecting] = useState(false)
   const [linkedinBanner, setLinkedinBanner] = useState<string | null>(null)
+
+  // Notification preferences
+  const [notifyPostPublished, setNotifyPostPublished] = useState(true)
+  const [notifyPostFailed, setNotifyPostFailed] = useState(true)
+  const [notifyWeeklySummary, setNotifyWeeklySummary] = useState(true)
+  const [savingNotif, setSavingNotif] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -58,6 +108,9 @@ export default function AccountSettingsPage() {
         const p: ProfileData = data.profile
         setEmail(p.email)
         setPlan(p.plan)
+        setNotifyPostPublished(p.notifyPostPublished)
+        setNotifyPostFailed(p.notifyPostFailed)
+        setNotifyWeeklySummary(p.notifyWeeklySummary)
         if (linkedinRes.ok) setLinkedin((await linkedinRes.json()) as LinkedInStatus)
       } catch (err) {
         if (active) setError(err instanceof Error ? err.message : "Something went wrong")
@@ -70,23 +123,6 @@ export default function AccountSettingsPage() {
     }
   }, [])
 
-  // Surface the ?linkedin= result from the OAuth redirect (status itself is
-  // fetched above, alongside the profile).
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const result = params.get("linkedin")
-    if (result === "connected") setLinkedinBanner("LinkedIn connected successfully.")
-    else if (result === "error")
-      setLinkedinBanner("Couldn't connect LinkedIn. Please try again.")
-    if (result) {
-      // Clean the query param so a refresh doesn't re-show the banner.
-      window.history.replaceState({}, "", window.location.pathname)
-    }
-    // Re-fetch (the initial status came in already, above, alongside the
-    // profile) in case this mount is a fresh OAuth-redirect landing.
-    void refreshLinkedIn()
-  }, [])
-
   async function refreshLinkedIn() {
     try {
       const res = await fetch("/api/linkedin/status")
@@ -96,6 +132,28 @@ export default function AccountSettingsPage() {
       // best-effort — leave status null
     }
   }
+
+  // Surface the ?linkedin= result from the OAuth redirect (status itself is
+  // fetched above, alongside the profile). The banner's setState calls are
+  // placed after the refetch's `await` rather than synchronously at the top
+  // of the effect, so they run as a microtask continuation instead of
+  // synchronously within the effect body.
+  useEffect(() => {
+    void (async () => {
+      // Re-fetch (the initial status came in already, above, alongside the
+      // profile) in case this mount is a fresh OAuth-redirect landing.
+      await refreshLinkedIn()
+
+      const params = new URLSearchParams(window.location.search)
+      const result = params.get("linkedin")
+      if (result === "connected") setLinkedinBanner("LinkedIn connected successfully.")
+      else if (result === "error") setLinkedinBanner("Couldn't connect LinkedIn. Please try again.")
+      if (result) {
+        // Clean the query param so a refresh doesn't re-show the banner.
+        window.history.replaceState({}, "", window.location.pathname)
+      }
+    })()
+  }, [])
 
   async function handleDisconnectLinkedIn() {
     setDisconnecting(true)
@@ -108,6 +166,32 @@ export default function AccountSettingsPage() {
       setError(err instanceof Error ? err.message : "Failed to disconnect LinkedIn")
     } finally {
       setDisconnecting(false)
+    }
+  }
+
+  async function handleToggleNotification(
+    key: "postPublished" | "postFailed" | "weeklySummary",
+    next: boolean,
+  ) {
+    const setters = {
+      postPublished: setNotifyPostPublished,
+      postFailed: setNotifyPostFailed,
+      weeklySummary: setNotifyWeeklySummary,
+    }
+    const setter = setters[key]
+    setter(next)
+    setSavingNotif(key)
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notifications: { [key]: next } }),
+      })
+      if (!res.ok) throw new Error()
+    } catch {
+      setter(!next) // revert on failure
+    } finally {
+      setSavingNotif(null)
     }
   }
 
@@ -170,6 +254,31 @@ export default function AccountSettingsPage() {
                   {plan === "GROWTH" ? "Growth" : plan === "PRO" ? "Pro" : "Free"}
                 </span>
               </div>
+            </div>
+          </div>
+
+          {/* Security — password + two-factor auth are managed entirely by
+              Clerk (openUserProfile opens its own modal with Security tab
+              built in); nothing to build here beyond the entry point. If 2FA
+              isn't offered, it needs enabling in the Clerk Dashboard under
+              User & Authentication > Multi-factor — that's a config change,
+              not code. */}
+          <div className="flex flex-col gap-3">
+            <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Security</h2>
+            <div className="flex items-center justify-between gap-4 p-4 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC]">
+              <div className="flex items-center gap-3">
+                <ShieldCheck size={20} className="text-[#7C3AED] flex-shrink-0" strokeWidth={1.8} />
+                <div className="flex flex-col gap-0.5">
+                  <p className="text-[13px] font-medium text-[#1A1A1A]">Password &amp; two-factor authentication</p>
+                  <p className="text-[12px] text-[#9CA3AF]">Manage your password, 2FA, and active sessions.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => clerk.openUserProfile()}
+                className="inline-flex items-center flex-shrink-0 px-4 py-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F1EFE9] text-[13px] font-medium text-[#374151] transition-colors"
+              >
+                Manage
+              </button>
             </div>
           </div>
 
@@ -239,6 +348,34 @@ export default function AccountSettingsPage() {
                   Connect LinkedIn
                 </a>
               )}
+            </div>
+          </div>
+
+          {/* Notifications */}
+          <div className="flex flex-col gap-3">
+            <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Notifications</h2>
+            <div className="rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] divide-y divide-[#E9E7E1]">
+              <NotificationToggle
+                label="Post published"
+                hint="Email me when a scheduled post publishes"
+                checked={notifyPostPublished}
+                disabled={savingNotif === "postPublished"}
+                onChange={(v) => void handleToggleNotification("postPublished", v)}
+              />
+              <NotificationToggle
+                label="Post failed"
+                hint="Email me when a scheduled post fails to publish"
+                checked={notifyPostFailed}
+                disabled={savingNotif === "postFailed"}
+                onChange={(v) => void handleToggleNotification("postFailed", v)}
+              />
+              <NotificationToggle
+                label="Weekly summary"
+                hint="Email me weekly referral & performance summaries"
+                checked={notifyWeeklySummary}
+                disabled={savingNotif === "weeklySummary"}
+                onChange={(v) => void handleToggleNotification("weeklySummary", v)}
+              />
             </div>
           </div>
 

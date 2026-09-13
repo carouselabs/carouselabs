@@ -34,6 +34,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   let scheduledFor: Date | undefined
   let status: Status | undefined
+  let tagIds: string[] | undefined
 
   try {
     const body = await req.json()
@@ -46,11 +47,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       if (!isValidStatus(body.status)) throw new Error("Invalid status")
       status = body.status
     }
+    if (Array.isArray(body.tagIds)) {
+      tagIds = body.tagIds.filter((t: unknown): t is string => typeof t === "string")
+    }
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Invalid request body" },
       { status: 400 },
     )
+  }
+
+  // Tags live on the underlying Post, not this ScheduledPost row — same
+  // "only ever connect tags you own" guard as the create route.
+  if (tagIds) {
+    const ownedTagIds = tagIds.length
+      ? (await db.postTag.findMany({ where: { id: { in: tagIds }, userId: user.id }, select: { id: true } })).map(
+          (t) => t.id,
+        )
+      : []
+    await db.post.update({
+      where: { id: existing.postId },
+      data: { tags: { set: ownedTagIds.map((id) => ({ id })) } },
+    })
   }
 
   // A draft moving to "queued" is the moment it actually needs to publish —
@@ -80,7 +98,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(effectiveNextStatus === "queued" ? { failureReason: null, retryCount: 0 } : {}),
     },
     include: {
-      post: { select: { id: true, title: true, caption: true, format: true, imageUrls: true } },
+      post: {
+        select: {
+          id: true,
+          title: true,
+          caption: true,
+          format: true,
+          imageUrls: true,
+          tags: { select: { id: true, name: true, color: true } },
+        },
+      },
     },
   })
 

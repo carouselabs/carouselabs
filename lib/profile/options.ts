@@ -108,6 +108,9 @@ export interface ProfileData {
   voiceGuidelines: string
   email: string
   plan: "FREE" | "PRO" | "GROWTH"
+  notifyPostPublished: boolean
+  notifyPostFailed: boolean
+  notifyWeeklySummary: boolean
 }
 
 export function toneLabel(id: string): string {

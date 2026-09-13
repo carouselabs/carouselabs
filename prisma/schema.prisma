@@ -104,6 +104,10 @@ model User {
   ideaBoardItems IdeaBoardItem[]
   extensionKeys  ExtensionApiKey[]
   startPage      StartPage?
+  postTemplates  PostTemplate[]
+  postTags       PostTag[]
+  hashtagGroups  HashtagGroup[]
+  shortLinks     ShortLink[]
 
   // ── Referral program ──
   referralCode       String?              @unique
@@ -158,6 +162,14 @@ model Profile {
   // Regenerated only when ideaSuggestionsKey (a hash of profile inputs) changes.
   ideaSuggestions           String[]  @default([])
   ideaSuggestionsKey        String?
+  // Email notification preferences (Settings > Account). Default true so
+  // existing users keep getting exactly the emails they already got before
+  // these toggles existed — this is an opt-OUT, not an opt-in.
+  // notifyWeeklySummary is stored and settable now, but nothing sends that
+  // email yet — see app/api/cron/publish-scheduled-posts/route.ts's comment.
+  notifyPostPublished       Boolean   @default(true)
+  notifyPostFailed          Boolean   @default(true)
+  notifyWeeklySummary       Boolean   @default(true)
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
 
@@ -239,6 +251,7 @@ model Post {
   idea           Idea?           @relation(fields: [ideaId], references: [id], onDelete: SetNull)
   slides         Slide[]
   scheduledPosts ScheduledPost[]
+  tags           PostTag[]
 
   @@index([userId])
   @@index([userId, status])
@@ -408,6 +421,67 @@ model StartPageLink {
 
   @@index([startPageId])
   @@index([startPageId, order])
+}
+
+// Content Hub Library — a saved caption a user reuses across posts. Loading
+// one into the Custom Post composer just fills the caption textarea; nothing
+// AI-generated, no credit charge.
+model PostTemplate {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  caption   String   @db.Text
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Content Hub Library — a label a user can attach to any Post (implicit
+// many-to-many via Post.tags) to filter/group the calendar and list views
+// later. Scoped to the Custom Post composer for now (see
+// app/api/content-hub/custom-post/route.ts and .../scheduled/route.ts).
+model PostTag {
+  id     String @id @default(cuid())
+  userId String
+  name   String
+  color  String @default("#7C3AED")
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  posts Post[]
+
+  @@index([userId])
+}
+
+// Content Hub Library — a saved set of hashtags a user can quick-insert into
+// a caption instead of retyping the same group every time.
+model HashtagGroup {
+  id       String   @id @default(cuid())
+  userId   String
+  name     String
+  hashtags String[]
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Content Hub Library — a short carouselabs.com/l/[slug] link that redirects
+// to targetUrl and counts clicks (see app/l/[slug]/route.ts, public — added
+// to proxy.ts). Any UTM params the user added at creation time are already
+// baked into targetUrl itself (see lib/utm.ts), not stored separately.
+model ShortLink {
+  id         String   @id @default(cuid())
+  userId     String
+  slug       String   @unique
+  targetUrl  String
+  clickCount Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Slide {

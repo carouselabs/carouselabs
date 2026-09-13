@@ -32,7 +32,14 @@ export async function GET(req: Request) {
     orderBy: { scheduledFor: "asc" },
     include: {
       post: {
-        select: { id: true, title: true, caption: true, format: true, imageUrls: true },
+        select: {
+          id: true,
+          title: true,
+          caption: true,
+          format: true,
+          imageUrls: true,
+          tags: { select: { id: true, name: true, color: true } },
+        },
       },
     },
   })
@@ -58,6 +65,8 @@ export async function POST(req: Request) {
   let useQueue = false
   let timeZone = "UTC"
   let status: "draft" | "queued"
+  let tagIds: string[]
+  let tagsProvided: boolean
 
   try {
     const body = await req.json()
@@ -66,6 +75,12 @@ export async function POST(req: Request) {
     if (!isValidPlatform(body.platform)) throw new Error("Unsupported platform")
     platform = body.platform
     status = body.status === "draft" ? "draft" : "queued"
+    // undefined (field omitted) means "leave this post's tags alone" —
+    // only an explicit array (even []) means "set the tags to exactly this".
+    tagIds = Array.isArray(body.tagIds)
+      ? body.tagIds.filter((t: unknown): t is string => typeof t === "string")
+      : []
+    tagsProvided = Array.isArray(body.tagIds)
 
     useQueue = body.useQueue === true
     if (typeof body.timeZone === "string" && body.timeZone) {
@@ -92,6 +107,19 @@ export async function POST(req: Request) {
   const post = await db.post.findUnique({ where: { id: postId }, select: { userId: true } })
   if (!post || post.userId !== user.id) {
     return NextResponse.json({ error: "Post not found" }, { status: 404 })
+  }
+
+  // Tags are assigned at the scheduling step for existing/generated content
+  // (the Custom Post composer assigns them at creation instead — see
+  // app/api/content-hub/custom-post). Only ever connects tags the requesting
+  // user actually owns; a stray/foreign id is silently dropped.
+  if (tagsProvided) {
+    const ownedTagIds = tagIds.length
+      ? (await db.postTag.findMany({ where: { id: { in: tagIds }, userId: user.id }, select: { id: true } })).map(
+          (t) => t.id,
+        )
+      : []
+    await db.post.update({ where: { id: postId }, data: { tags: { set: ownedTagIds.map((id) => ({ id })) } } })
   }
 
   if (useQueue) {
@@ -127,7 +155,16 @@ export async function POST(req: Request) {
   const scheduled = await db.scheduledPost.create({
     data: { userId: user.id, postId, platform, scheduledFor: scheduledFor!, status: effectiveStatus },
     include: {
-      post: { select: { id: true, title: true, caption: true, format: true, imageUrls: true } },
+      post: {
+        select: {
+          id: true,
+          title: true,
+          caption: true,
+          format: true,
+          imageUrls: true,
+          tags: { select: { id: true, name: true, color: true } },
+        },
+      },
     },
   })
 

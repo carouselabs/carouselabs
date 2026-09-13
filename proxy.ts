@@ -32,6 +32,7 @@ const isPublicRoute = createRouteMatcher([
   "/thumbnails(.*)", // 10 thumbnail-keyword SEO pages + hub
   "/verify-certificate(.*)", // Public intern-certificate verification page
   "/start(.*)", // Public link-in-bio Start Pages (carouselabs.com/start/[slug])
+  "/l/(.*)", // Public short-link redirects (carouselabs.com/l/[slug])
   "/sitemap.xml",
   "/robots.txt",
   "/api/contact(.*)",

@@ -4,7 +4,8 @@
 // "Add to Queue" assigns new posts to automatically (see lib/queue.ts). One
 // slot = one day, unlike Recurring Slots' multi-day rows — see
 // prisma/schema.prisma's QueueSlot comment for why these are kept separate.
-import { Loader2, Pause, Play, Pencil, Trash2, Plus } from "lucide-react"
+import { useState } from "react"
+import { Loader2, Pause, Play, Pencil, Trash2, Plus, Shuffle, PauseCircle } from "lucide-react"
 import { PLATFORM_ORDER, PLATFORM_META, type Platform } from "@/lib/platforms"
 import { PlatformBadge } from "./platforms"
 
@@ -43,6 +44,8 @@ interface QueueSettingsPanelProps {
   onSubmit: () => void
   onToggleActive: (slot: QueueSlotSummary) => void
   onDelete: (id: string) => void
+  onPauseAll: () => Promise<number>
+  onShuffle: () => Promise<number>
 }
 
 export function QueueSettingsPanel({
@@ -63,13 +66,61 @@ export function QueueSettingsPanel({
   onSubmit,
   onToggleActive,
   onDelete,
+  onPauseAll,
+  onShuffle,
 }: QueueSettingsPanelProps) {
+  const [pausingAll, setPausingAll] = useState(false)
+  const [shuffling, setShuffling] = useState(false)
+  const [actionMessage, setActionMessage] = useState<string | null>(null)
+
+  async function handlePauseAll() {
+    setPausingAll(true)
+    setActionMessage(null)
+    try {
+      const count = await onPauseAll()
+      setActionMessage(count > 0 ? `Paused ${count} slot${count === 1 ? "" : "s"}` : "No active slots to pause")
+    } finally {
+      setPausingAll(false)
+    }
+  }
+
+  async function handleShuffle() {
+    setShuffling(true)
+    setActionMessage(null)
+    try {
+      const count = await onShuffle()
+      setActionMessage(count > 0 ? `Shuffled ${count} queued post${count === 1 ? "" : "s"}` : "Nothing to shuffle yet")
+    } finally {
+      setShuffling(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <p className="text-[13px] text-[#6B7280] leading-[1.5]">
         Set preset times you like to post. When you choose &quot;Add to Queue&quot; on a new post, it fills the
         next empty slot below instead of you picking a time manually.
       </p>
+
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => void handlePauseAll()}
+          disabled={pausingAll || slots.every((s) => !s.active)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[12px] font-medium text-[#6B7280] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {pausingAll ? <Loader2 size={12} className="animate-spin" /> : <PauseCircle size={12} strokeWidth={2} />}
+          Pause All Queues
+        </button>
+        <button
+          onClick={() => void handleShuffle()}
+          disabled={shuffling}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[12px] font-medium text-[#6B7280] transition-colors disabled:opacity-50"
+        >
+          {shuffling ? <Loader2 size={12} className="animate-spin" /> : <Shuffle size={12} strokeWidth={2} />}
+          Shuffle
+        </button>
+      </div>
+      {actionMessage && <p className="text-[11.5px] text-[#9CA3AF]">{actionMessage}</p>}
 
       {slots.length > 0 && (
         <div className="flex flex-col gap-2">

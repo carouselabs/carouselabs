@@ -25,12 +25,15 @@ Ideas Board (`/content-hub/ideas`) — no AI, no page injection, no credit charg
 - `options.html`/`options.js` — where the extension key (and, for local dev,
   the API base URL) is stored via `chrome.storage.local`.
 
+## Icons
+
+`icons/icon{16,48,128}.png` — a generated placeholder (purple #7C3AED square,
+white lightbulb), wired into `manifest.json`'s `icons` and
+`action.default_icon`. Swap these for real brand assets whenever they're
+ready; same file names, so no manifest changes needed.
+
 ## Known follow-ups, not done here
 
-- **No icon assets.** `manifest.json` has no `icons` field, so Chrome shows a
-  generic placeholder icon in the toolbar and extensions list. Add real
-  16/48/128px PNGs and wire them into `manifest.json`'s `icons` and
-  `action.default_icon` when brand assets are ready.
 - **No auto-opening "Saved!" popup.** There's no public extension API to
   force-open the toolbar popup from a background script in response to a
   context-menu click (the newer `chrome.action.openPopup()` needs a direct

@@ -2,7 +2,8 @@
 "use client"
 
 import { useState } from "react"
-import { Download, Loader2, ImageIcon } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Download, Loader2, ImageIcon, Copy } from "lucide-react"
 import type { ThumbnailHistoryEntry } from "@/lib/hooks/useHistory"
 
 function timeAgo(iso: string): string {
@@ -24,13 +25,29 @@ interface ThumbnailHistoryCardProps {
 }
 
 // Thumbnail generations have no Idea/breakdown behind them, so there's no
-// multi-step "Continue" flow to resume — this card is display-only: a
-// preview of the result, the topic it was based on, and a way to view/save
-// the full image. No pin/delete/duplicate (not wired up for standalone Posts
-// yet), which is fine — thumbnails aren't part of the idea pipeline these
-// actions were built around.
+// multi-step "Continue" flow to resume — this card is otherwise
+// display-only: a preview of the result, the topic it was based on, and a
+// way to view/save the full image. "Duplicate" hands off to Content Hub's
+// existing "pick content" deep link (openNewPanelForPost) with a fresh copy
+// pre-selected, ready for a new date/time or platform.
 export function ThumbnailHistoryCard({ entry }: ThumbnailHistoryCardProps) {
+  const router = useRouter()
   const [downloading, setDownloading] = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
+
+  async function handleDuplicate(e: React.MouseEvent) {
+    e.preventDefault()
+    if (duplicating) return
+    setDuplicating(true)
+    try {
+      const res = await fetch(`/api/content-hub/posts/${entry.id}/duplicate`, { method: "POST" })
+      const data = await res.json()
+      if (!res.ok) throw new Error()
+      router.push(`/content-hub?postId=${(data as { postId: string }).postId}`)
+    } catch {
+      setDuplicating(false)
+    }
+  }
 
   async function handleDownload(e: React.MouseEvent) {
     e.stopPropagation()
@@ -83,18 +100,32 @@ export function ThumbnailHistoryCard({ entry }: ThumbnailHistoryCardProps) {
           <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full tracking-wide text-[#7C3AED] bg-[rgba(124,58,237,0.1)]">
             Thumbnail
           </span>
-          <button
-            onClick={(e) => void handleDownload(e)}
-            disabled={downloading}
-            title="Download"
-            className="flex-shrink-0 p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#ECEAE4] transition-colors cursor-pointer disabled:opacity-50"
-          >
-            {downloading ? (
-              <Loader2 size={13} className="animate-spin" strokeWidth={2} />
-            ) : (
-              <Download size={13} strokeWidth={2} />
-            )}
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={(e) => void handleDuplicate(e)}
+              disabled={duplicating}
+              title="Duplicate"
+              className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#ECEAE4] transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {duplicating ? (
+                <Loader2 size={13} className="animate-spin" strokeWidth={2} />
+              ) : (
+                <Copy size={13} strokeWidth={2} />
+              )}
+            </button>
+            <button
+              onClick={(e) => void handleDownload(e)}
+              disabled={downloading}
+              title="Download"
+              className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#ECEAE4] transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {downloading ? (
+                <Loader2 size={13} className="animate-spin" strokeWidth={2} />
+              ) : (
+                <Download size={13} strokeWidth={2} />
+              )}
+            </button>
+          </div>
         </div>
 
         <p className="text-[13px] text-[#374151] leading-[1.4] line-clamp-2">

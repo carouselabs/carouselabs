@@ -25,6 +25,7 @@ import { InternBroadcastEmail } from "@/emails/InternBroadcastEmail"
 import { AdminNewSupportMessageEmail } from "@/emails/AdminNewSupportMessageEmail"
 import { InternSupportReplyEmail } from "@/emails/InternSupportReplyEmail"
 import { ScheduledPostFailedEmail } from "@/emails/ScheduledPostFailedEmail"
+import { ScheduledPostPublishedEmail } from "@/emails/ScheduledPostPublishedEmail"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -98,6 +99,24 @@ export async function sendScheduledPostFailedEmail(
     to: email,
     subject: "A scheduled post didn't publish",
     html: await render(ScheduledPostFailedEmail({ name, postTitle, platform, reason })),
+  })
+  if (error) throw new Error(`Resend: ${error.message}`)
+}
+
+// Gated behind Profile.notifyPostPublished (default true) — see
+// app/api/cron/publish-scheduled-posts/route.ts.
+export async function sendScheduledPostPublishedEmail(
+  email: string,
+  name: string,
+  postTitle: string,
+  platform: string,
+  publishedUrl?: string,
+) {
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: "Your post just went out 🎉",
+    html: await render(ScheduledPostPublishedEmail({ name, postTitle, platform, publishedUrl })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
 }

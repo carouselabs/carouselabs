@@ -1,11 +1,7 @@
 import * as React from "react"
 import { Heading, Text } from "@react-email/components"
 import { APP_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
-
-const PLATFORM_LABELS: Record<string, string> = {
-  linkedin: "LinkedIn",
-  instagram: "Instagram",
-}
+import { PLATFORM_META, isValidPlatform } from "@/lib/platforms"
 
 // Subject: "A scheduled post didn't publish"
 export function ScheduledPostFailedEmail({
@@ -20,7 +16,7 @@ export function ScheduledPostFailedEmail({
   reason: string
 }) {
   const greeting = name?.trim() ? name : "there"
-  const platformLabel = PLATFORM_LABELS[platform] ?? platform
+  const platformLabel = isValidPlatform(platform) ? PLATFORM_META[platform].label : platform
 
   return (
     <EmailLayout preview={`Your scheduled post to ${platformLabel} didn't go out.`}>

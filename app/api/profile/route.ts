@@ -46,6 +46,9 @@ export async function GET() {
     voiceGuidelines: p?.voiceGuidelines ?? "",
     email: user.email,
     plan: user.subscription?.plan ?? "FREE",
+    notifyPostPublished: p?.notifyPostPublished ?? true,
+    notifyPostFailed: p?.notifyPostFailed ?? true,
+    notifyWeeklySummary: p?.notifyWeeklySummary ?? true,
   }
 
   return NextResponse.json({ profile })
@@ -92,6 +95,9 @@ export async function POST(req: Request) {
 //   • voice guidelines  (when `voiceGuidelines` is present)
 //   • dismissProfileReview (when `true`) — the banner's own dismiss button,
 //     for a user who reviewed the pre-filled values and left them as-is.
+//   • notifications     (when `notifications` is present) — email
+//     notification preferences (Settings > Account), any subset of
+//     { postPublished, postFailed, weeklySummary }.
 // Any combination may be sent. Never touches onboardingDone.
 export async function PATCH(req: Request) {
   const user = await getCurrentUser()
@@ -116,6 +122,12 @@ export async function PATCH(req: Request) {
   }
   if (body.dismissProfileReview === true) {
     data.profileReviewDismissed = true
+  }
+  if (body.notifications && typeof body.notifications === "object") {
+    const n = body.notifications as Record<string, unknown>
+    if (typeof n.postPublished === "boolean") data.notifyPostPublished = n.postPublished
+    if (typeof n.postFailed === "boolean") data.notifyPostFailed = n.postFailed
+    if (typeof n.weeklySummary === "boolean") data.notifyWeeklySummary = n.weeklySummary
   }
 
   if (Object.keys(data).length === 0) {

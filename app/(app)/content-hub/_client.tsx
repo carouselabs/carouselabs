@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import NextLink from "next/link"
 import {
   Plus,
   List as ListIcon,
@@ -20,23 +21,25 @@ import {
   Repeat,
   Pause,
   Play,
+  ListOrdered,
+  Lightbulb,
 } from "lucide-react"
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser"
-
-// lucide-react dropped brand logos, so inline the LinkedIn "in" mark (same
-// treatment as components/generate/PostToLinkedInButton.tsx).
-function LinkedInIcon({ size = 12, className }: { size?: number; className?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.34V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.38-1.85 3.61 0 4.28 2.38 4.28 5.47v6.27zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.55V9h3.57v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z" />
-    </svg>
-  )
-}
+import { PLATFORM_META, PLATFORM_ORDER, type Platform } from "@/lib/platforms"
+import { PlatformBadge, PlatformIcon } from "@/components/content-hub/platforms"
+import { CustomPostComposer } from "@/components/content-hub/CustomPostComposer"
+import { QueueSettingsPanel, type QueueSlotSummary } from "@/components/content-hub/QueueSettingsPanel"
 
 // ── Shared shapes (mirror the API routes) ──────────────────────────
-type Platform = "linkedin" | "instagram"
-type ScheduledStatus = "draft" | "queued" | "publishing" | "published" | "failed" | "cancelled"
-type PostFormat = "CAROUSEL" | "SINGLE_IMAGE" | "TEXT_ONLY" | "THUMBNAIL"
+type ScheduledStatus =
+  | "draft"
+  | "queued"
+  | "publishing"
+  | "published"
+  | "failed"
+  | "cancelled"
+  | "pending_connection"
+type PostFormat = "CAROUSEL" | "SINGLE_IMAGE" | "TEXT_ONLY" | "THUMBNAIL" | "CUSTOM"
 
 interface PostSummary {
   id: string
@@ -59,6 +62,15 @@ interface ScheduledItem {
 
 interface PickablePost extends PostSummary {
   createdAt: string
+}
+
+// Just the fields openNewPanelForBoardItem needs from GET /api/ideas-board —
+// the full shape lives in app/(app)/content-hub/ideas/page.tsx.
+interface IdeaBoardItemLite {
+  id: string
+  type: "link" | "image" | "note"
+  content: string
+  title: string | null
 }
 
 interface SuggestionSlot {
@@ -88,6 +100,7 @@ type PanelState =
   | { mode: "edit"; item: ScheduledItem }
   | { mode: "day"; date: Date }
   | { mode: "recurring" }
+  | { mode: "queue" }
   | null
 
 const FORMAT_LABELS: Record<PostFormat, string> = {
@@ -95,6 +108,7 @@ const FORMAT_LABELS: Record<PostFormat, string> = {
   SINGLE_IMAGE: "Image",
   TEXT_ONLY: "Text",
   THUMBNAIL: "Thumbnail",
+  CUSTOM: "Custom",
 }
 
 const STATUS_DOT: Record<ScheduledStatus, string> = {
@@ -104,6 +118,7 @@ const STATUS_DOT: Record<ScheduledStatus, string> = {
   published: "#10B981",
   failed: "#EF4444",
   cancelled: "#D1D5DB",
+  pending_connection: "#F59E0B",
 }
 
 const STATUS_LABEL: Record<ScheduledStatus, string> = {
@@ -113,6 +128,7 @@ const STATUS_LABEL: Record<ScheduledStatus, string> = {
   published: "Published",
   failed: "Failed",
   cancelled: "Cancelled",
+  pending_connection: "Pending connection",
 }
 
 function startOfWeek(date: Date): Date {
@@ -206,21 +222,6 @@ function defaultInputs(): { date: string; time: string } {
 const EMPTY_BANNER_KEY = "content-hub-empty-banner-dismissed"
 
 // ── Render helpers (top-level — never re-created during a parent render) ──
-function PlatformBadge({ platform }: { platform: Platform }) {
-  if (platform === "linkedin") {
-    return (
-      <span className="w-5 h-5 rounded-full bg-[#0A66C2] flex items-center justify-center flex-shrink-0">
-        <LinkedInIcon size={11} className="text-white" />
-      </span>
-    )
-  }
-  return (
-    <span className="w-5 h-5 rounded-full bg-[#E1306C] flex items-center justify-center flex-shrink-0">
-      <Camera size={11} className="text-white" strokeWidth={2.2} />
-    </span>
-  )
-}
-
 function Thumbnail({ post, size = 48 }: { post: PostSummary; size?: number }) {
   const src = post.imageUrls[0]
   return (
@@ -269,6 +270,11 @@ function ScheduledRow({
         </p>
         {item.status === "failed" && item.failureReason && (
           <p className="text-[11px] text-[rgba(239,68,68,0.9)]">{item.failureReason}</p>
+        )}
+        {item.status === "pending_connection" && (
+          <p className="text-[11px] text-[#D97706]">
+            Pending — connect {PLATFORM_META[item.platform].label} to publish here
+          </p>
         )}
       </div>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -556,7 +562,13 @@ function WeekGrid({
   )
 }
 
-export function ContentHubClient({ initialPostId }: { initialPostId?: string }) {
+export function ContentHubClient({
+  initialPostId,
+  initialBoardItemId,
+}: {
+  initialPostId?: string
+  initialBoardItemId?: string
+}) {
   const { user } = useCurrentUser()
 
   const [view, setView] = useState<View>("list")
@@ -578,11 +590,20 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
   const [panel, setPanel] = useState<PanelState>(null)
   const [step, setStep] = useState<1 | 2 | 3>(1)
 
-  // Panel — step 1 (pick content)
+  // Panel — step 1 (choose content source, then either pick existing content
+  // or fill out the Custom Post composer)
+  const [contentSource, setContentSource] = useState<"pick" | "custom" | null>(null)
   const [pickablePosts, setPickablePosts] = useState<PickablePost[]>([])
   const [loadingPosts, setLoadingPosts] = useState(false)
   const [postSearch, setPostSearch] = useState("")
   const [selectedPost, setSelectedPost] = useState<PostSummary | null>(null)
+
+  // Panel — Custom Post composer state (contentSource === "custom")
+  const [customCaption, setCustomCaption] = useState("")
+  const [customImages, setCustomImages] = useState<string[]>([])
+  const [customPlatforms, setCustomPlatforms] = useState<Platform[]>([])
+  const [customizePerPlatform, setCustomizePerPlatform] = useState(false)
+  const [customPlatformCaptions, setCustomPlatformCaptions] = useState<Partial<Record<Platform, string>>>({})
 
   // Panel — step 2 (pick platform)
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null)
@@ -608,16 +629,34 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
   const [slotLabel, setSlotLabel] = useState("")
   const [slotDays, setSlotDays] = useState<number[]>([])
   const [slotTime, setSlotTime] = useState("09:00")
+  const [slotPlatform, setSlotPlatform] = useState<Platform>("linkedin")
   const [slotSubmitting, setSlotSubmitting] = useState(false)
   const [slotError, setSlotError] = useState<string | null>(null)
+
+  // Panel — queue settings (Buffer-style posting queue, see lib/queue.ts)
+  const [queueSlots, setQueueSlots] = useState<QueueSlotSummary[]>([])
+  const [queueFormOpen, setQueueFormOpen] = useState(false)
+  const [editingQueueSlotId, setEditingQueueSlotId] = useState<string | null>(null)
+  const [queueDay, setQueueDay] = useState(1)
+  const [queueTime, setQueueTime] = useState("09:00")
+  const [queuePlatform, setQueuePlatform] = useState<Platform>("linkedin")
+  const [queueSubmitting, setQueueSubmitting] = useState(false)
+  const [queueError, setQueueError] = useState<string | null>(null)
+  // "Add to Queue" is its own footer button, distinct from Schedule/Save as
+  // Draft, so it needs its own in-flight flag (mirrors savingAsDraft).
+  const [addingToQueue, setAddingToQueue] = useState(false)
 
   useEffect(() => {
     void refreshScheduled()
     void loadSuggestion()
     void loadRecurringSlots()
+    void loadQueueSlots()
     // Deep-link from a generation result's "Schedule for Later" button —
     // open straight into the Add panel with that post pre-selected.
     if (initialPostId) void openNewPanelForPost(initialPostId)
+    // Deep-link from Ideas Board's "Turn into Post" — open straight into the
+    // Custom Post composer, pre-filled with that saved item's content.
+    if (initialBoardItemId) void openNewPanelForBoardItem(initialBoardItemId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -659,11 +698,22 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
     }
   }
 
+  async function loadQueueSlots() {
+    try {
+      const res = await fetch("/api/content-hub/queue")
+      const data = await res.json()
+      if (res.ok) setQueueSlots((data as { slots: QueueSlotSummary[] }).slots)
+    } catch {
+      // best-effort — "Add to Queue" just surfaces its own error on click
+    }
+  }
+
   // ── Recurring slots settings ────────────────────────────────────
   function resetSlotForm() {
     setSlotLabel("")
     setSlotDays([])
     setSlotTime("09:00")
+    setSlotPlatform("linkedin")
     setSlotError(null)
   }
 
@@ -684,6 +734,7 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
     setSlotLabel(slot.label)
     setSlotDays(slot.daysOfWeek)
     setSlotTime(slot.timeOfDay)
+    setSlotPlatform(slot.platform)
     setSlotError(null)
     setEditingSlotId(slot.id)
     setRecurringFormOpen(true)
@@ -705,7 +756,12 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
         const res = await fetch(`/api/content-hub/recurring/${editingSlotId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ label: slotLabel || "Recurring post", daysOfWeek: slotDays, timeOfDay: slotTime }),
+          body: JSON.stringify({
+            label: slotLabel || "Recurring post",
+            daysOfWeek: slotDays,
+            timeOfDay: slotTime,
+            platform: slotPlatform,
+          }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to update slot")
@@ -717,7 +773,7 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
             label: slotLabel || "Recurring post",
             daysOfWeek: slotDays,
             timeOfDay: slotTime,
-            platform: "linkedin",
+            platform: slotPlatform,
           }),
         })
         const data = await res.json()
@@ -754,6 +810,91 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
       if (!res.ok) throw new Error()
     } catch {
       setRecurringSlots(snapshot)
+    }
+  }
+
+  // ── Queue settings (mirrors the recurring-slot handlers above) ──
+  function resetQueueForm() {
+    setQueueDay(1)
+    setQueueTime("09:00")
+    setQueuePlatform("linkedin")
+    setQueueError(null)
+  }
+
+  function openQueuePanel() {
+    setPanel({ mode: "queue" })
+    setQueueFormOpen(false)
+    setEditingQueueSlotId(null)
+    resetQueueForm()
+  }
+
+  function startNewQueueSlot() {
+    resetQueueForm()
+    setEditingQueueSlotId(null)
+    setQueueFormOpen(true)
+  }
+
+  function startEditQueueSlot(slot: QueueSlotSummary) {
+    setQueueDay(slot.dayOfWeek)
+    setQueueTime(slot.timeOfDay)
+    setQueuePlatform(slot.platform)
+    setQueueError(null)
+    setEditingQueueSlotId(slot.id)
+    setQueueFormOpen(true)
+  }
+
+  async function submitQueueForm() {
+    setQueueSubmitting(true)
+    setQueueError(null)
+    try {
+      if (editingQueueSlotId) {
+        const res = await fetch(`/api/content-hub/queue/${editingQueueSlotId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dayOfWeek: queueDay, timeOfDay: queueTime, platform: queuePlatform }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to update slot")
+      } else {
+        const res = await fetch("/api/content-hub/queue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dayOfWeek: queueDay, timeOfDay: queueTime, platform: queuePlatform }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to create slot")
+      }
+      setQueueFormOpen(false)
+      await loadQueueSlots()
+    } catch (err) {
+      setQueueError(err instanceof Error ? err.message : "Something went wrong")
+    } finally {
+      setQueueSubmitting(false)
+    }
+  }
+
+  async function toggleQueueSlotActive(slot: QueueSlotSummary) {
+    setQueueSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, active: !s.active } : s)))
+    try {
+      const res = await fetch(`/api/content-hub/queue/${slot.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active: !slot.active }),
+      })
+      if (!res.ok) throw new Error()
+    } catch {
+      await loadQueueSlots() // revert to server truth on failure
+    }
+  }
+
+  async function deleteQueueSlot(id: string) {
+    const snapshot = queueSlots
+    setQueueSlots((prev) => prev.filter((s) => s.id !== id))
+    try {
+      const res = await fetch(`/api/content-hub/queue/${id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error()
+    } catch {
+      setQueueSlots(snapshot)
     }
   }
 
@@ -806,18 +947,62 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
   }
 
   // ── Panel open/close ────────────────────────────────────────────
+  function resetCustomComposer() {
+    setContentSource(null)
+    setCustomCaption("")
+    setCustomImages([])
+    setCustomPlatforms([])
+    setCustomizePerPlatform(false)
+    setCustomPlatformCaptions({})
+  }
+
   function openNewPanel(presetIso?: string) {
     setPanel({ mode: "new" })
     setStep(1)
     setSelectedPost(null)
     setSelectedPlatform(null)
     setPanelError(null)
+    resetCustomComposer()
     const inputs = presetIso ? isoToLocalInputs(presetIso) : defaultInputs()
     setDateValue(inputs.date)
     setTimeValue(inputs.time)
     setPostSearch("")
     void loadPickablePosts()
     if (linkedInConnected === null) void checkLinkedIn()
+  }
+
+  // Entry point for the Step 1 choice screen — "Pick from your generated
+  // content" vs. "Create a Custom Post". Picking "custom" pre-checks LinkedIn
+  // (the only functional platform) since it's the overwhelmingly common case.
+  function chooseContentSource(source: "pick" | "custom") {
+    setContentSource(source)
+    setPanelError(null)
+    if (source === "custom") {
+      setCustomCaption("")
+      setCustomImages([])
+      setCustomPlatforms(["linkedin"])
+      setCustomizePerPlatform(false)
+      setCustomPlatformCaptions({})
+    }
+  }
+
+  function toggleCustomPlatform(platform: Platform) {
+    setCustomPlatforms((prev) => (prev.includes(platform) ? prev.filter((p) => p !== platform) : [...prev, platform]))
+  }
+
+  // Custom composer's "Continue" — validates, then hands off to the same
+  // date/time + Schedule/Save-as-Draft step (Step 3) used for existing content.
+  function continueCustomComposer() {
+    if (customPlatforms.length === 0) {
+      setPanelError("Pick at least one platform")
+      return
+    }
+    if (!customCaption.trim() && customImages.length === 0) {
+      setPanelError("Add a caption or at least one image")
+      return
+    }
+    setPanelError(null)
+    setStep(3)
   }
 
   // Deep-link entry point (see the mount effect above) — opens the "new"
@@ -831,6 +1016,7 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
     setSelectedPost(null)
     setSelectedPlatform(null)
     setPanelError(null)
+    setContentSource("pick")
     const inputs = defaultInputs()
     setDateValue(inputs.date)
     setTimeValue(inputs.time)
@@ -847,12 +1033,61 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
     // the normal Step 1 picker instead, nothing breaks.
   }
 
+  // Deep-link from Ideas Board's "Turn into Post" — jumps straight into the
+  // Custom Post composer with a saved item's content pre-filled. An "image"
+  // item gets re-hosted to R2 first (see custom-post/upload's sourceUrl
+  // mode) so it satisfies the same "every image URL is one of ours"
+  // invariant as any other Custom Post image.
+  async function openNewPanelForBoardItem(boardItemId: string) {
+    setPanel({ mode: "new" })
+    setStep(1)
+    setPanelError(null)
+    resetCustomComposer()
+    setContentSource("custom")
+    setCustomPlatforms(["linkedin"])
+    const inputs = defaultInputs()
+    setDateValue(inputs.date)
+    setTimeValue(inputs.time)
+    if (linkedInConnected === null) void checkLinkedIn()
+
+    try {
+      const res = await fetch("/api/ideas-board")
+      const data = await res.json()
+      if (!res.ok) return
+      const items = (data as { items: IdeaBoardItemLite[] }).items
+      const item = items.find((i) => i.id === boardItemId)
+      if (!item) return // not found — user just lands on an empty composer
+
+      if (item.type === "note") {
+        setCustomCaption(item.content)
+      } else if (item.type === "link") {
+        setCustomCaption(item.title ? `${item.title}\n\n${item.content}` : item.content)
+      } else if (item.type === "image") {
+        setCustomCaption(item.title ?? "")
+        const uploadRes = await fetch("/api/content-hub/custom-post/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sourceUrl: item.content }),
+        })
+        const uploadData = await uploadRes.json()
+        if (uploadRes.ok) {
+          setCustomImages([(uploadData as { url: string }).url])
+        } else {
+          setPanelError((uploadData as { error?: string }).error ?? "Couldn't re-host that image")
+        }
+      }
+    } catch {
+      // best-effort — user just lands on an empty composer if this fails
+    }
+  }
+
   function openEditPanel(item: ScheduledItem) {
     setPanel({ mode: "edit", item })
     setStep(3)
     setSelectedPost(item.post)
     setSelectedPlatform(item.platform)
     setPanelError(null)
+    setContentSource("pick")
     const inputs = isoToLocalInputs(item.scheduledFor)
     setDateValue(inputs.date)
     setTimeValue(inputs.time)
@@ -920,12 +1155,71 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
   }
 
   async function handleSchedule(asDraft = false) {
-    if (!selectedPost || !selectedPlatform || !dateValue || !timeValue) return
+    if (!dateValue || !timeValue) return
     const scheduledFor = new Date(`${dateValue}T${timeValue}`)
     if (isNaN(scheduledFor.getTime())) {
       setPanelError("Pick a valid date and time")
       return
     }
+
+    // Custom Post flow: create the Post record first (no AI generation, no
+    // credit charge — see app/api/content-hub/custom-post), then one
+    // ScheduledPost per selected platform via the same endpoint the
+    // pick-existing-content flow uses below, so a non-functional platform
+    // gets the same "pending_connection" handling either way.
+    if (contentSource === "custom") {
+      if (customPlatforms.length === 0) {
+        setPanelError("Pick at least one platform")
+        return
+      }
+      setSubmitting(true)
+      if (asDraft) setSavingAsDraft(true)
+      setPanelError(null)
+      try {
+        const platformCaptions =
+          customizePerPlatform && Object.values(customPlatformCaptions).some((v) => (v ?? "").trim())
+            ? customPlatformCaptions
+            : undefined
+
+        const postRes = await fetch("/api/content-hub/custom-post", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            caption: customCaption.trim(),
+            platformCaptions,
+            imageUrls: customImages,
+            platforms: customPlatforms,
+          }),
+        })
+        const postData = await postRes.json()
+        if (!postRes.ok) throw new Error((postData as { error?: string }).error ?? "Failed to create post")
+        const postId = (postData as { postId: string }).postId
+
+        const status = asDraft ? "draft" : "queued"
+        const results = await Promise.all(
+          customPlatforms.map((platform) =>
+            fetch("/api/content-hub/scheduled", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ postId, platform, scheduledFor: scheduledFor.toISOString(), status }),
+            }).then((r) => r.ok),
+          ),
+        )
+        if (results.some((ok) => !ok)) {
+          setError("Post created, but scheduling failed for one or more platforms — check Drafts and retry.")
+        }
+        closePanel()
+        await refreshScheduled()
+      } catch (err) {
+        setPanelError(err instanceof Error ? err.message : "Something went wrong")
+      } finally {
+        setSubmitting(false)
+        setSavingAsDraft(false)
+      }
+      return
+    }
+
+    if (!selectedPost || !selectedPlatform) return
     setSubmitting(true)
     if (asDraft) setSavingAsDraft(true)
     setPanelError(null)
@@ -965,6 +1259,94 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
     } finally {
       setSubmitting(false)
       setSavingAsDraft(false)
+    }
+  }
+
+  // "Add to Queue" — a third option alongside Schedule/Save as Draft (new
+  // posts only, mirroring Save as Draft's scope). Skips date/time entirely:
+  // the server computes scheduledFor from the next empty queue slot for each
+  // platform (see lib/queue.ts), then creates the exact same ScheduledPost
+  // shape handleSchedule does — no separate publishing path.
+  async function handleAddToQueue() {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+    if (contentSource === "custom") {
+      if (customPlatforms.length === 0) {
+        setPanelError("Pick at least one platform")
+        return
+      }
+      setSubmitting(true)
+      setAddingToQueue(true)
+      setPanelError(null)
+      try {
+        const platformCaptions =
+          customizePerPlatform && Object.values(customPlatformCaptions).some((v) => (v ?? "").trim())
+            ? customPlatformCaptions
+            : undefined
+
+        const postRes = await fetch("/api/content-hub/custom-post", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            caption: customCaption.trim(),
+            platformCaptions,
+            imageUrls: customImages,
+            platforms: customPlatforms,
+          }),
+        })
+        const postData = await postRes.json()
+        if (!postRes.ok) throw new Error((postData as { error?: string }).error ?? "Failed to create post")
+        const postId = (postData as { postId: string }).postId
+
+        const results = await Promise.all(
+          customPlatforms.map((platform) =>
+            fetch("/api/content-hub/scheduled", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ postId, platform, useQueue: true, timeZone, status: "queued" }),
+            }).then(async (r) => ({ ok: r.ok, error: (await r.json()) as { error?: string } })),
+          ),
+        )
+        const failures = results.filter((r) => !r.ok)
+        if (failures.length > 0) {
+          setError(failures.map((f) => f.error.error).filter(Boolean).join(" "))
+        }
+        closePanel()
+        await refreshScheduled()
+      } catch (err) {
+        setPanelError(err instanceof Error ? err.message : "Something went wrong")
+      } finally {
+        setSubmitting(false)
+        setAddingToQueue(false)
+      }
+      return
+    }
+
+    if (!selectedPost || !selectedPlatform) return
+    setSubmitting(true)
+    setAddingToQueue(true)
+    setPanelError(null)
+    try {
+      const res = await fetch("/api/content-hub/scheduled", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          postId: selectedPost.id,
+          platform: selectedPlatform,
+          useQueue: true,
+          timeZone,
+          status: "queued",
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to add to queue")
+      closePanel()
+      await refreshScheduled()
+    } catch (err) {
+      setPanelError(err instanceof Error ? err.message : "Something went wrong")
+    } finally {
+      setSubmitting(false)
+      setAddingToQueue(false)
     }
   }
 
@@ -1031,7 +1413,7 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
     const in7d = now + 7 * 24 * 60 * 60 * 1000
     return scheduled.some((s) => {
       const t = new Date(s.scheduledFor).getTime()
-      return s.status === "queued" && t >= now && t <= in7d
+      return (s.status === "queued" || s.status === "pending_connection") && t >= now && t <= in7d
     })
   }, [scheduled])
 
@@ -1092,12 +1474,26 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
               {today.chipLabel}
             </button>
           )}
+          <NextLink
+            href="/content-hub/ideas"
+            title="Ideas Board"
+            className="p-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[#6B7280] transition-colors"
+          >
+            <Lightbulb size={15} strokeWidth={2} />
+          </NextLink>
           <button
             onClick={openRecurringPanel}
             title="Recurring slots"
             className="p-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[#6B7280] transition-colors"
           >
             <Repeat size={15} strokeWidth={2} />
+          </button>
+          <button
+            onClick={openQueuePanel}
+            title="Queue settings"
+            className="p-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[#6B7280] transition-colors"
+          >
+            <ListOrdered size={15} strokeWidth={2} />
           </button>
           <button
             onClick={() => openNewPanel()}
@@ -1307,7 +1703,9 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
                       )
                     : panel.mode === "recurring"
                       ? "Recurring Slots"
-                      : "New Post"}
+                      : panel.mode === "queue"
+                        ? "Queue Settings"
+                        : "New Post"}
               </h2>
               <button
                 onClick={closePanel}
@@ -1417,7 +1815,18 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
                         onChange={(e) => setSlotTime(e.target.value)}
                         className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
                       />
-                      <p className="text-[11px] text-[#9CA3AF]">Platform: LinkedIn (Instagram isn&apos;t connected yet)</p>
+                      <select
+                        value={slotPlatform}
+                        onChange={(e) => setSlotPlatform(e.target.value as Platform)}
+                        className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
+                      >
+                        {PLATFORM_ORDER.map((p) => (
+                          <option key={p} value={p}>
+                            {PLATFORM_META[p].label}
+                            {!PLATFORM_META[p].functional ? " (not connected yet)" : ""}
+                          </option>
+                        ))}
+                      </select>
                       {slotError && (
                         <div className="px-3 py-2 rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[12px] text-[rgba(239,68,68,0.9)]">
                           {slotError}
@@ -1449,6 +1858,29 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
                 </div>
               )}
 
+              {/* Queue settings mode */}
+              {panel.mode === "queue" && (
+                <QueueSettingsPanel
+                  slots={queueSlots}
+                  formOpen={queueFormOpen}
+                  onStartNew={startNewQueueSlot}
+                  onStartEdit={startEditQueueSlot}
+                  onCancelForm={() => setQueueFormOpen(false)}
+                  editingId={editingQueueSlotId}
+                  day={queueDay}
+                  onDayChange={setQueueDay}
+                  time={queueTime}
+                  onTimeChange={setQueueTime}
+                  platform={queuePlatform}
+                  onPlatformChange={setQueuePlatform}
+                  submitting={queueSubmitting}
+                  error={queueError}
+                  onSubmit={() => void submitQueueForm()}
+                  onToggleActive={(slot) => void toggleQueueSlotActive(slot)}
+                  onDelete={(id) => void deleteQueueSlot(id)}
+                />
+              )}
+
               {/* Day mode — that day's full schedule, no wizard steps */}
               {panel.mode === "day" && (
                 <div className="flex flex-col gap-3">
@@ -1470,58 +1902,119 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
                 </div>
               )}
 
-              {/* Step 1 — pick content */}
+              {/* Step 1 — choose content source, then pick existing content or
+                  build a Custom Post */}
               {panel.mode === "new" && step === 1 && (
                 <div className="flex flex-col gap-3">
-                  <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">
-                    Step 1 · Pick content
-                  </p>
-                  <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-                    <input
-                      value={postSearch}
-                      onChange={(e) => setPostSearch(e.target.value)}
-                      placeholder="Search your posts…"
-                      className="w-full pl-9 pr-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
+                  {contentSource === null ? (
+                    <>
+                      <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">
+                        Step 1 · Choose content
+                      </p>
+                      <button
+                        onClick={() => chooseContentSource("pick")}
+                        className="flex flex-col items-start gap-1 p-4 rounded-xl border border-[#E5E3DE] bg-white hover:border-[#7C3AED] transition-colors text-left"
+                      >
+                        <span className="text-[13px] font-semibold text-[#0A0A0A]">
+                          Pick from your generated content
+                        </span>
+                        <span className="text-[11px] text-[#9CA3AF]">
+                          Schedule a caption, image, or carousel you&apos;ve already created
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => chooseContentSource("custom")}
+                        className="flex flex-col items-start gap-1 p-4 rounded-xl border border-[#E5E3DE] bg-white hover:border-[#7C3AED] transition-colors text-left"
+                      >
+                        <span className="text-[13px] font-semibold text-[#0A0A0A]">Create a Custom Post</span>
+                        <span className="text-[11px] text-[#9CA3AF]">
+                          For content you&apos;ve made yourself outside CarouseLabs
+                        </span>
+                      </button>
+                    </>
+                  ) : contentSource === "custom" ? (
+                    <CustomPostComposer
+                      caption={customCaption}
+                      onCaptionChange={setCustomCaption}
+                      images={customImages}
+                      onAddImage={(url) => setCustomImages((prev) => [...prev, url])}
+                      onRemoveImage={(url) => setCustomImages((prev) => prev.filter((u) => u !== url))}
+                      platforms={customPlatforms}
+                      onTogglePlatform={toggleCustomPlatform}
+                      customizePerPlatform={customizePerPlatform}
+                      onToggleCustomizePerPlatform={setCustomizePerPlatform}
+                      platformCaptions={customPlatformCaptions}
+                      onPlatformCaptionChange={(platform, value) =>
+                        setCustomPlatformCaptions((prev) => ({ ...prev, [platform]: value }))
+                      }
+                      linkedInConnected={linkedInConnected}
+                      error={panelError}
+                      onBack={() => setContentSource(null)}
                     />
-                  </div>
-
-                  {loadingPosts ? (
-                    <div className="grid grid-cols-3 gap-2">
-                      {Array.from({ length: 6 }).map((_, i) => (
-                        <div key={i} className="aspect-square rounded-lg bg-[#F1EFE9] animate-pulse" />
-                      ))}
-                    </div>
-                  ) : filteredPickablePosts.length === 0 ? (
-                    <p className="text-[13px] text-[#9CA3AF] text-center py-8">
-                      {pickablePosts.length === 0
-                        ? "No generated posts yet — create one from Generate first."
-                        : "No posts match your search."}
-                    </p>
                   ) : (
-                    <div className="grid grid-cols-3 gap-2">
-                      {filteredPickablePosts.map((p) => (
-                        <button
-                          key={p.id}
-                          onClick={() => selectPost(p)}
-                          className="flex flex-col gap-1 text-left group"
-                        >
-                          <div className="aspect-square rounded-lg overflow-hidden border border-[#E5E3DE] bg-[#F4F2EC] group-hover:border-[#7C3AED] transition-colors">
-                            {p.imageUrls[0] ? (
-                              /* eslint-disable-next-line @next/next/no-img-element */
-                              <img src={p.imageUrls[0]} alt={p.title} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <ImageIcon size={16} className="text-[#ADA99F]" />
+                    <>
+                      <button
+                        onClick={() => setContentSource(null)}
+                        className="self-start text-[11px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+                      >
+                        ← Back
+                      </button>
+                      <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">
+                        Step 1 · Pick content
+                      </p>
+                      <div className="relative">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+                        <input
+                          value={postSearch}
+                          onChange={(e) => setPostSearch(e.target.value)}
+                          placeholder="Search your posts…"
+                          className="w-full pl-9 pr-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
+                        />
+                      </div>
+
+                      {loadingPosts ? (
+                        <div className="grid grid-cols-3 gap-2">
+                          {Array.from({ length: 6 }).map((_, i) => (
+                            <div key={i} className="aspect-square rounded-lg bg-[#F1EFE9] animate-pulse" />
+                          ))}
+                        </div>
+                      ) : filteredPickablePosts.length === 0 ? (
+                        <p className="text-[13px] text-[#9CA3AF] text-center py-8">
+                          {pickablePosts.length === 0
+                            ? "No generated posts yet — create one from Generate first."
+                            : "No posts match your search."}
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-2">
+                          {filteredPickablePosts.map((p) => (
+                            <button
+                              key={p.id}
+                              onClick={() => selectPost(p)}
+                              className="flex flex-col gap-1 text-left group"
+                            >
+                              <div className="relative aspect-square rounded-lg overflow-hidden border border-[#E5E3DE] bg-[#F4F2EC] group-hover:border-[#7C3AED] transition-colors">
+                                {p.imageUrls[0] ? (
+                                  /* eslint-disable-next-line @next/next/no-img-element */
+                                  <img src={p.imageUrls[0]} alt={p.title} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <ImageIcon size={16} className="text-[#ADA99F]" />
+                                  </div>
+                                )}
+                                {p.format === "CUSTOM" && (
+                                  <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded-full bg-[rgba(10,10,10,0.75)] text-[9px] font-semibold text-white tracking-wide">
+                                    Custom
+                                  </span>
+                                )}
                               </div>
-                            )}
-                          </div>
-                          <span className="text-[10.5px] text-[#6B7280] truncate">
-                            {FORMAT_LABELS[p.format]}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+                              <span className="text-[10.5px] text-[#6B7280] truncate">
+                                {FORMAT_LABELS[p.format]}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -1537,7 +2030,7 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
                     className="flex items-center gap-3 p-4 rounded-xl border border-[#E5E3DE] bg-white hover:border-[#0A66C2] transition-colors text-left"
                   >
                     <span className="w-9 h-9 rounded-full bg-[#0A66C2] flex items-center justify-center flex-shrink-0">
-                      <LinkedInIcon size={16} className="text-white" />
+                      <PlatformIcon platform="linkedin" size={16} />
                     </span>
                     <span className="flex flex-col">
                       <span className="text-[13px] font-semibold text-[#0A0A0A]">LinkedIn</span>
@@ -1568,7 +2061,9 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
               )}
 
               {/* Step 3 — date/time + preview */}
-              {panel.mode !== "day" && step === 3 && selectedPost && selectedPlatform && (
+              {panel.mode !== "day" &&
+                step === 3 &&
+                (contentSource === "custom" ? customPlatforms.length > 0 : !!(selectedPost && selectedPlatform)) && (
                 <div className="flex flex-col gap-4">
                   <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">
                     {panel.mode === "edit" ? "New date & time" : "Step 3 · Date & time"}
@@ -1616,7 +2111,12 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
                       <div className="flex items-center gap-2.5">
                         <div
                           className="w-9 h-9 rounded-full flex items-center justify-center text-white text-[13px] font-bold flex-shrink-0"
-                          style={{ background: selectedPlatform === "linkedin" ? "#0A66C2" : "#E1306C" }}
+                          style={{
+                            background:
+                              contentSource === "custom"
+                                ? PLATFORM_META[customPlatforms[0]].color
+                                : PLATFORM_META[selectedPlatform!].color,
+                          }}
                         >
                           {(user?.name?.[0] ?? user?.email?.[0] ?? "U").toUpperCase()}
                         </div>
@@ -1627,15 +2127,33 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
                           <span className="text-[11px] text-[#9CA3AF]">Scheduled · 🌐</span>
                         </div>
                       </div>
-                      {selectedPost.caption && (
+                      {(contentSource === "custom" ? customCaption : selectedPost?.caption) && (
                         <p className="text-[13px] text-[#374151] leading-[1.5] whitespace-pre-wrap line-clamp-6">
-                          {selectedPost.caption}
+                          {contentSource === "custom" ? customCaption : selectedPost?.caption}
                         </p>
                       )}
-                      {selectedPost.imageUrls[0] && (
+                      {(contentSource === "custom" ? customImages[0] : selectedPost?.imageUrls[0]) && (
                         <div className="rounded-lg overflow-hidden border border-[#E5E3DE]">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={selectedPost.imageUrls[0]} alt="" className="w-full h-auto" />
+                          <img
+                            src={contentSource === "custom" ? customImages[0] : selectedPost?.imageUrls[0]}
+                            alt=""
+                            className="w-full h-auto"
+                          />
+                        </div>
+                      )}
+                      {contentSource === "custom" && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {customPlatforms.map((p) => (
+                            <span
+                              key={p}
+                              className="inline-flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-full bg-[#F4F2EC] text-[11px] font-medium text-[#4B5563]"
+                            >
+                              <PlatformBadge platform={p} size={16} />
+                              {PLATFORM_META[p].label}
+                              {!PLATFORM_META[p].functional && <span className="text-[#D97706]">· pending</span>}
+                            </span>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -1650,15 +2168,30 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
               )}
             </div>
 
+            {/* Custom composer footer — "Continue" hands off to the shared
+                date/time + Schedule/Save-as-Draft step below */}
+            {panel.mode === "new" && step === 1 && contentSource === "custom" && (
+              <div className="px-5 py-4 border-t border-[#E5E3DE] flex-shrink-0">
+                <button
+                  onClick={continueCustomComposer}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_18px_rgba(124,58,237,0.25)] transition-colors"
+                >
+                  Continue
+                </button>
+              </div>
+            )}
+
             {/* Footer — one obvious primary action, plus a secondary "back"/"remove" where relevant */}
-            {panel.mode !== "day" && step === 3 && selectedPost && selectedPlatform && (
-              <div className="flex items-center gap-2 px-5 py-4 border-t border-[#E5E3DE] flex-shrink-0">
+            {panel.mode !== "day" &&
+              step === 3 &&
+              (contentSource === "custom" ? customPlatforms.length > 0 : !!(selectedPost && selectedPlatform)) && (
+              <div className="flex items-center gap-2 px-5 py-4 border-t border-[#E5E3DE] flex-shrink-0 flex-wrap">
                 <button
                   onClick={() => void handleSchedule()}
                   disabled={submitting}
                   className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 shadow-[0_0_18px_rgba(124,58,237,0.25)] transition-colors"
                 >
-                  {submitting && !savingAsDraft ? (
+                  {submitting && !savingAsDraft && !addingToQueue ? (
                     <Loader2 size={14} className="animate-spin" strokeWidth={2.2} />
                   ) : panel.mode === "edit" ? (
                     panel.item.status === "draft" ? "Schedule" : "Save New Time"
@@ -1674,6 +2207,21 @@ export function ContentHubClient({ initialPostId }: { initialPostId?: string }) 
                   >
                     {removingId === panel.item.id && <Loader2 size={12} className="animate-spin" />}
                     {removingId === panel.item.id ? "Removing…" : "Remove"}
+                  </button>
+                )}
+                {panel.mode === "new" && (
+                  <button
+                    onClick={() => void handleAddToQueue()}
+                    disabled={submitting}
+                    title={
+                      queueSlots.filter((s) => s.active).length === 0
+                        ? "No active queue slots yet — add one via Queue Settings"
+                        : undefined
+                    }
+                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[12px] font-medium text-[#6B7280] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {addingToQueue && <Loader2 size={12} className="animate-spin" />}
+                    {addingToQueue ? "Adding…" : "Add to Queue"}
                   </button>
                 )}
                 {panel.mode === "new" && (

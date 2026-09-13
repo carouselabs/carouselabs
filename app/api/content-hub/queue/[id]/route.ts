@@ -5,43 +5,29 @@ import { isValidPlatform } from "@/lib/platforms"
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/
 
-function isValidDaysOfWeek(val: unknown): val is number[] {
-  return (
-    Array.isArray(val) &&
-    val.length > 0 &&
-    val.every((d) => typeof d === "number" && Number.isInteger(d) && d >= 0 && d <= 6)
-  )
+function isValidDayOfWeek(val: unknown): val is number {
+  return typeof val === "number" && Number.isInteger(val) && val >= 0 && val <= 6
 }
 
-// PATCH /api/content-hub/recurring/[id] — edit a slot, or just flip `active`
-// to pause/resume it without deleting the rule.
+// PATCH /api/content-hub/queue/[id] — edit a slot, or just flip `active` to
+// pause/resume it without deleting it.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { id } = await params
-  const existing = await db.recurringSlot.findUnique({ where: { id } })
+  const existing = await db.queueSlot.findUnique({ where: { id } })
   if (!existing || existing.userId !== user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
-  const data: {
-    label?: string
-    daysOfWeek?: number[]
-    timeOfDay?: string
-    platform?: string
-    active?: boolean
-  } = {}
+  const data: { dayOfWeek?: number; timeOfDay?: string; platform?: string; active?: boolean } = {}
 
   try {
     const body = await req.json()
-    if (body.label !== undefined) {
-      if (typeof body.label !== "string" || !body.label.trim()) throw new Error("Invalid label")
-      data.label = body.label.trim()
-    }
-    if (body.daysOfWeek !== undefined) {
-      if (!isValidDaysOfWeek(body.daysOfWeek)) throw new Error("daysOfWeek must be 1+ integers 0-6")
-      data.daysOfWeek = body.daysOfWeek
+    if (body.dayOfWeek !== undefined) {
+      if (!isValidDayOfWeek(body.dayOfWeek)) throw new Error("dayOfWeek must be an integer 0-6")
+      data.dayOfWeek = body.dayOfWeek
     }
     if (body.timeOfDay !== undefined) {
       if (typeof body.timeOfDay !== "string" || !TIME_RE.test(body.timeOfDay)) {
@@ -64,21 +50,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     )
   }
 
-  const slot = await db.recurringSlot.update({ where: { id }, data })
+  const slot = await db.queueSlot.update({ where: { id }, data })
   return NextResponse.json({ slot })
 }
 
-// DELETE /api/content-hub/recurring/[id]
+// DELETE /api/content-hub/queue/[id]
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { id } = await params
-  const existing = await db.recurringSlot.findUnique({ where: { id } })
+  const existing = await db.queueSlot.findUnique({ where: { id } })
   if (!existing || existing.userId !== user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
-  await db.recurringSlot.delete({ where: { id } })
+  await db.queueSlot.delete({ where: { id } })
   return NextResponse.json({ ok: true })
 }

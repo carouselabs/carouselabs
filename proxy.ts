@@ -31,10 +31,12 @@ const isPublicRoute = createRouteMatcher([
   "/speed(.*)", // 500 speed-focused SEO pages + hub
   "/thumbnails(.*)", // 10 thumbnail-keyword SEO pages + hub
   "/verify-certificate(.*)", // Public intern-certificate verification page
+  "/start(.*)", // Public link-in-bio Start Pages (carouselabs.com/start/[slug])
   "/sitemap.xml",
   "/robots.txt",
   "/api/contact(.*)",
   "/api/verify-certificate(.*)", // Public — looks up a certificate by its own opaque code, no session
+  "/api/start-page/click(.*)", // Public — click-tracking redirect, hit by anonymous Start Page visitors
   "/api/webhooks/clerk(.*)",
   "/api/webhooks/lemonsqueezy(.*)",
   "/api/webhooks/resend(.*)",

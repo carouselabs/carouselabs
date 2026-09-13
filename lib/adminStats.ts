@@ -13,6 +13,7 @@ export function postCreditCost(format: PostFormat): number {
   if (format === "CAROUSEL") return 40
   if (format === "SINGLE_IMAGE") return 15
   if (format === "THUMBNAIL") return 15
+  if (format === "CUSTOM") return 0 // user's own content — never charged
   return 5
 }
 

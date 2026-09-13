@@ -17,6 +17,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { postToLinkedIn } from "@/lib/linkedin"
 import { sendScheduledPostFailedEmail } from "@/lib/email"
+import { isFunctionalPlatform, type Platform } from "@/lib/platforms"
 
 export const maxDuration = 300
 
@@ -97,7 +98,11 @@ async function fulfillRecurringSlots(now: Date): Promise<number> {
     })
     if (firedRecently) continue
 
-    if (slot.platform !== "linkedin") continue // instagram isn't connected yet
+    // A recurring slot on a not-yet-connected platform is saved but simply
+    // never fires until that platform goes live (see lib/platforms.ts's
+    // `functional` flag) — same treatment as a queued ScheduledPost getting
+    // downgraded to "pending_connection" instead of being rejected outright.
+    if (!isFunctionalPlatform(slot.platform as Platform)) continue
 
     // Most recent post that isn't already queued/published anywhere, so a
     // recurring slot never reposts the same content on repeat.
@@ -179,10 +184,11 @@ export async function GET(req: Request) {
 
     try {
       if (scheduled.platform !== "linkedin") {
-        // Only linkedin can ever reach "queued" today (see
-        // app/api/content-hub/scheduled/route.ts), but guard here too in
+        // Only linkedin can ever reach "queued" today — every other platform
+        // is downgraded to "pending_connection" at write time (see
+        // app/api/content-hub/scheduled/route.ts) — but guard here too in
         // case that changes without this worker being updated in lockstep.
-        throw new Error("Instagram isn't connected yet")
+        throw new Error(`${scheduled.platform} isn't connected yet`)
       }
       if (!user.linkedIn) {
         throw new Error("LinkedIn isn't connected")
@@ -191,10 +197,16 @@ export async function GET(req: Request) {
         throw new Error("LinkedIn connection expired — please reconnect")
       }
 
+      // Custom posts may carry a per-platform caption override (see
+      // app/api/content-hub/custom-post/route.ts) — use LinkedIn's if the
+      // user set one, otherwise fall back to the post's default caption.
+      const metadata = post.metadata as { platformCaptions?: Record<string, string> } | null
+      const caption = metadata?.platformCaptions?.linkedin ?? post.caption ?? ""
+
       const { postUrl } = await postToLinkedIn(
         user.linkedIn.accessToken,
         user.linkedIn.linkedInId,
-        post.caption ?? "",
+        caption,
         post.imageUrls,
       )
 

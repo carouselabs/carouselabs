@@ -38,6 +38,10 @@ enum PostFormat {
   SINGLE_IMAGE
   TEXT_ONLY
   THUMBNAIL
+  // User's own content uploaded through the Content Hub Custom Post composer
+  // — no AI generation step, no credit charge. See
+  // app/api/content-hub/custom-post/route.ts.
+  CUSTOM
 }
 
 enum PostStatus {
@@ -96,6 +100,10 @@ model User {
   history        IdeaHistory[]
   scheduledPosts ScheduledPost[]
   recurringSlots RecurringSlot[]
+  queueSlots     QueueSlot[]
+  ideaBoardItems IdeaBoardItem[]
+  extensionKeys  ExtensionApiKey[]
+  startPage      StartPage?
 
   // ── Referral program ──
   referralCode       String?              @unique
@@ -246,9 +254,14 @@ model ScheduledPost {
   id              String   @id @default(cuid())
   userId          String
   postId          String
-  platform        String // "linkedin" | "instagram"
+  platform        String // see lib/platforms.ts's Platform union — a plain string so a new platform never needs a migration
   scheduledFor    DateTime // stored UTC; the client renders it in local time
-  status          String   @default("queued") // "draft" | "queued" | "publishing" | "published" | "failed" | "cancelled"
+  // "draft" | "queued" | "publishing" | "published" | "failed" | "cancelled" |
+  // "pending_connection" (queued for a platform with no real posting access
+  // yet — see lib/platforms.ts's `functional` flag; the cron publisher only
+  // ever queries status "queued", so these rows are never touched until that
+  // platform's `functional` flag flips true and existing rows are requeued)
+  status          String   @default("queued")
   publishedUrl    String?
   failureReason   String?
   retryCount      Int      @default(0)
@@ -284,6 +297,117 @@ model RecurringSlot {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// Buffer-style posting queue — a DIFFERENT concept from RecurringSlot even
+// though the shape looks similar, so it's a separate model rather than
+// reusing/extending RecurringSlot (see lib/queue.ts for the full comparison
+// this comment summarizes):
+//   - RecurringSlot is fully automatic: the cron worker itself PICKS the
+//     content (the user's most recent unscheduled post) when a slot's time
+//     arrives — the user never explicitly creates a post for it.
+//   - QueueSlot is just a smarter default time picker: the user explicitly
+//     creates/composes a post and chooses "Add to Queue", and the app
+//     assigns it to the next empty slot occurrence. One ScheduledPost is
+//     created immediately with a computed `scheduledFor` — after that it's
+//     indistinguishable from a manually-scheduled post to the rest of the
+//     system (same cron, same drafts/calendar/history).
+//   - The data shape also differs in a way that would need a migration to
+//     unify: RecurringSlot stores multiple days per row (`daysOfWeek Int[]`,
+//     e.g. Mon+Wed+Fri in one row); QueueSlot stores one day per row by
+//     design, since "find the next empty occurrence" is naturally a
+//     per-(day,time) lookup, not a per-multi-day-rule one.
+model QueueSlot {
+  id        String   @id @default(cuid())
+  userId    String
+  dayOfWeek Int // 0=Sunday..6=Saturday
+  timeOfDay String // "HH:mm", local to the user's profile timezone
+  platform  String // see lib/platforms.ts's Platform union
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Content Library / Ideas Board — a lightweight scratchpad for raw material
+// (a link, an image, or a quick note) saved for later, either from inside the
+// app or captured from any webpage via browser-extension-ideas/. "Turn into
+// Post" (Content Hub > Ideas) pre-fills the Custom Post composer with an
+// item's content — this never touches AI generation or credits, same as a
+// Custom Post itself.
+model IdeaBoardItem {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String // "link" | "image" | "note"
+  content   String   @db.Text // URL, image URL, or note text
+  sourceUrl String? // the page it was captured from, if applicable
+  title     String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, createdAt])
+}
+
+// Long-lived credential for browser-extension-ideas/ (and any future
+// extension) to call app/api/ideas-board/capture on the user's behalf. An
+// extension has no Clerk session cookie to authenticate with, so it needs its
+// own bearer credential instead — this did not exist anywhere in the
+// codebase before Phase C; there was no earlier "LinkedIn AI extension" work
+// to reuse a pattern from, so this is a new, minimal design (see
+// lib/extensionAuth.ts): only `keyHash` (SHA-256 of the actual key) is ever
+// stored, never the plaintext key itself, which is shown to the user exactly
+// once at generation time (app/api/settings/extension-key).
+model ExtensionApiKey {
+  id         String    @id @default(cuid())
+  userId     String    @unique // one active key per user for now — regenerating replaces it
+  keyHash    String    @unique
+  label      String    @default("Browser extension")
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Start Page — a simple link-in-bio page at carouselabs.com/start/[slug].
+// One per user (userId is @unique). Publicly readable by anyone who knows
+// the slug (see app/(marketing)/start/[slug]/page.tsx and proxy.ts's public
+// route list) — only the owner can edit it (app/(app)/settings/start-page).
+model StartPage {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  slug      String   @unique
+  title     String?
+  bio       String?  @db.Text
+  avatarUrl String?
+  theme     String   @default("default") // see components/startpage — a small fixed set of presets
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  links StartPageLink[]
+
+  @@index([slug])
+}
+
+model StartPageLink {
+  id          String   @id @default(cuid())
+  startPageId String
+  label       String
+  url         String
+  order       Int
+  clickCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  startPage StartPage @relation(fields: [startPageId], references: [id], onDelete: Cascade)
+
+  @@index([startPageId])
+  @@index([startPageId, order])
 }
 
 model Slide {

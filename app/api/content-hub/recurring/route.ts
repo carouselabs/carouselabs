@@ -1,13 +1,7 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
-
-const VALID_PLATFORMS = ["linkedin", "instagram"] as const
-type Platform = (typeof VALID_PLATFORMS)[number]
-
-function isValidPlatform(val: unknown): val is Platform {
-  return VALID_PLATFORMS.includes(val as Platform)
-}
+import { isValidPlatform, type Platform } from "@/lib/platforms"
 
 // "HH:mm", 00-23 : 00-59.
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/
@@ -35,6 +29,11 @@ export async function GET() {
 
 // POST /api/content-hub/recurring — "post automatically every [days] at
 // [time] on [platform]". Body: { label, daysOfWeek, timeOfDay, platform }
+// Every platform is creatable, not just functional ones — same reasoning as
+// the Custom Post composer and Queue Settings: a rule for a not-yet-connected
+// platform is saved and simply never fires (see the cron's
+// fulfillRecurringSlots, which skips any slot whose platform isn't
+// functional yet) until that platform gets real API access.
 export async function POST(req: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -53,17 +52,13 @@ export async function POST(req: Request) {
       throw new Error("timeOfDay must be 'HH:mm'")
     }
     timeOfDay = body.timeOfDay
-    if (!isValidPlatform(body.platform)) throw new Error("platform must be 'linkedin' or 'instagram'")
+    if (!isValidPlatform(body.platform)) throw new Error("Unsupported platform")
     platform = body.platform
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Invalid request body" },
       { status: 400 },
     )
-  }
-
-  if (platform === "instagram") {
-    return NextResponse.json({ error: "Instagram isn't connected yet" }, { status: 400 })
   }
 
   const slot = await db.recurringSlot.create({

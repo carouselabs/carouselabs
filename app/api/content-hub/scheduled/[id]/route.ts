@@ -1,8 +1,17 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
+import { isFunctionalPlatform, type Platform } from "@/lib/platforms"
 
-const VALID_STATUSES = ["draft", "queued", "publishing", "published", "failed", "cancelled"] as const
+const VALID_STATUSES = [
+  "draft",
+  "queued",
+  "publishing",
+  "published",
+  "failed",
+  "cancelled",
+  "pending_connection",
+] as const
 type Status = (typeof VALID_STATUSES)[number]
 
 function isValidStatus(val: unknown): val is Status {
@@ -46,25 +55,29 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   // A draft moving to "queued" is the moment it actually needs to publish —
   // that's when a LinkedIn connection is required, not when the draft was saved.
-  const nextStatus = status ?? existing.status
+  const nextStatus = status ?? (existing.status as Status)
   if (existing.platform === "linkedin" && nextStatus === "queued") {
     const linkedIn = await db.linkedInAccount.findUnique({ where: { userId: user.id } })
     if (!linkedIn) {
       return NextResponse.json({ error: "LinkedIn isn't connected yet" }, { status: 400 })
     }
   }
-  if (existing.platform === "instagram" && nextStatus === "queued") {
-    return NextResponse.json({ error: "Instagram isn't connected yet" }, { status: 400 })
-  }
+
+  // Same downgrade as the create route: a platform with no real posting
+  // access yet never gets rejected, just never actually reaches "queued".
+  const effectiveNextStatus: Status =
+    nextStatus === "queued" && !isFunctionalPlatform(existing.platform as Platform)
+      ? "pending_connection"
+      : nextStatus
 
   const updated = await db.scheduledPost.update({
     where: { id },
     data: {
       ...(scheduledFor ? { scheduledFor } : {}),
-      ...(status ? { status } : {}),
+      ...(status ? { status: effectiveNextStatus } : {}),
       // Manually rescheduling/reactivating clears any prior failure so the
       // card doesn't keep showing a stale red dot after the user fixes it.
-      ...(status === "queued" ? { failureReason: null, retryCount: 0 } : {}),
+      ...(effectiveNextStatus === "queued" ? { failureReason: null, retryCount: 0 } : {}),
     },
     include: {
       post: { select: { id: true, title: true, caption: true, format: true, imageUrls: true } },

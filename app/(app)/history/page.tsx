@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Clock, Search } from "lucide-react"
 import { HistoryCard } from "@/components/history/HistoryCard"
 import { ThumbnailHistoryCard } from "@/components/history/ThumbnailHistoryCard"
+import { CustomPostHistoryCard } from "@/components/history/CustomPostHistoryCard"
 import {
   pinHistory,
   deleteHistory,
@@ -13,13 +14,14 @@ import {
   type HistoryStatus,
 } from "@/lib/hooks/useHistory"
 
-type Filter = "All" | "Caption" | "Image" | "Carousel" | "Thumbnail"
+type Filter = "All" | "Caption" | "Image" | "Carousel" | "Thumbnail" | "Custom"
 
-const FILTERS: Filter[] = ["All", "Caption", "Image", "Carousel", "Thumbnail"]
+const FILTERS: Filter[] = ["All", "Caption", "Image", "Carousel", "Thumbnail", "Custom"]
 
 // Which statuses belong to each filter tab (idea-based entries only —
-// Thumbnail is filtered separately below since it has no HistoryStatus).
-const FILTER_STATUSES: Record<Exclude<Filter, "All" | "Thumbnail">, HistoryStatus[]> = {
+// Thumbnail and Custom are filtered separately below since neither has a
+// HistoryStatus).
+const FILTER_STATUSES: Record<Exclude<Filter, "All" | "Thumbnail" | "Custom">, HistoryStatus[]> = {
   Caption: ["CAPTION", "CAPTION_DONE"],
   Image: ["IMAGE", "IMAGE_DONE"],
   Carousel: ["CAROUSEL", "CAROUSEL_DONE"],
@@ -59,13 +61,17 @@ export default function HistoryPage() {
     return entries.filter((e) => {
       const matchesSearch =
         !q ||
-        (e.kind === "idea" ? e.idea.hook : e.videoContent).toLowerCase().includes(q)
+        (e.kind === "idea" ? e.idea.hook : e.kind === "thumbnail" ? e.videoContent : (e.caption ?? ""))
+          .toLowerCase()
+          .includes(q)
       const matchesFilter =
         filter === "All"
           ? true
           : filter === "Thumbnail"
             ? e.kind === "thumbnail"
-            : e.kind === "idea" && FILTER_STATUSES[filter].includes(e.status)
+            : filter === "Custom"
+              ? e.kind === "custom"
+              : e.kind === "idea" && FILTER_STATUSES[filter].includes(e.status)
       return matchesSearch && matchesFilter
     })
   }, [entries, search, filter])
@@ -193,8 +199,10 @@ export default function HistoryPage() {
                 onDuplicate={handleDuplicate}
                 isDuplicating={duplicatingId === entry.ideaId}
               />
-            ) : (
+            ) : entry.kind === "thumbnail" ? (
               <ThumbnailHistoryCard key={entry.id} entry={entry} />
+            ) : (
+              <CustomPostHistoryCard key={entry.id} entry={entry} />
             ),
           )}
         </div>

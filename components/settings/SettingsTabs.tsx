@@ -9,6 +9,8 @@ const TABS = [
   { href: "/settings/voice-presets", label: "Voice Presets" },
   { href: "/settings/billing", label: "Billing" },
   { href: "/settings/referrals", label: "Referrals" },
+  { href: "/settings/extension", label: "Extension" },
+  { href: "/settings/start-page", label: "Start Page" },
   { href: "/settings/account", label: "Account" },
 ]
 

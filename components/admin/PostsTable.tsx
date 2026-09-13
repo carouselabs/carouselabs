@@ -129,6 +129,8 @@ export function PostsTable() {
           <option value="TEXT_ONLY">Caption</option>
           <option value="SINGLE_IMAGE">Image</option>
           <option value="CAROUSEL">Carousel</option>
+          <option value="THUMBNAIL">Thumbnail</option>
+          <option value="CUSTOM">Custom</option>
         </AdminSelect>
         <input
           type="date"

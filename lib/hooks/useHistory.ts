@@ -41,7 +41,19 @@ export interface ThumbnailHistoryEntry {
   createdAt: string
 }
 
-export type AnyHistoryEntry = HistoryEntry | ThumbnailHistoryEntry
+// Custom Posts (Content Hub's "Create a Custom Post") have no Idea behind
+// them either — the user's own content, saved directly as a Post (see
+// app/api/content-hub/custom-post/route.ts). Same display-only treatment as
+// ThumbnailHistoryEntry.
+export interface CustomPostHistoryEntry {
+  kind: "custom"
+  id: string // Post id
+  caption: string | null
+  imageUrl: string | null
+  createdAt: string
+}
+
+export type AnyHistoryEntry = HistoryEntry | ThumbnailHistoryEntry | CustomPostHistoryEntry
 
 // Maps a history status to the route the user should resume at — the core
 // "take me exactly where I left off" logic. Intent and _DONE share a route.

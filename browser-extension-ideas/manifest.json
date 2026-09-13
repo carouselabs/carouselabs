@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "CarouseLabs Ideas Board",
+  "version": "1.0.0",
+  "description": "Right-click any image, link, or selected text to save it to your CarouseLabs Ideas Board.",
+  "permissions": ["contextMenus", "storage"],
+  "host_permissions": [
+    "https://carouselabs.com/*",
+    "http://localhost:3000/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "CarouseLabs Ideas Board"
+  },
+  "options_page": "options.html"
+}

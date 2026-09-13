@@ -13,6 +13,10 @@
       "schedule": "0 6 * * 1"
     },
     {
+      "path": "/api/cron/weekly-summary-email",
+      "schedule": "0 7 * * 1"
+    },
+    {
       "path": "/api/cron/publish-scheduled-posts",
       "schedule": "*/5 * * * *"
     },

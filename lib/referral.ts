@@ -197,6 +197,30 @@ export async function createCommissionForPayment(params: {
   }
 }
 
+// Pending + paid commission totals for one referrer, optionally scoped to
+// commissions created on/after `since` (e.g. "this month", for the weekly
+// summary email — see lib/weeklySummary.ts). Mirrors the same filtering
+// rules as app/api/referrals/me's lifetime stats: "reversed" commissions
+// never count as pending or paid, and the two buckets are mutually exclusive
+// (a commission is exactly one of pending/paid/reversed at any time).
+export async function getReferralEarningsSummary(
+  userId: string,
+  since?: Date,
+): Promise<{ pending: number; paid: number }> {
+  const commissions = await db.referralCommission.findMany({
+    where: {
+      referrerId: userId,
+      status: { in: ["pending", "paid"] },
+      ...(since ? { createdAt: { gte: since } } : {}),
+    },
+    select: { amount: true, status: true },
+  })
+
+  const pending = commissions.filter((c) => c.status === "pending").reduce((sum, c) => sum + c.amount, 0)
+  const paid = commissions.filter((c) => c.status === "paid").reduce((sum, c) => sum + c.amount, 0)
+  return { pending, paid }
+}
+
 // Reverses a commission when its underlying payment is refunded — see
 // STEP 6 in the referral program spec. Exported now so it's ready to wire up
 // the moment a real refund webhook event is confirmed (see the gap noted in

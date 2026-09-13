@@ -26,6 +26,7 @@ import { AdminNewSupportMessageEmail } from "@/emails/AdminNewSupportMessageEmai
 import { InternSupportReplyEmail } from "@/emails/InternSupportReplyEmail"
 import { ScheduledPostFailedEmail } from "@/emails/ScheduledPostFailedEmail"
 import { ScheduledPostPublishedEmail } from "@/emails/ScheduledPostPublishedEmail"
+import { WeeklySummaryEmail, type WeeklySummaryEmailPost } from "@/emails/WeeklySummaryEmail"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -346,6 +347,33 @@ export async function sendInternSupportReplyEmail(email: string, name: string) {
     to: email,
     subject: "You have a new reply from Support",
     html: await render(InternSupportReplyEmail({ name })),
+  })
+  if (error) throw new Error(`Resend: ${error.message}`)
+}
+
+// Gated behind Profile.notifyWeeklySummary (default true) — see
+// app/api/cron/weekly-summary-email/route.ts, which also skips users with no
+// activity at all before ever calling this.
+export async function sendWeeklySummaryEmail(
+  email: string,
+  data: {
+    name?: string
+    publishedPosts: WeeklySummaryEmailPost[]
+    publishedCount: number
+    upcomingPosts: WeeklySummaryEmailPost[]
+    upcomingCount: number
+    referralPending: number
+    referralPaid: number
+    hasReferralActivity: boolean
+    creditsRemaining: number
+    plan: "FREE" | "PRO" | "GROWTH"
+  },
+) {
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: "Your CarouseLabs week in review",
+    html: await render(WeeklySummaryEmail(data)),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
 }

@@ -9,10 +9,14 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { isValidPlatform } from "@/lib/platforms"
+import { isValidPlatform, MAX_PLATFORM_IMAGES } from "@/lib/platforms"
 import type { Prisma } from "@prisma/client"
 
-const MAX_IMAGES = 6
+// Sanity ceiling only — real per-platform enforcement (Pinterest: 1, X: 4,
+// etc.) happens via validatePostForPlatform when this post is actually
+// scheduled (see app/(app)/content-hub/_client.tsx's handleSchedule/
+// handleAddToQueue), not here. This just stops an arbitrarily large upload.
+const MAX_IMAGES = MAX_PLATFORM_IMAGES
 
 export async function POST(req: Request) {
   const user = await getCurrentUser()

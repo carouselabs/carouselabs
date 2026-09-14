@@ -175,7 +175,7 @@ export function CustomPostComposer({
       </button>
       <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">Create a Custom Post</p>
 
-      <CustomPostImageUploader images={images} onAdd={onAddImage} onRemove={onRemoveImage} />
+      <CustomPostImageUploader images={images} onAdd={onAddImage} onRemove={onRemoveImage} platforms={platforms} />
 
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">

@@ -73,6 +73,26 @@ export const PLATFORM_LIMITS: Record<
   threads: { maxChars: 500, maxImages: 20, functional: PLATFORM_META.threads.functional },
 }
 
+// The highest per-platform image cap that exists in PLATFORM_LIMITS today —
+// the sane absolute ceiling for the upload widget itself (before the user
+// has picked platforms, or when every selected platform has no strict cap,
+// e.g. Facebook alone). Derived rather than hardcoded so it can never drift
+// out of sync with PLATFORM_LIMITS as platforms are added or limits change.
+export const MAX_PLATFORM_IMAGES = Math.max(
+  ...Object.values(PLATFORM_LIMITS).map((l) => l.maxImages ?? 0),
+)
+
+// The real, per-selection image ceiling: the tightest maxImages among the
+// given platforms, or MAX_PLATFORM_IMAGES when no platform is selected yet
+// or none of the selected platforms impose a strict cap (e.g. Facebook,
+// whose maxImages is null).
+export function maxImagesForPlatforms(platforms: Platform[]): number {
+  const finiteLimits = platforms
+    .map((p) => PLATFORM_LIMITS[p].maxImages)
+    .filter((n): n is number => n !== null)
+  return finiteLimits.length > 0 ? Math.min(...finiteLimits) : MAX_PLATFORM_IMAGES
+}
+
 // How many characters actually show before a platform's feed collapses the
 // rest behind "...more" / "...see more" — soft, advisory data (varies by
 // surface and isn't published by any platform), not a hard limit. Platforms

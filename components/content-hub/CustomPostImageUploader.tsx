@@ -7,8 +7,8 @@
 // Post's imageUrls must be real hosted URLs, not base64.
 import { useCallback, useRef, useState } from "react"
 import { Upload, X, Loader2, ImageIcon } from "lucide-react"
+import { PLATFORM_LIMITS, PLATFORM_META, maxImagesForPlatforms, type Platform } from "@/lib/platforms"
 
-const MAX_IMAGES = 6
 const MAX_FILE_BYTES = 8 * 1024 * 1024 // 8MB source file cap, before compression
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"]
 
@@ -16,6 +16,30 @@ interface CustomPostImageUploaderProps {
   images: string[] // already-uploaded R2 URLs
   onAdd: (url: string) => void
   onRemove: (url: string) => void
+  platforms: Platform[] // currently-selected platforms — sets the real image cap
+}
+
+// "(optional)" with no platforms selected yet, "(optional, up to N)" once a
+// real cap applies, and a "— X only allows N images" callout only when some
+// selected platform is genuinely tighter than the others (not just the only
+// one with a defined cap — e.g. LinkedIn + Facebook shouldn't call out
+// LinkedIn, since Facebook has no cap to be tighter than).
+function buildImagesSuffix(platforms: Platform[]): string {
+  if (platforms.length === 0) return "(optional)"
+  const finiteLimits = platforms
+    .map((p) => ({ platform: p, max: PLATFORM_LIMITS[p].maxImages }))
+    .filter((l): l is { platform: Platform; max: number } => l.max !== null)
+  if (finiteLimits.length === 0) return `(optional, up to ${maxImagesForPlatforms(platforms)})`
+
+  const minMax = Math.min(...finiteLimits.map((l) => l.max))
+  const restrictors = finiteLimits.filter((l) => l.max === minMax)
+  const isCalledOut = finiteLimits.length > 1 && restrictors.length < finiteLimits.length
+  if (!isCalledOut) return `(optional, up to ${minMax})`
+
+  const names = restrictors.map((r) => PLATFORM_META[r.platform].label).join(" and ")
+  const noun = minMax === 1 ? "image" : "images"
+  const verb = restrictors.length > 1 ? "only allow" : "only allows"
+  return `(optional, up to ${minMax} — ${names} ${verb} ${minMax} ${noun})`
 }
 
 async function compressImage(file: File, maxSize = 1600, quality = 0.85): Promise<string> {
@@ -48,20 +72,21 @@ async function compressImage(file: File, maxSize = 1600, quality = 0.85): Promis
   })
 }
 
-export function CustomPostImageUploader({ images, onAdd, onRemove }: CustomPostImageUploaderProps) {
+export function CustomPostImageUploader({ images, onAdd, onRemove, platforms }: CustomPostImageUploaderProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const maxImages = maxImagesForPlatforms(platforms)
 
   const handleFiles = useCallback(
     async (fileList: FileList | File[]) => {
       const files = Array.from(fileList)
       setError(null)
 
-      const room = MAX_IMAGES - images.length
+      const room = maxImages - images.length
       if (room <= 0) {
-        setError(`You can attach up to ${MAX_IMAGES} images`)
+        setError(`You can attach up to ${maxImages} images`)
         return
       }
 
@@ -92,7 +117,7 @@ export function CustomPostImageUploader({ images, onAdd, onRemove }: CustomPostI
         setUploading(false)
       }
     },
-    [images.length, onAdd],
+    [images.length, maxImages, onAdd],
   )
 
   const handleDrop = useCallback(
@@ -109,14 +134,14 @@ export function CustomPostImageUploader({ images, onAdd, onRemove }: CustomPostI
     e.target.value = "" // allow re-selecting the same file after removing it
   }
 
-  const canAddMore = images.length < MAX_IMAGES
+  const canAddMore = images.length < maxImages
 
   return (
     <div className="flex flex-col gap-2">
       <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
         Images{" "}
         <span className="normal-case tracking-normal font-normal text-[#C4C0B6]">
-          (optional, up to {MAX_IMAGES})
+          {buildImagesSuffix(platforms)}
         </span>
       </p>
 

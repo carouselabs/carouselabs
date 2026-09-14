@@ -19,7 +19,19 @@ function isValidType(val: unknown): val is ItemType {
 // sourceUrl? }.
 export async function POST(req: Request) {
   const user = await getUserFromExtensionKey(req)
-  if (!user) return NextResponse.json({ error: "Invalid or missing extension key" }, { status: 401 })
+  if (!user) {
+    // No prior logging existed here at all, so a stale/revoked extension key
+    // (e.g. the user regenerated it in Settings but never re-pasted it into
+    // the extension's options page) failed every single capture with zero
+    // trace in Vercel logs — background.js only shows a transient badge the
+    // user can easily miss. Never log the key itself, only whether one was
+    // even present, so a real leaked key can't end up in logs.
+    const auth = req.headers.get("authorization")
+    console.warn(
+      `[ideas-board/capture] rejected — ${auth ? "key present but no match" : "no Authorization header"}`,
+    )
+    return NextResponse.json({ error: "Invalid or missing extension key" }, { status: 401 })
+  }
 
   let type: ItemType
   let content: string
@@ -43,9 +55,14 @@ export async function POST(req: Request) {
     )
   }
 
-  const item = await db.ideaBoardItem.create({
-    data: { userId: user.id, type, content, title, sourceUrl },
-  })
-
-  return NextResponse.json({ ok: true, item })
+  try {
+    const item = await db.ideaBoardItem.create({
+      data: { userId: user.id, type, content, title, sourceUrl },
+    })
+    console.log(`[ideas-board/capture] saved ${type} item ${item.id} for user ${user.id}`)
+    return NextResponse.json({ ok: true, item })
+  } catch (err) {
+    console.error(`[ideas-board/capture] db write failed for user ${user.id}:`, err)
+    return NextResponse.json({ error: "Failed to save item" }, { status: 500 })
+  }
 }

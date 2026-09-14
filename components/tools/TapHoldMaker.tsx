@@ -99,8 +99,11 @@ export function TapHoldMaker() {
         setHistoryCount(0)
         requestAnimationFrame(renderPreviews)
       })
-    } catch {
-      setToast("Please choose a JPG, PNG, or WebP image.")
+    } catch (err) {
+      // loadImage() throws a specific, user-actionable message per failure
+      // (bad format vs. a genuine decode failure) — surface that instead of
+      // one generic message that didn't tell the user what to actually fix.
+      setToast(err instanceof Error ? err.message : "Please choose a JPG, PNG, or WebP image.")
     }
   }, [ensureRenderer, renderPreviews])
 

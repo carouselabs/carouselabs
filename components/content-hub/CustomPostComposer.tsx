@@ -8,7 +8,7 @@
 // for AI-generated content.
 import { useRef, useState } from "react"
 import { Loader2, FileText, Hash, ChevronDown, Link2 } from "lucide-react"
-import { PLATFORM_ORDER, PLATFORM_META, type Platform } from "@/lib/platforms"
+import { PLATFORM_ORDER, PLATFORM_META, PLATFORM_LIMITS, validatePostForPlatform, type Platform } from "@/lib/platforms"
 import { PlatformBadge } from "./platforms"
 import { CustomPostImageUploader } from "./CustomPostImageUploader"
 import type { PostTemplateSummary, HashtagGroupSummary } from "./LibraryPanel"
@@ -151,6 +151,20 @@ export function CustomPostComposer({
       setShortening(false)
     }
   }
+  // Per-platform caption overrides (when customizing) each get validated
+  // against their OWN text, never the shared default — an empty override
+  // falls back to the shared caption, same as what actually gets posted.
+  function effectiveCaptionFor(platform: Platform): string {
+    if (customizePerPlatform && platformCaptions[platform]?.trim()) return platformCaptions[platform]!
+    return caption
+  }
+
+  function counterColor(len: number, max: number): string {
+    if (len > max) return "text-[rgba(239,68,68,0.9)]"
+    if (len >= max * 0.9) return "text-[rgba(217,119,6,0.9)]"
+    return "text-[#16A34A]"
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <button
@@ -321,38 +335,65 @@ export function CustomPostComposer({
           {PLATFORM_ORDER.map((platform) => {
             const meta = PLATFORM_META[platform]
             const checked = platforms.includes(platform)
+            const limits = PLATFORM_LIMITS[platform]
+            const effectiveCaption = effectiveCaptionFor(platform)
+            const len = effectiveCaption.trim().length
+            const validation = checked ? validatePostForPlatform(effectiveCaption, images.length, platform) : null
             return (
-              <button
+              <div
                 key={platform}
-                type="button"
-                onClick={() => onTogglePlatform(platform)}
                 className={[
-                  "flex items-center gap-2 p-2.5 rounded-xl border text-left transition-colors",
+                  "flex flex-col rounded-xl border transition-colors",
                   checked
                     ? "border-[rgba(124,58,237,0.5)] bg-[rgba(124,58,237,0.05)]"
                     : "border-[#E5E3DE] bg-white hover:border-[#D1CFC8]",
                 ].join(" ")}
               >
-                <PlatformBadge platform={platform} size={22} />
-                <span className="flex flex-col min-w-0">
-                  <span className="text-[12.5px] font-semibold text-[#0A0A0A] truncate">{meta.label}</span>
-                  <span className="text-[10px] text-[#9CA3AF] truncate">
-                    {meta.functional
-                      ? linkedInConnected === false
-                        ? "Not connected"
-                        : "Ready to post"
-                      : "Connect to enable"}
-                  </span>
-                </span>
-                <span
-                  className={[
-                    "ml-auto w-4 h-4 rounded flex-shrink-0 border flex items-center justify-center transition-colors",
-                    checked ? "bg-[#7C3AED] border-[#7C3AED]" : "border-[#D1D5DB]",
-                  ].join(" ")}
+                <button
+                  type="button"
+                  onClick={() => onTogglePlatform(platform)}
+                  className="flex items-center gap-2 p-2.5 text-left w-full"
                 >
-                  {checked && <span className="w-1.5 h-1.5 rounded-sm bg-white" />}
-                </span>
-              </button>
+                  <PlatformBadge platform={platform} size={22} />
+                  <span className="flex flex-col min-w-0">
+                    <span className="text-[12.5px] font-semibold text-[#0A0A0A] truncate">{meta.label}</span>
+                    <span className="text-[10px] text-[#9CA3AF] truncate">
+                      {meta.functional
+                        ? linkedInConnected === false
+                          ? "Not connected"
+                          : "Ready to post"
+                        : "Connect to enable"}
+                    </span>
+                  </span>
+                  {checked && (
+                    <span className={`ml-auto text-[10px] font-medium tabular-nums ${counterColor(len, limits.maxChars)}`}>
+                      {len.toLocaleString()}/{limits.maxChars.toLocaleString()}
+                    </span>
+                  )}
+                  <span
+                    className={[
+                      "w-4 h-4 rounded flex-shrink-0 border flex items-center justify-center transition-colors",
+                      checked ? "bg-[#7C3AED] border-[#7C3AED]" : "border-[#D1D5DB] ml-auto",
+                    ].join(" ")}
+                  >
+                    {checked && <span className="w-1.5 h-1.5 rounded-sm bg-white" />}
+                  </span>
+                </button>
+                {checked && validation && (validation.errors.length > 0 || validation.warnings.length > 0) && (
+                  <div className="flex flex-col gap-0.5 px-2.5 pb-2 -mt-1">
+                    {validation.errors.map((msg, i) => (
+                      <p key={`e${i}`} className="text-[10px] leading-snug text-[rgba(239,68,68,0.9)]">
+                        {msg}
+                      </p>
+                    ))}
+                    {validation.warnings.map((msg, i) => (
+                      <p key={`w${i}`} className="text-[10px] leading-snug text-[rgba(217,119,6,0.9)]">
+                        {msg}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>
@@ -375,21 +416,28 @@ export function CustomPostComposer({
           </label>
           {customizePerPlatform && (
             <div className="flex flex-col gap-2.5 pt-1">
-              {platforms.map((platform) => (
-                <div key={platform} className="flex flex-col gap-1">
-                  <span className="text-[11px] font-medium text-[#6B7280] flex items-center gap-1.5">
-                    <PlatformBadge platform={platform} size={16} />
-                    {PLATFORM_META[platform].label}
-                  </span>
-                  <textarea
-                    value={platformCaptions[platform] ?? ""}
-                    onChange={(e) => onPlatformCaptionChange(platform, e.target.value)}
-                    placeholder={caption || "Same as default caption"}
-                    rows={2}
-                    className="w-full px-2.5 py-2 rounded-lg border border-[#E5E3DE] bg-white text-[12.5px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors resize-y"
-                  />
-                </div>
-              ))}
+              {platforms.map((platform) => {
+                const overrideLen = (platformCaptions[platform] ?? caption).trim().length
+                const overrideMax = PLATFORM_LIMITS[platform].maxChars
+                return (
+                  <div key={platform} className="flex flex-col gap-1">
+                    <span className="text-[11px] font-medium text-[#6B7280] flex items-center gap-1.5">
+                      <PlatformBadge platform={platform} size={16} />
+                      {PLATFORM_META[platform].label}
+                      <span className={`ml-auto tabular-nums ${counterColor(overrideLen, overrideMax)}`}>
+                        {overrideLen.toLocaleString()}/{overrideMax.toLocaleString()}
+                      </span>
+                    </span>
+                    <textarea
+                      value={platformCaptions[platform] ?? ""}
+                      onChange={(e) => onPlatformCaptionChange(platform, e.target.value)}
+                      placeholder={caption || "Same as default caption"}
+                      rows={2}
+                      className="w-full px-2.5 py-2 rounded-lg border border-[#E5E3DE] bg-white text-[12.5px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors resize-y"
+                    />
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>

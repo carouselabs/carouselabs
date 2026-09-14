@@ -303,7 +303,7 @@ model RecurringSlot {
   label      String
   daysOfWeek Int[] // 0=Sunday..6=Saturday
   timeOfDay  String // "HH:mm", local to the user's profile timezone
-  platform   String // "linkedin" | "instagram"
+  platform   String // see lib/platforms.ts's Platform union
   active     Boolean  @default(true)
   createdAt  DateTime @default(now())
 

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ArrowLeft, History, Sparkles, Loader2 } from "lucide-react"
 import { CAPTION_TEMPLATES, CATEGORY_ORDER, getTemplatesByCategory } from "@/lib/captionTemplates"
 import { CAPTION_PLATFORMS } from "@/lib/captionPlatforms"
+import { isValidPlatform, validatePostForPlatform } from "@/lib/platforms"
 import { CaptionEditor } from "@/components/generate/CaptionEditor"
 import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { ToneSelector, type Tone } from "@/components/generate/ToneSelector"
@@ -662,6 +663,29 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
         regenerateDisabled={atLimit}
       />
       )}
+
+      {/* Real platform-limit check on the generated/edited caption — same
+          validatePostForPlatform used by Content Hub's Custom Post Composer,
+          so an AI caption that happens to run long gets the same treatment
+          as one a user typed by hand. */}
+      {!isGenerating && caption.trim() && selectedPlatform && isValidPlatform(selectedPlatform) && (() => {
+        const { errors, warnings } = validatePostForPlatform(caption, 0, selectedPlatform)
+        if (errors.length === 0 && warnings.length === 0) return null
+        return (
+          <div className="flex flex-col gap-1">
+            {errors.map((msg, i) => (
+              <p key={`e${i}`} className="text-[12px] leading-snug text-[rgba(239,68,68,0.9)]">
+                {msg}
+              </p>
+            ))}
+            {warnings.map((msg, i) => (
+              <p key={`w${i}`} className="text-[12px] leading-snug text-[rgba(217,119,6,0.9)]">
+                {msg}
+              </p>
+            ))}
+          </div>
+        )
+      })()}
 
       {/* Version history — silent, below the editor */}
       <VersionHistory versions={versions} onRestore={(content) => setCaption(content)} />

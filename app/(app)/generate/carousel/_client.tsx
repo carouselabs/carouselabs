@@ -25,6 +25,7 @@ import { friendlyGenerationError } from "@/lib/friendlyError"
 import { countWords } from "@/lib/wordCount"
 import { useCreditStore } from "@/lib/store/creditStore"
 import { CAPTION_PLATFORMS } from "@/lib/captionPlatforms"
+import { isValidPlatform, validatePostForPlatform } from "@/lib/platforms"
 import { CAPTION_TEMPLATES, CATEGORY_ORDER, getTemplatesByCategory } from "@/lib/captionTemplates"
 import {
   CAROUSEL_CATEGORY_ORDER,
@@ -816,6 +817,27 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
         {countWords(caption) > 0 && (
           <p className="text-[11px] text-[#ADA99F] tabular-nums">{countWords(caption)} words</p>
         )}
+        {/* Same validatePostForPlatform used by Content Hub's Custom Post
+            Composer, so an AI caption/carousel that runs long or has too many
+            slides gets the same treatment as content a user typed by hand. */}
+        {caption.trim() && selectedPlatform && isValidPlatform(selectedPlatform) && (() => {
+          const { errors, warnings } = validatePostForPlatform(caption, slideImages.length, selectedPlatform)
+          if (errors.length === 0 && warnings.length === 0) return null
+          return (
+            <div className="flex flex-col gap-1">
+              {errors.map((msg, i) => (
+                <p key={`e${i}`} className="text-[12px] leading-snug text-[rgba(239,68,68,0.9)]">
+                  {msg}
+                </p>
+              ))}
+              {warnings.map((msg, i) => (
+                <p key={`w${i}`} className="text-[12px] leading-snug text-[rgba(217,119,6,0.9)]">
+                  {msg}
+                </p>
+              ))}
+            </div>
+          )
+        })()}
         <div className="flex items-center gap-2">
           <button
             onClick={handleCopyCaption}

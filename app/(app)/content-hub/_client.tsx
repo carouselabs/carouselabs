@@ -29,7 +29,7 @@ import {
   UploadCloud,
 } from "lucide-react"
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser"
-import { PLATFORM_META, PLATFORM_ORDER, type Platform } from "@/lib/platforms"
+import { PLATFORM_META, PLATFORM_ORDER, validatePostForPlatform, type Platform } from "@/lib/platforms"
 import { PlatformBadge, PlatformIcon } from "@/components/content-hub/platforms"
 import { CustomPostComposer } from "@/components/content-hub/CustomPostComposer"
 import { PlatformPreview } from "@/components/content-hub/PlatformPreview"
@@ -1398,6 +1398,33 @@ export function ContentHubClient({
     setStep(3)
   }
 
+  // Splits the custom composer's selected platforms into ones whose current
+  // content (its own per-platform caption override when customizing, else
+  // the shared default caption) passes real platform limits vs. ones with a
+  // hard violation — see PLATFORM_LIMITS/validatePostForPlatform in
+  // lib/platforms.ts. A platform with a violation is never blocking for the
+  // OTHERS: the caller schedules the valid ones and reports the rest as
+  // skipped rather than failing the whole action.
+  function splitCustomPlatformsByValidation(): { valid: Platform[]; skippedSummary: string | null } {
+    const skipped: string[] = []
+    const valid: Platform[] = []
+    for (const platform of customPlatforms) {
+      const effectiveCaption =
+        customizePerPlatform && customPlatformCaptions[platform]?.trim()
+          ? customPlatformCaptions[platform]!
+          : customCaption
+      const { valid: ok, errors } = validatePostForPlatform(effectiveCaption, customImages.length, platform)
+      if (ok) valid.push(platform)
+      else skipped.push(`${PLATFORM_META[platform].label} (${errors.join(", ")})`)
+    }
+    if (skipped.length === 0) return { valid, skippedSummary: null }
+    const skippedText =
+      skipped.length === 1
+        ? skipped[0]
+        : `${skipped.slice(0, -1).join(", ")} and ${skipped[skipped.length - 1]}`
+    return { valid, skippedSummary: `Skipped ${skippedText}.` }
+  }
+
   async function handleSchedule(asDraft = false) {
     if (!dateValue || !timeValue) return
     const scheduledFor = new Date(`${dateValue}T${timeValue}`)
@@ -1416,6 +1443,20 @@ export function ContentHubClient({
         setPanelError("Pick at least one platform")
         return
       }
+      // A hard platform-limit violation only blocks scheduling/posting for
+      // THAT platform — a draft isn't going live yet, so it's saved for
+      // every selected platform regardless (the user can fix the content
+      // before promoting it). Checked before creating the Post record so a
+      // fully-blocked submission never creates an orphan post.
+      const { valid: platformsToSchedule, skippedSummary } = asDraft
+        ? { valid: customPlatforms, skippedSummary: null as string | null }
+        : splitCustomPlatformsByValidation()
+
+      if (!asDraft && platformsToSchedule.length === 0) {
+        setPanelError(`Nothing scheduled — ${skippedSummary?.replace(/^Skipped /, "").replace(/\.$/, "")}.`)
+        return
+      }
+
       setSubmitting(true)
       if (asDraft) setSavingAsDraft(true)
       setPanelError(null)
@@ -1442,7 +1483,7 @@ export function ContentHubClient({
 
         const status = asDraft ? "draft" : "queued"
         const results = await Promise.all(
-          customPlatforms.map((platform) =>
+          platformsToSchedule.map((platform) =>
             fetch("/api/content-hub/scheduled", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -1452,6 +1493,9 @@ export function ContentHubClient({
         )
         if (results.some((ok) => !ok)) {
           setError("Post created, but scheduling failed for one or more platforms — check Drafts and retry.")
+        } else if (skippedSummary) {
+          const scheduledLabels = platformsToSchedule.map((p) => PLATFORM_META[p].label).join(", ")
+          setError(`Scheduled to ${scheduledLabels}. ${skippedSummary}`)
         }
         closePanel()
         await refreshScheduled()
@@ -1522,6 +1566,18 @@ export function ContentHubClient({
         setPanelError("Pick at least one platform")
         return
       }
+
+      // Same non-blocking split as handleSchedule: a queue slot is a real
+      // posting commitment, so a hard platform-limit violation skips that
+      // platform rather than blocking the whole action — checked before
+      // creating the Post record so a fully-blocked submission never
+      // creates an orphan post.
+      const { valid: platformsToQueue, skippedSummary } = splitCustomPlatformsByValidation()
+      if (platformsToQueue.length === 0) {
+        setPanelError(`Nothing added — ${skippedSummary?.replace(/^Skipped /, "").replace(/\.$/, "")}.`)
+        return
+      }
+
       setSubmitting(true)
       setAddingToQueue(true)
       setPanelError(null)
@@ -1547,7 +1603,7 @@ export function ContentHubClient({
         const postId = (postData as { postId: string }).postId
 
         const results = await Promise.all(
-          customPlatforms.map((platform) =>
+          platformsToQueue.map((platform) =>
             fetch("/api/content-hub/scheduled", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -1558,6 +1614,9 @@ export function ContentHubClient({
         const failures = results.filter((r) => !r.ok)
         if (failures.length > 0) {
           setError(failures.map((f) => f.error.error).filter(Boolean).join(" "))
+        } else if (skippedSummary) {
+          const queuedLabels = platformsToQueue.map((p) => PLATFORM_META[p].label).join(", ")
+          setError(`Added to queue for ${queuedLabels}. ${skippedSummary}`)
         }
         closePanel()
         await refreshScheduled()

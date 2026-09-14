@@ -26,8 +26,6 @@ Examples include:
 - X (Twitter)
 - Facebook
 - Threads
-- TikTok
-- YouTube
 - Pinterest
 - Reddit
 - Product Hunt

@@ -11,7 +11,12 @@ async function load() {
 document.getElementById("save").addEventListener("click", async () => {
   const apiKey = document.getElementById("apiKey").value.trim()
   const apiBase = document.getElementById("apiBase").value.trim() || DEFAULT_API_BASE
-  await chrome.storage.local.set({ apiKey, apiBase })
+  // Saving a new key is the user actively trying to fix a broken connection —
+  // clear any stale keyInvalid flag now rather than waiting for the next
+  // capture to succeed (background.js's clearKeyInvalid). If this key is ALSO
+  // bad, the very next failed capture sets keyInvalid: true again; this just
+  // stops showing the OLD error before they've had a chance to test the new one.
+  await chrome.storage.local.set({ apiKey, apiBase, keyInvalid: false })
   const status = document.getElementById("status")
   status.textContent = "Saved."
   setTimeout(() => {

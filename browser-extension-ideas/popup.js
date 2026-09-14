@@ -24,12 +24,18 @@ async function init() {
 
   const justSaved = lastSavedAt && Date.now() - lastSavedAt < RECENT_SAVE_WINDOW_MS
 
+  // Exactly one state renders, ever — set explicitly in every branch rather
+  // than leaning on markup defaults for the "off" cases, so this can't drift
+  // into showing two contradictory states at once again.
+  banner.hidden = !keyInvalid
+  dot.classList.remove("ok")
+
   // A stale/revoked key overrides every other status — it fails identically
   // on every capture, so "Connected" (or a leftover "✓ Saved!" from before
-  // it went bad) would be actively misleading here. Stays shown until a
-  // capture actually succeeds again (background.js clears the flag then).
+  // it went bad) would be actively misleading here. Stays shown until either
+  // a capture actually succeeds again, or the user saves a new key (see
+  // background.js's clearKeyInvalid and options.js's save handler).
   if (keyInvalid) {
-    banner.hidden = false
     statusText.textContent = "Key invalid — reconnect needed"
   } else if (justSaved) {
     dot.classList.add("ok")

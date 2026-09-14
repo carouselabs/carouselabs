@@ -60,7 +60,13 @@
         color: #7c3aed;
         text-decoration: none;
       }
-      .keyInvalidBanner {
+      /* :not([hidden]) is required here — an author rule's `display` always
+         beats the browser's own `[hidden] { display: none }` rule in the CSS
+         cascade regardless of specificity, so a plain `.keyInvalidBanner`
+         selector made the `hidden` attribute (and popup.js's `banner.hidden`
+         toggle) a complete no-op: this banner was rendering unconditionally
+         on every popup open. */
+      .keyInvalidBanner:not([hidden]) {
         display: flex;
         align-items: flex-start;
         gap: 8px;

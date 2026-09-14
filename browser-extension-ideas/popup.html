@@ -60,10 +60,26 @@
         color: #7c3aed;
         text-decoration: none;
       }
+      .keyInvalidBanner {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 10px;
+        border-radius: 10px;
+        background: #fef2f2;
+        border: 1px solid rgba(239, 68, 68, 0.25);
+        color: #991b1b;
+        font-size: 11.5px;
+        line-height: 1.4;
+        margin-bottom: 10px;
+      }
     </style>
   </head>
   <body>
     <h1>CarouseLabs Ideas Board</h1>
+    <div id="keyInvalidBanner" class="keyInvalidBanner" hidden>
+      ⚠️ Your extension key is invalid or expired. Items aren&#39;t being saved — reconnect below.
+    </div>
     <div id="status" class="status">
       <span id="dot" class="dot"></span>
       <span id="statusText">Checking…</span>

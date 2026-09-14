@@ -11,13 +11,12 @@
 // so it isn't used here). Instead this uses the standard, universally
 // supported pattern: a brief toolbar badge for immediate feedback, plus the
 // popup itself shows "Saved!" if it's opened shortly after a capture (see
-// popup.js). No icon assets are required for badge text, unlike
-// chrome.notifications (which mandates an iconUrl) — see this repo's
-// browser-extension-ideas/README.md for the icon follow-up.
+// popup.js).
 
 const MENU_ID = "carouselabs-save-idea"
 const DEFAULT_API_BASE = "https://carouselabs.com"
 const BADGE_CLEAR_MS = 3000
+const KEY_INVALID_NOTIFICATION_ID = "carouselabs-key-invalid"
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
@@ -37,6 +36,36 @@ function flashBadge(text, color) {
   chrome.action.setBadgeBackgroundColor({ color })
   setTimeout(() => chrome.action.setBadgeText({ text: "" }), BADGE_CLEAR_MS)
 }
+
+// A revoked/stale key (e.g. the user regenerated it in Settings but never
+// re-pasted it into the extension) fails EVERY capture identically from then
+// on — a transient 3-second badge flash is easy to miss entirely, which is
+// exactly how a user can go on believing captures are saving while zero rows
+// ever reach the database. This stays visible, and the storage flag drives a
+// persistent warning banner in the popup (see popup.js), until a capture
+// actually succeeds again — see clearKeyInvalid below.
+function markKeyInvalid() {
+  chrome.action.setBadgeText({ text: "!" })
+  chrome.action.setBadgeBackgroundColor({ color: "#EF4444" })
+  chrome.storage.local.set({ keyInvalid: true })
+  chrome.notifications.create(KEY_INVALID_NOTIFICATION_ID, {
+    type: "basic",
+    iconUrl: "icons/icon128.png",
+    title: "CarouseLabs",
+    message: "Your extension key is invalid or expired. Please reconnect in Settings.",
+  })
+}
+
+function clearKeyInvalid() {
+  chrome.storage.local.set({ keyInvalid: false })
+  chrome.action.setBadgeText({ text: "" })
+}
+
+chrome.notifications.onClicked.addListener((id) => {
+  if (id !== KEY_INVALID_NOTIFICATION_ID) return
+  chrome.runtime.openOptionsPage()
+  chrome.notifications.clear(id)
+})
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== MENU_ID) return
@@ -74,10 +103,15 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(payload),
     })
+    if (res.status === 401) {
+      markKeyInvalid()
+      return
+    }
     if (!res.ok) {
       flashBadge("!", "#EF4444")
       return
     }
+    clearKeyInvalid()
     await chrome.storage.local.set({ lastSavedAt: Date.now() })
     flashBadge("✓", "#10B981")
   } catch {

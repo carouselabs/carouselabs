@@ -6,6 +6,14 @@
 import { useEffect, useState } from "react"
 import { Copy, Check, Loader2, KeyRound, Trash2 } from "lucide-react"
 import { SettingsTabs } from "@/components/settings/SettingsTabs"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 
 interface KeyStatus {
   hasKey: boolean
@@ -22,6 +30,9 @@ export default function ExtensionSettingsPage() {
   const [newKey, setNewKey] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Only regenerating an EXISTING key actually disconnects anything — the
+  // first-ever "Generate Key" has nothing live to warn about.
+  const [confirmRegenerateOpen, setConfirmRegenerateOpen] = useState(false)
 
   useEffect(() => {
     void load()
@@ -153,7 +164,7 @@ export default function ExtensionSettingsPage() {
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => void handleGenerate()}
+                onClick={() => (status?.hasKey ? setConfirmRegenerateOpen(true) : void handleGenerate())}
                 disabled={generating}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[12.5px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 transition-colors"
               >
@@ -179,6 +190,35 @@ export default function ExtensionSettingsPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={confirmRegenerateOpen} onOpenChange={setConfirmRegenerateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Regenerate your extension key?</DialogTitle>
+            <DialogDescription>
+              Regenerating your key will disconnect your browser extension. You&apos;ll need to update it with
+              the new key, or it will stop saving items silently.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              onClick={() => setConfirmRegenerateOpen(false)}
+              className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-[#6B7280] hover:text-[#1A1A1A] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                setConfirmRegenerateOpen(false)
+                void handleGenerate()
+              }}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] transition-colors"
+            >
+              Regenerate Key
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

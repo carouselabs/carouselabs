@@ -16,12 +16,18 @@ Ideas Board (`/content-hub/ideas`) — no AI, no page injection, no credit charg
 
 ## How it works
 
-- `manifest.json` — Manifest V3, `contextMenus` + `storage` permissions only.
+- `manifest.json` — Manifest V3, `contextMenus` + `storage` + `notifications`
+  permissions.
 - `background.js` — the context-menu click handler; posts the captured
   content straight to `POST /api/ideas-board/capture` with
-  `Authorization: Bearer <key>`.
-- `popup.html`/`popup.js` — toolbar-icon popup: connection status, and shows
-  "✓ Saved!" if opened within a few seconds of a capture.
+  `Authorization: Bearer <key>`. A 401 (invalid/revoked key) sets a
+  persistent red toolbar badge, fires a `chrome.notifications` alert, and
+  stores `{ keyInvalid: true }` — all of which clear only once a capture
+  actually succeeds again. Every other failure still gets the transient
+  3-second badge flash.
+- `popup.html`/`popup.js` — toolbar-icon popup: connection status, shows
+  "✓ Saved!" if opened within a few seconds of a capture, and shows a
+  persistent warning banner whenever `keyInvalid` is set.
 - `options.html`/`options.js` — where the extension key (and, for local dev,
   the API base URL) is stored via `chrome.storage.local`.
 

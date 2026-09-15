@@ -117,6 +117,17 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   // Stage 1's structure decision, kept in state so the
   // DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION panel can display it.
   const [carouselStructureDecision, setCarouselStructureDecision] = useState<string | null>(null)
+  // Stage 1's slide count — the single source of truth for "how many slides
+  // should this carousel have," carried through to Stage 2 (which now
+  // validates against it server-side) and used as the progress counter's
+  // denominator, rather than deriving it from whatever a later stage
+  // happens to return.
+  const [plannedSlideCount, setPlannedSlideCount] = useState<number | null>(null)
+  // Slide numbers that failed to generate an image even after one automatic
+  // retry — shown as a clear "failed to generate" card instead of a silently
+  // missing slide (see generateCarouselFlow's image-generation loop).
+  const [failedSlideNumbers, setFailedSlideNumbers] = useState<number[]>([])
+  const [retryingFailedSlide, setRetryingFailedSlide] = useState<number | null>(null)
 
   // Step 4b — actual slide images generated from the prompts (one at a time)
   const [slideImages, setSlideImages] = useState<SlideImage[]>([])
@@ -397,6 +408,53 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     invalidateGeneratedCarousel()
   }
 
+  // One attempt at rendering a single slide's image, persist:false so it
+  // never spawns its own Post. Returns null on failure — never throws —
+  // callers decide what a failure means (an automatic retry during the
+  // initial batch loop below, vs. a real error surfaced during a manual
+  // retry). Checks res.ok explicitly: a failed generation returns a real
+  // error status with no `slides` array, which previously fell through
+  // this check silently (imgData.slides?.[0] is just undefined) and the
+  // slide vanished with no log, no error, nothing.
+  async function requestOneSlideImage(slide: Slide): Promise<SlideImage | null> {
+    try {
+      const imgRes = await fetch("/api/generate/carousel-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slides: [slide], // ONE slide only
+          size: size ?? "4:5",
+          ideaId,
+          persist: false,
+          referenceImage: referenceImage ?? undefined,
+          referenceMediaType: referenceImage ? referenceMediaType : undefined,
+        }),
+      })
+      const imgData = await imgRes.json()
+      if (!imgRes.ok || !imgData.slides?.[0]) {
+        console.error(
+          `[carousel] slide ${slide.slideNumber} failed:`,
+          (imgData as { error?: string })?.error ?? `HTTP ${imgRes.status}`,
+        )
+        return null
+      }
+      return imgData.slides[0] as SlideImage
+    } catch (err) {
+      console.error(`[carousel] slide ${slide.slideNumber} failed:`, err)
+      return null
+    }
+  }
+
+  // Wraps requestOneSlideImage with one automatic retry — most failures here
+  // are transient (a rate limit, a one-off content-policy hiccup), so a
+  // second attempt frequently just works. Only a slide that fails TWICE
+  // counts as a real failure.
+  async function requestOneSlideImageWithRetry(slide: Slide): Promise<SlideImage | null> {
+    const first = await requestOneSlideImage(slide)
+    if (first) return first
+    return requestOneSlideImage(slide)
+  }
+
   // Single-button flow: silently generate the slide prompts, then generate the
   // slide images ONE AT A TIME from the client so each appears in the grid the
   // moment it's ready and progress is shown live. Slides are kept in state +
@@ -405,6 +463,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     setError(null)
     setReferenceNotice(null)
     setSlideImages([])
+    setFailedSlideNumbers([])
+    setPlannedSlideCount(null)
 
     setIsGeneratingSlides(true)
     setGameStarted(true) // keep the game visible for the whole flow
@@ -412,6 +472,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     // Design a bespoke slide-by-slide structure before any slide content is
     // written — now runs for every idea (trending and own-idea alike).
     let structureDecision: string | undefined
+    let expectedSlideCount: number | undefined
     setLoadingMessage("Designing carousel structure...")
     try {
       const structureRes = await fetch("/api/own-idea/carousel-structure", {
@@ -436,6 +497,11 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
       }
       structureDecision = structureData.carouselStructureDecision as string
       setCarouselStructureDecision(structureDecision)
+      expectedSlideCount =
+        typeof structureData.plannedSlideCount === "number" && structureData.plannedSlideCount > 0
+          ? structureData.plannedSlideCount
+          : undefined
+      setPlannedSlideCount(expectedSlideCount ?? null)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
       setIsGeneratingSlides(false)
@@ -457,6 +523,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
           referenceImage: referenceImage ?? undefined,
           referenceMediaType: referenceImage ? referenceMediaType : undefined,
           ...(structureDecision ? { isOwnIdea: true, carouselStructureDecision: structureDecision } : {}),
+          expectedSlideCount,
         }),
       })
       const promptData = await promptRes.json()
@@ -471,6 +538,10 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
       }
       generatedSlides = promptData.slides as Slide[]
       setSlides(generatedSlides)
+      // The server now enforces this equals expectedSlideCount when one was
+      // sent (retrying once, then erroring rather than returning a short
+      // result) — this covers the legacy path where no plan exists to check.
+      setPlannedSlideCount((prev) => prev ?? generatedSlides.length)
       trackHistory(ideaId, "CAROUSEL_DONE")
       try {
         localStorage.setItem(`carouselSlides_${ideaId}`, JSON.stringify(generatedSlides))
@@ -497,32 +568,33 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     // single slide and does NOT persist (persist: false), so no junk Posts.
     setIsGeneratingImages(true)
     const generatedImages: SlideImage[] = []
+    const failed: number[] = []
+    const displayTotal = plannedSlideCount ?? generatedSlides.length
 
     for (let i = 0; i < generatedSlides.length; i++) {
       const slide = generatedSlides[i]
-      setLoadingMessage(`Generating slide ${i + 1} of ${generatedSlides.length}...`)
+      setLoadingMessage(`Generating slide ${i + 1} of ${displayTotal}...`)
 
-      try {
-        const imgRes = await fetch("/api/generate/carousel-images", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            slides: [slide], // ONE slide only
-            size: size ?? "4:5",
-            ideaId,
-            persist: false,
-            referenceImage: referenceImage ?? undefined,
-            referenceMediaType: referenceImage ? referenceMediaType : undefined,
-          }),
-        })
-        const imgData = await imgRes.json()
-        if (imgData.slides?.[0]) {
-          generatedImages.push(imgData.slides[0] as SlideImage)
-          setSlideImages([...generatedImages]) // show each image as it arrives
-        }
-      } catch (err) {
-        console.error(`[carousel] slide ${i + 1} failed:`, err)
+      const image = await requestOneSlideImageWithRetry(slide)
+      if (image) {
+        generatedImages.push(image)
+        setSlideImages([...generatedImages]) // show each image as it arrives
+      } else {
+        // requestOneSlideImage already retried once internally — this slide
+        // genuinely failed. Track it instead of letting it silently vanish
+        // (the earlier bug: a dropped slide left no trace anywhere, so the
+        // carousel just quietly came up one short).
+        failed.push(slide.slideNumber)
       }
+    }
+
+    setFailedSlideNumbers(failed)
+    if (failed.length > 0) {
+      setError(
+        failed.length === 1
+          ? `Slide ${failed[0]} failed to generate. Click Retry below to try again.`
+          : `Slides ${failed.join(", ")} failed to generate. Click Retry below on each to try again.`,
+      )
     }
 
     setIsGeneratingImages(false)
@@ -694,6 +766,35 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
       }
     } catch {
       decrement(ideaId)
+    }
+  }
+
+  // Retry a slide that never generated an image in the first place — distinct
+  // from regenerateSlideImage above, which REPLACES an existing slideImages
+  // entry and charges slide_regen credits for an intentional user redo. This
+  // slide isn't in slideImages at all yet, and re-rendering it is CarouseLabs
+  // making good on the original paid generation, not a new user request — no
+  // extra charge (the carousel_grant unit consumed by the failed attempt was
+  // already refunded server-side, so this draws from the same grant).
+  async function retryFailedSlide(slideNumber: number) {
+    const slide = slides?.find((s) => s.slideNumber === slideNumber)
+    if (!slide) return
+    setRetryingFailedSlide(slideNumber)
+    setError(null)
+    try {
+      const image = await requestOneSlideImage(slide)
+      if (!image) {
+        setError(`Slide ${slideNumber} failed to generate again. Please try once more.`)
+        return
+      }
+      setSlideImages((prev) => {
+        const next = [...prev, image].sort((a, b) => a.slideNumber - b.slideNumber)
+        persistImages(next)
+        return next
+      })
+      setFailedSlideNumbers((prev) => prev.filter((n) => n !== slideNumber))
+    } finally {
+      setRetryingFailedSlide(null)
     }
   }
 
@@ -895,6 +996,33 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
               setSlideInstructions((prev) => ({ ...prev, [slideNumber]: value }))
             }
           />
+        )}
+
+        {/* Slides that failed to generate even after one automatic retry —
+            shown explicitly rather than just being a gap in the grid above. */}
+        {!isGeneratingImages && failedSlideNumbers.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {failedSlideNumbers.map((slideNumber) => (
+              <div
+                key={slideNumber}
+                className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-[rgba(239,68,68,0.06)] border border-[rgba(239,68,68,0.2)]"
+              >
+                <span className="text-[12.5px] font-medium text-[rgba(239,68,68,0.9)]">
+                  Slide {slideNumber} failed to generate
+                </span>
+                <button
+                  onClick={() => void retryFailedSlide(slideNumber)}
+                  disabled={retryingFailedSlide !== null}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[rgba(239,68,68,0.3)] bg-white hover:bg-[rgba(239,68,68,0.08)] text-[11.5px] font-semibold text-[rgba(239,68,68,0.9)] transition-colors disabled:opacity-50"
+                >
+                  {retryingFailedSlide === slideNumber && (
+                    <Loader2 size={11} className="animate-spin" strokeWidth={2.2} />
+                  )}
+                  Retry
+                </button>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>

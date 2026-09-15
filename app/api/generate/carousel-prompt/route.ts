@@ -14,6 +14,7 @@ import {
   buildOwnIdeaCarouselSystemMessage,
   buildOwnIdeaCarouselUserMessage,
 } from "@/lib/ai/prompts/ownIdeaCarouselPrompt"
+import { countPlannedSlides } from "@/lib/carouselStructureTemplates"
 import { validateReferenceImage } from "@/lib/validateImage"
 import { hasGenerationBalance } from "@/lib/credits"
 import { chargeCreditsForAction } from "@/lib/chargeCredits"
@@ -401,6 +402,7 @@ export async function POST(req: Request) {
   let currentSlides: string | undefined
   let isOwnIdea: boolean
   let carouselStructureDecision: string | undefined
+  let expectedSlideCount: number | undefined
 
   try {
     const body = await req.json()
@@ -423,6 +425,14 @@ export async function POST(req: Request) {
     carouselStructureDecision =
       typeof body.carouselStructureDecision === "string" && body.carouselStructureDecision.trim()
         ? body.carouselStructureDecision.trim()
+        : undefined
+    // Single source of truth for slide count, computed once by
+    // /api/own-idea/carousel-structure and carried through unchanged — this
+    // route validates its own output against it instead of just trusting
+    // whatever the model happened to return (see the retry/error logic below).
+    expectedSlideCount =
+      typeof body.expectedSlideCount === "number" && body.expectedSlideCount > 0
+        ? body.expectedSlideCount
         : undefined
     if (!ideaId) throw new Error("Missing ideaId")
     // TEMP diagnostic — confirm in Vercel logs exactly what the client sent.
@@ -481,6 +491,29 @@ export async function POST(req: Request) {
   // than deleted, since it's the same code path edit mode still uses.
   const usesStructurePipeline = !!carouselStructureDecision && !isEditMode
 
+  // The client sends expectedSlideCount from Stage 1's own count, but never
+  // trust that alone — an older cached client bundle, or any other caller of
+  // this route, might omit it. When it's missing but a structure decision IS
+  // present, recount the outline's own numbered lines as a fallback, so the
+  // prompt sent below (which now states this as a hard fact — see
+  // buildOwnIdeaCarouselUserMessage) always has a real number to state,
+  // never leaving the model to infer/recompute it from the outline text.
+  if (usesStructurePipeline && !expectedSlideCount) {
+    const recount = countPlannedSlides(carouselStructureDecision!)
+    if (recount > 0) expectedSlideCount = recount
+  }
+  // If the structure decision genuinely has no countable numbered lines,
+  // something is wrong with Stage 1's output — fail clearly (before any
+  // credit charge below) rather than send a fabricated/placeholder total
+  // into the prompt, which would just recreate this exact bug from a
+  // different angle.
+  if (usesStructurePipeline && !expectedSlideCount) {
+    return NextResponse.json(
+      { error: "Couldn't determine the carousel's slide count. Please try again." },
+      { status: 502 },
+    )
+  }
+
   // ── Server-side credit charge (V1 fix) ──
   // Full generation charges carousel_prompts (35) HERE — combined with the 5
   // the caption route charges, a carousel totals 40. Charging at this route
@@ -507,6 +540,7 @@ export async function POST(req: Request) {
           breakdown.deepDive,
           carouselStructureDecision!,
           size === "1:1" ? "Square 1080x1080px" : "Portrait 1080x1350px",
+          expectedSlideCount!,
         )
       : buildCarouselUserMessage(
           breakdown.refinedHook,
@@ -525,168 +559,215 @@ export async function POST(req: Request) {
     ? buildOwnIdeaCarouselSystemMessage()
     : CAROUSEL_MASTER_SYSTEM_PROMPT
 
-  let modelRaw = ""
-  let usedFallback = false
+  // One full generate-then-parse attempt: GPT-4o primary, Claude fallback on
+  // refusal/error, then multi-strategy JSON parsing. Extracted into a
+  // function so a slide-count mismatch against Stage 1's plan (see the retry
+  // loop below) can retry the whole thing — a truncation or a model
+  // dropping/merging a section is often non-deterministic, so a fresh
+  // attempt frequently just works.
+  async function attemptGeneration(): Promise<
+    { ok: true; parsed: { caption: string; slides: Slide[] } } | { ok: false; status: number; error: string }
+  > {
+    let modelRaw = ""
+    let usedFallback = false
 
-  // PRIMARY: GPT-4o. Any refusal or API error falls through to Claude below.
-  try {
-    const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
-      ...(referenceImageBase64
-        ? [
-            {
-              type: "image_url" as const,
-              image_url: {
-                url: `data:${referenceMediaType || "image/jpeg"};base64,${referenceImageBase64.replace(/^data:image\/\w+;base64,/, "")}`,
-                detail: "high" as const,
-              },
-            },
-          ]
-        : []),
-      {
-        type: "text" as const,
-        text: userText,
-      },
-    ]
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      max_tokens: MAX_TOKENS,
-      messages: [
-        ...(isEditMode
-          ? []
-          : [{ role: "system" as const, content: systemPrompt }]),
-        { role: "user" as const, content: userContent },
-      ],
-    })
-
-    console.log("[carousel-prompt] GPT-4o finish_reason:", response.choices[0]?.finish_reason)
-    console.log(
-      "[carousel-prompt] GPT-4o tokens:",
-      response.usage?.completion_tokens,
-      "/",
-      MAX_TOKENS,
-    )
-
-    // Near-ceiling warning — if output tokens approach MAX_TOKENS the response
-    // was probably truncated mid-slide.
-    const completionTokens = response.usage?.completion_tokens ?? 0
-    if (completionTokens > TOKEN_WARN_THRESHOLD) {
-      console.warn("[carousel-prompt] WARNING: Near token ceiling:", completionTokens)
-    }
-
-    const gptRaw = response.choices[0]?.message?.content ?? ""
-
-    if (isRefusal(gptRaw)) {
-      console.warn("[carousel-prompt] GPT-4o refused request, falling back to Claude")
-      usedFallback = true
-    } else {
-      modelRaw = gptRaw
-    }
-  } catch (err) {
-    const e = err as { message?: string }
-    console.warn(
-      "[carousel-prompt] GPT-4o error, falling back to Claude:",
-      e?.message ?? err,
-    )
-    usedFallback = true
-  }
-
-  // FALLBACK: Claude, fed the same system prompt and user message (as its
-  // native system param + message), so output format and rules are identical.
-  if (usedFallback) {
+    // PRIMARY: GPT-4o. Any refusal or API error falls through to Claude below.
     try {
-      const claudeMessages: Anthropic.MessageParam[] = referenceImageBase64
-        ? [
-            {
-              role: "user" as const,
-              content: [
-                {
-                  type: "image" as const,
-                  source: {
-                    type: "base64" as const,
-                    media_type: (referenceMediaType || "image/jpeg") as
-                      | "image/jpeg"
-                      | "image/png"
-                      | "image/webp",
-                    data: referenceImageBase64.replace(/^data:image\/\w+;base64,/, ""),
-                  },
+      const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
+        ...(referenceImageBase64
+          ? [
+              {
+                type: "image_url" as const,
+                image_url: {
+                  url: `data:${referenceMediaType || "image/jpeg"};base64,${referenceImageBase64.replace(/^data:image\/\w+;base64,/, "")}`,
+                  detail: "high" as const,
                 },
-                {
-                  type: "text" as const,
-                  text: userText,
-                },
-              ],
-            },
-          ]
-        : [
-            {
-              role: "user" as const,
-              content: userText,
-            },
-          ]
+              },
+            ]
+          : []),
+        {
+          type: "text" as const,
+          text: userText,
+        },
+      ]
 
-      const claudeResponse = await anthropic.messages.create({
-        model: "claude-sonnet-4-5",
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
         max_tokens: MAX_TOKENS,
-        // Edit mode's prompt is self-contained — mirror the GPT-4o call, which
-        // only attaches the master system prompt for full generations.
-        ...(isEditMode ? {} : { system: systemPrompt }),
-        messages: claudeMessages,
+        messages: [
+          ...(isEditMode
+            ? []
+            : [{ role: "system" as const, content: systemPrompt }]),
+          { role: "user" as const, content: userContent },
+        ],
       })
 
-      console.log("[carousel-prompt] Claude fallback stop_reason:", claudeResponse.stop_reason)
+      console.log("[carousel-prompt] GPT-4o finish_reason:", response.choices[0]?.finish_reason)
+      console.log(
+        "[carousel-prompt] GPT-4o tokens:",
+        response.usage?.completion_tokens,
+        "/",
+        MAX_TOKENS,
+      )
 
-      modelRaw = claudeResponse.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .map((b) => b.text)
-        .join("")
+      // Near-ceiling warning — if output tokens approach MAX_TOKENS the response
+      // was probably truncated mid-slide.
+      const completionTokens = response.usage?.completion_tokens ?? 0
+      if (completionTokens > TOKEN_WARN_THRESHOLD) {
+        console.warn("[carousel-prompt] WARNING: Near token ceiling:", completionTokens)
+      }
+
+      const gptRaw = response.choices[0]?.message?.content ?? ""
+
+      if (isRefusal(gptRaw)) {
+        console.warn("[carousel-prompt] GPT-4o refused request, falling back to Claude")
+        usedFallback = true
+      } else {
+        modelRaw = gptRaw
+      }
     } catch (err) {
       const e = err as { message?: string }
-      console.error("[carousel-prompt] Claude fallback also failed:", e?.message ?? err)
-      // Both providers failed after the charge — give the credits back.
-      await refundCreditsForAction(user.id, chargedAction)
-      return NextResponse.json(
-        { error: "Something went wrong generating the carousel. Please try again." },
-        { status: 500 },
+      console.warn(
+        "[carousel-prompt] GPT-4o error, falling back to Claude:",
+        e?.message ?? err,
       )
+      usedFallback = true
     }
+
+    // FALLBACK: Claude, fed the same system prompt and user message (as its
+    // native system param + message), so output format and rules are identical.
+    if (usedFallback) {
+      try {
+        const claudeMessages: Anthropic.MessageParam[] = referenceImageBase64
+          ? [
+              {
+                role: "user" as const,
+                content: [
+                  {
+                    type: "image" as const,
+                    source: {
+                      type: "base64" as const,
+                      media_type: (referenceMediaType || "image/jpeg") as
+                        | "image/jpeg"
+                        | "image/png"
+                        | "image/webp",
+                      data: referenceImageBase64.replace(/^data:image\/\w+;base64,/, ""),
+                    },
+                  },
+                  {
+                    type: "text" as const,
+                    text: userText,
+                  },
+                ],
+              },
+            ]
+          : [
+              {
+                role: "user" as const,
+                content: userText,
+              },
+            ]
+
+        const claudeResponse = await anthropic.messages.create({
+          model: "claude-sonnet-4-5",
+          max_tokens: MAX_TOKENS,
+          // Edit mode's prompt is self-contained — mirror the GPT-4o call, which
+          // only attaches the master system prompt for full generations.
+          ...(isEditMode ? {} : { system: systemPrompt }),
+          messages: claudeMessages,
+        })
+
+        console.log("[carousel-prompt] Claude fallback stop_reason:", claudeResponse.stop_reason)
+
+        modelRaw = claudeResponse.content
+          .filter((b): b is Anthropic.TextBlock => b.type === "text")
+          .map((b) => b.text)
+          .join("")
+      } catch (err) {
+        const e = err as { message?: string }
+        console.error("[carousel-prompt] Claude fallback also failed:", e?.message ?? err)
+        return { ok: false, status: 500, error: "Something went wrong generating the carousel. Please try again." }
+      }
+    }
+
+    console.log("[carousel-prompt] Model used:", usedFallback ? "Claude (fallback)" : "GPT-4o")
+
+    if (!modelRaw.trimEnd().endsWith("}")) {
+      console.warn("[generate/carousel-prompt] WARNING: Response may be truncated — does not end with }")
+      console.log("[carousel-prompt] Raw response length:", modelRaw.length, "/ max_tokens:", MAX_TOKENS)
+    }
+
+    let parsed: { caption: string; slides: Slide[] }
+    try {
+      parsed = parseCarouselResponse(modelRaw)
+    } catch {
+      console.error("[generate/carousel-prompt] All parse strategies failed. Raw:\n", modelRaw)
+      return { ok: false, status: 502, error: "Failed to parse AI response" }
+    }
+
+    if (!parsed.slides.length) {
+      return { ok: false, status: 502, error: "No slides found in AI response" }
+    }
+
+    // Standardize the STYLE REFERENCE section of every brief (reference uploads
+    // only — the block explicitly talks about the uploaded image).
+    if (referenceImageBase64) {
+      parsed.slides = parsed.slides.map((s) => ({
+        ...s,
+        prompt: injectStyleReference(s.prompt),
+      }))
+    }
+
+    console.log("[carousel-prompt] Final slide count:", parsed.slides.length)
+    return { ok: true, parsed }
   }
 
-  console.log("[carousel-prompt] Model used:", usedFallback ? "Claude (fallback)" : "GPT-4o")
-
-  if (!modelRaw.trimEnd().endsWith("}")) {
-    console.warn("[generate/carousel-prompt] WARNING: Response may be truncated — does not end with }")
-    console.log("[carousel-prompt] Raw response length:", modelRaw.length, "/ max_tokens:", MAX_TOKENS)
+  // Up to 2 attempts total. A count mismatch against Stage 1's plan is the
+  // main reason to retry (see countPlannedSlides in carousel-structure/route.ts
+  // — expectedSlideCount is that same number, carried through unchanged); a
+  // hard failure (parse/API error) is NOT retried here since attemptGeneration
+  // already tried GPT-4o then Claude internally.
+  const MAX_GENERATION_ATTEMPTS = 2
+  let result: Awaited<ReturnType<typeof attemptGeneration>> | null = null
+  for (let attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS; attempt++) {
+    result = await attemptGeneration()
+    if (!result.ok) break // hard failure — no point retrying, see below
+    const countOk = isEditMode || !expectedSlideCount || result.parsed.slides.length === expectedSlideCount
+    if (countOk) break
+    console.warn(
+      `[carousel-prompt] Slide count mismatch (attempt ${attempt}/${MAX_GENERATION_ATTEMPTS}): got ${result.parsed.slides.length}, expected ${expectedSlideCount}`,
+    )
   }
+  // result is always set — the loop runs at least once.
+  const finalResult = result!
 
-  let parsed: { caption: string; slides: Slide[] }
-  try {
-    parsed = parseCarouselResponse(modelRaw)
-  } catch {
-    console.error("[generate/carousel-prompt] All parse strategies failed. Raw:\n", modelRaw)
+  if (!finalResult.ok) {
     await refundCreditsForAction(user.id, chargedAction)
-    return NextResponse.json({ error: "Failed to parse AI response" }, { status: 502 })
+    return NextResponse.json({ error: finalResult.error }, { status: finalResult.status })
   }
 
-  if (!parsed.slides.length) {
+  const parsed = finalResult.parsed
+
+  // Both attempts (or the only attempt, if expectedSlideCount wasn't given)
+  // still don't match the planned count — this is exactly the "12 planned,
+  // 11 generated" bug: silently returning the short result as success let a
+  // dropped slide vanish with zero trace. Surface it as a real error instead.
+  if (!isEditMode && expectedSlideCount && parsed.slides.length !== expectedSlideCount) {
+    console.error(
+      `[carousel-prompt] Giving up after ${MAX_GENERATION_ATTEMPTS} attempts: got ${parsed.slides.length} slides, expected ${expectedSlideCount}`,
+    )
     await refundCreditsForAction(user.id, chargedAction)
-    return NextResponse.json({ error: "No slides found in AI response" }, { status: 502 })
+    return NextResponse.json(
+      {
+        error: `Expected ${expectedSlideCount} slides but only generated ${parsed.slides.length}. Please try again.`,
+      },
+      { status: 502 },
+    )
   }
 
-  // Standardize the STYLE REFERENCE section of every brief (reference uploads
-  // only — the block explicitly talks about the uploaded image).
-  if (referenceImageBase64) {
-    parsed.slides = parsed.slides.map((s) => ({
-      ...s,
-      prompt: injectStyleReference(s.prompt),
-    }))
-  }
-
-  console.log("[carousel-prompt] Final slide count:", parsed.slides.length)
-
-  // Edit mode legitimately returns only the changed slides; a full generation
-  // returning fewer than 7 usually means truncation or a partial parse recovery.
-  if (!isEditMode && parsed.slides.length < 7) {
+  // No planned count to check against (e.g. a restored session, or the
+  // legacy non-structure-pipeline flow) — fall back to the old heuristic.
+  if (!isEditMode && !expectedSlideCount && parsed.slides.length < 7) {
     console.warn(
       `[carousel-prompt] WARNING: Only ${parsed.slides.length} slides generated, expected 7-9`,
     )

@@ -94,3 +94,15 @@ export function getCarouselTemplatesByCategory(): Record<string, CarouselStructu
   }
   return grouped
 }
+
+// The AI-designed carousel structure decision (see
+// app/api/own-idea/carousel-structure/route.ts) is free-text — a numbered
+// list like "1. Hook\n2. ...\n12. CTA" — so this is the ONE place that turns
+// it into an actual number. Both carousel-structure (which computes and
+// returns it as plannedSlideCount) and carousel-prompt (which recounts it
+// as a fallback if the client ever omits expectedSlideCount) import this
+// same function, so the two can never define "how many slides" differently.
+export function countPlannedSlides(decision: string): number {
+  const matches = decision.match(/^\s*\d+\.\s+\S/gm)
+  return matches ? matches.length : 0
+}

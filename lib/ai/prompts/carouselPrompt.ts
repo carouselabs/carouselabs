@@ -48,6 +48,8 @@ For the STYLE REFERENCE section, write only a single short sentence such as "Mat
 
 For the Branding section: unless the user message explicitly provides a brand name to display, specify that the slide carries no logo, watermark, or brand text of any kind. The only text on a slide is the headline, supporting copy, and slide indicator described in the brief.
 
+For the Slide Indicator section: decide the total slide count ONCE, before writing slide 1, based on how many slides you actually plan to output. Then use that exact same total, character-for-character identical, in every single slide's Slide Indicator (for example "Slide 1 of 8", "Slide 2 of 8", ... "Slide 8 of 8" — never a number that changes partway through, and never a number that doesn't match how many slide objects you actually return in the JSON).
+
 Design direction
 
 Aim for large typography, generous white space, premium hierarchy, elegant composition, and editorial layouts of professional marketing quality. Favor premium illustration and original visual metaphors over generic AI art, stock illustration concepts, clipart, or cluttered infographic-style layouts. Simplicity and restraint read as premium.

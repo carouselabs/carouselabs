@@ -13,12 +13,13 @@ import OpenAI from "openai"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { validateReferenceImage } from "@/lib/validateImage"
-import { CAROUSEL_STRUCTURE_TEMPLATES } from "@/lib/carouselStructureTemplates"
+import { CAROUSEL_STRUCTURE_TEMPLATES, countPlannedSlides } from "@/lib/carouselStructureTemplates"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 export const maxDuration = 60
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
 
 const ratelimit = new Ratelimit({
   redis: Redis.fromEnv(),
@@ -409,7 +410,11 @@ ${selection.line}`
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
-      max_tokens: 400,
+      // Was 400 — fine for a typical 7-9 line structure, but tight for a
+      // longer 12-20 slide structure with multi-word section labels, where
+      // truncation would silently cut the LAST section(s) off the list this
+      // whole pipeline treats as authoritative.
+      max_tokens: 600,
       messages: [
         { role: "system", content: CAROUSEL_STRUCTURE_SYSTEM_PROMPT },
         { role: "user", content: userContent },
@@ -426,7 +431,10 @@ ${selection.line}`
       )
     }
 
-    return NextResponse.json({ carouselStructureDecision })
+    const plannedSlideCount = countPlannedSlides(carouselStructureDecision)
+    console.log("[own-idea/carousel-structure] plannedSlideCount:", plannedSlideCount)
+
+    return NextResponse.json({ carouselStructureDecision, plannedSlideCount })
   } catch (err) {
     console.error("[own-idea/carousel-structure] OpenAI error:", err)
     return NextResponse.json(

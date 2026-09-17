@@ -49,6 +49,13 @@ const isPublicRoute = createRouteMatcher([
   // route's own CRON_SECRET check ever runs. Each cron route still
   // authenticates itself independently — this only lets that check happen.
   "/api/cron(.*)",
+  // browser-extension-ideas/ calls this with an Authorization: Bearer <key>
+  // header, not a Clerk session cookie (see lib/extensionAuth.ts) — same
+  // gap as /api/cron above, confirmed live in production: every capture from
+  // the shipped extension was hitting this same Clerk auth.protect()
+  // interception and getting 307-redirected to /sign-in before
+  // lib/extensionAuth.ts's own bearer-token check ever ran.
+  "/api/ideas-board/capture(.*)",
 ])
 
 // ── Subdomain-based routing ──────────────────────────────────────────────

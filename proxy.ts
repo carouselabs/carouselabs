@@ -49,9 +49,21 @@ const isPublicRoute = createRouteMatcher([
   // route's own CRON_SECRET check ever runs. Each cron route still
   // authenticates itself independently — this only lets that check happen.
   "/api/cron(.*)",
+  // browser-extension-comment/ calls these with an Authorization: Bearer
+  // <token> header, not a Clerk session cookie — same reasoning as
+  // /api/cron above, and the same latent gap that (pre-existing, not
+  // touched here) also affects /api/ideas-board/capture: without this
+  // exemption Clerk's auth.protect() intercepts the request first and
+  // 307-redirects it to /sign-in before the route's own bearer-token check
+  // (see lib/extensionCommentAuth.ts) ever runs. The one exception is
+  // /api/ext/auth/exchange, which DOES require a real Clerk session (it
+  // mints a token FROM one) — it stays exempt from the middleware's
+  // auth.protect() like its siblings here, but calls getCurrentUser() (and
+  // returns its own 401 JSON, not a redirect) itself to enforce that.
+  "/api/ext(.*)",
   // browser-extension-ideas/ calls this with an Authorization: Bearer <key>
   // header, not a Clerk session cookie (see lib/extensionAuth.ts) — same
-  // gap as /api/cron above, confirmed live in production: every capture from
+  // gap as /api/ext above, confirmed live in production: every capture from
   // the shipped extension was hitting this same Clerk auth.protect()
   // interception and getting 307-redirected to /sign-in before
   // lib/extensionAuth.ts's own bearer-token check ever ran.

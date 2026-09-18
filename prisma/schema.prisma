@@ -109,6 +109,13 @@ model User {
   hashtagGroups  HashtagGroup[]
   shortLinks     ShortLink[]
 
+  // ── CarouseLabs Comment extension ──
+  defaultCommentProfileId String?
+  insertWarningHidden     Boolean          @default(false)
+  commentProfiles         CommentProfile[]
+  commentHistory          CommentHistory[]
+  extensionTokens         ExtensionToken[]
+
   // ── Referral program ──
   referralCode       String?              @unique
   referralsMade      Referral[]           @relation("ReferralsMade")
@@ -383,6 +390,81 @@ model ExtensionApiKey {
   createdAt  DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ── CarouseLabs Comment extension ──────────────────────────────────
+// A reusable "voice" for AI-generated LinkedIn comments (who the commenter
+// is, their goal, tone, length, etc.). userId is nullable because isSystem
+// profiles are built-in presets shared by everyone (not owned by any one
+// user); a user's own custom profiles always have userId set.
+model CommentProfile {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  whoIAm    String
+  goal      String
+  tone      String
+  length    String
+  emoji     String   @default("None")
+  language  String   @default("English")
+  alwaysDo  String?
+  neverDo   String?
+  samples   String[]
+  isDefault Boolean  @default(false)
+  isSystem  Boolean  @default(false)
+  testsUsed Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// One row per AI-generated LinkedIn comment (see
+// app/api/ext/comments/generate, added in a later part) — the extension's
+// equivalent of IdeaHistory, driving the History screen. profileId is a
+// plain string, not a relation — deliberately no FK to CommentProfile, so a
+// history row (and the credits it recorded as spent) survives even if the
+// profile it was generated with is later edited or deleted.
+model CommentHistory {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId   String
+  postAuthor  String
+  postUrl     String
+  postSnippet String
+  comment     String   @db.Text
+  action      String   @default("NONE") // "COPIED" | "INSERTED" | "NONE"
+  creditsUsed Float
+  model       String
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([profileId])
+  @@index([userId, createdAt])
+}
+
+// Long-lived credential for browser-extension-comment/ to call app/api/ext/*
+// on the user's behalf — same bearer-token design as ExtensionApiKey (see its
+// comment above): only tokenHash (SHA-256 of the actual token) is ever
+// stored, the plaintext token is returned exactly once from
+// app/api/ext/auth/exchange and never persisted. A separate model (not a
+// reuse of ExtensionApiKey) because this one supports multiple concurrent
+// tokens per user (one per device/browser install, see `device`) and
+// revocation of a single token without affecting others, neither of which
+// ExtensionApiKey's one-key-per-user design supports.
+model ExtensionToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  device     String?
+  lastUsedAt DateTime  @default(now())
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
 
   @@index([userId])
 }

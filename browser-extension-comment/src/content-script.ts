@@ -74,6 +74,7 @@ interface SelectedPost {
   authorHeadline: string;
   text: string;
   type: PostType;
+  url: string;
   capturedAt: number;
 }
 
@@ -405,6 +406,12 @@ async function handleClick(event: MouseEvent) {
     authorHeadline: extractHeadlineNear(author.link, author.name),
     text,
     type: classifyPostType(postContainer, config),
+    // The post's own permalink when the container exposes one, else the page
+    // URL. Only used for the history row's link, so degrading to the feed URL
+    // costs nothing functionally.
+    url:
+      postContainer.querySelector<HTMLAnchorElement>('a[href*="/feed/update/"]')?.href ??
+      window.location.href,
     capturedAt: Date.now(),
   };
 

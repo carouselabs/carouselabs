@@ -30,6 +30,11 @@ export interface CommentProfile {
   updatedAt: string;
 }
 
+export interface GenerateResponse {
+  comment: string;
+  creditsRemaining: number;
+}
+
 export interface MeResponse {
   email: string;
   plan: string;

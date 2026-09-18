@@ -20,6 +20,10 @@ export const CREDIT_COSTS = {
   slide_regen: 8,
   text_regen: 1,
   thumbnail: 15,
+  // browser-extension-comment/'s Generate flow (app/api/ext/generate). Charged
+  // per successful comment; a generation that fails after its automatic retry
+  // is never charged.
+  comment_generate: 1,
 } as const
 
 export type CreditAction = keyof typeof CREDIT_COSTS

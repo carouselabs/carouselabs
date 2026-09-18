@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { apiFetch, ApiError, type CommentProfile, type MeResponse } from "@/lib/api";
+import {
+  apiFetch,
+  ApiError,
+  type CommentProfile,
+  type GenerateResponse,
+  type MeResponse,
+} from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -29,6 +35,7 @@ interface SelectedPost {
   authorHeadline: string;
   text: string;
   type: "text" | "image" | "article" | "poll" | "repost";
+  url: string;
   capturedAt: number;
 }
 
@@ -47,6 +54,9 @@ export function HomeScreen() {
   // than leaving it attached to the wrong post.
   const [selectedPost, setSelectedPost] = useState<SelectedPost | null>(null);
   const [generatedComment, setGeneratedComment] = useState<string | null>(null);
+  const [extraInstruction, setExtraInstruction] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,6 +78,7 @@ export function HomeScreen() {
       // comment — but the Comment Profile selection above is untouched.
       setSelectedPost(post);
       setGeneratedComment(null);
+      setGenerateError(null);
     }
 
     // Instant path — only lands if the panel is open AND this screen is
@@ -161,6 +172,41 @@ export function HomeScreen() {
     setSelectedId(value);
   }
 
+  async function handleGenerate() {
+    if (!selectedPost || !selectedId) return;
+
+    setGenerating(true);
+    setGenerateError(null);
+    setGeneratedComment(null);
+
+    try {
+      const { comment } = await apiFetch<GenerateResponse>("/api/ext/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profileId: selectedId,
+          post: {
+            author: selectedPost.authorName,
+            headline: selectedPost.authorHeadline,
+            text: selectedPost.text,
+            type: selectedPost.type,
+            url: selectedPost.url,
+          },
+          extraInstruction: extraInstruction.trim() || undefined,
+        }),
+      });
+
+      setGeneratedComment(comment);
+    } catch (err) {
+      // Out-of-credits is the one failure worth naming, since retrying won't
+      // fix it. Everything else gets the generic copy from the UX spec.
+      const outOfCredits = err instanceof ApiError && err.status === 402;
+      setGenerateError(outOfCredits ? err.message : "Something went wrong, try again");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4 p-4">
       <div className="space-y-1.5">
@@ -232,14 +278,36 @@ export function HomeScreen() {
         )}
       </div>
 
-      {/* Real comment-generation flow is wired up in a later step — for now
-          this just reflects whether a post has been captured. */}
-      <Button disabled={!selectedPost}>Generate</Button>
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-muted-foreground">
+          Extra instruction <span className="font-normal">(optional)</span>
+        </label>
+        <textarea
+          value={extraInstruction}
+          onChange={(e) => setExtraInstruction(e.target.value)}
+          disabled={!selectedPost || generating}
+          rows={2}
+          placeholder="e.g. mention my own experience with this"
+          className="w-full resize-none rounded-md border border-input bg-background p-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+        />
+      </div>
+
+      <Button disabled={!selectedPost || !selectedId || generating} onClick={handleGenerate}>
+        {generating ? "Generating…" : "Generate"}
+      </Button>
+
+      {generateError && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
+          {generateError}
+        </div>
+      )}
 
       {generatedComment && (
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">Generated comment</label>
-          <p className="rounded-md border border-input bg-background p-3 text-sm">{generatedComment}</p>
+          <p className="whitespace-pre-wrap rounded-md border border-input bg-background p-3 text-sm">
+            {generatedComment}
+          </p>
         </div>
       )}
     </div>

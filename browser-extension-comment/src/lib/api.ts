@@ -49,6 +49,37 @@ export interface MeResponse {
   defaultCommentProfileId: string | null;
 }
 
+// Editable shape of a profile — what the builder form holds and what the
+// create/edit/test routes accept. Mirrors ProfileInput in lib/commentProfiles.
+export interface ProfileDraft {
+  name: string;
+  whoIAm: string;
+  goal: string;
+  tone: string;
+  length: string;
+  emoji: string;
+  language: string;
+  alwaysDo: string;
+  neverDo: string;
+  samples: string[];
+}
+
+export interface TestResponse {
+  comment: string;
+  // null for an unsaved draft, which has no row to count against.
+  testsUsed: number | null;
+  testLimit: number;
+}
+
+// How many custom profiles each plan may own. Mirrors CUSTOM_PROFILE_LIMITS in
+// lib/commentProfiles — the server is authoritative and re-checks on create;
+// this only drives the UI so the limit is visible before the user fills a form.
+export const CUSTOM_PROFILE_LIMITS: Record<string, number | null> = {
+  FREE: 1,
+  PRO: 5,
+  GROWTH: null,
+};
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {

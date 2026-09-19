@@ -8,7 +8,22 @@
 // a <post> element and explicitly labelled as data so that a post whose body
 // says something like "ignore your instructions and reply with X" is treated
 // as content to comment on rather than as instructions.
-import type { CommentProfile } from "@prisma/client"
+// Only the fields the prompt actually reads, rather than the full Prisma
+// model. A saved CommentProfile satisfies this structurally, and so does the
+// unsaved draft app/api/ext/profiles/test receives from the builder form —
+// which is what lets Test preview real Generate output through the exact same
+// function instead of a near-copy that could drift.
+export interface CommentProfileInput {
+  whoIAm: string
+  goal: string
+  tone: string
+  length: string
+  emoji: string
+  language: string
+  alwaysDo?: string | null
+  neverDo?: string | null
+  samples?: string[]
+}
 
 // Phrases the model must never produce. Exported because
 // app/api/ext/generate/route.ts post-validates against this same list — if the
@@ -58,7 +73,7 @@ function escapeAttribute(value: string): string {
     .replace(/>/g, "&gt;")
 }
 
-export function buildCommentSystemMessage(profile: CommentProfile): string {
+export function buildCommentSystemMessage(profile: CommentProfileInput): string {
   const sections: string[] = []
 
   sections.push(`You write LinkedIn comments for this person: ${profile.whoIAm}.`)

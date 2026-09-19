@@ -7,8 +7,6 @@
 // request that fails after its automatic retry is never charged and writes no
 // CommentHistory row, so a user is not billed for output they never saw.
 import { NextResponse } from "next/server"
-import Anthropic from "@anthropic-ai/sdk"
-import OpenAI from "openai"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import { availableCredits } from "@/lib/credits"
@@ -23,152 +21,13 @@ import {
   ANTI_FABRICATION_REMINDER,
   type CommentPostInput,
 } from "@/lib/ai/prompts/commentPrompt"
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-// Haiku rather than the Sonnet used by the carousel/image routes: a comment is
-// a few dozen words and the user is watching a side panel spinner, so latency
-// matters more here than headroom.
-const CLAUDE_MODEL = "claude-haiku-4-5-20251001"
-const FALLBACK_MODEL = "gpt-4o"
-
-// Same check as app/api/generate/image-prompt: a real generation is JSON
-// starting with "{", so refusal prose only ever appears at the very start.
-function isRefusal(text: string): boolean {
-  const refusalPhrases = [
-    "i'm sorry",
-    "i cannot",
-    "i can't assist",
-    "i'm not able",
-    "i won't",
-    "i am unable",
-    "i apologize",
-    "not able to help",
-    "can't help with",
-  ]
-  const opening = text.toLowerCase().trim().slice(0, 300)
-  return refusalPhrases.some((phrase) => opening.startsWith(phrase) || opening.includes(phrase))
-}
-
-function extractStringValue(raw: string, key: string): string | null {
-  const pattern = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\[\\s\\S])*)"`, "s")
-  const match = raw.match(pattern)
-  if (!match) return null
-  try {
-    return JSON.parse(`"${match[1]}"`)
-  } catch {
-    return match[1]
-  }
-}
-
-// Same lenient ladder as the carousel/image prompt routes, narrowed to the
-// single `comment` field.
-function parseComment(raw: string): string | null {
-  try {
-    const parsed = JSON.parse(raw)
-    if (typeof parsed.comment === "string") return parsed.comment
-  } catch {}
-
-  try {
-    const start = raw.indexOf("{")
-    const end = raw.lastIndexOf("}")
-    if (start !== -1 && end !== -1 && end > start) {
-      const parsed = JSON.parse(raw.slice(start, end + 1))
-      if (typeof parsed.comment === "string") return parsed.comment
-    }
-  } catch {}
-
-  try {
-    const match = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (match) {
-      const parsed = JSON.parse(match[1].trim())
-      if (typeof parsed.comment === "string") return parsed.comment
-    }
-  } catch {}
-
-  return extractStringValue(raw, "comment")
-}
-
-// Removes what the prompt already forbids, for the cases where the model
-// ignores it. Reports how much was removed so the caller can tell a cosmetic
-// tidy-up from a comment that was mostly banned filler.
-function sanitizeComment(raw: string): { comment: string; removedChars: number } {
-  const before = raw.trim()
-  let comment = before
-
-  // Hashtags, including the trailing runs models like to append.
-  comment = comment.replace(/(^|\s)#[\p{L}\p{N}_]+/gu, "$1")
-
-  for (const phrase of BANNED_PHRASES) {
-    // Phrase plus any punctuation and spacing that trails it, so removing
-    // "Great post" doesn't leave a stranded "! ".
-    comment = comment.replace(new RegExp(`${phrase}[\\s!.,—-]*`, "gi"), "")
-  }
-
-  comment = comment
-    .replace(/—/g, "-")
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
-
-  return { comment, removedChars: before.length - comment.length }
-}
-
-// Numbers in the output that appear in neither the post nor the commenter's own
-// instruction were invented by the model. That matters more here than in most
-// generation flows: the comment is posted under the user's name, so a made-up
-// "40% time savings" becomes a claim they appear to be making themselves.
-//
-// Compared as exact normalised tokens rather than substrings: a loose match
-// would let a fabricated "4x" pass because the post happened to mention "40".
-function findUnsourcedNumbers(comment: string, sources: string): string[] {
-  const normalize = (n: string) => n.replace(/,/g, "").replace(/[.]+$/, "")
-  const sourceNumbers = new Set((sources.match(/\d[\d,.]*/g) ?? []).map(normalize))
-
-  const unsourced = new Set<string>()
-  for (const raw of comment.match(/\d[\d,.]*/g) ?? []) {
-    const token = normalize(raw)
-    if (token && !sourceNumbers.has(token)) unsourced.add(token)
-  }
-
-  return [...unsourced]
-}
-
-async function callModel(systemMessage: string, userMessage: string): Promise<string> {
-  // PRIMARY: Claude. Any refusal or API error falls through to GPT-4o.
-  try {
-    const response = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 1024,
-      system: systemMessage,
-      messages: [{ role: "user", content: userMessage }],
-    })
-
-    const raw = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("")
-
-    if (!isRefusal(raw) && raw.trim()) return raw
-    console.warn("[ext/generate] Claude refused or returned empty, falling back to GPT-4o")
-  } catch (err) {
-    const e = err as { message?: string }
-    console.warn("[ext/generate] Claude error, falling back to GPT-4o:", e?.message ?? err)
-  }
-
-  // FALLBACK: GPT-4o.
-  const response = await openai.chat.completions.create({
-    model: FALLBACK_MODEL,
-    max_tokens: 1024,
-    messages: [
-      { role: "system", content: systemMessage },
-      { role: "user", content: userMessage },
-    ],
-  })
-
-  return response.choices[0]?.message?.content ?? ""
-}
+import {
+  callCommentModel,
+  parseComment,
+  sanitizeComment,
+  findUnsourcedNumbers,
+  CLAUDE_MODEL,
+} from "@/lib/ai/commentModel"
 
 export async function POST(req: Request) {
   const user = await getUserFromCommentExtensionToken(req)
@@ -256,7 +115,7 @@ export async function POST(req: Request) {
 
     let raw: string
     try {
-      raw = await callModel(systemMessage, message)
+      raw = await callCommentModel(systemMessage, message, "ext/generate")
     } catch (err) {
       console.error(`[ext/generate] attempt ${attempt}: both models failed:`, err)
       continue
@@ -334,8 +193,9 @@ export async function POST(req: Request) {
     )
   }
 
-  // action stays NONE until the user actually copies or inserts the comment.
-  await db.commentHistory.create({
+  // action stays NONE until the user actually copies or inserts the comment;
+  // the id goes back to the client so it can PATCH that field when they do.
+  const history = await db.commentHistory.create({
     data: {
       userId: user.id,
       profileId: profile.id,
@@ -349,5 +209,9 @@ export async function POST(req: Request) {
     },
   })
 
-  return NextResponse.json({ comment, creditsRemaining: charge.remaining })
+  return NextResponse.json({
+    comment,
+    creditsRemaining: charge.remaining,
+    historyId: history.id,
+  })
 }

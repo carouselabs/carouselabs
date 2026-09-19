@@ -33,6 +33,13 @@ export interface CommentProfile {
 export interface GenerateResponse {
   comment: string;
   creditsRemaining: number;
+  // Id of the CommentHistory row this generation created, so a later Copy can
+  // PATCH its action field. See app/api/ext/history/[id].
+  historyId: string;
+}
+
+export interface RewriteResponse {
+  comment: string;
 }
 
 export interface MeResponse {

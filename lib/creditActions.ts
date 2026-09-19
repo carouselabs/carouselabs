@@ -24,6 +24,11 @@ export const CREDIT_COSTS = {
   // per successful comment; a generation that fails after its automatic retry
   // is never charged.
   comment_generate: 1,
+  // Shorter / Longer rewrites (app/api/ext/rewrite). TODO: bill at 0.5 once the
+  // credit columns can hold a fraction — Subscription.creditsUsed/creditsTotal/
+  // extraCredits are Int, so 0.5 would be rounded on deduction rather than
+  // charged. Free rather than silently wrong; the route rate-limits instead.
+  comment_rewrite: 0,
 } as const
 
 export type CreditAction = keyof typeof CREDIT_COSTS

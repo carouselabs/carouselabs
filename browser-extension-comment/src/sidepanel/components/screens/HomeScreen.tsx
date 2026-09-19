@@ -5,6 +5,7 @@ import {
   type CommentProfile,
   type GenerateResponse,
   type MeResponse,
+  type RewriteResponse,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,15 +49,24 @@ export function HomeScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Populated by src/content-script.ts via chrome.runtime.sendMessage when
-  // the user clicks Comment on a LinkedIn post. generatedComment has no
-  // producer yet (comment generation is a later step) but is reset here too
-  // so that a NEW post arriving mid-session clears any stale output rather
-  // than leaving it attached to the wrong post.
+  // the user clicks Comment on a LinkedIn post. The output is reset here too,
+  // so a NEW post arriving mid-session clears stale comment text rather than
+  // leaving it attached to the wrong post.
   const [selectedPost, setSelectedPost] = useState<SelectedPost | null>(null);
-  const [generatedComment, setGeneratedComment] = useState<string | null>(null);
   const [extraInstruction, setExtraInstruction] = useState("");
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+
+  // The output box is editable, so this holds whatever is currently in it,
+  // including the user's own edits. Every action below (Copy, Shorter, Longer)
+  // operates on this value rather than on the last thing the model returned.
+  const [comment, setComment] = useState("");
+  // Row created by the last successful generate, so Copy can mark it COPIED.
+  // Cleared on a new post: copying then would tag the wrong row.
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const [rewriting, setRewriting] = useState<"shorter" | "longer" | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [credits, setCredits] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,38 +75,27 @@ export function HomeScreen() {
     // second arrival would clear generatedComment a second time.
     let lastAppliedAt: number | null = null;
 
-    function applyPost(post: SelectedPost, source: string) {
+    function applyPost(post: SelectedPost) {
       if (cancelled) return;
-      if (lastAppliedAt === post.capturedAt) {
-        console.log(`[sidepanel] duplicate post from ${source}, already applied — ignoring.`);
-        return;
-      }
+      if (lastAppliedAt === post.capturedAt) return;
       lastAppliedAt = post.capturedAt;
-      console.log(`[sidepanel] applying post from ${source}:`, post);
 
-      // Replace the preview entirely and clear any previously generated
-      // comment — but the Comment Profile selection above is untouched.
+      // Replace the preview entirely and clear the output — but the Comment
+      // Profile selection above is untouched.
       setSelectedPost(post);
-      setGeneratedComment(null);
+      setComment("");
+      setHistoryId(null);
+      setCopied(false);
       setGenerateError(null);
     }
 
     // Instant path — only lands if the panel is open AND this screen is
     // mounted at the moment of the click.
     function handleMessage(message: unknown) {
-      console.log("[sidepanel] chrome.runtime.onMessage received:", message);
-
       if (!message || typeof message !== "object") return;
       const { type, post } = message as { type?: string; post?: SelectedPost };
-
-      if (type !== POST_SELECTED_MESSAGE_TYPE || !post) {
-        console.log(
-          `[sidepanel] message ignored — expected type "${POST_SELECTED_MESSAGE_TYPE}" with a post, got type "${type}".`,
-        );
-        return; // not our message — don't interfere with other listeners
-      }
-
-      applyPost(post, "runtime.onMessage");
+      if (type !== POST_SELECTED_MESSAGE_TYPE || !post) return;
+      applyPost(post);
     }
 
     // Reliable path — fires in every extension context, and the value is
@@ -106,10 +105,8 @@ export function HomeScreen() {
       areaName: string,
     ) {
       if (areaName !== "local" || !(LAST_POST_STORAGE_KEY in changes)) return;
-      console.log("[sidepanel] storage change:", changes[LAST_POST_STORAGE_KEY]);
-
       const post = changes[LAST_POST_STORAGE_KEY].newValue as SelectedPost | undefined;
-      if (post) applyPost(post, "storage.onChanged");
+      if (post) applyPost(post);
     }
 
     chrome.runtime.onMessage.addListener(handleMessage);
@@ -119,8 +116,7 @@ export function HomeScreen() {
     // after the Comment click already happened.
     chrome.storage.local.get(LAST_POST_STORAGE_KEY).then((stored) => {
       const post = stored[LAST_POST_STORAGE_KEY] as SelectedPost | undefined;
-      console.log("[sidepanel] initial storage read:", post ?? "(nothing stored yet)");
-      if (post) applyPost(post, "storage initial read");
+      if (post) applyPost(post);
     });
 
     return () => {
@@ -150,6 +146,7 @@ export function HomeScreen() {
           fetchedProfiles[0];
 
         setSelectedId(preselected?.id ?? "");
+        setCredits(me.creditsAvailable);
         setState("ready");
       } catch (err) {
         if (cancelled) return;
@@ -172,15 +169,31 @@ export function HomeScreen() {
     setSelectedId(value);
   }
 
+  // Button-state table. "Logged out" is not checked here: App.tsx renders
+  // SignInScreen instead of this component when there is no token, so an
+  // unauthenticated user never reaches these controls.
+  const busy = generating || rewriting !== null;
+  const hasComment = comment.trim().length > 0;
+  // credits is null only while /api/ext/me is still in flight; treating that
+  // as "out" would disable Generate during every panel open.
+  const outOfCredits = credits !== null && credits <= 0;
+  const generateDisabled = !selectedPost || !selectedId || outOfCredits || busy;
+  // Copy / Shorter / Longer all need a comment to act on.
+  const actionsDisabled = !hasComment || busy;
+
+  // Regenerate is the same call as Generate: same post, same profile, same
+  // cost. The only difference is that it replaces existing output.
   async function handleGenerate() {
     if (!selectedPost || !selectedId) return;
 
     setGenerating(true);
     setGenerateError(null);
-    setGeneratedComment(null);
+    setComment("");
+    setHistoryId(null);
+    setCopied(false);
 
     try {
-      const { comment } = await apiFetch<GenerateResponse>("/api/ext/generate", {
+      const res = await apiFetch<GenerateResponse>("/api/ext/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -196,7 +209,9 @@ export function HomeScreen() {
         }),
       });
 
-      setGeneratedComment(comment);
+      setComment(res.comment);
+      setHistoryId(res.historyId);
+      setCredits(res.creditsRemaining);
     } catch (err) {
       // Out-of-credits is the one failure worth naming, since retrying won't
       // fix it. Everything else gets the generic copy from the UX spec.
@@ -204,6 +219,60 @@ export function HomeScreen() {
       setGenerateError(outOfCredits ? err.message : "Something went wrong, try again");
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function handleRewrite(direction: "shorter" | "longer") {
+    if (!comment.trim()) return;
+
+    setRewriting(direction);
+    setGenerateError(null);
+    setCopied(false);
+
+    try {
+      // Sends the CURRENT box contents, so a hand-edit is what gets resized.
+      // historyId rides along so the route can keep the stored history text in
+      // step with the rewritten version the user will actually copy.
+      const res = await apiFetch<RewriteResponse>("/api/ext/rewrite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentComment: comment, direction, historyId }),
+      });
+
+      setComment(res.comment);
+    } catch (err) {
+      const rateLimited = err instanceof ApiError && err.status === 429;
+      setGenerateError(rateLimited ? err.message : "Something went wrong, try again");
+    } finally {
+      setRewriting(null);
+    }
+  }
+
+  async function handleCopy() {
+    if (!comment.trim()) return;
+
+    try {
+      await navigator.clipboard.writeText(comment);
+    } catch {
+      setGenerateError("Couldn't copy to clipboard");
+      return;
+    }
+
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+
+    // Best effort: the copy already succeeded, so a failed PATCH must not
+    // surface as an error. It only costs the history row its COPIED label.
+    //
+    // The comment text rides along because the box is editable: what the user
+    // just put on their clipboard may be a hand-edit of what was generated,
+    // and the row should record what they actually took.
+    if (historyId) {
+      apiFetch(`/api/ext/history/${historyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "COPIED", comment }),
+      }).catch(() => {});
     }
   }
 
@@ -292,9 +361,15 @@ export function HomeScreen() {
         />
       </div>
 
-      <Button disabled={!selectedPost || !selectedId || generating} onClick={handleGenerate}>
-        {generating ? "Generating…" : "Generate"}
+      <Button disabled={generateDisabled} onClick={handleGenerate}>
+        {generating ? "Generating…" : comment ? "Regenerate" : "Generate"}
       </Button>
+
+      {outOfCredits && (
+        <p className="text-xs text-muted-foreground">
+          You're out of credits, so Generate is unavailable.
+        </p>
+      )}
 
       {generateError && (
         <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
@@ -302,14 +377,42 @@ export function HomeScreen() {
         </div>
       )}
 
-      {generatedComment && (
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Generated comment</label>
-          <p className="whitespace-pre-wrap rounded-md border border-input bg-background p-3 text-sm">
-            {generatedComment}
-          </p>
-        </div>
-      )}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Comment</label>
+        <textarea
+          value={comment}
+          onChange={(e) => {
+            setComment(e.target.value);
+            setCopied(false);
+          }}
+          disabled={!hasComment || busy}
+          rows={6}
+          placeholder="Your generated comment appears here, and can be edited before copying."
+          className="w-full resize-y rounded-md border border-input bg-background p-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+        />
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="secondary" disabled={actionsDisabled} onClick={handleCopy}>
+          {copied ? "Copied" : "Copy"}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={actionsDisabled}
+          onClick={() => handleRewrite("shorter")}
+        >
+          {rewriting === "shorter" ? "Shortening…" : "Shorter"}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={actionsDisabled}
+          onClick={() => handleRewrite("longer")}
+        >
+          {rewriting === "longer" ? "Lengthening…" : "Longer"}
+        </Button>
+      </div>
     </div>
   );
 }

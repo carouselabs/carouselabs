@@ -47,10 +47,33 @@ export interface MeResponse {
   plan: string;
   creditsAvailable: number;
   commentsThisMonth: number;
+  commentsToday: number;
   defaultCommentProfileId: string | null;
   defaultLanguage: string | null;
   insertWarningHidden: boolean;
 }
+
+export interface HistoryEntry {
+  id: string;
+  postAuthor: string;
+  postUrl: string;
+  postSnippet: string;
+  comment: string;
+  action: "NONE" | "COPIED" | "INSERTED";
+  createdAt: string;
+  profileName: string;
+}
+
+export interface HistoryResponse {
+  entries: HistoryEntry[];
+  nextCursor: string | null;
+}
+
+// Roughly one comment every 10 minutes across a working day. Past this the
+// panel shows a pacing nudge — LinkedIn reads sustained bursts as automation.
+export const DAILY_NUDGE_THRESHOLD = 50;
+
+export const LINKEDIN_FEED_URL = "https://www.linkedin.com/feed/";
 
 export interface SettingsResponse {
   defaultCommentProfileId: string | null;

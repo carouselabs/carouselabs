@@ -4,6 +4,9 @@ import {
   apiFetch,
   ApiError,
   fetchExtConfig,
+  BILLING_URL,
+  LINKEDIN_FEED_URL,
+  DAILY_NUDGE_THRESHOLD,
   type CommentProfile,
   type GenerateResponse,
   type MeResponse,
@@ -19,8 +22,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Selecting this value is a no-op stub for now — real "create custom
-// profile" flow is wired up in Part 8.
+// Sentinel option in the profile dropdown. Selecting it does not change the
+// selection — it hands off to the Profile Builder on the Profiles screen,
+// through the same App-level deep link onboarding uses.
 const CREATE_CUSTOM_VALUE = "__create_custom__";
 
 // Must match MESSAGE_TYPE in src/content-script.ts exactly — no shared
@@ -66,7 +70,13 @@ function userFacingError(err: unknown): string {
   return "Something went wrong, try again";
 }
 
-export function HomeScreen() {
+interface Props {
+  // Opens the Profile Builder on the Profiles screen. Owned by App, since
+  // switching screens is App's job and HomeScreen cannot navigate itself.
+  onCreateProfile: () => void;
+}
+
+export function HomeScreen({ onCreateProfile }: Props) {
   const [profiles, setProfiles] = useState<CommentProfile[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [state, setState] = useState<LoadState>("loading");
@@ -99,6 +109,13 @@ export function HomeScreen() {
   const [insertWarningHidden, setInsertWarningHidden] = useState(false);
   const [showInsertWarning, setShowInsertWarning] = useState(false);
   const [inserting, setInserting] = useState(false);
+
+  // null while unknown. Chrome reveals tab.url only for hosts the extension
+  // has permission for, so a readable linkedin.com URL is itself the signal —
+  // no "tabs" permission needed.
+  const [onLinkedIn, setOnLinkedIn] = useState<boolean | null>(null);
+  const [commentsToday, setCommentsToday] = useState(0);
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
 
   // Lets the mount-once message listener reach the current handleGenerate
   // without listing it as an effect dependency, which would tear down and
@@ -193,6 +210,7 @@ export function HomeScreen() {
 
         setSelectedId(preselected?.id ?? "");
         setCredits(me.creditsAvailable);
+        setCommentsToday(me.commentsToday);
         setInsertWarningHidden(me.insertWarningHidden);
         setState("ready");
       } catch (err) {
@@ -212,7 +230,12 @@ export function HomeScreen() {
   const customProfiles = profiles.filter((p) => !p.isSystem);
 
   function handleValueChange(value: string) {
-    if (value === CREATE_CUSTOM_VALUE) return;
+    // Not a real selection: leave selectedId alone so the previously chosen
+    // profile stays active if the user backs out of the builder.
+    if (value === CREATE_CUSTOM_VALUE) {
+      onCreateProfile();
+      return;
+    }
     setSelectedId(value);
   }
 
@@ -250,6 +273,10 @@ export function HomeScreen() {
     chrome.storage.local.get(SHOW_INSERT_STORAGE_KEY).then((stored) => {
       const value = stored[SHOW_INSERT_STORAGE_KEY];
       if (!cancelled && typeof value === "boolean") setShowInsertPref(value);
+    });
+
+    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+      if (!cancelled) setOnLinkedIn(!!tab?.url?.includes("linkedin.com"));
     });
 
     return () => {
@@ -475,6 +502,34 @@ export function HomeScreen() {
         )}
       </div>
 
+      {/* Pacing nudge. Advisory only: it never blocks generating, because the
+          judgement of what looks like automation is the user's to make. */}
+      {commentsToday >= DAILY_NUDGE_THRESHOLD && !nudgeDismissed && (
+        <div className="flex items-start gap-2 rounded-md border border-input bg-muted/50 p-2">
+          <p className="flex-1 text-xs text-muted-foreground">
+            Slow down: lots of comments in a short time can look like automation.
+          </p>
+          <button
+            onClick={() => setNudgeDismissed(true)}
+            aria-label="Dismiss"
+            className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* Nothing below this is reachable on a non-LinkedIn tab, so it replaces
+          the whole flow rather than sitting alongside it. */}
+      {onLinkedIn === false && (
+        <div className="space-y-2 rounded-md border border-dashed border-input p-3">
+          <p className="text-xs text-muted-foreground">Open LinkedIn to start commenting.</p>
+          <Button size="sm" onClick={() => chrome.tabs.create({ url: LINKEDIN_FEED_URL })}>
+            Open LinkedIn
+          </Button>
+        </div>
+      )}
+
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-muted-foreground">Selected post</label>
 
@@ -512,20 +567,25 @@ export function HomeScreen() {
         />
       </div>
 
-      <Button disabled={generateDisabled} onClick={handleGenerate}>
-        {generating ? "Generating…" : comment ? "Regenerate" : "Generate"}
-      </Button>
-
-      {outOfCredits && (
-        <p className="text-xs text-muted-foreground">
-          You're out of credits, so Generate is unavailable.
-        </p>
+      {/* Out of credits replaces Generate entirely rather than disabling it:
+          a disabled button with a note underneath gives the user nothing to
+          act on, and topping up is the only thing that helps. */}
+      {outOfCredits ? (
+        <>
+          <Button onClick={() => chrome.tabs.create({ url: BILLING_URL })}>Top up credits</Button>
+          <p className="text-xs text-muted-foreground">
+            You're out of credits. Top up to keep generating comments.
+          </p>
+        </>
+      ) : (
+        <Button disabled={generateDisabled} onClick={handleGenerate}>
+          {generating ? "Generating…" : comment ? "Regenerate" : "Generate"}
+        </Button>
       )}
 
       {postHasNoText && !outOfCredits && (
         <p className="text-xs text-muted-foreground">
-          No post text was captured for this post. Click Comment on it again, or pick a different
-          post.
+          Couldn't read this post. Try opening it in its own page.
         </p>
       )}
 

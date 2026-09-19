@@ -29,10 +29,18 @@ chrome.commands.onCommand.addListener((command) => {
 
 console.log("[background] service worker script evaluated, registering listeners.");
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   chrome.sidePanel
     .setPanelBehavior({ openPanelOnActionClick: true })
     .catch((error) => console.error("[CarouseLabs Comment] setPanelBehavior failed:", error));
+
+  // Only on a genuine first install: an update or a browser restart also fires
+  // this listener, and reopening the welcome tab then would be noise.
+  // chrome.sidePanel.open() cannot be called here (it needs a user gesture),
+  // so the page explains how to pin the toolbar icon instead.
+  if (details.reason === "install") {
+    chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
+  }
 
   console.log("[CarouseLabs Comment] service worker installed.");
 });

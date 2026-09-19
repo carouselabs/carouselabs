@@ -28,15 +28,25 @@ export async function GET(req: Request) {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1)
 
-  const commentsThisMonth = await db.commentHistory.count({
-    where: { userId: user.id, createdAt: { gte: monthStart, lt: nextMonthStart } },
-  })
+  // Today's count drives the pacing nudge in the side panel. Calendar day in
+  // server time, consistent with how commentsThisMonth is bounded.
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
+  const [commentsThisMonth, commentsToday] = await Promise.all([
+    db.commentHistory.count({
+      where: { userId: user.id, createdAt: { gte: monthStart, lt: nextMonthStart } },
+    }),
+    db.commentHistory.count({
+      where: { userId: user.id, createdAt: { gte: dayStart } },
+    }),
+  ])
 
   return NextResponse.json({
     email: user.email,
     plan: subscription.plan,
     creditsAvailable: availableCredits(subscription),
     commentsThisMonth,
+    commentsToday,
     defaultCommentProfileId: user.defaultCommentProfileId,
     defaultLanguage: user.defaultLanguage,
     // Whether the user has dismissed the Insert risk warning. Server-side

@@ -19,7 +19,14 @@ type View =
 
 type LoadState = "loading" | "ready" | "error";
 
-export function ProfilesScreen() {
+interface Props {
+  // Set when onboarding ended on "Create my profile now", so this screen opens
+  // straight into the builder rather than its list.
+  startInBuilder?: boolean;
+  onBuilderOpened?: () => void;
+}
+
+export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) {
   const [profiles, setProfiles] = useState<CommentProfile[]>([]);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [state, setState] = useState<LoadState>("loading");
@@ -45,6 +52,14 @@ export function ProfilesScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Consumed once: the flag is cleared immediately so navigating away from
+  // Profiles and back does not reopen the builder.
+  useEffect(() => {
+    if (!startInBuilder) return;
+    setView({ mode: "create" });
+    onBuilderOpened?.();
+  }, [startInBuilder, onBuilderOpened]);
 
   const customProfiles = profiles.filter((p) => !p.isSystem);
   const systemProfiles = profiles.filter((p) => p.isSystem);

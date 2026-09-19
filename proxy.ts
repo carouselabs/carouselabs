@@ -48,7 +48,12 @@ const isPublicRoute = createRouteMatcher([
   // documented behavior for unauthenticated non-page requests) before the
   // route's own CRON_SECRET check ever runs. Each cron route still
   // authenticates itself independently — this only lets that check happen.
-  "/api/cron(.*)",
+  // Trailing slash before the wildcard is deliberate: "/api/cron(.*)" also
+  // matched lookalikes such as /api/cronx/..., since the wildcard sat directly
+  // after "cron". Nothing served those paths, but the exemption is what lets a
+  // request skip Clerk entirely, so it should cover only real sub-paths.
+  // Nothing serves bare /api/cron, so requiring the slash breaks no route.
+  "/api/cron/(.*)",
   // browser-extension-comment/ calls these with an Authorization: Bearer
   // <token> header, not a Clerk session cookie — same reasoning as
   // /api/cron above, and the same latent gap that (pre-existing, not

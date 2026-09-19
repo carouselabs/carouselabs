@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { InsertWarningModal } from "../InsertWarningModal";
 import {
   apiFetch,
@@ -41,6 +41,10 @@ const INSERT_MESSAGE_TYPE = "carouselabs:insert-comment";
 // whether one browser shows a button.
 const SHOW_INSERT_STORAGE_KEY = "showInsertButton";
 
+// Must match GENERATE_SHORTCUT_MESSAGE_TYPE in src/background.ts. Relayed from
+// the service worker, which is where the keyboard command actually fires.
+const GENERATE_SHORTCUT_MESSAGE_TYPE = "carouselabs:shortcut-generate";
+
 // Shape sent by src/content-script.ts — keep in sync with its SelectedPost.
 interface SelectedPost {
   authorName: string;
@@ -52,6 +56,15 @@ interface SelectedPost {
 }
 
 type LoadState = "loading" | "ready" | "error";
+
+// 4xx messages are written for the user and say something actionable ("out of
+// credits", "no post text was captured"). Replacing them with generic copy was
+// hiding the only clue the panel had. 5xx stays generic: those messages
+// describe server internals and are not the user's problem to read.
+function userFacingError(err: unknown): string {
+  if (err instanceof ApiError && err.status >= 400 && err.status < 500) return err.message;
+  return "Something went wrong, try again";
+}
 
 export function HomeScreen() {
   const [profiles, setProfiles] = useState<CommentProfile[]>([]);
@@ -87,6 +100,11 @@ export function HomeScreen() {
   const [showInsertWarning, setShowInsertWarning] = useState(false);
   const [inserting, setInserting] = useState(false);
 
+  // Lets the mount-once message listener reach the current handleGenerate
+  // without listing it as an effect dependency, which would tear down and
+  // re-add the post listeners on every render.
+  const generateRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     // Deduped on capturedAt because the same post arrives twice by design:
@@ -113,6 +131,15 @@ export function HomeScreen() {
     function handleMessage(message: unknown) {
       if (!message || typeof message !== "object") return;
       const { type, post } = message as { type?: string; post?: SelectedPost };
+
+      // The keyboard shortcut arrives on the same channel. Routed through a
+      // ref so this listener does not need re-registering whenever the
+      // generate handler's dependencies change.
+      if (type === GENERATE_SHORTCUT_MESSAGE_TYPE) {
+        generateRef.current?.();
+        return;
+      }
+
       if (type !== POST_SELECTED_MESSAGE_TYPE || !post) return;
       applyPost(post);
     }
@@ -197,7 +224,12 @@ export function HomeScreen() {
   // credits is null only while /api/ext/me is still in flight; treating that
   // as "out" would disable Generate during every panel open.
   const outOfCredits = credits !== null && credits <= 0;
-  const generateDisabled = !selectedPost || !selectedId || outOfCredits || busy;
+  // A captured post with no body text cannot be commented on, and the route
+  // rejects it with a 400. Blocking it here turns a failed round trip into an
+  // explained disabled button.
+  const postHasNoText = !!selectedPost && !selectedPost.text.trim();
+  const generateDisabled =
+    !selectedPost || !selectedId || outOfCredits || postHasNoText || busy;
   // Copy / Shorter / Longer all need a comment to act on.
   const actionsDisabled = !hasComment || busy;
 
@@ -257,14 +289,17 @@ export function HomeScreen() {
       setHistoryId(res.historyId);
       setCredits(res.creditsRemaining);
     } catch (err) {
-      // Out-of-credits is the one failure worth naming, since retrying won't
-      // fix it. Everything else gets the generic copy from the UX spec.
-      const outOfCredits = err instanceof ApiError && err.status === 402;
-      setGenerateError(outOfCredits ? err.message : "Something went wrong, try again");
+      setGenerateError(userFacingError(err));
     } finally {
       setGenerating(false);
     }
   }
+
+  // Kept current every render so the keyboard shortcut always invokes the
+  // latest closure rather than one captured at mount.
+  generateRef.current = () => {
+    if (!generateDisabled) void handleGenerate();
+  };
 
   async function handleRewrite(direction: "shorter" | "longer") {
     if (!comment.trim()) return;
@@ -285,8 +320,7 @@ export function HomeScreen() {
 
       setComment(res.comment);
     } catch (err) {
-      const rateLimited = err instanceof ApiError && err.status === 429;
-      setGenerateError(rateLimited ? err.message : "Something went wrong, try again");
+      setGenerateError(userFacingError(err));
     } finally {
       setRewriting(null);
     }
@@ -485,6 +519,13 @@ export function HomeScreen() {
       {outOfCredits && (
         <p className="text-xs text-muted-foreground">
           You're out of credits, so Generate is unavailable.
+        </p>
+      )}
+
+      {postHasNoText && !outOfCredits && (
+        <p className="text-xs text-muted-foreground">
+          No post text was captured for this post. Click Comment on it again, or pick a different
+          post.
         </p>
       )}
 

@@ -57,12 +57,18 @@ export async function POST(req: Request) {
     }
 
     if (!profileId) throw new Error("Missing profileId")
-    if (!post.text.trim()) throw new Error("Post has no text to comment on")
+    if (!post.text.trim()) {
+      throw new Error(
+        "No post text was captured. Click Comment on the post again, then retry.",
+      )
+    }
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Invalid request body" },
-      { status: 400 },
-    )
+    const message = err instanceof Error ? err.message : "Invalid request body"
+    // Logged as well as returned: a 400 here means the extension sent a body
+    // the route cannot use, which is a bug worth seeing in the server output
+    // rather than only in the panel.
+    console.warn(`[ext/generate] rejected request: ${message}`)
+    return NextResponse.json({ error: message }, { status: 400 })
   }
 
   // System profiles are shared; custom ones must belong to the caller. The

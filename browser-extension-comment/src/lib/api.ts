@@ -46,9 +46,23 @@ export interface MeResponse {
   email: string;
   plan: string;
   creditsAvailable: number;
+  commentsThisMonth: number;
   defaultCommentProfileId: string | null;
+  defaultLanguage: string | null;
   insertWarningHidden: boolean;
 }
+
+export interface SettingsResponse {
+  defaultCommentProfileId: string | null;
+  defaultLanguage: string | null;
+  insertWarningHidden: boolean;
+}
+
+// Mirrors LANGUAGES in app/api/ext/settings/route.ts, which validates against
+// the same list — a value not in it is rejected server-side.
+export const LANGUAGES = ["English", "Spanish", "French", "German", "Portuguese", "Hindi"];
+
+export const BILLING_URL = "https://carouselabs.com/settings/billing";
 
 // Public selector config (app/api/ext/config). Only the fields the side panel
 // reads; the content script has its own fuller copy of this shape.

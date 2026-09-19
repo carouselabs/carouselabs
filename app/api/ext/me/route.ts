@@ -20,11 +20,25 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "No subscription found" }, { status: 404 })
   }
 
+  // Calendar month, matching the "month" branch of getPeriodRange in
+  // lib/internPoints.ts: first of this month to first of next. Calendar rather
+  // than rolling 30 days, so the figure lines up with how a billing period
+  // reads to the user.
+  const now = new Date()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+
+  const commentsThisMonth = await db.commentHistory.count({
+    where: { userId: user.id, createdAt: { gte: monthStart, lt: nextMonthStart } },
+  })
+
   return NextResponse.json({
     email: user.email,
     plan: subscription.plan,
     creditsAvailable: availableCredits(subscription),
+    commentsThisMonth,
     defaultCommentProfileId: user.defaultCommentProfileId,
+    defaultLanguage: user.defaultLanguage,
     // Whether the user has dismissed the Insert risk warning. Server-side
     // rather than per-install, since the risk being acknowledged is to their
     // LinkedIn account, not to one browser.

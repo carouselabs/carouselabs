@@ -8,6 +8,25 @@
 // and the web app's, so it's a literal by necessity.
 const MESSAGE_TYPE = "carouselabs:extension-token";
 
+// Must match GENERATE_SHORTCUT_MESSAGE_TYPE in HomeScreen.tsx. The keyboard
+// shortcut is registered in manifest.config.ts and fires here, in the service
+// worker, rather than in the side panel — which is what makes it work while
+// the LinkedIn page has focus rather than only when the panel does.
+const GENERATE_SHORTCUT_MESSAGE_TYPE = "carouselabs:shortcut-generate";
+
+chrome.commands.onCommand.addListener((command) => {
+  if (command !== "generate-comment") return;
+
+  // Delivered only if the side panel is open. Nothing opens it here: that
+  // would need a user-gesture path and would surprise someone who pressed the
+  // shortcut by accident.
+  chrome.runtime.sendMessage({ type: GENERATE_SHORTCUT_MESSAGE_TYPE }, () => {
+    if (chrome.runtime.lastError) {
+      console.log("[background] generate shortcut had no receiver (side panel closed)");
+    }
+  });
+});
+
 console.log("[background] service worker script evaluated, registering listeners.");
 
 chrome.runtime.onInstalled.addListener(() => {

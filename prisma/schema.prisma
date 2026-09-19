@@ -112,6 +112,9 @@ model User {
   // ── CarouseLabs Comment extension ──
   defaultCommentProfileId String?
   insertWarningHidden     Boolean          @default(false)
+  // Preferred language for new comment profiles. Nullable rather than
+  // defaulted, so "never chosen" stays distinguishable from "chose English".
+  defaultLanguage         String?
   commentProfiles         CommentProfile[]
   commentHistory          CommentHistory[]
   extensionTokens         ExtensionToken[]

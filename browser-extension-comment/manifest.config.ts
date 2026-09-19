@@ -45,6 +45,18 @@ export default defineManifest({
       run_at: "document_idle",
     },
   ],
+  // A real global shortcut: chrome.commands fires in the service worker even
+  // while the LinkedIn page has focus, which a listener inside the side panel
+  // could not do. The service worker relays it to the panel (see
+  // src/background.ts). Chrome does not allow an extension to CHANGE its own
+  // shortcut, so Settings displays the binding and links to
+  // chrome://extensions/shortcuts for rebinding.
+  commands: {
+    "generate-comment": {
+      suggested_key: { default: "Alt+Shift+G", mac: "Alt+Shift+G" },
+      description: "Generate a comment for the selected LinkedIn post",
+    },
+  },
   action: {
     default_title: "CarouseLabs Comment",
     default_icon: {

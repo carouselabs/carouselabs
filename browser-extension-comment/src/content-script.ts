@@ -34,6 +34,10 @@ const MESSAGE_TYPE = "carouselabs:post-selected";
 // chrome.storage.onChanged fires in every extension context.
 const LAST_POST_STORAGE_KEY = "lastSelectedPost";
 
+// Must match INSERT_MESSAGE_TYPE in HomeScreen.tsx. Sent by the side panel
+// after the user has confirmed the Insert risk warning.
+const INSERT_MESSAGE_TYPE = "carouselabs:insert-comment";
+
 type PostType = "text" | "image" | "article" | "poll" | "repost";
 
 interface ExtensionConfig {
@@ -43,6 +47,7 @@ interface ExtensionConfig {
   authorLinkSelector: string;
   authorHeaderSelector: string;
   postTextSelector: string;
+  commentBoxSelector: string;
   imageIndicatorSelector: string;
   articleIndicatorSelector: string;
   pollIndicatorSelector: string;
@@ -61,6 +66,8 @@ const FALLBACK_CONFIG: ExtensionConfig = {
   authorLinkSelector: `a[aria-label^="View "][aria-label$="'s profile"]`,
   authorHeaderSelector: "[componentkey^='feed-header']",
   postTextSelector: '[data-testid="expandable-text-box"]',
+  commentBoxSelector:
+    "div[contenteditable='true'][role='textbox'], div.ql-editor[contenteditable='true'], div[contenteditable='true'][aria-label*='comment' i]",
   imageIndicatorSelector: ".update-components-image",
   articleIndicatorSelector: ".update-components-article",
   pollIndicatorSelector: ".update-components-poll",
@@ -397,6 +404,10 @@ async function handleClick(event: MouseEvent) {
     return;
   }
 
+  // Remembered so a later Insert targets this post's comment box rather than
+  // whichever one happens to be first in the feed.
+  lastPostContainer = postContainer;
+
   // Text first: the author's last-resort tier is cross-checked against it.
   const text = extractPostText(postContainer, config.postTextSelector);
   const author = extractAuthor(postContainer, config, text);
@@ -423,6 +434,58 @@ async function handleClick(event: MouseEvent) {
 
   sendPostToSidePanel(post);
 }
+
+// The container of the post whose Comment button was clicked last. Insert
+// needs it to scope the search for LinkedIn's comment box, so that a feed with
+// several open comment boxes puts the text in the right one.
+let lastPostContainer: Element | null = null;
+
+// Places text into LinkedIn's own comment box. Deliberately limited to filling
+// the field: nothing here clicks Post, and nothing submits. The user reviews
+// and posts the comment themselves.
+async function insertIntoCommentBox(text: string): Promise<{ ok: boolean; error?: string }> {
+  const config = await getConfig();
+
+  const scope = lastPostContainer ?? document;
+  const box = scope.querySelector<HTMLElement>(config.commentBoxSelector);
+
+  if (!box) {
+    return {
+      ok: false,
+      error:
+        "Couldn't find LinkedIn's comment box. Open the comment box on the post first, then try again.",
+    };
+  }
+
+  box.focus();
+
+  // execCommand is deprecated but remains the most reliable way to fill a
+  // contenteditable owned by a framework: it produces the same input events a
+  // real keystroke would, so LinkedIn's editor registers the text instead of
+  // silently discarding it on the next render.
+  const inserted = document.execCommand("insertText", false, text);
+
+  if (!inserted) {
+    // Fallback for editors where execCommand is blocked. Sets the text, then
+    // fires the input event the framework listens for.
+    box.textContent = text;
+    box.dispatchEvent(new InputEvent("input", { bubbles: true, data: text, inputType: "insertText" }));
+  }
+
+  return { ok: true };
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (!message || message.type !== INSERT_MESSAGE_TYPE || typeof message.text !== "string") {
+    return; // not our message — leave the channel alone for other listeners
+  }
+
+  insertIntoCommentBox(message.text)
+    .then(sendResponse)
+    .catch((err) => sendResponse({ ok: false, error: String(err) }));
+
+  return true; // keep the channel open for the async sendResponse above
+});
 
 // One delegated listener rather than one per Comment button — LinkedIn's
 // feed is virtualized/infinite-scroll, so buttons are constantly added and

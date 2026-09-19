@@ -47,6 +47,21 @@ export interface MeResponse {
   plan: string;
   creditsAvailable: number;
   defaultCommentProfileId: string | null;
+  insertWarningHidden: boolean;
+}
+
+// Public selector config (app/api/ext/config). Only the fields the side panel
+// reads; the content script has its own fuller copy of this shape.
+export interface ExtConfigResponse {
+  insertEnabled: boolean;
+}
+
+// Public route — no bearer token, so it bypasses apiFetch.
+export async function fetchExtConfig(): Promise<ExtConfigResponse> {
+  const baseUrl = await getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/api/ext/config`);
+  if (!res.ok) throw new ApiError(res.status, "Failed to load config");
+  return (await res.json()) as ExtConfigResponse;
 }
 
 // Editable shape of a profile — what the builder form holds and what the

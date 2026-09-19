@@ -109,9 +109,17 @@ export async function GET() {
     pollIndicatorSelector: ".update-components-poll",
     repostIndicatorSelector:
       ".update-components-mini-update-v2, .feed-shared-reshared-update-v2, .update-components-actor--reshared",
-    // Reserved for a future "insert comment into LinkedIn's comment box"
-    // feature — a remote kill switch so that feature can be disabled
-    // server-side without an extension redeploy. Not acted on yet.
+    // LinkedIn's own comment input for a post. It is a contenteditable, not a
+    // <textarea>, so insertion goes through the editable element rather than
+    // a value assignment. Scoped to the post container at use time.
+    //
+    // UNVERIFIED against live markup, same caveat as the selectors above: the
+    // aria-label wording is a best guess and may need correcting here.
+    commentBoxSelector:
+      "div[contenteditable='true'][role='textbox'], div.ql-editor[contenteditable='true'], div[contenteditable='true'][aria-label*='comment' i]",
+    // Remote kill switch for the Insert feature. When false the side panel
+    // hides the Insert button entirely, regardless of the user's own setting,
+    // so the feature can be withdrawn without an extension redeploy.
     insertEnabled: true,
   })
   return withCorsHeaders(res)

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { InsertWarningModal } from "../InsertWarningModal";
 import {
   apiFetch,
   ApiError,
+  fetchExtConfig,
   type CommentProfile,
   type GenerateResponse,
   type MeResponse,
@@ -29,6 +31,15 @@ const POST_SELECTED_MESSAGE_TYPE = "carouselabs:post-selected";
 
 // Must likewise match LAST_POST_STORAGE_KEY in src/content-script.ts.
 const LAST_POST_STORAGE_KEY = "lastSelectedPost";
+
+// Must match INSERT_MESSAGE_TYPE in src/content-script.ts exactly.
+const INSERT_MESSAGE_TYPE = "carouselabs:insert-comment";
+
+// Per-install UI preference, so it lives in chrome.storage rather than on the
+// User row. Unlike insertWarningHidden — which records that a risk was
+// acknowledged and therefore belongs to the account — this is only about
+// whether one browser shows a button.
+const SHOW_INSERT_STORAGE_KEY = "showInsertButton";
 
 // Shape sent by src/content-script.ts — keep in sync with its SelectedPost.
 interface SelectedPost {
@@ -67,6 +78,14 @@ export function HomeScreen() {
   const [rewriting, setRewriting] = useState<"shorter" | "longer" | null>(null);
   const [copied, setCopied] = useState(false);
   const [credits, setCredits] = useState<number | null>(null);
+
+  // Insert gating: the server kill switch, the per-install preference, and the
+  // per-account "warning already acknowledged" flag are three separate things.
+  const [insertEnabled, setInsertEnabled] = useState(false);
+  const [showInsertPref, setShowInsertPref] = useState(true);
+  const [insertWarningHidden, setInsertWarningHidden] = useState(false);
+  const [showInsertWarning, setShowInsertWarning] = useState(false);
+  const [inserting, setInserting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,6 +166,7 @@ export function HomeScreen() {
 
         setSelectedId(preselected?.id ?? "");
         setCredits(me.creditsAvailable);
+        setInsertWarningHidden(me.insertWarningHidden);
         setState("ready");
       } catch (err) {
         if (cancelled) return;
@@ -180,6 +200,30 @@ export function HomeScreen() {
   const generateDisabled = !selectedPost || !selectedId || outOfCredits || busy;
   // Copy / Shorter / Longer all need a comment to act on.
   const actionsDisabled = !hasComment || busy;
+
+  // The server kill switch and the per-install preference are read separately
+  // from the account data above, since the config route is public and the
+  // preference never leaves this browser.
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchExtConfig()
+      .then((config) => {
+        if (!cancelled) setInsertEnabled(config.insertEnabled);
+      })
+      // A config fetch failure leaves Insert hidden. Failing closed is right
+      // for a feature whose own warning says it carries account risk.
+      .catch(() => {});
+
+    chrome.storage.local.get(SHOW_INSERT_STORAGE_KEY).then((stored) => {
+      const value = stored[SHOW_INSERT_STORAGE_KEY];
+      if (!cancelled && typeof value === "boolean") setShowInsertPref(value);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Regenerate is the same call as Generate: same post, same profile, same
   // cost. The only difference is that it replaces existing output.
@@ -248,6 +292,77 @@ export function HomeScreen() {
     }
   }
 
+  // Records what the user did with the generated comment. Best effort, same
+  // as Copy: the action already happened, so a failed write must not surface.
+  function markHistory(action: "COPIED" | "INSERTED") {
+    if (!historyId) return;
+    apiFetch(`/api/ext/history/${historyId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, comment }),
+    }).catch(() => {});
+  }
+
+  // Entry point for the Insert button. The warning is shown unless this user
+  // has already acknowledged it; it is never skipped silently on first use.
+  function handleInsertClick() {
+    if (!comment.trim()) return;
+    if (insertWarningHidden) {
+      void performInsert();
+      return;
+    }
+    setShowInsertWarning(true);
+  }
+
+  async function performInsert() {
+    setInserting(true);
+    setGenerateError(null);
+
+    try {
+      // tabs.query returns the tab id without needing the "tabs" permission;
+      // only sensitive fields like url are withheld. Messaging the tab itself
+      // is covered by the linkedin.com host permission.
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id === undefined) throw new Error("no active tab");
+
+      const res = (await chrome.tabs.sendMessage(tab.id, {
+        type: INSERT_MESSAGE_TYPE,
+        text: comment,
+      })) as { ok: boolean; error?: string } | undefined;
+
+      if (!res?.ok) {
+        setGenerateError(res?.error ?? "Couldn't insert into LinkedIn. Try Copy instead.");
+        return;
+      }
+
+      markHistory("INSERTED");
+    } catch {
+      // Most often the active tab has no content script, i.e. it is not a
+      // LinkedIn page.
+      setGenerateError("Open the LinkedIn post in the active tab, then try again.");
+    } finally {
+      setInserting(false);
+    }
+  }
+
+  async function handleConfirmInsert(dontShowAgain: boolean) {
+    setShowInsertWarning(false);
+
+    if (dontShowAgain) {
+      setInsertWarningHidden(true);
+      // Persisted per account, not per install: the risk being acknowledged
+      // is to their LinkedIn account. Best effort, so a failed write only
+      // means they see the warning again.
+      apiFetch("/api/ext/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ insertWarningHidden: true }),
+      }).catch(() => {});
+    }
+
+    await performInsert();
+  }
+
   async function handleCopy() {
     if (!comment.trim()) return;
 
@@ -261,23 +376,25 @@ export function HomeScreen() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
 
-    // Best effort: the copy already succeeded, so a failed PATCH must not
-    // surface as an error. It only costs the history row its COPIED label.
-    //
     // The comment text rides along because the box is editable: what the user
     // just put on their clipboard may be a hand-edit of what was generated,
     // and the row should record what they actually took.
-    if (historyId) {
-      apiFetch(`/api/ext/history/${historyId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "COPIED", comment }),
-      }).catch(() => {});
-    }
+    markHistory("COPIED");
   }
 
   return (
     <div className="flex flex-col gap-4 p-4">
+      {showInsertWarning && (
+        <InsertWarningModal
+          onCopyInstead={() => {
+            setShowInsertWarning(false);
+            void handleCopy();
+          }}
+          onInsertAnyway={handleConfirmInsert}
+          onDismiss={() => setShowInsertWarning(false)}
+        />
+      )}
+
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-muted-foreground">Comment Profile</label>
 
@@ -396,6 +513,13 @@ export function HomeScreen() {
         <Button size="sm" variant="secondary" disabled={actionsDisabled} onClick={handleCopy}>
           {copied ? "Copied" : "Copy"}
         </Button>
+        {/* Hidden entirely when the server kill switch is off, regardless of
+            the per-install preference. */}
+        {insertEnabled && showInsertPref && (
+          <Button size="sm" variant="outline" disabled={actionsDisabled} onClick={handleInsertClick}>
+            {inserting ? "Inserting…" : "Insert"}
+          </Button>
+        )}
         <Button
           size="sm"
           variant="outline"

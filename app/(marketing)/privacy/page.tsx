@@ -10,7 +10,7 @@ export default function PrivacyPage() {
   return (
     <LegalShell
       title="Privacy Policy"
-      updated="June 15, 2026"
+      updated="September 19, 2026"
       intro="This Privacy Policy explains what information CarouseLabs (“we,” “us,” “our”) collects, how we use and share it, and the choices and rights you have. We aim to collect only what we need to operate the Service and to keep your data secure. By using CarouseLabs, you agree to the practices described here."
     >
       <LegalSection heading="1. Information we collect">
@@ -180,7 +180,61 @@ export default function PrivacyPage() {
         </ul>
       </LegalSection>
 
-      <LegalSection heading="10. Contact">
+      <LegalSection heading="10. Browser Extension (CarouseLabs Comment)">
+        <p>
+          If you install our LinkedIn commenting extension, the following additional practices
+          apply:
+        </p>
+        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-[#1A1A1A]">
+          <li>
+            <span className="text-[#0A0A0A] font-medium">Extension token</span> — signing in from
+            the extension stores a unique authentication token locally in your browser, used solely
+            to identify your account when generating comments. Each browser you install on holds its
+            own token.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">Post content you select</span> — when you
+            click the Comment button on a LinkedIn post, that post&rsquo;s visible text, author name
+            and headline, and its link are sent to CarouseLabs so a comment can be written about it.
+            This happens only for posts you explicitly select.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">Generated comments</span> — the comment
+            produced for you, and whether you copied or inserted it, are stored against your account
+            so they appear in your History.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">90-day retention</span> — comment history is
+            deleted automatically 90 days after it is created, by a scheduled job. Nothing is kept
+            beyond that window.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">No automatic browsing tracking</span> — the
+            extension reads a post only when you click its Comment button. It does not monitor your
+            general browsing, your feed, your messages, or any page content you have not selected.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">It never posts for you</span> — the
+            extension never submits anything to LinkedIn. Copy places the comment on your clipboard.
+            Insert, which is optional and off by default behind a warning, only places text into
+            LinkedIn&rsquo;s comment box; you still review it and press Post yourself.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">No third-party sharing</span> — post content
+            and generated comments are used solely to provide the feature to you and are never sold
+            or shared with third parties. Generating a comment involves sending the post text to our
+            AI model providers purely to produce that comment.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">Your control</span> — you can sign out from
+            the extension&rsquo;s Account screen, which immediately revokes that browser&rsquo;s
+            token and disconnects it from your account. Signing out on one browser does not affect
+            your other devices.
+          </li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection heading="11. Contact">
         <p>
           For privacy questions, requests, or concerns, email{" "}
           <a href="mailto:support@carouselabs.com" className="text-[#1A1A1A] hover:underline">

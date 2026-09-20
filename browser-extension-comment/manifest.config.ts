@@ -1,12 +1,25 @@
 import { defineManifest } from "@crxjs/vite-plugin";
 import pkg from "./package.json";
 
-export default defineManifest({
+// localhost entries exist only so the extension can be pointed at a local
+// Next.js server during development (see src/lib/api.ts's apiBaseUrl
+// override). A production build must not ship them: the Chrome Web Store
+// treats a localhost host permission as a reviewable capability, and it
+// grants the extension access it has no reason to hold on a user's machine.
+//
+// Gated on the build mode rather than deleted, so `npm run dev` keeps working
+// and nobody has to remember to re-add them. `npm run build` sets mode
+// "production", so the packaged zip is clean by construction rather than by
+// discipline.
+export default defineManifest(({ mode }) => {
+  const isDev = mode !== "production";
+
+  return {
   manifest_version: 3,
   name: "CarouseLabs Comment",
   version: pkg.version,
   description:
-    "Generate and post AI-assisted LinkedIn comments from CarouseLabs.",
+    "Generate LinkedIn comments in your own voice. You review and post every one yourself.",
   icons: {
     16: "icons/icon16.png",
     48: "icons/icon48.png",
@@ -16,9 +29,7 @@ export default defineManifest({
   host_permissions: [
     "https://www.linkedin.com/*",
     "https://carouselabs.com/*",
-    // Local dev only — same pattern as browser-extension-ideas/manifest.json.
-    // Remove before shipping to production; see README.
-    "http://localhost:3000/*",
+    ...(isDev ? ["http://localhost:3000/*"] : []),
   ],
   background: {
     service_worker: "src/background.ts",
@@ -31,8 +42,7 @@ export default defineManifest({
     {
       matches: [
         "https://carouselabs.com/extension-connect*",
-        // Local dev only — same reasoning as host_permissions below.
-        "http://localhost:3000/extension-connect*",
+        ...(isDev ? ["http://localhost:3000/extension-connect*"] : []),
       ],
       js: ["src/content/authRelay.ts"],
       run_at: "document_idle",
@@ -68,4 +78,5 @@ export default defineManifest({
   side_panel: {
     default_path: "src/sidepanel/index.html",
   },
+  };
 });

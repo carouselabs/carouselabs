@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { Sparkles, Clock, Bookmark, Settings, Award, ImageIcon, Calendar } from "lucide-react"
+import { Sparkles, Clock, Bookmark, Settings, Award, ImageIcon, Calendar, Wrench } from "lucide-react"
 import { NavItem } from "./NavItem"
 import { UserMenu } from "./UserMenu"
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser"
@@ -12,6 +12,10 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Generate", icon: Sparkles },
   { href: "/thumbnail", label: "Thumbnail", icon: ImageIcon },
   { href: "/content-hub", label: "Content Hub", icon: Calendar },
+  // Grouped with the creation tools above rather than the account items below:
+  // it is a directory of more tools, not a record of past work. Desktop only:
+  // a seventh item made the mobile tab bar too cramped.
+  { href: "/toolkit", label: "Toolkit", icon: Wrench, hideOnMobile: true },
   { href: "/history", label: "History", icon: Clock },
   { href: "/pinned", label: "Pinned", icon: Bookmark },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -81,7 +85,7 @@ export function Sidebar({ isEmployeeSubdomain = false }: { isEmployeeSubdomain?:
 
       {/* Mobile tab bar */}
       <div className="md:hidden fixed bottom-0 inset-x-0 z-50 h-[58px] bg-white border-t border-[#E5E3DE] flex items-center justify-around">
-        {navItems.map(({ href, label, icon: Icon }) => {
+        {navItems.filter((item) => !("hideOnMobile" in item && item.hideOnMobile)).map(({ href, label, icon: Icon }) => {
           const active = isActive(href)
           return (
             <Link

@@ -36,6 +36,13 @@ const MAX_LENGTHS = {
 
 export const MAX_SAMPLES = 5
 
+// Bounds for an explicit "N-M characters" length. Span every range a stored
+// profile can have — 15 is Quick Human's floor, 900 the top of the "Long"
+// bucket — and must equal CHAR_MIN/CHAR_MAX in the extension's ProfileForm,
+// so every savable range is one its slider can display exactly.
+export const LENGTH_RANGE_MIN = 15
+export const LENGTH_RANGE_MAX = 900
+
 export interface ProfileInput {
   name: string
   whoIAm: string
@@ -87,6 +94,21 @@ export function parseProfileInput(body: unknown): { ok: true; value: ProfileInpu
 
   for (const [field, label] of required) {
     if (!value[field]) return { ok: false, error: `${label} is required` }
+  }
+
+  // The builder writes explicit ranges as "N-M characters". Enforced with the
+  // picker's exact bounds, so nothing can be saved that the picker could not
+  // display — a hand-crafted "5-10" would otherwise open showing 15.
+  const range = value.length.match(/(\d+)\s*-\s*(\d+)\s*char/i)
+  if (range) {
+    const min = Number(range[1])
+    const max = Number(range[2])
+    if (min < LENGTH_RANGE_MIN || max > LENGTH_RANGE_MAX || min > max) {
+      return {
+        ok: false,
+        error: `Length must be a range between ${LENGTH_RANGE_MIN} and ${LENGTH_RANGE_MAX} characters, minimum first`,
+      }
+    }
   }
 
   return { ok: true, value }

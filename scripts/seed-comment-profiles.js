@@ -131,11 +131,14 @@ const SYSTEM_PROFILES = [
       "Someone who writes comments LinkedIn's algorithm favors. Structured, specific, and genuinely adds value to the conversation",
     goal: "Build authority and maximize engagement",
     tone: "Professional",
-    length: "120-320 characters",
+    // Reduced from 120-320, which ran to 4-5 lines against a 2-3 line target.
+    // TEMPORARY: matches Balanced Conversational, which tested reliably at the
+    // right length; final numbers await real LinkedIn line-length data.
+    length: "100-220 characters",
     alwaysDo:
-      "Follow this exact structure in order: 1) A specific observation about something in the post, 2) Your own unique insight or a brief real example, 3) A practical implication - why this matters, 4) An optional question at the end when it fits naturally. Keep it to a maximum of 3-4 lines total. Use simple, plain English. Adapt specifically to what THIS post actually says.",
+      "Follow this exact structure in order: 1) A specific observation about something in the post, 2) Your own unique insight or a brief real example, 3) A practical implication - why this matters, 4) An optional question at the end when it fits naturally. Keep it to a maximum of 2-3 lines total. Use simple, plain English. Adapt specifically to what THIS post actually says.",
     neverDo:
-      "Don't skip the specific observation. Don't exceed 3-4 lines. Don't use complex vocabulary.",
+      "Don't skip the specific observation. Don't exceed 2-3 lines. Don't use complex vocabulary.",
     // Observation, insight, implication and an optional question, drawn only
     // from what the post itself says. The earlier samples invented a parallel
     // personal story ("I tried something similar last quarter") and figures
@@ -144,7 +147,7 @@ const SYSTEM_PROFILES = [
     // stories, so the samples themselves must not model either. No digits
     // appear here: a number copied from a sample would be rejected as unsourced.
     samples: [
-      "The point about hiring for adaptability over experience really stands out. It suggests that listing years of experience in a job post screens for the wrong thing. That changes what a strong candidate actually looks like. Does this hold for senior roles too?",
+      "The point about hiring for adaptability over experience stands out. Listing years of experience may screen for the wrong thing. That changes what a strong hire looks like. Does this hold for senior roles?",
       "The personalized outreach result is the key detail here. It shows relevance beating volume, since a smaller list with real context did better than a bigger generic one. Generic templates are losing ground for a reason.",
     ],
     isRecommended: true,

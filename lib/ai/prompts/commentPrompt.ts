@@ -56,8 +56,21 @@ export const WEAK_COMMENT_PATTERNS: { label: string; pattern: RegExp }[] = [
 // model and to decide (in the route) whether a generation came back far enough
 // off target to be worth one automatic retry. Kept beside the length wording
 // it interprets so the two stay in step.
+//
+// An explicit range ("15-35 characters") wins over the keyword buckets and is
+// checked first. It is how the CarouseLabs presets carry ranges far outside the
+// buckets (Quick Human's 15-35 is below even "Short"'s floor of 40), and
+// because it lives in the length string rather than separate columns it
+// survives Duplicate intact — the copy keeps the same range.
+const EXPLICIT_RANGE = /(\d+)\s*-\s*(\d+)\s*char/
+
 export function targetLengthRange(length: string): { min: number; max: number } {
   const value = length.toLowerCase()
+  const explicit = value.match(EXPLICIT_RANGE)
+  if (explicit) {
+    const [a, b] = [Number(explicit[1]), Number(explicit[2])]
+    return { min: Math.min(a, b), max: Math.max(a, b) }
+  }
   if (value.includes("short") || value.includes("1 line")) return { min: 40, max: 220 }
   if (value.includes("long") || value.includes("4")) return { min: 240, max: 900 }
   return { min: 110, max: 460 }
@@ -76,6 +89,20 @@ function escapeAttribute(value: string): string {
 export function buildCommentSystemMessage(profile: CommentProfileInput): string {
   const sections: string[] = []
 
+  // Only profiles whose length is an explicit character range get the
+  // hard-limit treatment below; the keyword-bucket profiles ("Medium (2-3
+  // lines)") keep exactly the prompt they had. Tested live: as a plain
+  // "Length: 15-35 characters" control line, every explicit-range preset ran
+  // two to four times over, because the specificity rule and the long example
+  // both pull toward a full-sentence comment.
+  const explicit = profile.length.toLowerCase().match(EXPLICIT_RANGE)
+  const hardRange = explicit ? targetLengthRange(profile.length) : null
+  // Below this a comment has no room to quote a detail AND explain it.
+  const isTerse = hardRange !== null && hardRange.max <= 60
+  // The STRONG example below is ~190 characters; shown to a profile capped
+  // under that, it anchors the model to a length it is not allowed to write.
+  const EXAMPLE_LENGTH = 190
+
   sections.push(`You write LinkedIn comments for this person: ${profile.whoIAm}.`)
 
   sections.push(`## What this comment should do
@@ -84,6 +111,14 @@ export function buildCommentSystemMessage(profile: CommentProfileInput): string 
 - Length: ${profile.length}
 - Emoji: ${profile.emoji}
 - Language: ${profile.language}`)
+
+  if (hardRange) {
+    sections.push(`## LENGTH IS A HARD LIMIT
+Your comment MUST be between ${hardRange.min} and ${hardRange.max} characters, counting
+spaces and punctuation. This overrides every other instruction about how much to
+say. Count the characters before you answer. A comment outside this range is a
+FAILED comment however good it is, so cut it down rather than run over.`)
+  }
 
   const constraints: string[] = []
   if (profile.alwaysDo?.trim()) constraints.push(`- Always: ${profile.alwaysDo.trim()}`)
@@ -106,13 +141,21 @@ ${samples.map((sample) => `<sample>${sample}</sample>`).join("\n")}
 </samples>`)
   }
 
-  sections.push(`## THE RULE THAT MATTERS MOST: be specific
+  if (isTerse) {
+    // Specificity still matters, but at this length it has to be a single
+    // anchor word or number, not a quoted claim plus a reaction to it.
+    sections.push(`## Be specific, but tiny
+Anchor your reaction on ONE word or number that appears in the post. A single
+word is enough at this length. Do not explain it or add a second thought.`)
+  } else {
+    sections.push(`## THE RULE THAT MATTERS MOST: be specific
 CRITICAL: Your comment MUST reference a specific word, number, phrase, or claim
 that appears literally in the post text below. Quote or closely paraphrase ONE
 exact detail (a number, a specific claim, a phrase they used), not a general
 theme or topic. If you cannot find a specific detail to reference, you have not
 read the post closely enough. A comment that could be posted under ANY similar
 post on this topic is a FAILED comment, regardless of how polished it sounds.`)
+  }
 
   sections.push(`## Hard rules
 - No hashtags, no links, and no selling or pitching, unless the goal above explicitly asks for it.
@@ -135,6 +178,8 @@ fabricating one.
 
 Every number that appears in your comment must come from the post itself or
 from the user's own instruction. If it appears in neither, do not write it.`)
+
+  if (hardRange && hardRange.max < EXAMPLE_LENGTH) return sections.join("\n\n")
 
   sections.push(`## Example
 

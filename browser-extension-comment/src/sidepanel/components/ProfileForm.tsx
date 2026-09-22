@@ -84,9 +84,15 @@ function NativeSelect({
   onChange: (v: string) => void;
   options: string[];
 }) {
+  // A duplicated preset can carry a value the fixed list doesn't offer (e.g.
+  // length "15-35 characters", tone "Casual"). Without adding it, the browser
+  // would display the first option while the form still held — and saved — the
+  // real value, so the builder would show a setting it isn't saving.
+  const all = value && !options.includes(value) ? [value, ...options] : options;
+
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} className={fieldClass}>
-      {options.map((o) => (
+      {all.map((o) => (
         <option key={o} value={o}>
           {o}
         </option>

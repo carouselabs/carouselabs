@@ -25,6 +25,8 @@ export interface CommentProfile {
   samples: string[];
   isDefault: boolean;
   isSystem: boolean;
+  // Curated CarouseLabs preset. Always also isSystem.
+  isRecommended: boolean;
   testsUsed: number;
   createdAt: string;
   updatedAt: string;

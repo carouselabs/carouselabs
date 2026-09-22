@@ -16,18 +16,12 @@ import {
   buildCommentSystemMessage,
   buildCommentUserMessage,
   targetLengthRange,
-  BANNED_PHRASES,
   WEAK_COMMENT_PATTERNS,
   ANTI_FABRICATION_REMINDER,
   type CommentPostInput,
 } from "@/lib/ai/prompts/commentPrompt"
-import {
-  callCommentModel,
-  parseComment,
-  sanitizeComment,
-  findUnsourcedNumbers,
-  CLAUDE_MODEL,
-} from "@/lib/ai/commentModel"
+import { callCommentModel, parseComment, sanitizeComment, CLAUDE_MODEL } from "@/lib/ai/commentModel"
+import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
 
 export async function POST(req: Request) {
   const user = await getUserFromCommentExtensionToken(req)

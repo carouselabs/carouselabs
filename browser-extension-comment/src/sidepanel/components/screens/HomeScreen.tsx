@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { InsertWarningModal } from "../InsertWarningModal";
+import { RecommendedBadge } from "../RecommendedBadge";
 import {
   apiFetch,
   ApiError,
@@ -226,7 +227,10 @@ export function HomeScreen({ onCreateProfile }: Props) {
     };
   }, []);
 
-  const systemProfiles = profiles.filter((p) => p.isSystem);
+  // Three groups in the order the route already returns them: recommended
+  // presets, the original system profiles, then the user's own.
+  const recommendedProfiles = profiles.filter((p) => p.isRecommended);
+  const systemProfiles = profiles.filter((p) => p.isSystem && !p.isRecommended);
   const customProfiles = profiles.filter((p) => !p.isSystem);
 
   function handleValueChange(value: string) {
@@ -475,6 +479,15 @@ export function HomeScreen({ onCreateProfile }: Props) {
               <SelectValue placeholder="Select a profile" />
             </SelectTrigger>
             <SelectContent>
+              {recommendedProfiles.map((profile) => (
+                <SelectItem key={profile.id} value={profile.id}>
+                  {profile.name}
+                  <RecommendedBadge />
+                </SelectItem>
+              ))}
+
+              {recommendedProfiles.length > 0 && systemProfiles.length > 0 && <SelectSeparator />}
+
               {systemProfiles.map((profile) => (
                 <SelectItem key={profile.id} value={profile.id}>
                   {profile.name}

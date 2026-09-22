@@ -8,6 +8,7 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ProfileForm, draftFromProfile } from "../ProfileForm";
+import { RecommendedBadge } from "../RecommendedBadge";
 
 type View =
   | { mode: "list" }
@@ -62,9 +63,29 @@ export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) 
   }, [startInBuilder, onBuilderOpened]);
 
   const customProfiles = profiles.filter((p) => !p.isSystem);
-  const systemProfiles = profiles.filter((p) => p.isSystem);
+  const recommendedProfiles = profiles.filter((p) => p.isRecommended);
+  const systemProfiles = profiles.filter((p) => p.isSystem && !p.isRecommended);
   const limit = me ? CUSTOM_PROFILE_LIMITS[me.plan] ?? null : null;
   const atLimit = limit !== null && customProfiles.length >= limit;
+
+  // One renderer for both system sections, so recommended and built-in cards
+  // differ only in the badge. System profiles are shared across every user, so
+  // they offer Duplicate only — editing or deleting one would change it for
+  // everyone. Duplicating is how a preset becomes an editable custom profile.
+  function renderSystemCard(profile: CommentProfile, recommended: boolean) {
+    return (
+      <div key={profile.id} className="space-y-2 rounded-md border border-input p-3">
+        <div className="flex flex-wrap items-center gap-y-1">
+          <span className="text-sm font-medium">{profile.name}</span>
+          {recommended && <RecommendedBadge />}
+        </div>
+        <p className="line-clamp-2 text-xs text-muted-foreground">{profile.whoIAm}</p>
+        <Button size="sm" variant="outline" disabled={atLimit} onClick={() => setView({ mode: "duplicate", profile })}>
+          Duplicate
+        </Button>
+      </div>
+    );
+  }
 
   async function handleDelete(profile: CommentProfile) {
     setPendingId(profile.id);
@@ -160,6 +181,18 @@ export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) 
             )}
           </div>
 
+          {recommendedProfiles.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Recommended by CarouseLabs</p>
+              {recommendedProfiles.map((profile) => renderSystemCard(profile, true))}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">Built-in profiles</p>
+            {systemProfiles.map((profile) => renderSystemCard(profile, false))}
+          </div>
+
           {customProfiles.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground">Your profiles</p>
@@ -192,21 +225,6 @@ export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) 
               ))}
             </div>
           )}
-
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">Built-in profiles</p>
-            {systemProfiles.map((profile) => (
-              <div key={profile.id} className="space-y-2 rounded-md border border-input p-3">
-                <span className="text-sm font-medium">{profile.name}</span>
-                <p className="line-clamp-2 text-xs text-muted-foreground">{profile.whoIAm}</p>
-                {/* System profiles are shared, so they offer Duplicate only —
-                    editing or deleting one would change it for every user. */}
-                <Button size="sm" variant="outline" disabled={atLimit} onClick={() => setView({ mode: "duplicate", profile })}>
-                  Duplicate
-                </Button>
-              </div>
-            ))}
-          </div>
         </>
       )}
     </div>

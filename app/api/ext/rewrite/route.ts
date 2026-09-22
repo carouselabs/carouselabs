@@ -20,12 +20,8 @@ import {
   countSentences,
   WEAK_COMMENT_PATTERNS,
 } from "@/lib/ai/prompts/commentPrompt"
-import {
-  callCommentModel,
-  parseComment,
-  sanitizeComment,
-  findUnsourcedNumbers,
-} from "@/lib/ai/commentModel"
+import { callCommentModel, parseComment, sanitizeComment } from "@/lib/ai/commentModel"
+import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
 
 const ratelimit = new Ratelimit({
   redis: Redis.fromEnv(),

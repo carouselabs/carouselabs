@@ -418,6 +418,9 @@ model CommentProfile {
   samples   String[]
   isDefault Boolean  @default(false)
   isSystem  Boolean  @default(false)
+  // Curated CarouseLabs presets, surfaced first and badged in the extension.
+  // Always also isSystem: a recommended profile is a kind of system profile.
+  isRecommended Boolean @default(false)
   testsUsed Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -98,26 +98,6 @@ export function sanitizeComment(raw: string): { comment: string; removedChars: n
   return { comment, removedChars: before.length - comment.length }
 }
 
-// Numbers in the output that appear in neither the post nor the commenter's own
-// instruction were invented by the model. That matters more here than in most
-// generation flows: the comment is posted under the user's name, so a made-up
-// "40% time savings" becomes a claim they appear to be making themselves.
-//
-// Compared as exact normalised tokens rather than substrings: a loose match
-// would let a fabricated "4x" pass because the post happened to mention "40".
-export function findUnsourcedNumbers(comment: string, sources: string): string[] {
-  const normalize = (n: string) => n.replace(/,/g, "").replace(/[.]+$/, "")
-  const sourceNumbers = new Set((sources.match(/\d[\d,.]*/g) ?? []).map(normalize))
-
-  const unsourced = new Set<string>()
-  for (const raw of comment.match(/\d[\d,.]*/g) ?? []) {
-    const token = normalize(raw)
-    if (token && !sourceNumbers.has(token)) unsourced.add(token)
-  }
-
-  return [...unsourced]
-}
-
 // Claude primary, GPT-4o on refusal or error. `label` only tags the log lines
 // so the two routes stay distinguishable in output.
 export async function callCommentModel(

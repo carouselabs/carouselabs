@@ -110,14 +110,16 @@ model User {
   shortLinks     ShortLink[]
 
   // ── CarouseLabs Comment extension ──
-  defaultCommentProfileId String?
-  insertWarningHidden     Boolean          @default(false)
+  defaultCommentProfileId    String?
+  defaultConnectionProfileId String?
+  insertWarningHidden        Boolean             @default(false)
   // Preferred language for new comment profiles. Nullable rather than
   // defaulted, so "never chosen" stays distinguishable from "chose English".
-  defaultLanguage         String?
-  commentProfiles         CommentProfile[]
-  commentHistory          CommentHistory[]
-  extensionTokens         ExtensionToken[]
+  defaultLanguage            String?
+  commentProfiles            CommentProfile[]
+  connectionProfiles         ConnectionProfile[]
+  commentHistory             CommentHistory[]
+  extensionTokens            ExtensionToken[]
 
   // ── Referral program ──
   referralCode       String?              @unique
@@ -402,28 +404,57 @@ model ExtensionApiKey {
 // is, their goal, tone, length, etc.). userId is nullable because isSystem
 // profiles are built-in presets shared by everyone (not owned by any one
 // user); a user's own custom profiles always have userId set.
+// Connection request notes (app/api/ext/connection-note). Same shape as
+// CommentProfile, minus the fields a 280-character invitation has no use for
+// (emoji, language): a note is short, plain and sent under the user's name.
+// Separate table rather than a "kind" column on CommentProfile, so no existing
+// comment query can accidentally pick up a connection profile.
+model ConnectionProfile {
+  id            String   @id @default(cuid())
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  // How the sender should come across: the note's angle, not the sender's bio
+  // (that comes from the "Your context" setting).
+  angle         String
+  goal          String
+  tone          String
+  length        String
+  alwaysDo      String?
+  neverDo       String?
+  samples       String[]
+  isDefault     Boolean  @default(false)
+  isSystem      Boolean  @default(false)
+  isRecommended Boolean  @default(false)
+  testsUsed     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
 model CommentProfile {
-  id        String   @id @default(cuid())
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name      String
-  whoIAm    String
-  goal      String
-  tone      String
-  length    String
-  emoji     String   @default("None")
-  language  String   @default("English")
-  alwaysDo  String?
-  neverDo   String?
-  samples   String[]
-  isDefault Boolean  @default(false)
-  isSystem  Boolean  @default(false)
+  id            String   @id @default(cuid())
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  whoIAm        String
+  goal          String
+  tone          String
+  length        String
+  emoji         String   @default("None")
+  language      String   @default("English")
+  alwaysDo      String?
+  neverDo       String?
+  samples       String[]
+  isDefault     Boolean  @default(false)
+  isSystem      Boolean  @default(false)
   // Curated CarouseLabs presets, surfaced first and badged in the extension.
   // Always also isSystem: a recommended profile is a kind of system profile.
-  isRecommended Boolean @default(false)
-  testsUsed Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isRecommended Boolean  @default(false)
+  testsUsed     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([userId])
 }

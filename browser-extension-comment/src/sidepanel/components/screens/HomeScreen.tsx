@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { InsertWarningModal } from "../InsertWarningModal";
+import { ConnectionNotePanel } from "../ConnectionNotePanel";
 import { RecommendedBadge } from "../RecommendedBadge";
 import {
   apiFetch,
@@ -22,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { LinkedInProfileInfo } from "@/lib/connectionNote";
 
 // Sentinel option in the profile dropdown. Selecting it does not change the
 // selection — it hands off to the Profile Builder on the Profiles screen,
@@ -71,7 +73,7 @@ interface ReplySelection {
 interface SelectedPost {
   // Optional: a selection stored by an older build has no mode, and was always
   // a comment.
-  mode?: "comment" | "reply";
+  mode?: "comment" | "reply" | "connect";
   authorName: string;
   authorHeadline: string;
   text: string;
@@ -79,9 +81,11 @@ interface SelectedPost {
   url: string;
   capturedAt: number;
   reply?: ReplySelection;
+  // Connection Note mode: the person whose Connect button was clicked.
+  connect?: { target: LinkedInProfileInfo };
 }
 
-type InsertMode = "comment" | "reply";
+type InsertMode = "comment" | "reply" | "connect";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -95,9 +99,10 @@ function userFacingError(err: unknown): string {
 }
 
 interface Props {
-  // Opens the Profile Builder on the Profiles screen. Owned by App, since
-  // switching screens is App's job and HomeScreen cannot navigate itself.
-  onCreateProfile: () => void;
+  // Opens the builder for that kind of profile on the Profiles screen. Owned
+  // by App, since switching screens is App's job and HomeScreen cannot
+  // navigate itself.
+  onCreateProfile: (kind: "comment" | "connection") => void;
 }
 
 export function HomeScreen({ onCreateProfile }: Props) {
@@ -136,9 +141,11 @@ export function HomeScreen({ onCreateProfile }: Props) {
   const [insertWarningHidden, setInsertWarningHidden] = useState(false);
   const [showInsertWarning, setShowInsertWarning] = useState(false);
   const [inserting, setInserting] = useState(false);
-  // What the Insert warning is about to insert, so the same modal serves both
-  // the comment flow and the reply flow.
+  // What the Insert warning is about to insert, so the same modal serves the
+  // comment flow and Connection Note mode.
   const [pendingInsert, setPendingInsert] = useState<{ text: string; mode: InsertMode } | null>(null);
+  // Insert failures in Connection Note mode, shown inside that panel.
+  const [connectInsertError, setConnectInsertError] = useState<string | null>(null);
 
   // null while unknown. Chrome reveals tab.url only for hosts the extension
   // has permission for, so a readable linkedin.com URL is itself the signal —
@@ -171,6 +178,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
       setHistoryId(null);
       setCopied(false);
       setGenerateError(null);
+      setConnectInsertError(null);
     }
 
     // Instant path — only lands if the panel is open AND this screen is
@@ -267,7 +275,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
     // Not a real selection: leave selectedId alone so the previously chosen
     // profile stays active if the user backs out of the builder.
     if (value === CREATE_CUSTOM_VALUE) {
-      onCreateProfile();
+      onCreateProfile("comment");
       return;
     }
     setSelectedId(value);
@@ -426,8 +434,9 @@ export function HomeScreen({ onCreateProfile }: Props) {
   }
 
   async function performInsert(text: string, mode: InsertMode) {
+    const setError = mode === "connect" ? setConnectInsertError : setGenerateError;
     setInserting(true);
-    setGenerateError(null);
+    setError(null);
 
     try {
       // tabs.query returns the tab id without needing the "tabs" permission;
@@ -440,20 +449,25 @@ export function HomeScreen({ onCreateProfile }: Props) {
         type: INSERT_MESSAGE_TYPE,
         text,
         // Reply mode targets the captured comment's reply box, never the
-        // post's main comment box.
+        // post's main comment box; connect targets the invitation's note box.
         mode,
       })) as { ok: boolean; error?: string } | undefined;
 
       if (!res?.ok) {
-        setGenerateError(res?.error ?? "Couldn't insert into LinkedIn. Try Copy instead.");
+        setError(res?.error ?? "Couldn't insert into LinkedIn. Try Copy instead.");
         return;
       }
 
-      markHistory("INSERTED");
+      // Connection notes have no history row to mark.
+      if (mode !== "connect") markHistory("INSERTED");
     } catch {
       // Most often the active tab has no content script, i.e. it is not a
       // LinkedIn page.
-      setGenerateError("Open the LinkedIn post in the active tab, then try again.");
+      setError(
+        mode === "connect"
+          ? "Open the LinkedIn profile in the active tab, then try again."
+          : "Open the LinkedIn post in the active tab, then try again.",
+      );
     } finally {
       setInserting(false);
     }
@@ -503,8 +517,11 @@ export function HomeScreen({ onCreateProfile }: Props) {
     <InsertWarningModal
       onCopyInstead={() => {
         setShowInsertWarning(false);
+        const pending = pendingInsert;
         setPendingInsert(null);
-        void handleCopy();
+        // A connection note isn't in the comment box, so copy its own text.
+        if (pending?.mode === "connect") void navigator.clipboard.writeText(pending.text).catch(() => {});
+        else void handleCopy();
       }}
       onInsertAnyway={handleConfirmInsert}
       onDismiss={() => {
@@ -513,6 +530,27 @@ export function HomeScreen({ onCreateProfile }: Props) {
       }}
     />
   );
+
+  // Connection Note mode replaces the whole comment flow: comment profiles,
+  // post preview and Shorter/Longer don't apply to an invitation note.
+  const connectTarget = selectedPost?.mode === "connect" ? (selectedPost.connect?.target ?? null) : null;
+  if (connectTarget && selectedPost) {
+    return (
+      <div className="flex flex-col gap-4 p-4">
+        {insertWarningModal}
+        <ConnectionNotePanel
+          key={selectedPost.capturedAt}
+          target={connectTarget}
+          outOfCredits={outOfCredits}
+          showInsert={insertEnabled && showInsertPref}
+          inserting={inserting}
+          insertError={connectInsertError}
+          onInsert={(text) => requestInsert(text, "connect")}
+          onCreateProfile={() => onCreateProfile("connection")}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4 p-4">

@@ -8,6 +8,7 @@ import {
   type SettingsResponse,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { ConnectContextEditor } from "../ConnectContextEditor";
 
 // Per-install UI preference, so it lives in chrome.storage rather than on the
 // User row. Unlike insertWarningHidden — which records that an account-level
@@ -179,6 +180,13 @@ export function SettingsScreen() {
             </option>
           ))}
         </select>
+      </Row>
+
+      <Row
+        title="Connection notes: your context"
+        hint="What connection notes say about you. Saved in this browser and used for every note until you change it."
+      >
+        <ConnectContextEditor />
       </Row>
 
       <Row

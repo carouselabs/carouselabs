@@ -29,6 +29,9 @@ export const CREDIT_COSTS = {
   // extraCredits are Int, so 0.5 would be rounded on deduction rather than
   // charged. Free rather than silently wrong; the route rate-limits instead.
   comment_rewrite: 0,
+  // Connection request notes (app/api/ext/connection-note). Priced like a
+  // comment: one short generation per successful note, never on failure.
+  connection_note: 1,
 } as const
 
 export type CreditAction = keyof typeof CREDIT_COSTS

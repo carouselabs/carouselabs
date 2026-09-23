@@ -210,7 +210,31 @@ function withReferralCapture(request: NextRequest, response: Response): Response
   return response
 }
 
+// browser-extension-comment/ calls these with an Authorization: Bearer header
+// and no cookies at all, so Clerk has nothing to do on them — every one
+// authenticates itself (lib/extensionCommentAuth.ts). Listing them as public
+// above is not enough: clerkMiddleware still RUNS, and against a development
+// Clerk instance a cookieless request triggers its dev-browser handshake,
+// which rewrites the request and makes the route 404 (confirmed locally:
+// every /api/ext/* route 404'd from curl and from the extension, while
+// /api/credits/consume still resolved). Skipping the middleware entirely for
+// them fixes local dev and changes nothing in production, where these routes
+// were already exempt from auth.protect().
+//
+// /api/ext/auth/exchange is the one exception: it MINTS a token from a real
+// Clerk session, so it needs clerkMiddleware to have run for getCurrentUser()
+// to see one.
+const CLERK_SESSION_EXT_ROUTES = new Set(["/api/ext/auth/exchange"])
+
+function isBearerOnlyExtensionRoute(pathname: string): boolean {
+  return pathname.startsWith("/api/ext/") && !CLERK_SESSION_EXT_ROUTES.has(pathname)
+}
+
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
+  if (isBearerOnlyExtensionRoute(request.nextUrl.pathname)) {
+    return NextResponse.next()
+  }
+
   const response = (await handler(request, event)) ?? NextResponse.next()
   return withReferralCapture(request, response)
 }

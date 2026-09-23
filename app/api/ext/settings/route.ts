@@ -20,6 +20,7 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     defaultCommentProfileId: user.defaultCommentProfileId,
+    defaultConnectionProfileId: user.defaultConnectionProfileId,
     defaultLanguage: user.defaultLanguage,
     insertWarningHidden: user.insertWarningHidden,
   })
@@ -39,6 +40,7 @@ export async function PATCH(req: Request) {
 
   const data: {
     defaultCommentProfileId?: string | null
+    defaultConnectionProfileId?: string | null
     defaultLanguage?: string | null
     insertWarningHidden?: boolean
   } = {}
@@ -60,6 +62,25 @@ export async function PATCH(req: Request) {
       data.defaultCommentProfileId = id
     } else {
       return NextResponse.json({ error: "defaultCommentProfileId must be a string or null" }, { status: 400 })
+    }
+  }
+
+  // Same rule as the comment default above, against the connection profiles.
+  if ("defaultConnectionProfileId" in body) {
+    const id = body.defaultConnectionProfileId
+    if (id === null) {
+      data.defaultConnectionProfileId = null
+    } else if (typeof id === "string") {
+      const profile = await db.connectionProfile.findFirst({
+        where: { id, OR: [{ isSystem: true }, { userId: user.id }] },
+        select: { id: true },
+      })
+      if (!profile) {
+        return NextResponse.json({ error: "Connection profile not found" }, { status: 404 })
+      }
+      data.defaultConnectionProfileId = id
+    } else {
+      return NextResponse.json({ error: "defaultConnectionProfileId must be a string or null" }, { status: 400 })
     }
   }
 
@@ -93,6 +114,7 @@ export async function PATCH(req: Request) {
     data,
     select: {
       defaultCommentProfileId: true,
+      defaultConnectionProfileId: true,
       defaultLanguage: true,
       insertWarningHidden: true,
     },

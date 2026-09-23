@@ -23,6 +23,18 @@
 
 import { getApiBaseUrl } from "@/lib/api";
 import { commentUrn, extractThread, findReplyButton, getSelfName, sameName } from "@/content/replyThread";
+import {
+  extractProfile,
+  findConnectButton,
+  insertIntoNoteBox,
+  checkProfileOwnersConnect,
+  isProfilePage,
+} from "@/content/connectNote";
+import {
+  READ_SELF_PROFILE_MESSAGE_TYPE,
+  SELF_PROFILE_STORAGE_KEY,
+  type LinkedInProfileInfo,
+} from "@/lib/connectionNote";
 
 // Must match MESSAGE_TYPE in src/sidepanel/components/screens/HomeScreen.tsx
 // exactly — no shared package between the content script and sidepanel
@@ -112,7 +124,7 @@ interface SelectedPost {
   // "reply" tags a Reply capture, so the panel can tell it apart from a plain
   // Comment on the post. Both travel through the same storage key and message,
   // so whichever the user clicked last is what the panel shows.
-  mode: "comment" | "reply";
+  mode: "comment" | "reply" | "connect";
   authorName: string;
   authorHeadline: string;
   text: string;
@@ -120,6 +132,9 @@ interface SelectedPost {
   url: string;
   capturedAt: number;
   reply?: ReplySelection;
+  // Present in "connect" mode: the person whose Connect button was clicked.
+  // The post fields above then carry their name and headline, text is empty.
+  connect?: { target: LinkedInProfileInfo };
 }
 
 console.log("[content-script] loaded on", window.location.href);
@@ -421,6 +436,63 @@ function classifyPostType(container: Element, config: ExtensionConfig): PostType
   return "text";
 }
 
+function handleConnectClick(connectButton: Element) {
+  // A Connect for someone in the sidebar ("People also viewed") would
+  // otherwise capture the page owner's profile under the wrong person's name.
+  // Both sides of the comparison are logged, so a wrong verdict is readable
+  // from this one line.
+  const owner = checkProfileOwnersConnect(connectButton);
+  console.log(
+    `[content-script] Connect detected on ${window.location.pathname} — invited name: "${owner.invited}" | page owner name: "${owner.ownerName}" | url slug: "${owner.slug}" | ${owner.ok ? "accepted" : "IGNORED"} (${owner.reason})`,
+  );
+  if (!owner.ok) return;
+
+  const extraction = extractProfile(connectButton);
+  const { profile } = extraction;
+  console.log(
+    `[content-script] profile extracted — name: "${profile.name}" (${extraction.strategies.name}), headline: "${profile.headline}" (${extraction.strategies.headline}), role: "${profile.currentRole}" (${extraction.strategies.currentRole}), about: ${profile.about.length} chars (${extraction.strategies.about})`,
+  );
+
+  if (!profile.name || (!profile.headline && !profile.currentRole)) {
+    console.warn(
+      `[content-script] incomplete profile extraction — name: "${profile.name}" (${extraction.strategies.name}), headline: ${profile.headline ? "yes" : "no"}, role: ${profile.currentRole ? "yes" : "no"}. See src/content/connectNote.ts.`,
+    );
+  }
+
+  sendPostToSidePanel({
+    mode: "connect",
+    authorName: profile.name,
+    authorHeadline: profile.headline,
+    text: "",
+    type: "text",
+    url: profile.url,
+    capturedAt: Date.now(),
+    connect: { target: profile },
+  });
+}
+
+// For "Use my LinkedIn profile": the side panel asks while the user has their
+// own profile open. Stored for later notes, and returned so the panel can show
+// what it read.
+async function readSelfProfile(): Promise<{ ok: boolean; profile?: LinkedInProfileInfo; error?: string }> {
+  if (!isProfilePage()) return { ok: false, error: "Open your own LinkedIn profile in this tab first." };
+
+  const { profile } = extractProfile(null);
+  if (!profile.name) {
+    return { ok: false, error: "Couldn't read the profile on this page. Let it finish loading, then try again." };
+  }
+
+  // false only when both names are known and differ; unknown is allowed, since
+  // the nav avatar isn't always readable.
+  const self = await getSelfName();
+  if (sameName(profile.name, self.name) === false) {
+    return { ok: false, error: `This is ${profile.name}'s profile, not yours. Open your own profile, then try again.` };
+  }
+
+  await chrome.storage.local.set({ [SELF_PROFILE_STORAGE_KEY]: profile });
+  return { ok: true, profile };
+}
+
 function sendPostToSidePanel(post: SelectedPost) {
   console.log("[content-script] sending post to side panel:", post);
 
@@ -480,6 +552,14 @@ async function handleClick(event: MouseEvent) {
   if (!target) return;
 
   const config = await getConfig();
+
+  // Profile pages only: Connect buttons elsewhere (My Network, search
+  // results) have no profile page around them to read.
+  const connectButton = isProfilePage() ? findConnectButton(target) : null;
+  if (connectButton) {
+    handleConnectClick(connectButton);
+    return;
+  }
 
   // Checked before Comment and returns early: a Reply under a comment is its own flow
   // and must never fall through into the post Comment handling below.
@@ -755,8 +835,21 @@ async function insertIntoCommentBox(
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === READ_SELF_PROFILE_MESSAGE_TYPE) {
+    readSelfProfile()
+      .then(sendResponse)
+      .catch((err) => sendResponse({ ok: false, error: String(err) }));
+    return true;
+  }
+
   if (!message || message.type !== INSERT_MESSAGE_TYPE || typeof message.text !== "string") {
     return; // not our message — leave the channel alone for other listeners
+  }
+
+  // A connection note goes into the invitation dialog, not a comment box.
+  if (message.mode === "connect") {
+    sendResponse(insertIntoNoteBox(message.text));
+    return;
   }
 
   // Older panels send no mode; they only know about comments.

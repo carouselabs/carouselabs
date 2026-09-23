@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ProfileForm, draftFromProfile } from "../ProfileForm";
 import { RecommendedBadge } from "../RecommendedBadge";
+import { ConnectionProfilesScreen } from "./ConnectionProfilesScreen";
 
 type View =
   | { mode: "list" }
@@ -20,14 +21,21 @@ type View =
 
 type LoadState = "loading" | "ready" | "error";
 
+// Which kind of profile the screen opens on, and whose builder to open. Both
+// kinds live here rather than on separate screens: they are the same idea, and
+// one nav entry keeps them findable.
+export type ProfileKind = "comment" | "connection";
+
 interface Props {
-  // Set when onboarding ended on "Create my profile now", so this screen opens
-  // straight into the builder rather than its list.
-  startInBuilder?: boolean;
+  // Set when onboarding ended on "Create my profile now", or when a panel's
+  // "+ Create custom profile" was used, so this screen opens straight into
+  // the builder for that kind rather than its list.
+  startInBuilder?: ProfileKind | null;
   onBuilderOpened?: () => void;
 }
 
 export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) {
+  const [tab, setTab] = useState<ProfileKind>(startInBuilder === "connection" ? "connection" : "comment");
   const [profiles, setProfiles] = useState<CommentProfile[]>([]);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [state, setState] = useState<LoadState>("loading");
@@ -57,7 +65,7 @@ export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) 
   // Consumed once: the flag is cleared immediately so navigating away from
   // Profiles and back does not reopen the builder.
   useEffect(() => {
-    if (!startInBuilder) return;
+    if (startInBuilder !== "comment") return;
     setView({ mode: "create" });
     onBuilderOpened?.();
   }, [startInBuilder, onBuilderOpened]);
@@ -147,8 +155,36 @@ export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) 
     );
   }
 
+  const tabs = (
+    <div className="flex gap-2">
+      {(["comment", "connection"] as ProfileKind[]).map((kind) => (
+        <Button
+          key={kind}
+          size="sm"
+          variant={tab === kind ? "default" : "outline"}
+          onClick={() => setTab(kind)}
+        >
+          {kind === "comment" ? "Comments" : "Connection notes"}
+        </Button>
+      ))}
+    </div>
+  );
+
+  if (tab === "connection") {
+    return (
+      <div className="flex flex-col gap-4 p-4">
+        {tabs}
+        <ConnectionProfilesScreen
+          startInBuilder={startInBuilder === "connection"}
+          onBuilderOpened={onBuilderOpened}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4 p-4">
+      {tabs}
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">Comment profiles</h2>
         {me && (

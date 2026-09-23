@@ -8,13 +8,15 @@ import { HistoryScreen } from "./components/screens/HistoryScreen";
 import { SettingsScreen } from "./components/screens/SettingsScreen";
 import { AccountScreen } from "./components/screens/AccountScreen";
 import { Onboarding, ONBOARDING_DONE_STORAGE_KEY } from "./components/Onboarding";
+import { CaptureToast } from "./components/CaptureToast";
 import type { Screen } from "./types";
+import type { ProfileKind } from "./components/screens/ProfilesScreen";
 
 function renderScreen(
   screen: Screen,
-  openProfileBuilder: boolean,
+  openProfileBuilder: ProfileKind | null,
   onBuilderOpened: () => void,
-  onCreateProfile: () => void,
+  onCreateProfile: (kind: ProfileKind) => void,
 ) {
   switch (screen) {
     case "home":
@@ -42,7 +44,7 @@ export default function App() {
   const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
   // Set when onboarding ends on "Create my profile now", so the Profiles
   // screen opens straight into the builder instead of its list.
-  const [openProfileBuilder, setOpenProfileBuilder] = useState(false);
+  const [openProfileBuilder, setOpenProfileBuilder] = useState<ProfileKind | null>(null);
 
   useEffect(() => {
     chrome.storage.local.get("extensionToken").then(({ extensionToken }) => {
@@ -69,8 +71,8 @@ export default function App() {
 
   // Single entry point for "open the Profile Builder", shared by onboarding's
   // "Create my profile now" and the Home dropdown's "+ Create custom profile".
-  function goToProfileBuilder() {
-    setOpenProfileBuilder(true);
+  function goToProfileBuilder(kind: ProfileKind = "comment") {
+    setOpenProfileBuilder(kind);
     setActiveScreen("profiles");
   }
 
@@ -96,7 +98,7 @@ export default function App() {
         <Header />
         <div className="min-h-0 flex-1 overflow-y-auto">
           <Onboarding
-            onCreateProfile={goToProfileBuilder}
+            onCreateProfile={() => goToProfileBuilder("comment")}
             onFinish={() => setNeedsOnboarding(false)}
           />
         </div>
@@ -105,14 +107,15 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-background">
+    <div className="relative flex h-screen w-screen flex-col bg-background">
+      <CaptureToast />
       <Header />
       <div className="flex min-h-0 flex-1">
         <main className="min-w-0 flex-1 overflow-y-auto">
           {renderScreen(
             activeScreen,
             openProfileBuilder,
-            () => setOpenProfileBuilder(false),
+            () => setOpenProfileBuilder(null),
             goToProfileBuilder,
           )}
         </main>

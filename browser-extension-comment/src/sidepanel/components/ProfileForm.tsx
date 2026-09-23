@@ -7,6 +7,7 @@ import {
   type TestResponse,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { CharRangePicker } from "./CharRangePicker";
 
 const GOALS = [
   "adds one useful insight",
@@ -132,87 +133,6 @@ function NativeSelect({
   );
 }
 
-// One bound: a drag slider plus an editable number, kept in sync. The number is
-// a text input with inputMode="numeric" rather than type="number", because
-// type="number" renders the browser's own up/down stepper arrows — the control
-// this replaces.
-function CharBound({
-  label,
-  value,
-  onCommit,
-  acceptsWhileTyping,
-}: {
-  label: string;
-  value: number;
-  onCommit: (n: number) => void;
-  // Gate for live updates from typing. Without it, typing Max "300" while Min
-  // is 150 would commit the partial "30", and the clamp would drag Min down
-  // to 30 with it — a keystroke silently destroying the other bound.
-  acceptsWhileTyping: (n: number) => boolean;
-}) {
-  // Local text so a half-typed value ("1" on the way to "150") is allowed to
-  // exist without being clamped out from under the user mid-keystroke.
-  const [text, setText] = useState(String(value));
-  // Resync when the value changes from outside (the slider was dragged).
-  // Adjusted during render rather than in an effect: React's recommended way
-  // to derive state from a changing prop, and it avoids a render with the
-  // stale number showing first.
-  const [synced, setSynced] = useState(value);
-  if (value !== synced) {
-    setSynced(value);
-    setText(String(value));
-  }
-
-  function commitText() {
-    const n = Number.parseInt(text, 10);
-    // An unchanged value must not commit: blur fires on every tab-through, and
-    // committing would rewrite an untouched legacy length ("Medium (2-3
-    // lines)") as an explicit range just because the field was focused.
-    if (Number.isFinite(n) && clamp(n) !== value) onCommit(clamp(n));
-    else setText(String(value));
-  }
-
-  return (
-    <div className="flex items-center gap-2">
-      <span className="w-8 shrink-0 text-[11px] text-muted-foreground">{label}</span>
-      <input
-        type="range"
-        min={CHAR_MIN}
-        max={CHAR_MAX}
-        // 1, not a coarser step: a typed value off the step grid (137 with a
-        // step of 5) would leave the handle on 135 while the box said 137.
-        step={1}
-        value={value}
-        onChange={(e) => onCommit(Number(e.target.value))}
-        aria-label={`${label} characters`}
-        className="h-2 flex-1 cursor-pointer accent-[#7C3AED]"
-      />
-      <input
-        type="text"
-        inputMode="numeric"
-        value={text}
-        onChange={(e) => {
-          const next = e.target.value.replace(/\D/g, "");
-          setText(next);
-          // Move the slider live only while the typed value is a valid bound
-          // that doesn't cross the other one. Crossing is still allowed, just
-          // on blur/Enter, where it deliberately pushes the other bound along.
-          const n = Number.parseInt(next, 10);
-          if (Number.isFinite(n) && n >= CHAR_MIN && n <= CHAR_MAX && acceptsWhileTyping(n)) {
-            onCommit(n);
-          }
-        }}
-        onBlur={commitText}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commitText();
-        }}
-        aria-label={`${label} characters (number)`}
-        className="w-14 shrink-0 rounded-md border border-input bg-background px-1.5 py-1 text-center text-sm tabular-nums focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      />
-    </div>
-  );
-}
-
 // Reads and writes the profile's existing `length` string, so it needs no new
 // column: moving either control writes "N-M characters", which the server
 // already parses. An older profile ("Medium (2-3 lines)") opens showing the
@@ -225,21 +145,18 @@ function LengthRangePicker({ value, onChange }: { value: string; onChange: (v: s
   const max = clamp(parsed.max);
   const isExplicit = /(\d+)\s*-\s*(\d+)\s*char/i.test(value);
 
-  // Each bound is clamped against the other rather than the pair being
-  // rejected, so dragging one handle past the other pushes it along.
-  const setMin = (n: number) => onChange(lengthFromRange(clamp(n), Math.max(max, clamp(n))));
-  const setMax = (n: number) => onChange(lengthFromRange(Math.min(min, clamp(n)), clamp(n)));
-
   return (
-    <div className="space-y-2 rounded-md border border-input p-2">
-      <CharBound label="Min" value={min} onCommit={setMin} acceptsWhileTyping={(n) => n <= max} />
-      <CharBound label="Max" value={max} onCommit={setMax} acceptsWhileTyping={(n) => n >= min} />
-      <p className="text-[11px] text-muted-foreground">
-        {isExplicit
+    <CharRangePicker
+      min={min}
+      max={max}
+      bounds={{ min: CHAR_MIN, max: CHAR_MAX }}
+      onChange={(nextMin, nextMax) => onChange(lengthFromRange(nextMin, nextMax))}
+      caption={
+        isExplicit
           ? `${min}-${max} characters`
-          : `Using the preset "${value}". Move a slider to set an exact range.`}
-      </p>
-    </div>
+          : `Using the preset "${value}". Move a slider to set an exact range.`
+      }
+    />
   );
 }
 

@@ -50,6 +50,40 @@ export interface RewriteResponse {
   comment: string;
 }
 
+// Connection Note profiles — the same shape as CommentProfile minus the fields
+// a 280-character invitation has no use for. Mirrors model ConnectionProfile.
+export interface ConnectionProfile {
+  id: string;
+  name: string;
+  angle: string;
+  goal: string;
+  tone: string;
+  length: string;
+  alwaysDo: string | null;
+  neverDo: string | null;
+  samples: string[];
+  isDefault: boolean;
+  isSystem: boolean;
+  isRecommended: boolean;
+}
+
+// Editable shape the connection-profile builder holds.
+export interface ConnectionProfileDraft {
+  name: string;
+  angle: string;
+  goal: string;
+  tone: string;
+  length: string;
+  alwaysDo: string;
+  neverDo: string;
+  samples: string[];
+}
+
+export interface ConnectionNoteResponse {
+  note: string;
+  creditsRemaining: number;
+}
+
 export interface MeResponse {
   email: string;
   plan: string;
@@ -60,6 +94,7 @@ export interface MeResponse {
   commentsThisMonth: number;
   commentsToday: number;
   defaultCommentProfileId: string | null;
+  defaultConnectionProfileId?: string | null;
   defaultLanguage: string | null;
   insertWarningHidden: boolean;
 }

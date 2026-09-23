@@ -7,7 +7,8 @@ const VISIBLE_MS = 3000;
 const FADE_MS = 300;
 
 // Brief confirmation of what the content script just captured: "Comment mode"
-// for a post's Comment button, "Reply mode" for Reply under a comment.
+// for a post's Comment button, "Reply mode" for Reply under a comment,
+// "Connection note mode" for Connect on a profile.
 // Mounted by App, not HomeScreen, so it shows whichever screen is open.
 //
 // Listens to storage only. The content script writes every capture there with a
@@ -33,7 +34,9 @@ export function CaptureToast() {
       if (!post) return;
 
       clearTimers();
-      setLabel(post.mode === "reply" ? "Reply mode" : "Comment mode");
+      setLabel(
+        post.mode === "reply" ? "Reply mode" : post.mode === "connect" ? "Connection note mode" : "Comment mode",
+      );
       setVisible(true);
       timers.current.push(
         window.setTimeout(() => setVisible(false), VISIBLE_MS),
@@ -55,8 +58,8 @@ export function CaptureToast() {
       role="status"
       aria-live="polite"
       // Full panel width less a gutter, white with the brand purple (the
-      // primary token, #7C3AED) for text and border. The same look for
-      // either mode; only the label differs.
+      // primary token, #7C3AED) for text and border. The same look for both
+      // modes; only the label differs.
       className={`pointer-events-none absolute inset-x-3 top-3 z-50 rounded-lg border-2 border-primary bg-white px-4 py-3 text-center text-sm font-semibold text-primary shadow-lg transition-opacity duration-300 ${
         visible ? "opacity-100" : "opacity-0"
       }`}

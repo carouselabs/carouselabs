@@ -1,3 +1,11 @@
+// ════════════════════════════════════════════════════════════════════════════
+// TESTING PHASE ONLY - credit checks disabled as of 2026-09-22. MUST restore
+// before public launch. See this comment in generate/route.ts, rewrite/route.ts
+// and connection-note/route.ts. Reply generation has no route of its own: it goes through
+// this one (body.reply), so the same skipped check covers it. The switch is
+// COMMENT_CREDITS_ENFORCED in lib/commentCredits.ts; both the balance check and
+// the charge below are skipped while it is false, not removed.
+// ════════════════════════════════════════════════════════════════════════════
 // app/api/ext/generate/route.ts — the Comment extension's core Generate flow.
 // Bearer-token authenticated, same as the rest of app/api/ext/* (see
 // lib/extensionCommentAuth.ts).
@@ -7,21 +15,74 @@
 // request that fails after its automatic retry is never charged and writes no
 // CommentHistory row, so a user is not billed for output they never saw.
 import { NextResponse } from "next/server"
+import { Ratelimit } from "@upstash/ratelimit"
+import { Redis } from "@upstash/redis"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import { availableCredits } from "@/lib/credits"
 import { chargeCreditsForAction } from "@/lib/chargeCredits"
 import { CREDIT_COSTS } from "@/lib/creditActions"
+import { COMMENT_CREDITS_ENFORCED } from "@/lib/commentCredits"
 import {
   buildCommentSystemMessage,
   buildCommentUserMessage,
+  buildReplySystemMessage,
+  buildReplyUserMessage,
   targetLengthRange,
   WEAK_COMMENT_PATTERNS,
   ANTI_FABRICATION_REMINDER,
   type CommentPostInput,
+  type CommentReplyInput,
+  type ReplyThreadEntryInput,
 } from "@/lib/ai/prompts/commentPrompt"
 import { callCommentModel, parseComment, sanitizeComment, CLAUDE_MODEL } from "@/lib/ai/commentModel"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
+
+// Same shape as app/api/ext/rewrite. Independent of COMMENT_CREDITS_ENFORCED:
+// while credits are off this is the only brake on model spend, and it stays
+// useful after launch as an abuse guard. Generate and Regenerate share it,
+// since both call this route.
+// Caps on a reply payload, which arrives from a scraped page: enough for any
+// real thread, small enough that one request can't carry a huge prompt.
+const MAX_THREAD_ENTRIES = 30
+const MAX_ENTRY_CHARS = 1500
+
+// Returns null when the body carries no reply (plain Comment mode). Throws when
+// a reply is present but unusable, so the caller answers 400 with its message.
+function parseReply(raw: unknown): CommentReplyInput | null {
+  if (!raw || typeof raw !== "object") return null
+  const { thread, isOwnPost } = raw as { thread?: unknown; isOwnPost?: unknown }
+  if (!Array.isArray(thread)) return null
+
+  const entries: ReplyThreadEntryInput[] = thread
+    .filter((e): e is Record<string, unknown> => !!e && typeof e === "object")
+    .map((e) => ({
+      author: typeof e.author === "string" ? e.author.slice(0, 100) : "",
+      text: typeof e.text === "string" ? e.text.trim().slice(0, MAX_ENTRY_CHARS) : "",
+      depth: typeof e.depth === "number" && Number.isFinite(e.depth) ? Math.max(0, Math.min(5, Math.floor(e.depth))) : 0,
+      isTarget: e.isTarget === true,
+      isSelf: e.isSelf === true,
+      isPostAuthor: e.isPostAuthor === true,
+    }))
+
+  const targetIndex = entries.findIndex((e) => e.isTarget)
+  if (targetIndex === -1 || !entries[targetIndex].text) {
+    throw new Error("No comment was captured to reply to. Click Reply on the comment again, then retry.")
+  }
+
+  // A long thread is trimmed around the target, so the target always survives.
+  const start = Math.max(0, Math.min(targetIndex, entries.length - MAX_THREAD_ENTRIES))
+  return {
+    thread: entries.slice(start, start + MAX_THREAD_ENTRIES),
+    isOwnPost: typeof isOwnPost === "boolean" ? isOwnPost : null,
+  }
+}
+
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(40, "1 h"),
+  analytics: false,
+})
 
 export async function POST(req: Request) {
   const user = await getUserFromCommentExtensionToken(req)
@@ -29,9 +90,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   }
 
+  const { success } = await ratelimit.limit(`ext:generate:${user.id}`)
+  if (!success) {
+    return NextResponse.json(
+      { error: "Too many comments generated. Please try again later." },
+      { status: 429 },
+    )
+  }
+
   let profileId: string
   let post: CommentPostInput
   let extraInstruction: string | undefined
+  // Present when the user clicked Reply under a comment rather than Comment on
+  // the post; routes to the reply prompt below.
+  let reply: CommentReplyInput | null
 
   try {
     const body = await req.json()
@@ -50,8 +122,11 @@ export async function POST(req: Request) {
       url: typeof raw.url === "string" ? raw.url : "",
     }
 
+    reply = parseReply(body.reply)
+
     if (!profileId) throw new Error("Missing profileId")
-    if (!post.text.trim()) {
+    // A reply can stand on the comment alone (image-only posts have no text).
+    if (!reply && !post.text.trim()) {
       throw new Error(
         "No post text was captured. Click Comment on the post again, then retry.",
       )
@@ -77,7 +152,11 @@ export async function POST(req: Request) {
   ])
 
   // Checked before the model call so a drained account never burns an API call.
-  if (!subscription || availableCredits(subscription) < CREDIT_COSTS.comment_generate) {
+  // TESTING PHASE ONLY: skipped while COMMENT_CREDITS_ENFORCED is false.
+  if (
+    COMMENT_CREDITS_ENFORCED &&
+    (!subscription || availableCredits(subscription) < CREDIT_COSTS.comment_generate)
+  ) {
     return NextResponse.json(
       { error: "You're out of credits.", requiresUpgrade: subscription?.plan === "FREE" },
       { status: 402 },
@@ -88,12 +167,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Comment profile not found" }, { status: 404 })
   }
 
-  const systemMessage = buildCommentSystemMessage(profile)
-  const userMessage = buildCommentUserMessage(post, extraInstruction)
+  const systemMessage = reply
+    ? buildReplySystemMessage(profile, reply.isOwnPost)
+    : buildCommentSystemMessage(profile)
+  const userMessage = reply
+    ? buildReplyUserMessage(post, reply, extraInstruction)
+    : buildCommentUserMessage(post, extraInstruction)
+  const replyTarget = reply?.thread.find((entry) => entry.isTarget) ?? null
   const { min, max } = targetLengthRange(profile.length)
 
   // Everything the model is allowed to source a number from.
-  const numberSources = [post.text, post.headline, post.author, extraInstruction ?? ""].join(" ")
+  // In reply mode the thread is part of what the model was shown, so a figure
+  // quoted from any comment in it counts as sourced.
+  const numberSources = [
+    post.text,
+    post.headline,
+    post.author,
+    extraInstruction ?? "",
+    ...(reply?.thread.map((entry) => entry.text) ?? []),
+  ].join(" ")
 
   let comment = ""
   // A generation that is clean but off-length is held here rather than
@@ -185,12 +277,18 @@ export async function POST(req: Request) {
     )
   }
 
-  const charge = await chargeCreditsForAction({ ...user, subscription }, "comment_generate")
-  if (!charge.ok) {
-    return NextResponse.json(
-      { error: "You're out of credits.", requiresUpgrade: charge.requiresUpgrade },
-      { status: 402 },
-    )
+  // TESTING PHASE ONLY: no charge while COMMENT_CREDITS_ENFORCED is false. The
+  // balance is still reported so the panel's credit figure stays accurate.
+  let creditsRemaining = subscription ? availableCredits(subscription) : 0
+  if (COMMENT_CREDITS_ENFORCED) {
+    const charge = await chargeCreditsForAction({ ...user, subscription }, "comment_generate")
+    if (!charge.ok) {
+      return NextResponse.json(
+        { error: "You're out of credits.", requiresUpgrade: charge.requiresUpgrade },
+        { status: 402 },
+      )
+    }
+    creditsRemaining = charge.remaining
   }
 
   // action stays NONE until the user actually copies or inserts the comment;
@@ -201,17 +299,23 @@ export async function POST(req: Request) {
       profileId: profile.id,
       postAuthor: post.author,
       postUrl: post.url,
-      postSnippet: post.text.slice(0, 280),
+      // No mode column on CommentHistory, so a reply is recorded by what it
+      // answered, which is also what the History screen should show for it.
+      postSnippet: (replyTarget
+        ? `Reply to ${replyTarget.author || "a comment"}: ${replyTarget.text}`
+        : post.text
+      ).slice(0, 280),
       comment,
       action: "NONE",
-      creditsUsed: CREDIT_COSTS.comment_generate,
+      // Records what was actually charged: 0 during the free testing phase.
+      creditsUsed: COMMENT_CREDITS_ENFORCED ? CREDIT_COSTS.comment_generate : 0,
       model: CLAUDE_MODEL,
     },
   })
 
   return NextResponse.json({
     comment,
-    creditsRemaining: charge.remaining,
+    creditsRemaining,
     historyId: history.id,
   })
 }

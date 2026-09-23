@@ -3,7 +3,9 @@
 // click on the page for LinkedIn's per-post Comment button; when one fires,
 // walks up to that post's container, extracts what we can about the post,
 // and hands it to the side panel (see sendPostToSidePanel for why that goes
-// through chrome.storage as well as chrome.runtime.sendMessage).
+// through chrome.storage as well as chrome.runtime.sendMessage). A click on
+// Reply under a comment goes through the same hand-off tagged mode "reply",
+// carrying the comment thread as well (see handleReplyClick).
 //
 // Selector strings all come from GET /api/ext/config (app/api/ext/config/route.ts)
 // rather than being hardcoded here, so a LinkedIn DOM change can be patched
@@ -20,6 +22,7 @@
 // the selector that failed.
 
 import { getApiBaseUrl } from "@/lib/api";
+import { commentUrn, extractThread, findReplyButton, getSelfName, sameName } from "@/content/replyThread";
 
 // Must match MESSAGE_TYPE in src/sidepanel/components/screens/HomeScreen.tsx
 // exactly — no shared package between the content script and sidepanel
@@ -43,10 +46,12 @@ type PostType = "text" | "image" | "article" | "poll" | "repost";
 interface ExtensionConfig {
   commentButtonSelector: string;
   postContainerSelector: string;
+  postContainerFallbackSelector: string;
   authorProfileHrefSelector: string;
   authorLinkSelector: string;
   authorHeaderSelector: string;
   postTextSelector: string;
+  commentItemSelector: string;
   commentBoxSelector: string;
   imageIndicatorSelector: string;
   articleIndicatorSelector: string;
@@ -62,10 +67,13 @@ interface ExtensionConfig {
 const FALLBACK_CONFIG: ExtensionConfig = {
   commentButtonSelector: "button[aria-label^='Comment'], button.comment-button",
   postContainerSelector: "div[role='listitem'][componentkey^='update-card-focus']",
+  postContainerFallbackSelector: "[componentkey^='update-card-focus']",
   authorProfileHrefSelector: 'a[href*="/in/"], a[href*="/company/"]',
   authorLinkSelector: `a[aria-label^="View "][aria-label$="'s profile"]`,
   authorHeaderSelector: "[componentkey^='feed-header']",
   postTextSelector: '[data-testid="expandable-text-box"]',
+  commentItemSelector:
+    "[componentkey*='replaceableComment_urn:li:comment:'], [componentkey*='CommentComponentReference_urn:li:comment:']",
   commentBoxSelector:
     "div[contenteditable='true'][role='textbox'], div.ql-editor[contenteditable='true'], div[contenteditable='true'][aria-label*='comment' i]",
   imageIndicatorSelector: ".update-components-image",
@@ -76,13 +84,42 @@ const FALLBACK_CONFIG: ExtensionConfig = {
   insertEnabled: true,
 };
 
+// One comment in a captured thread, as the side panel and the generate route
+// receive it. Keep in sync with ReplyThreadEntry in HomeScreen.tsx.
+interface ReplyThreadEntry {
+  author: string;
+  text: string;
+  depth: number;
+  isTarget: boolean;
+  // Written by the signed-in user / by the post's author. false when unknown.
+  isSelf: boolean;
+  isPostAuthor: boolean;
+}
+
+// Present when the user clicked Reply under a comment rather than the post's
+// Comment button.
+interface ReplySelection {
+  targetAuthor: string;
+  targetText: string;
+  // Reading order; exactly one entry has isTarget set.
+  thread: ReplyThreadEntry[];
+  // null when either name is unknown: "can't tell" is kept distinct from "not
+  // yours", so a failed author extraction never reads as someone else's post.
+  isOwnPost: boolean | null;
+}
+
 interface SelectedPost {
+  // "reply" tags a Reply capture, so the panel can tell it apart from a plain
+  // Comment on the post. Both travel through the same storage key and message,
+  // so whichever the user clicked last is what the panel shows.
+  mode: "comment" | "reply";
   authorName: string;
   authorHeadline: string;
   text: string;
   type: PostType;
   url: string;
   capturedAt: number;
+  reply?: ReplySelection;
 }
 
 console.log("[content-script] loaded on", window.location.href);
@@ -179,21 +216,41 @@ function findLastLinkBeforeText(
 // repeats the name verbatim inside the same link.
 const LINK_SUFFIX_PATTERN = /\s*[•·|]\s*(Following|Follow|1st|2nd|3rd\+?)\s*$/i;
 
+// Comment author links render the follow state in its own span with only
+// whitespace before it ("Chaim Simcha Following"). Case-sensitive, unlike the
+// separator form above, so a name that merely ends in a lowercase "follow"
+// is never truncated; LinkedIn always capitalises these labels.
+const SPACED_LINK_SUFFIX_PATTERN = /\s+(Following|Follow|1st|2nd|3rd\+?)$/;
+
+// Company/page commenters carry a follower count ("… 271 followers",
+// "… • 1.2K followers") and sometimes a Premium badge after the name.
+// "Premium" is case-sensitive for the same reason as above.
+const FOLLOWER_COUNT_SUFFIX_PATTERN = /\s*[•·|]?\s*\d[\d.,]*\s*[KMB]?\+?\s+followers?$/i;
+const PREMIUM_SUFFIX_PATTERN = /\s+Premium$/;
+
+// The name repeated for screen readers, either back to back ("NameName") or
+// with the Premium badge between the copies ("CarouseLabs PremiumCarouseLabs").
+// A plain space between copies is deliberately not collapsed: "Li Li" can be a
+// real name.
+const REPEATED_NAME_PATTERN = /^(.+?)(?: ?Premium ?)?\1$/;
+
 function cleanLinkName(raw: string): string {
   let text = raw.replace(/\s+/g, " ").trim();
 
-  // Looped because a link can carry more than one of these at once.
+  // Looped because a link can carry more than one of these at once
+  // ("CarouseLabs Premium 271 followers").
   let previous = "";
   while (text !== previous) {
     previous = text;
     text = text.replace(LINK_SUFFIX_PATTERN, "").trim();
+    text = text.replace(SPACED_LINK_SUFFIX_PATTERN, "").trim();
+    text = text.replace(FOLLOWER_COUNT_SUFFIX_PATTERN, "").trim();
+    text = text.replace(PREMIUM_SUFFIX_PATTERN, "").trim();
   }
 
-  // Collapse an exactly-repeated name ("NameName") back to a single copy.
-  const half = text.length / 2;
-  if (text.length > 0 && text.length % 2 === 0 && text.slice(0, half) === text.slice(half)) {
-    text = text.slice(0, half).trim();
-  }
+  // Collapse a repeated name back to a single copy.
+  const repeated = text.match(REPEATED_NAME_PATTERN);
+  if (repeated) text = repeated[1].trim();
 
   return text;
 }
@@ -387,19 +444,58 @@ function sendPostToSidePanel(post: SelectedPost) {
   });
 }
 
+type ContainerStrategy = "primary" | "fallback" | "single-on-page" | "none";
+
+// The post a click belongs to, tried in descending order of trust:
+//   1. postContainerSelector: verified on the main feed, one match per post.
+//   2. postContainerFallbackSelector: the same componentkey prefix without
+//      the tag/role requirement, for layouts like /posts/<slug> permalink
+//      pages (componentkey "...FeedType_FEED_DETAIL") where the verified
+//      selector matches nothing. The OUTERMOST match is taken, since without
+//      the role anchor an inner wrapper could share the prefix.
+//   3. The page's only fallback match, when the card isn't an ancestor of
+//      the click at all (comments rendered beside the post, not inside it).
+//      Only when exactly one exists, so a feed can never pick the wrong post.
+function findPostContainer(from: Element, config: ExtensionConfig): { container: Element | null; strategy: ContainerStrategy } {
+  const primary = from.closest(config.postContainerSelector);
+  if (primary) return { container: primary, strategy: "primary" };
+
+  // Older cached configs predate this key.
+  const fallbackSelector = config.postContainerFallbackSelector || FALLBACK_CONFIG.postContainerFallbackSelector;
+
+  let outermost: Element | null = null;
+  for (let el = from.parentElement; el; el = el.parentElement) {
+    if (el.matches(fallbackSelector)) outermost = el;
+  }
+  if (outermost) return { container: outermost, strategy: "fallback" };
+
+  const onPage = document.querySelectorAll(fallbackSelector);
+  if (onPage.length === 1) return { container: onPage[0], strategy: "single-on-page" };
+
+  return { container: null, strategy: "none" };
+}
+
 async function handleClick(event: MouseEvent) {
   const target = event.target as Element | null;
   if (!target) return;
 
   const config = await getConfig();
 
+  // Checked before Comment and returns early: a Reply under a comment is its own flow
+  // and must never fall through into the post Comment handling below.
+  const replyButton = findReplyButton(target);
+  if (replyButton) {
+    await handleReplyClick(replyButton, config);
+    return;
+  }
+
   const commentButton = target.closest(config.commentButtonSelector);
   if (!commentButton) return; // not a click on (or inside) a Comment button
 
-  const postContainer = commentButton.closest(config.postContainerSelector);
+  const { container: postContainer } = findPostContainer(commentButton, config);
   if (!postContainer) {
     console.warn(
-      `[content-script] matched a Comment button but no ancestor matched postContainerSelector ("${config.postContainerSelector}") — LinkedIn's DOM has likely changed; update the selector in app/api/ext/config.`,
+      `[content-script] matched a Comment button but no post container was found (postContainerSelector "${config.postContainerSelector}", fallback "${config.postContainerFallbackSelector}") — LinkedIn's DOM has likely changed; update the selector in app/api/ext/config.`,
     );
     return;
   }
@@ -413,6 +509,7 @@ async function handleClick(event: MouseEvent) {
   const author = extractAuthor(postContainer, config, text);
 
   const post: SelectedPost = {
+    mode: "comment",
     authorName: author.name,
     authorHeadline: extractHeadlineNear(author.link, author.name),
     text,
@@ -435,41 +532,223 @@ async function handleClick(event: MouseEvent) {
   sendPostToSidePanel(post);
 }
 
+// KNOWN LIMITATION: built and verified for the main feed (linkedin.com/feed).
+// On other layouts, such as a profile's Recent Activity listing
+// (/in/<slug>/recent-activity/), the post author comes back empty, so
+// isOwnPost is null there. Deliberately unsupported for now: replying from
+// the feed is the real use case.
+async function handleReplyClick(replyButton: Element, config: ExtensionConfig) {
+  const { container: postContainer, strategy: containerStrategy } = findPostContainer(replyButton, config);
+  if (!postContainer) {
+    console.warn(
+      `[content-script] matched a Reply control but no post container was found (postContainerSelector "${config.postContainerSelector}", fallback "${config.postContainerFallbackSelector}") — extracting the thread from the whole page instead.`,
+    );
+  }
+  // A container found as "the page's only post" may not hold the comments,
+  // so the thread is only scoped to it when the click is actually inside it.
+  const scope = postContainer?.contains(replyButton) ? postContainer : document.body;
+
+  const self = await getSelfName();
+
+  // Post fields first, via the same extraction the Comment flow uses, so the
+  // post author is known before thread entries are compared against it.
+  let text = postContainer ? extractPostText(postContainer, config.postTextSelector) : "";
+  const author = postContainer ? extractAuthor(postContainer, config, text) : null;
+  const authorName = author?.name ?? "";
+
+  const thread = extractThread(
+    replyButton,
+    scope,
+    {
+      // Older cached configs predate this key; the fallback keeps them working.
+      commentItemSelector: config.commentItemSelector || FALLBACK_CONFIG.commentItemSelector,
+      profileHrefSelector: config.authorProfileHrefSelector,
+      postTextSelector: config.postTextSelector,
+    },
+    { postAuthor: authorName, self: self.name },
+    { nameFromProfileLink: extractNameFromProfileLink, ownText },
+  );
+
+  // Comments may share the post body's text anchor. On a post with no text of
+  // its own, the first match would then be a comment — so it isn't post text.
+  const firstTextEl = postContainer?.querySelector(config.postTextSelector);
+  if (firstTextEl && thread.allItems.some((item) => item.contains(firstTextEl))) text = "";
+
+  const target = thread.entries.find((entry) => entry.isTarget);
+  if (!target || !thread.targetItem) {
+    // Nothing is sent: a reply with no comment to reply to would only fail at
+    // Generate, and the panel keeps showing whatever was selected before.
+    console.warn(
+      `[content-script] Reply clicked but the comment it belongs to wasn't found (item strategy: ${thread.itemStrategy}, container: ${containerStrategy}) — check commentItemSelector in app/api/ext/config.`,
+    );
+    return;
+  }
+
+  const isOwnPost = sameName(authorName, self.name);
+  if (isOwnPost === null) {
+    const why = !authorName
+      ? postContainer
+        ? "post author not extracted (container found, author extraction failed)"
+        : "post author not extracted (no post container: unsupported page layout?)"
+      : `your LinkedIn name unknown (${self.reason})`;
+    console.warn(`[content-script] couldn't tell whether this is your post: ${why}.`);
+  }
+
+  // Remembered so Insert can put the text in THIS comment's reply box. The
+  // URNs let it re-find the elements if LinkedIn re-renders the thread first.
+  lastReplyTarget = {
+    item: thread.targetItem,
+    root: thread.rootItem,
+    itemUrn: commentUrn(thread.targetItem),
+    rootUrn: thread.rootItem ? commentUrn(thread.rootItem) : null,
+    postContainer,
+  };
+
+  sendPostToSidePanel({
+    mode: "reply",
+    authorName,
+    authorHeadline: extractHeadlineNear(author?.link ?? null, authorName),
+    text,
+    type: postContainer ? classifyPostType(postContainer, config) : "text",
+    url:
+      postContainer?.querySelector<HTMLAnchorElement>('a[href*="/feed/update/"]')?.href ??
+      window.location.href,
+    capturedAt: Date.now(),
+    reply: {
+      targetAuthor: target.authorName,
+      targetText: target.text,
+      thread: thread.entries.map((entry) => ({
+        author: entry.authorName,
+        text: entry.text,
+        depth: entry.depth,
+        isTarget: entry.isTarget,
+        isSelf: entry.isSelf === true,
+        isPostAuthor: entry.isPostAuthor === true,
+      })),
+      isOwnPost,
+    },
+  });
+}
+
 // The container of the post whose Comment button was clicked last. Insert
 // needs it to scope the search for LinkedIn's comment box, so that a feed with
 // several open comment boxes puts the text in the right one.
 let lastPostContainer: Element | null = null;
 
-// Places text into LinkedIn's own comment box. Deliberately limited to filling
-// the field: nothing here clicks Post, and nothing submits. The user reviews
-// and posts the comment themselves.
-async function insertIntoCommentBox(text: string): Promise<{ ok: boolean; error?: string }> {
+// The comment whose Reply was clicked last, for Insert in reply mode.
+let lastReplyTarget: {
+  item: Element;
+  root: Element | null;
+  itemUrn: string | null;
+  rootUrn: string | null;
+  postContainer: Element | null;
+} | null = null;
+
+// A remembered element if it is still on the page, else the current element
+// carrying the same comment URN (LinkedIn may have re-rendered the thread).
+// querySelector returns the first match in document order, which is that
+// comment's outermost wrapper.
+function liveCommentElement(el: Element | null, urn: string | null): Element | null {
+  if (el?.isConnected) return el;
+  if (!urn) return null;
+  return document.querySelector(`[componentkey*=${JSON.stringify(`urn:li:comment:(${urn})`)}]`);
+}
+
+// LinkedIn opens the reply box when Reply is clicked. Where it renders isn't
+// verified against live markup yet, so this looks in descending order of
+// certainty and never falls back to the post's main comment box: putting a
+// reply there would publish it as a top-level comment on the post.
+function findReplyBox(config: ExtensionConfig): HTMLElement | null {
+  if (!lastReplyTarget) return null;
+  const itemSelector = config.commentItemSelector || FALLBACK_CONFIG.commentItemSelector;
+  const item = liveCommentElement(lastReplyTarget.item, lastReplyTarget.itemUrn);
+  const root = liveCommentElement(lastReplyTarget.root, lastReplyTarget.rootUrn);
+
+  // 1. Inside the target comment, and belonging to it rather than to one of
+  //    its nested replies: the nearest comment wrapper names the same URN.
+  if (item) {
+    const own = Array.from(item.querySelectorAll<HTMLElement>(config.commentBoxSelector)).find((box) => {
+      const owner = box.closest(itemSelector);
+      return owner ? commentUrn(owner) === lastReplyTarget?.itemUrn : true;
+    });
+    if (own) return own;
+  }
+
+  // 2. Anywhere in the thread: replying to a reply usually opens the box at
+  //    the foot of the thread. Prefer the first box after the target.
+  if (root) {
+    const boxes = Array.from(root.querySelectorAll<HTMLElement>(config.commentBoxSelector));
+    const after = item
+      ? boxes.find((box) => item.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING)
+      : undefined;
+    if (after ?? boxes[0]) return after ?? boxes[0];
+  }
+
+  // 3. The editor LinkedIn focused when Reply was clicked, if it still has
+  //    focus on the page and sits in the same thread or post.
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && active.matches(config.commentBoxSelector)) {
+    const scope = root ?? lastReplyTarget.postContainer;
+    if (!scope || scope.contains(active)) return active;
+  }
+
+  return null;
+}
+
+// Places text into LinkedIn's own comment or reply box. Deliberately limited
+// to filling the field: nothing here clicks Post, and nothing submits. The
+// user reviews and posts it themselves.
+async function insertIntoCommentBox(
+  text: string,
+  mode: "comment" | "reply",
+): Promise<{ ok: boolean; error?: string }> {
   const config = await getConfig();
 
-  const scope = lastPostContainer ?? document;
-  const box = scope.querySelector<HTMLElement>(config.commentBoxSelector);
+  const box =
+    mode === "reply"
+      ? findReplyBox(config)
+      : (lastPostContainer ?? document).querySelector<HTMLElement>(config.commentBoxSelector);
 
   if (!box) {
     return {
       ok: false,
       error:
-        "Couldn't find LinkedIn's comment box. Open the comment box on the post first, then try again.",
+        mode === "reply"
+          ? "Couldn't find the reply box. Click Reply on the comment again, then try Insert."
+          : "Couldn't find LinkedIn's comment box. Open the comment box on the post first, then try again.",
     };
   }
 
   box.focus();
 
+  // A reply box can already hold LinkedIn's @mention of the person being
+  // replied to. Insert after it, with a separating space, rather than at
+  // whatever position focus() left the caret.
+  let toInsert = text;
+  if (mode === "reply") {
+    const range = document.createRange();
+    range.selectNodeContents(box);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    const existing = box.textContent ?? "";
+    if (existing.trim() && !/\s$/.test(existing)) toInsert = ` ${text}`;
+  }
+
   // execCommand is deprecated but remains the most reliable way to fill a
   // contenteditable owned by a framework: it produces the same input events a
   // real keystroke would, so LinkedIn's editor registers the text instead of
   // silently discarding it on the next render.
-  const inserted = document.execCommand("insertText", false, text);
+  const inserted = document.execCommand("insertText", false, toInsert);
 
   if (!inserted) {
     // Fallback for editors where execCommand is blocked. Sets the text, then
-    // fires the input event the framework listens for.
-    box.textContent = text;
-    box.dispatchEvent(new InputEvent("input", { bubbles: true, data: text, inputType: "insertText" }));
+    // fires the input event the framework listens for. In reply mode it
+    // appends, so a pre-filled mention survives.
+    box.textContent = mode === "reply" ? `${box.textContent ?? ""}${toInsert}` : text;
+    box.dispatchEvent(new InputEvent("input", { bubbles: true, data: toInsert, inputType: "insertText" }));
   }
 
   return { ok: true };
@@ -480,7 +759,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return; // not our message — leave the channel alone for other listeners
   }
 
-  insertIntoCommentBox(message.text)
+  // Older panels send no mode; they only know about comments.
+  insertIntoCommentBox(message.text, message.mode === "reply" ? "reply" : "comment")
     .then(sendResponse)
     .catch((err) => sendResponse({ ok: false, error: String(err) }));
 

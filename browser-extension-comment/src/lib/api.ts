@@ -8,7 +8,13 @@
 // devtools console:
 //   chrome.storage.local.set({ apiBaseUrl: "http://localhost:3000" })
 
-const DEFAULT_API_BASE_URL = "https://carouselabs.com";
+// Chosen by build mode, the same switch manifest.config.ts uses for its
+// localhost host permissions: `npm run build` (production) talks to the live
+// site, `npm run build:dev` / `npm run dev` to a local server. The two must
+// agree — a production build has no localhost permission, so pointing it at
+// localhost could never work anyway. The apiBaseUrl override above still wins.
+const DEFAULT_API_BASE_URL =
+  import.meta.env.MODE === "production" ? "https://carouselabs.com" : "http://localhost:3000";
 
 export interface CommentProfile {
   id: string;
@@ -48,6 +54,9 @@ export interface MeResponse {
   email: string;
   plan: string;
   creditsAvailable: number;
+  // TESTING PHASE ONLY: false while the server's COMMENT_CREDITS_ENFORCED
+  // flag is off. Optional because a server predating the flag omits it.
+  creditsEnforced?: boolean;
   commentsThisMonth: number;
   commentsToday: number;
   defaultCommentProfileId: string | null;

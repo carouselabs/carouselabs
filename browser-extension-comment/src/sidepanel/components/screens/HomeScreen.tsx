@@ -50,15 +50,38 @@ const SHOW_INSERT_STORAGE_KEY = "showInsertButton";
 // the service worker, which is where the keyboard command actually fires.
 const GENERATE_SHORTCUT_MESSAGE_TYPE = "carouselabs:shortcut-generate";
 
-// Shape sent by src/content-script.ts — keep in sync with its SelectedPost.
+// Shapes sent by src/content-script.ts — keep in sync with its SelectedPost,
+// ReplySelection and ReplyThreadEntry.
+interface ReplyThreadEntry {
+  author: string;
+  text: string;
+  depth: number;
+  isTarget: boolean;
+  isSelf: boolean;
+  isPostAuthor: boolean;
+}
+
+interface ReplySelection {
+  targetAuthor: string;
+  targetText: string;
+  thread: ReplyThreadEntry[];
+  isOwnPost: boolean | null;
+}
+
 interface SelectedPost {
+  // Optional: a selection stored by an older build has no mode, and was always
+  // a comment.
+  mode?: "comment" | "reply";
   authorName: string;
   authorHeadline: string;
   text: string;
   type: "text" | "image" | "article" | "poll" | "repost";
   url: string;
   capturedAt: number;
+  reply?: ReplySelection;
 }
+
+type InsertMode = "comment" | "reply";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -102,6 +125,9 @@ export function HomeScreen({ onCreateProfile }: Props) {
   const [rewriting, setRewriting] = useState<"shorter" | "longer" | null>(null);
   const [copied, setCopied] = useState(false);
   const [credits, setCredits] = useState<number | null>(null);
+  // Defaults to enforced, so a server that doesn't send the flag keeps the
+  // normal out-of-credits behaviour.
+  const [creditsEnforced, setCreditsEnforced] = useState(true);
 
   // Insert gating: the server kill switch, the per-install preference, and the
   // per-account "warning already acknowledged" flag are three separate things.
@@ -110,6 +136,9 @@ export function HomeScreen({ onCreateProfile }: Props) {
   const [insertWarningHidden, setInsertWarningHidden] = useState(false);
   const [showInsertWarning, setShowInsertWarning] = useState(false);
   const [inserting, setInserting] = useState(false);
+  // What the Insert warning is about to insert, so the same modal serves both
+  // the comment flow and the reply flow.
+  const [pendingInsert, setPendingInsert] = useState<{ text: string; mode: InsertMode } | null>(null);
 
   // null while unknown. Chrome reveals tab.url only for hosts the extension
   // has permission for, so a readable linkedin.com URL is itself the signal —
@@ -211,6 +240,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
 
         setSelectedId(preselected?.id ?? "");
         setCredits(me.creditsAvailable);
+        setCreditsEnforced(me.creditsEnforced !== false);
         setCommentsToday(me.commentsToday);
         setInsertWarningHidden(me.insertWarningHidden);
         setState("ready");
@@ -250,11 +280,19 @@ export function HomeScreen({ onCreateProfile }: Props) {
   const hasComment = comment.trim().length > 0;
   // credits is null only while /api/ext/me is still in flight; treating that
   // as "out" would disable Generate during every panel open.
-  const outOfCredits = credits !== null && credits <= 0;
+  //
+  // TESTING PHASE ONLY: never true while the server reports credits as not
+  // enforced (lib/commentCredits.ts), so a zero balance doesn't block testing.
+  const outOfCredits = creditsEnforced && credits !== null && credits <= 0;
   // A captured post with no body text cannot be commented on, and the route
   // rejects it with a 400. Blocking it here turns a failed round trip into an
   // explained disabled button.
-  const postHasNoText = !!selectedPost && !selectedPost.text.trim();
+  //
+  // In reply mode the comment being answered is what must have text; the post
+  // itself may be image-only.
+  const reply = selectedPost?.mode === "reply" ? (selectedPost.reply ?? null) : null;
+  const postHasNoText =
+    !!selectedPost && (reply ? !reply.targetText.trim() : !selectedPost.text.trim());
   const generateDisabled =
     !selectedPost || !selectedId || outOfCredits || postHasNoText || busy;
   // Copy / Shorter / Longer all need a comment to act on.
@@ -313,6 +351,9 @@ export function HomeScreen({ onCreateProfile }: Props) {
             url: selectedPost.url,
           },
           extraInstruction: extraInstruction.trim() || undefined,
+          // Present only in reply mode; its presence is what switches the
+          // route to the reply prompt.
+          reply: reply ? { thread: reply.thread, isOwnPost: reply.isOwnPost } : undefined,
         }),
       });
 
@@ -372,14 +413,19 @@ export function HomeScreen({ onCreateProfile }: Props) {
   // has already acknowledged it; it is never skipped silently on first use.
   function handleInsertClick() {
     if (!comment.trim()) return;
+    requestInsert(comment, reply ? "reply" : "comment");
+  }
+
+  function requestInsert(text: string, mode: InsertMode) {
     if (insertWarningHidden) {
-      void performInsert();
+      void performInsert(text, mode);
       return;
     }
+    setPendingInsert({ text, mode });
     setShowInsertWarning(true);
   }
 
-  async function performInsert() {
+  async function performInsert(text: string, mode: InsertMode) {
     setInserting(true);
     setGenerateError(null);
 
@@ -392,7 +438,10 @@ export function HomeScreen({ onCreateProfile }: Props) {
 
       const res = (await chrome.tabs.sendMessage(tab.id, {
         type: INSERT_MESSAGE_TYPE,
-        text: comment,
+        text,
+        // Reply mode targets the captured comment's reply box, never the
+        // post's main comment box.
+        mode,
       })) as { ok: boolean; error?: string } | undefined;
 
       if (!res?.ok) {
@@ -412,6 +461,9 @@ export function HomeScreen({ onCreateProfile }: Props) {
 
   async function handleConfirmInsert(dontShowAgain: boolean) {
     setShowInsertWarning(false);
+    const pending = pendingInsert;
+    setPendingInsert(null);
+    if (!pending) return;
 
     if (dontShowAgain) {
       setInsertWarningHidden(true);
@@ -425,7 +477,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
       }).catch(() => {});
     }
 
-    await performInsert();
+    await performInsert(pending.text, pending.mode);
   }
 
   async function handleCopy() {
@@ -447,18 +499,24 @@ export function HomeScreen({ onCreateProfile }: Props) {
     markHistory("COPIED");
   }
 
+  const insertWarningModal = showInsertWarning && (
+    <InsertWarningModal
+      onCopyInstead={() => {
+        setShowInsertWarning(false);
+        setPendingInsert(null);
+        void handleCopy();
+      }}
+      onInsertAnyway={handleConfirmInsert}
+      onDismiss={() => {
+        setShowInsertWarning(false);
+        setPendingInsert(null);
+      }}
+    />
+  );
+
   return (
     <div className="flex flex-col gap-4 p-4">
-      {showInsertWarning && (
-        <InsertWarningModal
-          onCopyInstead={() => {
-            setShowInsertWarning(false);
-            void handleCopy();
-          }}
-          onInsertAnyway={handleConfirmInsert}
-          onDismiss={() => setShowInsertWarning(false)}
-        />
-      )}
+      {insertWarningModal}
 
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-muted-foreground">Comment Profile</label>
@@ -544,9 +602,32 @@ export function HomeScreen({ onCreateProfile }: Props) {
       )}
 
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-muted-foreground">Selected post</label>
+        <label className="text-xs font-medium text-muted-foreground">
+          {reply ? "Replying to" : "Selected post"}
+        </label>
 
-        {selectedPost ? (
+        {selectedPost && reply ? (
+          // Reply mode leads with the comment being answered, since that is
+          // what the reply responds to; the post is only context underneath.
+          <div className="space-y-1 rounded-md border border-primary/40 bg-background p-3 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium">
+                Replying to {reply.targetAuthor || "a"}
+                {reply.targetAuthor ? "'s" : ""} comment
+              </span>
+              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] uppercase text-primary">
+                Reply
+              </span>
+            </div>
+            <p className="line-clamp-2 text-sm text-foreground/90">{reply.targetText}</p>
+            <div className="text-xs text-muted-foreground">
+              {reply.isOwnPost
+                ? "On your post"
+                : `On ${selectedPost.authorName ? `${selectedPost.authorName}'s` : "a"} post`}
+              {reply.thread.length > 1 && ` · ${reply.thread.length} comments in thread`}
+            </div>
+          </div>
+        ) : selectedPost ? (
           <div className="space-y-1 rounded-md border border-input bg-background p-3 text-sm">
             <div className="flex items-center justify-between gap-2">
               <span className="font-medium">{selectedPost.authorName || "Unknown author"}</span>
@@ -561,7 +642,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
           </div>
         ) : (
           <div className="rounded-md border border-dashed border-input p-3 text-xs text-muted-foreground">
-            Click Comment on any LinkedIn post to start
+            Click Comment on a LinkedIn post, or Reply on a comment, to start
           </div>
         )}
       </div>
@@ -587,7 +668,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
         <>
           <Button onClick={() => chrome.tabs.create({ url: BILLING_URL })}>Top up credits</Button>
           <p className="text-xs text-muted-foreground">
-            You're out of credits. Top up to keep generating comments.
+            You&apos;re out of credits. Top up to keep generating comments.
           </p>
         </>
       ) : (
@@ -598,7 +679,9 @@ export function HomeScreen({ onCreateProfile }: Props) {
 
       {postHasNoText && !outOfCredits && (
         <p className="text-xs text-muted-foreground">
-          Couldn't read this post. Try opening it in its own page.
+          {reply
+            ? "Couldn't read that comment. Click Reply on it again."
+            : "Couldn't read this post. Try opening it in its own page."}
         </p>
       )}
 
@@ -609,7 +692,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
       )}
 
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-muted-foreground">Comment</label>
+        <label className="text-xs font-medium text-muted-foreground">{reply ? "Reply" : "Comment"}</label>
         <textarea
           value={comment}
           onChange={(e) => {

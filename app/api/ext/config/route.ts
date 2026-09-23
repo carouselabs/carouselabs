@@ -68,6 +68,13 @@ export async function GET() {
     // ("_83f42d93_f5") and are unusable as anchors, whereas the ARIA role and
     // the componentkey tracking attribute both survive a restyle.
     postContainerSelector: "div[role='listitem'][componentkey^='update-card-focus']",
+    // Tried only when postContainerSelector matches nothing. The same
+    // componentkey prefix without the tag/role requirement: /posts/<slug>
+    // permalink pages carry "update-card-focus…FeedType_FEED_DETAIL" (the
+    // feed's is "…FeedType_MAIN_FEED_RELEVANCE") but the feed selector still
+    // misses there. content-script.ts takes the outermost ancestor match, or
+    // the page's single match when the card doesn't wrap the comments.
+    postContainerFallbackSelector: "[componentkey^='update-card-focus']",
     // The author's name is not rendered into any attribute-anchored text
     // node — it only exists inside this link's aria-label ("View Si Conroy's
     // profile"), so content-script.ts parses the name out of the label
@@ -99,6 +106,17 @@ export async function GET() {
     // Their "…see more" is a line-clamp toggle, not a lazy-load — the full
     // text is already in this element's DOM at click time.
     postTextSelector: '[data-testid="expandable-text-box"]',
+    // One comment (or reply) inside a post's thread, for Reply handling.
+    // From live diagnostics: the ancestor chain of a comment's Reply control
+    // carries componentkeys naming that comment's URN
+    // ("replaceableComment_urn:li:comment:(activity:X,Y)" and
+    // "CommentComponentReference_urn:li:comment:…") at several depths.
+    // src/content/replyThread.ts groups matches by that URN — wrappers of the
+    // same comment collapse to the outermost, and a different URN further up
+    // is the parent comment — so this may match more than one element per
+    // comment without harm.
+    commentItemSelector:
+      "[componentkey*='replaceableComment_urn:li:comment:'], [componentkey*='CommentComponentReference_urn:li:comment:']",
     // No headline selector by design: the author's headline has no stable
     // anchor of any kind, so content-script.ts derives it structurally from
     // the author link on a best-effort basis and leaves it empty on failure.

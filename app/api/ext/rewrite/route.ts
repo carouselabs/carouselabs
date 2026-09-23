@@ -1,3 +1,15 @@
+// ════════════════════════════════════════════════════════════════════════════
+// TESTING PHASE ONLY - credit checks disabled as of 2026-09-22. MUST restore
+// before public launch. See this comment in generate/route.ts, rewrite/route.ts
+// and connection-note/route.ts (reply generation goes through generate/route.ts). The
+// switch is COMMENT_CREDITS_ENFORCED in lib/commentCredits.ts.
+//
+// This route has never charged (see CREDITS below), so there is no check here
+// to skip today. Restoring before launch means deciding its charge — the
+// planned 0.5 credits needs the Int credit columns resolved first — and gating
+// it on COMMENT_CREDITS_ENFORCED like generate/route.ts. The 40/hour rate
+// limit below is independent of the flag and stays active.
+// ════════════════════════════════════════════════════════════════════════════
 // app/api/ext/rewrite/route.ts — the Shorter / Longer buttons. Takes a comment
 // that already exists and resizes it, rather than generating a new one, so the
 // specific detail and the voice that made the original work survive.

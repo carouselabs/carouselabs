@@ -7,6 +7,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import { availableCredits } from "@/lib/credits"
+import { COMMENT_CREDITS_ENFORCED } from "@/lib/commentCredits"
 
 // GET /api/ext/me
 export async function GET(req: Request) {
@@ -45,9 +46,15 @@ export async function GET(req: Request) {
     email: user.email,
     plan: subscription.plan,
     creditsAvailable: availableCredits(subscription),
+    // TESTING PHASE ONLY while false (lib/commentCredits.ts). The side panel
+    // only blocks Generate on a zero balance when this is true, so the flag
+    // controls client and server together and restoring needs no extension
+    // rebuild.
+    creditsEnforced: COMMENT_CREDITS_ENFORCED,
     commentsThisMonth,
     commentsToday,
     defaultCommentProfileId: user.defaultCommentProfileId,
+    defaultConnectionProfileId: user.defaultConnectionProfileId,
     defaultLanguage: user.defaultLanguage,
     // Whether the user has dismissed the Insert risk warning. Server-side
     // rather than per-install, since the risk being acknowledged is to their

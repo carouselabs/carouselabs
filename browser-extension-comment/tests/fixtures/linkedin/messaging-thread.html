@@ -1,0 +1,142 @@
+<!doctype html>
+<!--
+  Fixture: /messaging/thread/2-bharti/ — a 1:1 conversation with Bharti Agrawal.
+
+  CONFIRMED (copied from live LinkedIn captures during development):
+    - h2.msg-entity-lockup__entity-title holding the contact's name
+    - the headline as a class-less <div title="…"> that echoes its own text
+    - img[alt="<name> Profile"] contact photo
+    - p.msg-s-event-listitem__body holding message text, <br> line breaks
+    - a sender row: a[href*="/in/"] + svg.msg-ui-profile__badge-icon +
+      time.msg-s-message-group__timestamp as siblings, NOT an ancestor of the
+      message body it introduces
+    - div.msg-form__contenteditable[contenteditable][role=textbox][aria-label="Write a message…"]
+    - the overlay header classes msg-overlay-bubble-header__badge-container / __details
+  APPROXIMATED (structure between those pieces, container class names, the
+  "(Edited)" marker markup, the overlay container/bubble class names, the
+  hidden stale conversation):
+    everything else. A test passing against this file proves the code handles
+    THIS markup, not that LinkedIn renders exactly this.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>(1) Messaging | LinkedIn</title>
+</head>
+<body>
+  <header id="global-nav" aria-label="Global Navigation">
+    <nav>
+      <a href="https://www.linkedin.com/feed/">Home</a>
+      <a href="https://www.linkedin.com/messaging/" aria-current="page">Messaging</a>
+      <button aria-label="Me"><img alt="Anant Goyal" src="data:," /></button>
+    </nav>
+  </header>
+
+  <main>
+    <ul aria-label="Conversation List">
+      <li>
+        <a href="https://www.linkedin.com/messaging/thread/2-emma/">
+          <span class="truncate">Emma Atkins 🖤</span>
+          <p class="msg-conversation-card__message-snippet">You: Hi Emma, I came across the role…</p>
+        </a>
+      </li>
+      <li>
+        <a href="https://www.linkedin.com/messaging/thread/2-bharti/">
+          <span class="truncate">Bharti Agrawal</span>
+          <p class="msg-conversation-card__message-snippet">You: Thanks, Bharti! Really appreciate it.</p>
+        </a>
+      </li>
+    </ul>
+
+    <section class="msg-convo-wrapper" data-fixture="open-thread">
+      <div class="msg-title-bar">
+        <a class="msg-thread__link-to-profile" data-fixture="header-link" href="https://www.linkedin.com/in/ACoAABharti000/">
+          <img alt="Bharti Agrawal Profile" src="data:," />
+        </a>
+        <div class="msg-entity-lockup">
+          <h2 tabindex="-1" class="msg-entity-lockup__entity-title truncate pr2 hoverable-link-text">Bharti Agrawal</h2>
+          <div title="Associate Manager- Human Resources | HR Business Partner">Associate Manager- Human Resources | HR Business Partner</div>
+        </div>
+      </div>
+
+      <ul class="msg-s-message-list-content">
+        <li class="msg-s-message-list__event">
+          <div class="msg-s-message-group__meta">
+            <a href="https://www.linkedin.com/in/ACoAAAnant000/"><span class="visually-hidden">View Anant’s profile</span><span class="msg-s-message-group__name">Anant Goyal</span></a>
+            <svg role="img" aria-hidden="false" aria-label="LinkedIn Verified" class="inline-block msg-ui-profile__badge-icon"></svg>
+            <!---->
+            <time class="msg-s-message-group__timestamp white-space-nowrap t-12 t-black--light t-normal">5:52 PM</time>
+          </div>
+          <div class="msg-s-event-listitem">
+            <p class="msg-s-event-listitem__body t-14 t-black--light t-normal">Hi Bharti, I’m exploring Product Manager opportunities.<br /><br />Would love to connect and share my profile.<span class="msg-s-event-listitem--edited">(Edited)</span></p>
+          </div>
+        </li>
+
+        <li class="msg-s-message-list__event">
+          <div class="msg-s-message-group__meta">
+            <a href="https://www.linkedin.com/in/ACoAAAnant000/"><span class="msg-s-message-group__name">Anant Goyal</span></a>
+            <time class="msg-s-message-group__timestamp">5:53 PM</time>
+          </div>
+          <div class="msg-s-event-listitem">
+            <div class="msg-s-event-listitem__attachment"><a href="#">ANANT_GOYAL_Project_Manager.docx</a> 12 KB</div>
+          </div>
+        </li>
+
+        <li class="msg-s-message-list__event">
+          <div class="msg-s-message-group__meta">
+            <a href="https://www.linkedin.com/in/ACoAABharti000/"><span class="visually-hidden">View Bharti’s profile</span><span class="msg-s-message-group__name">Bharti Agrawal</span></a>
+            <time class="msg-s-message-group__timestamp">6:01 PM</time>
+          </div>
+          <div class="msg-s-event-listitem"><p class="msg-s-event-listitem__body">Thanks</p></div>
+        </li>
+
+        <li class="msg-s-message-list__event">
+          <div class="msg-s-message-group__meta">
+            <a href="https://www.linkedin.com/in/ACoAAAnant000/"><span class="msg-s-message-group__name">Anant Goyal</span></a>
+            <time class="msg-s-message-group__timestamp">7:07 PM</time>
+          </div>
+          <div class="msg-s-event-listitem"><p class="msg-s-event-listitem__body">Thanks, Bharti! Really appreciate it.</p></div>
+          <div class="msg-s-event-listitem"><p class="msg-s-event-listitem__body">Looking forward to hearing from you 🙂</p></div>
+        </li>
+      </ul>
+
+      <form class="msg-form">
+        <div class="msg-form__contenteditable t-14 t-black--light t-normal flex-grow-1 full-height notranslate" contenteditable="true" role="textbox" dir="auto" aria-multiline="true" aria-label="Write a message…" data-fixture="main-compose"><p><br /></p></div>
+        <button type="submit" class="msg-form__send-button">Send</button>
+      </form>
+    </section>
+
+    <!-- A previously open conversation, kept mounted but hidden. -->
+    <section class="msg-convo-wrapper" style="display: none" data-fixture="stale-thread">
+      <div class="msg-entity-lockup"><h2 class="msg-entity-lockup__entity-title">Emma Atkins 🖤</h2></div>
+      <div class="msg-s-message-group__meta">
+        <a href="https://www.linkedin.com/in/ACoAAAnant000/"><span>Anant Goyal</span></a>
+        <time class="msg-s-message-group__timestamp">Sep 24</time>
+      </div>
+      <p class="msg-s-event-listitem__body">Hi Emma, I came across the role and wanted to reach out.</p>
+      <p class="msg-s-event-listitem__body">Hey Emma, just following up on the message I sent earlier.</p>
+      <div class="msg-form__contenteditable" contenteditable="true" role="textbox" aria-label="Write a message…" data-fixture="stale-compose"><p><br /></p></div>
+    </section>
+  </main>
+
+  <!-- Floating chat pop-up with a DIFFERENT person, expanded. -->
+  <aside class="msg-overlay-container">
+    <div class="msg-overlay-conversation-bubble msg-overlay-conversation-bubble--is-active" data-fixture="overlay">
+      <header class="KoYsTFNVKekEhxVRIXponRoAuKRYRhwPyQKBFrs">
+        <div class="msg-overlay-bubble-header__badge-container"></div>
+        <div class="msg-overlay-bubble-header__details flex-row align-items-center ml1">
+          <h2 class="msg-entity-lockup__entity-title">Chris Paris</h2>
+        </div>
+      </header>
+      <div class="msg-s-message-list-content">
+        <div class="msg-s-message-group__meta">
+          <a href="https://www.linkedin.com/in/ACoAAChris000/"><span>Chris Paris</span></a>
+          <time class="msg-s-message-group__timestamp">9:00 AM</time>
+        </div>
+        <p class="msg-s-event-listitem__body">Are we still on for Thursday’s call?</p>
+      </div>
+      <div class="msg-form__contenteditable" contenteditable="true" role="textbox" aria-label="Write a message…" data-fixture="overlay-compose"><p><br /></p></div>
+    </div>
+  </aside>
+</body>
+</html>

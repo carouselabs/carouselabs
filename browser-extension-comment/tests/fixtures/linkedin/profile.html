@@ -1,0 +1,61 @@
+<!doctype html>
+<!--
+  Fixture: /in/jane-doe/ — a 2nd-degree profile with Connect in the top card,
+  Connect in the "More" menu, and a sidebar "People also viewed" Connect for
+  someone ELSE.
+
+  CONFIRMED (from live captures, see src/content/connectNote.ts):
+    - componentkey card prefixes profileCardsAboveActivityTopcardOnly<slug>,
+      com.linkedin.sdui.profile.card.ref<id>
+    - More-menu item: a[role=menuitem] with componentkey
+      "ConnectButtonstate:invitation:urn:li:member:<id>_connect" and
+      href /preload/custom-invite/?vanityName=<slug>
+    - document.title "Name - Headline | LinkedIn"
+    - "About" / "Position" label lines
+  APPROXIMATED: the top-card Connect button markup, the sidebar, and the
+  "Add a note" dialog (never captured live — see insertIntoNoteBox).
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Jane Doe - Founder at Acme | LinkedIn</title>
+  <meta property="og:title" content="Jane Doe - Founder at Acme | LinkedIn" />
+</head>
+<body>
+  <header id="global-nav" aria-label="Global Navigation">
+    <nav><button aria-label="Me"><img alt="Anant Goyal" src="data:," /></button></nav>
+  </header>
+  <main>
+    <div componentkey="profileCardsAboveActivityTopcardOnlyjane-doe">
+      <div componentkey="com.linkedin.sdui.profile.card.ref101">
+        <p>Jane Doe</p>
+        <p>(She/Her)</p>
+        <p>· 2nd</p>
+        <p>Founder at Acme — helping product teams ship faster</p>
+        <p>Acme · MIT</p>
+        <p>San Francisco Bay Area</p>
+        <p>Contact info</p>
+      </div>
+      <button aria-label="Invite Jane Doe to connect" data-fixture="topcard-connect">Connect</button>
+      <button aria-label="More actions">More</button>
+      <div role="menu">
+        <a role="menuitem" componentkey="ConnectButtonstate:invitation:urn:li:member:101_connect" href="/preload/custom-invite/?vanityName=jane-doe" data-fixture="more-menu-connect">Connect</a>
+      </div>
+      <p>About</p>
+      <p>I help product teams ship small, ship often, and measure what matters. Previously led platform at Beta.</p>
+      <p>Position</p>
+      <p>Founder</p>
+      <p>Acme · Full-time</p>
+      <p>2021 - Present</p>
+    </div>
+
+    <aside>
+      <h2>People also viewed</h2>
+      <div>
+        <a href="https://www.linkedin.com/in/john-roe/"><span>John Roe</span></a>
+        <button aria-label="Invite John Roe to connect" data-fixture="sidebar-connect">Connect</button>
+      </div>
+    </aside>
+  </main>
+</body>
+</html>

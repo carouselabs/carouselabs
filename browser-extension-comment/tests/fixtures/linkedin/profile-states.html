@@ -1,0 +1,30 @@
+<!doctype html>
+<!--
+  Fixture: profile top-card action states the Connect flow must NOT treat as a
+  Connect: already connected (Message only), invitation pending, Follow-only
+  (3rd degree / creator mode), and InMail-only. Each state is a separate
+  <section data-state="…">; tests pick one. APPROXIMATED markup.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Sam Lee - Staff Engineer | LinkedIn</title>
+</head>
+<body>
+  <main>
+    <section data-state="connected">
+      <button aria-label="Message Sam Lee">Message</button>
+      <button aria-label="More actions">More</button>
+    </section>
+    <section data-state="pending">
+      <button aria-label="Pending, click to withdraw invitation sent to Sam Lee">Pending</button>
+    </section>
+    <section data-state="follow-only">
+      <button aria-label="Follow Sam Lee">Follow</button>
+    </section>
+    <section data-state="inmail">
+      <button aria-label="Send InMail to Sam Lee">Message</button>
+    </section>
+  </main>
+</body>
+</html>

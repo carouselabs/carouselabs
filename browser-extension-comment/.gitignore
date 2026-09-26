@@ -4,3 +4,6 @@ dist
 *.local
 *.tsbuildinfo
 dist-zip
+coverage
+test-results
+playwright-report

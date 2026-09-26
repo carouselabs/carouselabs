@@ -1,0 +1,78 @@
+<!doctype html>
+<!--
+  Fixture: /feed/ with three posts and a floating chat pop-up.
+
+  CONFIRMED (from live captures and app/api/ext/config's verified selectors):
+    - post container div[role=listitem][componentkey^=update-card-focus]
+    - author header [componentkey^=feed-header], author a[href*="/in/"]
+    - post text [data-testid=expandable-text-box] with a nested "…see more" button
+    - comment items keyed by componentkey replaceableComment_urn:li:comment:(…)
+  APPROXIMATED: the comment editor markup, the Reply control markup, image and
+  repost indicators, the chat pop-up.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Feed | LinkedIn</title>
+</head>
+<body>
+  <header id="global-nav" aria-label="Global Navigation">
+    <nav><button aria-label="Me"><img alt="Anant Goyal" src="data:," /></button></nav>
+  </header>
+
+  <main>
+    <div role="listitem" componentkey="update-card-focusAAA111FeedType_MAIN_FEED" data-fixture="post-1">
+      <div componentkey="feed-headerAAA111">
+        <a href="https://www.linkedin.com/in/jane-doe/" aria-label="View Jane Doe’s profile"><span>Jane Doe • Following</span></a>
+        <span>Founder at Acme — helping teams ship faster</span>
+      </div>
+      <div data-testid="expandable-text-box">Shipping small beats shipping big. Here’s what 3 years of weekly releases taught us. <button>…see more</button></div>
+      <a href="https://www.linkedin.com/feed/update/urn:li:activity:111/">1h</a>
+      <button aria-label="Comment on Jane Doe’s post">Comment</button>
+    </div>
+
+    <div role="listitem" componentkey="update-card-focusBBB222FeedType_MAIN_FEED" data-fixture="post-2">
+      <div componentkey="feed-headerBBB222">
+        <a href="https://www.linkedin.com/company/acme/"><span>Acme Corp 1,204 followers</span></a>
+      </div>
+      <div data-testid="expandable-text-box">We’re hiring 🚀 Two backend roles, remote-first.</div>
+      <div class="update-components-image"><img alt="" src="data:," /></div>
+      <a href="https://www.linkedin.com/feed/update/urn:li:activity:222/">2h</a>
+      <button aria-label="Comment">Comment</button>
+
+      <div componentkey="replaceableComment_urn:li:comment:(activity:222,900)" data-fixture="comment-900">
+        <a href="https://www.linkedin.com/in/sam-lee/"><span>Sam Lee</span></a>
+        <span data-testid="expandable-text-box">Is the role open to people outside the EU?</span>
+        <button>Reply</button>
+        <div componentkey="replaceableComment_urn:li:comment:(activity:222,901)" data-fixture="comment-901">
+          <a href="https://www.linkedin.com/company/acme/"><span>Acme Corp</span></a>
+          <span data-testid="expandable-text-box">Yes — anywhere within ±3h of CET.</span>
+          <button>Reply</button>
+        </div>
+      </div>
+
+      <div contenteditable="true" role="textbox" aria-label="Text editor for creating a comment" data-fixture="post-2-comment-box"><p><br /></p></div>
+    </div>
+
+    <div role="listitem" componentkey="update-card-focusCCC333FeedType_MAIN_FEED" data-fixture="post-3">
+      <div componentkey="feed-headerCCC333">
+        <a href="https://www.linkedin.com/in/raj-patel/"><span>Raj Patel</span></a>
+      </div>
+      <div class="update-components-image"><img alt="" src="data:," /></div>
+      <a href="https://www.linkedin.com/feed/update/urn:li:activity:333/">3h</a>
+      <button aria-label="Comment">Comment</button>
+    </div>
+  </main>
+
+  <aside class="msg-overlay-container">
+    <div class="msg-overlay-conversation-bubble" data-fixture="overlay">
+      <header class="GlnxHzHYfLUtHhOigzJWBvZsMwRMSOibjs">
+        <div class="msg-overlay-bubble-header__badge-container"></div>
+        <div class="msg-overlay-bubble-header__details"><h2 class="msg-entity-lockup__entity-title">Chris Paris</h2></div>
+      </header>
+      <p class="msg-s-event-listitem__body">Are we still on for Thursday’s call?</p>
+      <div class="msg-form__contenteditable" contenteditable="true" role="textbox" aria-label="Write a message…" data-fixture="overlay-compose"><p><br /></p></div>
+    </div>
+  </aside>
+</body>
+</html>

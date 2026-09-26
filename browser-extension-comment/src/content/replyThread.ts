@@ -172,7 +172,7 @@ function textOf(
 
 // Names compared loosely: accents, case, punctuation and spacing vary between
 // the nav avatar's alt text and a profile link's label.
-function normalizeName(name: string): string {
+export function normalizeName(name: string): string {
   return name
     .normalize("NFKD")
     .replace(/\p{M}/gu, "")
@@ -251,7 +251,7 @@ export function extractThread(
 // an answer, and refreshed every time the nav yields one, so switching
 // LinkedIn accounts corrects itself on the next read.
 
-const SELF_NAME_STORAGE_KEY = "linkedinSelfName";
+export const SELF_NAME_STORAGE_KEY = "linkedinSelfName";
 
 const SELF_CHROME_SCOPES = "header, nav, [role='banner'], [role='navigation']";
 

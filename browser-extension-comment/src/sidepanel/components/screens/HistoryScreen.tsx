@@ -141,7 +141,7 @@ export function HistoryScreen() {
                 <Button size="sm" variant="secondary" onClick={() => handleCopyAgain(entry)}>
                   {copiedId === entry.id ? "Copied" : "Copy again"}
                 </Button>
-                {entry.postUrl && (
+                {entry.postUrl.startsWith("https://www.linkedin.com/") && (
                   <Button
                     size="sm"
                     variant="outline"

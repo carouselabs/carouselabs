@@ -32,6 +32,9 @@ export const CREDIT_COSTS = {
   // Connection request notes (app/api/ext/connection-note). Priced like a
   // comment: one short generation per successful note, never on failure.
   connection_note: 1,
+  // Conversation Assistant messages (app/api/ext/message) — an opener or a
+  // reply, priced the same as a comment.
+  message_generate: 1,
 } as const
 
 export type CreditAction = keyof typeof CREDIT_COSTS

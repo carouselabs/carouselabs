@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ProfileForm, draftFromProfile } from "../ProfileForm";
 import { RecommendedBadge } from "../RecommendedBadge";
 import { ConnectionProfilesScreen } from "./ConnectionProfilesScreen";
+import { MessageProfilesScreen } from "./MessageProfilesScreen";
 
 type View =
   | { mode: "list" }
@@ -21,10 +22,10 @@ type View =
 
 type LoadState = "loading" | "ready" | "error";
 
-// Which kind of profile the screen opens on, and whose builder to open. Both
-// kinds live here rather than on separate screens: they are the same idea, and
-// one nav entry keeps them findable.
-export type ProfileKind = "comment" | "connection";
+// Which kind of profile the screen opens on, and whose builder to open. All
+// three live here rather than on separate screens: they are the same idea,
+// and one nav entry keeps them findable.
+export type ProfileKind = "comment" | "connection" | "message";
 
 interface Props {
   // Set when onboarding ended on "Create my profile now", or when a panel's
@@ -35,7 +36,7 @@ interface Props {
 }
 
 export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) {
-  const [tab, setTab] = useState<ProfileKind>(startInBuilder === "connection" ? "connection" : "comment");
+  const [tab, setTab] = useState<ProfileKind>(startInBuilder ?? "comment");
   const [profiles, setProfiles] = useState<CommentProfile[]>([]);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [state, setState] = useState<LoadState>("loading");
@@ -155,16 +156,22 @@ export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) 
     );
   }
 
+  const TAB_LABELS: Record<ProfileKind, string> = {
+    comment: "Comments",
+    connection: "Connection notes",
+    message: "Conversations",
+  };
+
   const tabs = (
-    <div className="flex gap-2">
-      {(["comment", "connection"] as ProfileKind[]).map((kind) => (
+    <div className="flex flex-wrap gap-2">
+      {(["comment", "connection", "message"] as ProfileKind[]).map((kind) => (
         <Button
           key={kind}
           size="sm"
           variant={tab === kind ? "default" : "outline"}
           onClick={() => setTab(kind)}
         >
-          {kind === "comment" ? "Comments" : "Connection notes"}
+          {TAB_LABELS[kind]}
         </Button>
       ))}
     </div>
@@ -178,6 +185,15 @@ export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) 
           startInBuilder={startInBuilder === "connection"}
           onBuilderOpened={onBuilderOpened}
         />
+      </div>
+    );
+  }
+
+  if (tab === "message") {
+    return (
+      <div className="flex flex-col gap-4 p-4">
+        {tabs}
+        <MessageProfilesScreen startInBuilder={startInBuilder === "message"} onBuilderOpened={onBuilderOpened} />
       </div>
     );
   }

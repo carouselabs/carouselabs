@@ -3,6 +3,7 @@ import { Header } from "./components/Header";
 import { IconBar } from "./components/IconBar";
 import { SignInScreen } from "./components/SignInScreen";
 import { HomeScreen } from "./components/screens/HomeScreen";
+import { MessagesScreen } from "./components/screens/MessagesScreen";
 import { ProfilesScreen } from "./components/screens/ProfilesScreen";
 import { HistoryScreen } from "./components/screens/HistoryScreen";
 import { SettingsScreen } from "./components/screens/SettingsScreen";
@@ -21,6 +22,8 @@ function renderScreen(
   switch (screen) {
     case "home":
       return <HomeScreen onCreateProfile={onCreateProfile} />;
+    case "messages":
+      return <MessagesScreen onCreateProfile={() => onCreateProfile("message")} />;
     case "profiles":
       return <ProfilesScreen startInBuilder={openProfileBuilder} onBuilderOpened={onBuilderOpened} />;
     case "history":

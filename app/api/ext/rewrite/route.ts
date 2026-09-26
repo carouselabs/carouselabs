@@ -7,8 +7,9 @@
 // This route has never charged (see CREDITS below), so there is no check here
 // to skip today. Restoring before launch means deciding its charge — the
 // planned 0.5 credits needs the Int credit columns resolved first — and gating
-// it on COMMENT_CREDITS_ENFORCED like generate/route.ts. The 40/hour rate
-// limit below is independent of the flag and stays active.
+// it on COMMENT_CREDITS_ENFORCED like generate/route.ts. The shared daily
+// generation limit (lib/extDailyLimit.ts) is independent of the flag and stays
+// active.
 // ════════════════════════════════════════════════════════════════════════════
 // app/api/ext/rewrite/route.ts — the Shorter / Longer buttons. Takes a comment
 // that already exists and resizes it, rather than generating a new one, so the
@@ -18,11 +19,9 @@
 // Subscription.creditsUsed / creditsTotal / extraCredits are Int columns, so a
 // fractional deduction would be silently rounded. Charging is deferred rather
 // than made wrong; see CREDIT_COSTS.comment_rewrite. Because that leaves an
-// unmetered model call, this route carries its own rate limit — the same shape
-// app/api/generate/image-prompt uses for exactly that reason.
+// unmetered model call, every rewrite counts against the shared daily limit.
 import { NextResponse } from "next/server"
-import { Ratelimit } from "@upstash/ratelimit"
-import { Redis } from "@upstash/redis"
+import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import {
@@ -35,12 +34,6 @@ import {
 import { callCommentModel, parseComment, sanitizeComment } from "@/lib/ai/commentModel"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
 
-const ratelimit = new Ratelimit({
-  redis: Redis.fromEnv(),
-  limiter: Ratelimit.slidingWindow(40, "1 h"),
-  analytics: false,
-})
-
 const MAX_COMMENT_CHARS = 4000
 
 export async function POST(req: Request) {
@@ -49,13 +42,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   }
 
-  const { success } = await ratelimit.limit(`ext:rewrite:${user.id}`)
-  if (!success) {
-    return NextResponse.json(
-      { error: "Too many rewrites. Please try again later." },
-      { status: 429 },
-    )
-  }
+  const limited = await extDailyLimitResponse(user.id)
+  if (limited) return limited
 
   let currentComment: string
   let direction: "shorter" | "longer"

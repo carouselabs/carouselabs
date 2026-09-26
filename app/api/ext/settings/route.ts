@@ -21,6 +21,7 @@ export async function GET(req: Request) {
   return NextResponse.json({
     defaultCommentProfileId: user.defaultCommentProfileId,
     defaultConnectionProfileId: user.defaultConnectionProfileId,
+    defaultMessageProfileId: user.defaultMessageProfileId,
     defaultLanguage: user.defaultLanguage,
     insertWarningHidden: user.insertWarningHidden,
   })
@@ -41,6 +42,7 @@ export async function PATCH(req: Request) {
   const data: {
     defaultCommentProfileId?: string | null
     defaultConnectionProfileId?: string | null
+    defaultMessageProfileId?: string | null
     defaultLanguage?: string | null
     insertWarningHidden?: boolean
   } = {}
@@ -84,6 +86,25 @@ export async function PATCH(req: Request) {
     }
   }
 
+  // Same rule as the profiles above, against the message profiles.
+  if ("defaultMessageProfileId" in body) {
+    const id = body.defaultMessageProfileId
+    if (id === null) {
+      data.defaultMessageProfileId = null
+    } else if (typeof id === "string") {
+      const profile = await db.messageProfile.findFirst({
+        where: { id, OR: [{ isSystem: true }, { userId: user.id }] },
+        select: { id: true },
+      })
+      if (!profile) {
+        return NextResponse.json({ error: "Message profile not found" }, { status: 404 })
+      }
+      data.defaultMessageProfileId = id
+    } else {
+      return NextResponse.json({ error: "defaultMessageProfileId must be a string or null" }, { status: 400 })
+    }
+  }
+
   if ("defaultLanguage" in body) {
     const language = body.defaultLanguage
     if (language === null) {
@@ -115,6 +136,7 @@ export async function PATCH(req: Request) {
     select: {
       defaultCommentProfileId: true,
       defaultConnectionProfileId: true,
+      defaultMessageProfileId: true,
       defaultLanguage: true,
       insertWarningHidden: true,
     },

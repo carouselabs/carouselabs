@@ -1,4 +1,4 @@
-import { Home, Users, History, Settings, UserCircle } from "lucide-react";
+import { Home, MessageSquare, Users, History, Settings, UserCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Screen } from "../types";
@@ -6,6 +6,7 @@ import { SCREENS } from "../types";
 
 const ICONS: Record<Screen, LucideIcon> = {
   home: Home,
+  messages: MessageSquare,
   profiles: Users,
   history: History,
   settings: Settings,

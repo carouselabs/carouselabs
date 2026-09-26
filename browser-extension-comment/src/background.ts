@@ -45,24 +45,38 @@ chrome.runtime.onInstalled.addListener((details) => {
   console.log("[CarouseLabs Comment] service worker installed.");
 });
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log("[background] onMessage fired. message:", message, "sender.tab?.id:", sender.tab?.id);
+// Only the sign-in hand-off page may hand the extension a token. Every
+// content script (including the one on linkedin.com) can reach this
+// listener, so a token arriving from anywhere else is ignored.
+const TOKEN_ORIGINS = [
+  "https://carouselabs.com",
+  ...(import.meta.env.MODE !== "production" ? ["http://localhost:3000"] : []),
+];
 
+function isSignInPage(sender: chrome.runtime.MessageSender): boolean {
+  try {
+    const url = new URL(sender.url ?? sender.tab?.url ?? "");
+    return TOKEN_ORIGINS.includes(url.origin) && url.pathname.startsWith("/extension-connect");
+  } catch {
+    return false;
+  }
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Never log the message itself: it can be the auth token, or a captured
+  // post / conversation broadcast to the side panel.
   if (!message || message.type !== MESSAGE_TYPE || typeof message.token !== "string") {
-    console.log("[background] message shape didn't match, ignoring.");
     return; // not our message — don't keep the channel open for it
   }
-
-  console.log("[background] storing extensionToken, starts with:", message.token.slice(0, 8) + "…");
+  if (!isSignInPage(sender)) {
+    console.warn("[background] ignored a sign-in token from outside the sign-in page");
+    return;
+  }
 
   chrome.storage.local
     .set({ extensionToken: message.token })
     .then(() => {
-      console.log("[background] chrome.storage.local.set resolved.");
-      return chrome.storage.local.get("extensionToken");
-    })
-    .then((stored) => {
-      console.log("[background] read-back confirms stored value present:", typeof stored.extensionToken === "string");
+      console.log("[background] signed in.");
       sendResponse({ ok: true });
 
       if (sender.tab?.id !== undefined) {

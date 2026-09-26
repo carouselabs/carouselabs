@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   apiFetch,
@@ -88,6 +88,10 @@ export function ConnectionNotePanel({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [fallbackCopied, setFallbackCopied] = useState(false);
+  // The output can land below the fold once the context/length pickers have
+  // pushed the page tall — scrolled into view automatically so a fresh
+  // result is never hidden behind a scroll the user has to find themselves.
+  const outputRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -196,6 +200,7 @@ export function ConnectionNotePanel({
         }),
       });
       setNote(res.note);
+      outputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       // Confirms the round trip in the side panel's own console (right-click
       // the panel → Inspect), the counterpart to the content script's lines.
       console.log(`[sidepanel] connection note generated — ${res.note.length} chars: "${res.note}"`);
@@ -409,7 +414,7 @@ export function ConnectionNotePanel({
         </div>
       )}
 
-      <div className="space-y-1.5">
+      <div ref={outputRef} className="space-y-1.5">
         <div className="flex items-center justify-between">
           <label className="text-xs font-medium text-muted-foreground">Note</label>
           <span className={`text-[11px] tabular-nums ${overLimit ? "text-destructive" : "text-muted-foreground"}`}>

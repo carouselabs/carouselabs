@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { InsertWarningModal } from "../InsertWarningModal";
+import { noContentScriptMessage } from "@/lib/tabs";
 import { ConnectionNotePanel } from "../ConnectionNotePanel";
 import { RecommendedBadge } from "../RecommendedBadge";
 import {
@@ -124,6 +125,10 @@ export function HomeScreen({ onCreateProfile }: Props) {
   // including the user's own edits. Every action below (Copy, Shorter, Longer)
   // operates on this value rather than on the last thing the model returned.
   const [comment, setComment] = useState("");
+  // The output can land below the fold once profile pickers/instructions have
+  // pushed the page tall — scrolled into view automatically so a fresh
+  // result is never hidden behind a scroll the user has to find themselves.
+  const outputRef = useRef<HTMLDivElement>(null);
   // Row created by the last successful generate, so Copy can mark it COPIED.
   // Cleared on a new post: copying then would tag the wrong row.
   const [historyId, setHistoryId] = useState<string | null>(null);
@@ -368,6 +373,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
       setComment(res.comment);
       setHistoryId(res.historyId);
       setCredits(res.creditsRemaining);
+      outputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     } catch (err) {
       setGenerateError(userFacingError(err));
     } finally {
@@ -438,11 +444,12 @@ export function HomeScreen({ onCreateProfile }: Props) {
     setInserting(true);
     setError(null);
 
+    let tab: chrome.tabs.Tab | undefined;
     try {
       // tabs.query returns the tab id without needing the "tabs" permission;
       // only sensitive fields like url are withheld. Messaging the tab itself
       // is covered by the linkedin.com host permission.
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id === undefined) throw new Error("no active tab");
 
       const res = (await chrome.tabs.sendMessage(tab.id, {
@@ -451,6 +458,8 @@ export function HomeScreen({ onCreateProfile }: Props) {
         // Reply mode targets the captured comment's reply box, never the
         // post's main comment box; connect targets the invitation's note box.
         mode,
+        // A note is only inserted on the profile it was written for.
+        expect: mode === "connect" ? { profileUrl: selectedPost?.connect?.target.url ?? "" } : undefined,
       })) as { ok: boolean; error?: string } | undefined;
 
       if (!res?.ok) {
@@ -461,12 +470,15 @@ export function HomeScreen({ onCreateProfile }: Props) {
       // Connection notes have no history row to mark.
       if (mode !== "connect") markHistory("INSERTED");
     } catch {
-      // Most often the active tab has no content script, i.e. it is not a
-      // LinkedIn page.
+      // The active tab has no content script: not LinkedIn, or a LinkedIn
+      // tab opened before the extension was updated.
       setError(
-        mode === "connect"
-          ? "Open the LinkedIn profile in the active tab, then try again."
-          : "Open the LinkedIn post in the active tab, then try again.",
+        noContentScriptMessage(
+          tab,
+          mode === "connect"
+            ? "Open the LinkedIn profile in the active tab, then try again."
+            : "Open the LinkedIn post in the active tab, then try again.",
+        ),
       );
     } finally {
       setInserting(false);
@@ -729,7 +741,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
         </div>
       )}
 
-      <div className="space-y-1.5">
+      <div ref={outputRef} className="space-y-1.5">
         <label className="text-xs font-medium text-muted-foreground">{reply ? "Reply" : "Comment"}</label>
         <textarea
           value={comment}

@@ -6,11 +6,10 @@
 // app/api/ext/generate, deliberately: a preview built from a near-copy of the
 // real prompt would drift and stop predicting what Generate actually produces.
 //
-// Charges no credits. The spend cap is instead TEST_LIMIT per profile, plus a
-// rate limit, since this is an unmetered model call.
+// Charges no credits. The spend cap is instead TEST_LIMIT per profile, plus
+// the shared daily generation limit, since this is an unmetered model call.
 import { NextResponse } from "next/server"
-import { Ratelimit } from "@upstash/ratelimit"
-import { Redis } from "@upstash/redis"
+import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import { parseProfileInput, TEST_LIMIT } from "@/lib/commentProfiles"
@@ -20,12 +19,6 @@ import {
 } from "@/lib/ai/prompts/commentPrompt"
 import { callCommentModel, parseComment, sanitizeComment } from "@/lib/ai/commentModel"
 
-const ratelimit = new Ratelimit({
-  redis: Redis.fromEnv(),
-  limiter: Ratelimit.slidingWindow(30, "1 h"),
-  analytics: false,
-})
-
 const MAX_POST_CHARS = 6000
 
 export async function POST(req: Request) {
@@ -34,10 +27,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   }
 
-  const { success } = await ratelimit.limit(`ext:profile-test:${user.id}`)
-  if (!success) {
-    return NextResponse.json({ error: "Too many tests. Please try again later." }, { status: 429 })
-  }
+  const limited = await extDailyLimitResponse(user.id)
+  if (limited) return limited
 
   const body = await req.json().catch(() => null)
   const raw = body as { profileDraft?: unknown; pastedPost?: unknown; profileId?: unknown } | null

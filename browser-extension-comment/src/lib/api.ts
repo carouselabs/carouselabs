@@ -84,6 +84,37 @@ export interface ConnectionNoteResponse {
   creditsRemaining: number;
 }
 
+// Conversation Assistant profiles — mirrors ConnectionProfile minus `length`:
+// an ongoing message thread has no fixed length the way a single connection
+// note does. Mirrors model MessageProfile.
+export interface MessageProfile {
+  id: string;
+  name: string;
+  goal: string;
+  tone: string;
+  alwaysDo: string | null;
+  neverDo: string | null;
+  samples: string[];
+  isDefault: boolean;
+  isSystem: boolean;
+  isRecommended: boolean;
+}
+
+// Editable shape the message-profile builder holds.
+export interface MessageProfileDraft {
+  name: string;
+  goal: string;
+  tone: string;
+  alwaysDo: string;
+  neverDo: string;
+  samples: string[];
+}
+
+export interface MessageGenerateResponse {
+  message: string;
+  creditsRemaining: number;
+}
+
 export interface MeResponse {
   email: string;
   plan: string;
@@ -95,6 +126,7 @@ export interface MeResponse {
   commentsToday: number;
   defaultCommentProfileId: string | null;
   defaultConnectionProfileId?: string | null;
+  defaultMessageProfileId?: string | null;
   defaultLanguage: string | null;
   insertWarningHidden: boolean;
 }
@@ -123,6 +155,8 @@ export const LINKEDIN_FEED_URL = "https://www.linkedin.com/feed/";
 
 export interface SettingsResponse {
   defaultCommentProfileId: string | null;
+  defaultConnectionProfileId: string | null;
+  defaultMessageProfileId: string | null;
   defaultLanguage: string | null;
   insertWarningHidden: boolean;
 }
@@ -197,17 +231,32 @@ async function getExtensionToken(): Promise<string | null> {
   return typeof extensionToken === "string" && extensionToken ? extensionToken : null;
 }
 
+// Longer than a slow generation (two model attempts, each with a fallback),
+// short enough that a hung server doesn't leave a spinner running forever.
+const REQUEST_TIMEOUT_MS = 120_000;
+
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const [baseUrl, token] = await Promise.all([getApiBaseUrl(), getExtensionToken()]);
   if (!token) throw new ApiError(401, "Not signed in — no extension token stored yet");
 
-  const res = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers: {
-      ...init.headers,
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        ...init.headers,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  } catch (err) {
+    if (controller.signal.aborted) throw new ApiError(408, "The server took too long to respond. Try again.");
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}) as { error?: string });

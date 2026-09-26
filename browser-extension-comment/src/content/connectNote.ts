@@ -514,6 +514,18 @@ export function insertIntoNoteBox(text: string): { ok: boolean; error?: string }
     };
   }
 
+  // LinkedIn's note limit depends on the account (Free and Premium differ)
+  // and is enforced by the textarea's maxlength, which silently cuts
+  // anything longer — mid-word — while execCommand still reports success.
+  // Verified in Chromium. So the box's own limit is checked first.
+  const limit = box instanceof HTMLTextAreaElement && box.maxLength > 0 ? box.maxLength : null;
+  if (limit !== null && text.length > limit) {
+    return {
+      ok: false,
+      error: `This note is ${text.length} characters, but LinkedIn's note box allows ${limit} on your account. Shorten it (or Copy and edit), then Insert.`,
+    };
+  }
+
   box.focus();
   if (box instanceof HTMLTextAreaElement) {
     // Selecting first makes insertText replace any earlier draft. It fires the

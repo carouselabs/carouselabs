@@ -35,6 +35,13 @@ import {
   SELF_PROFILE_STORAGE_KEY,
   type LinkedInProfileInfo,
 } from "@/lib/connectionNote";
+import { insertIntoComposeBox, readConversation } from "@/content/messageThread";
+import { insertTextAtEnd } from "@/content/editor";
+import { READ_CONVERSATION_MESSAGE_TYPE } from "@/lib/messageThread";
+
+// Captured posts, threads and profiles are other people's content; they go to
+// the page console only in development builds.
+const DEV = import.meta.env.MODE !== "production";
 
 // Must match MESSAGE_TYPE in src/sidepanel/components/screens/HomeScreen.tsx
 // exactly — no shared package between the content script and sidepanel
@@ -136,6 +143,12 @@ interface SelectedPost {
   // The post fields above then carry their name and headline, text is empty.
   connect?: { target: LinkedInProfileInfo };
 }
+
+// Reading a conversation is on-demand (see src/content/messageThread.ts's
+// header for why), so there is no "message" SelectedPost mode to route
+// through handleClick — the side panel asks for this directly via
+// READ_CONVERSATION_MESSAGE_TYPE and gets the result back in the response,
+// rather than through the storage/broadcast hand-off every other mode uses.
 
 console.log("[content-script] loaded on", window.location.href);
 
@@ -442,16 +455,25 @@ function handleConnectClick(connectButton: Element) {
   // Both sides of the comparison are logged, so a wrong verdict is readable
   // from this one line.
   const owner = checkProfileOwnersConnect(connectButton);
-  console.log(
-    `[content-script] Connect detected on ${window.location.pathname} — invited name: "${owner.invited}" | page owner name: "${owner.ownerName}" | url slug: "${owner.slug}" | ${owner.ok ? "accepted" : "IGNORED"} (${owner.reason})`,
-  );
+  if (DEV) {
+    console.log(
+      `[content-script] Connect detected on ${window.location.pathname} — invited name: "${owner.invited}" | page owner name: "${owner.ownerName}" | url slug: "${owner.slug}" | ${owner.ok ? "accepted" : "IGNORED"} (${owner.reason})`,
+    );
+  }
+  // Whichever Connect was clicked last is the invitation dialog that's open.
+  // A Connect for someone else clears the target, so a note written for the
+  // page owner can't be inserted into that other person's invitation.
+  lastConnectTargetPath = null;
   if (!owner.ok) return;
 
   const extraction = extractProfile(connectButton);
   const { profile } = extraction;
-  console.log(
-    `[content-script] profile extracted — name: "${profile.name}" (${extraction.strategies.name}), headline: "${profile.headline}" (${extraction.strategies.headline}), role: "${profile.currentRole}" (${extraction.strategies.currentRole}), about: ${profile.about.length} chars (${extraction.strategies.about})`,
-  );
+  lastConnectTargetPath = profilePath(profile.url);
+  if (DEV) {
+    console.log(
+      `[content-script] profile extracted — name: "${profile.name}" (${extraction.strategies.name}), headline: "${profile.headline}" (${extraction.strategies.headline}), role: "${profile.currentRole}" (${extraction.strategies.currentRole}), about: ${profile.about.length} chars (${extraction.strategies.about})`,
+    );
+  }
 
   if (!profile.name || (!profile.headline && !profile.currentRole)) {
     console.warn(
@@ -494,7 +516,7 @@ async function readSelfProfile(): Promise<{ ok: boolean; profile?: LinkedInProfi
 }
 
 function sendPostToSidePanel(post: SelectedPost) {
-  console.log("[content-script] sending post to side panel:", post);
+  if (DEV) console.log("[content-script] sending post to side panel:", post);
 
   // Written first, and the path the side panel actually relies on: it
   // survives the panel being closed at click time, and survives the Home
@@ -715,6 +737,18 @@ async function handleReplyClick(replyButton: Element, config: ExtensionConfig) {
 // several open comment boxes puts the text in the right one.
 let lastPostContainer: Element | null = null;
 
+// The /in/<slug> path of the profile whose Connect was clicked last, if that
+// Connect was for the page owner. See handleConnectClick.
+let lastConnectTargetPath: string | null = null;
+
+function profilePath(url: string): string {
+  try {
+    return new URL(url, window.location.origin).pathname.replace(/\/+$/, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
 // The comment whose Reply was clicked last, for Insert in reply mode.
 let lastReplyTarget: {
   item: Element;
@@ -778,60 +812,102 @@ function findReplyBox(config: ExtensionConfig): HTMLElement | null {
 // Places text into LinkedIn's own comment or reply box. Deliberately limited
 // to filling the field: nothing here clicks Post, and nothing submits. The
 // user reviews and posts it themselves.
+// A DM compose box — in a chat pop-up, or the Messaging page — matches the
+// generic contenteditable comment-box selector too. A comment must never be
+// typed into one.
+function isMessageComposeBox(el: Element): boolean {
+  return !!el.closest(".msg-form__contenteditable, [class*='msg-overlay' i], [class*='msg-form' i]");
+}
+
+// The post's own top-level comment box: inside the captured post, not a
+// reply box under one of its comments, not a DM box.
+function findPostCommentBox(config: ExtensionConfig): HTMLElement | null {
+  if (!lastPostContainer?.isConnected) return null;
+  const itemSelector = config.commentItemSelector || FALLBACK_CONFIG.commentItemSelector;
+  return (
+    Array.from(lastPostContainer.querySelectorAll<HTMLElement>(config.commentBoxSelector)).find(
+      (box) => !isMessageComposeBox(box) && !box.closest(itemSelector),
+    ) ?? null
+  );
+}
+
 async function insertIntoCommentBox(
   text: string,
   mode: "comment" | "reply",
 ): Promise<{ ok: boolean; error?: string }> {
   const config = await getConfig();
 
-  const box =
-    mode === "reply"
-      ? findReplyBox(config)
-      : (lastPostContainer ?? document).querySelector<HTMLElement>(config.commentBoxSelector);
+  if (mode === "comment" && !lastPostContainer?.isConnected) {
+    // The panel can show a post captured before this page reloaded, or in a
+    // different tab. Inserting then used to fill the first box on the page —
+    // some other post's, or a chat pop-up's.
+    return { ok: false, error: "Click Comment on the post again, then try Insert." };
+  }
 
-  if (!box) {
+  const box = mode === "reply" ? findReplyBox(config) : findPostCommentBox(config);
+  if (!box || isMessageComposeBox(box)) {
     return {
       ok: false,
       error:
         mode === "reply"
           ? "Couldn't find the reply box. Click Reply on the comment again, then try Insert."
-          : "Couldn't find LinkedIn's comment box. Open the comment box on the post first, then try again.",
+          : "Couldn't find this post's comment box. Open it (click Comment on the post), then try again.",
     };
   }
 
-  box.focus();
-
-  // A reply box can already hold LinkedIn's @mention of the person being
-  // replied to. Insert after it, with a separating space, rather than at
-  // whatever position focus() left the caret.
-  let toInsert = text;
-  if (mode === "reply") {
-    const range = document.createRange();
-    range.selectNodeContents(box);
-    range.collapse(false);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-
-    const existing = box.textContent ?? "";
-    if (existing.trim() && !/\s$/.test(existing)) toInsert = ` ${text}`;
-  }
-
-  // execCommand is deprecated but remains the most reliable way to fill a
-  // contenteditable owned by a framework: it produces the same input events a
-  // real keystroke would, so LinkedIn's editor registers the text instead of
-  // silently discarding it on the next render.
-  const inserted = document.execCommand("insertText", false, toInsert);
-
-  if (!inserted) {
-    // Fallback for editors where execCommand is blocked. Sets the text, then
-    // fires the input event the framework listens for. In reply mode it
-    // appends, so a pre-filled mention survives.
-    box.textContent = mode === "reply" ? `${box.textContent ?? ""}${toInsert}` : text;
-    box.dispatchEvent(new InputEvent("input", { bubbles: true, data: toInsert, inputType: "insertText" }));
-  }
-
+  // After anything already there: a draft the user typed, or the @mention
+  // LinkedIn pre-fills in a reply box.
+  insertTextAtEnd(box, text);
   return { ok: true };
+}
+
+// The server kill switch, checked fresh at the moment of Insert rather than
+// trusting the copy fetched at page load or the panel's copy. Fails closed:
+// the feature's own warning says it carries account risk.
+async function insertAllowed(): Promise<boolean> {
+  try {
+    return (await loadConfig()).insertEnabled !== false;
+  } catch {
+    return false;
+  }
+}
+
+type InsertRequest = {
+  text: string;
+  mode?: string;
+  expect?: { threadPath?: string; contactName?: string; profileUrl?: string };
+};
+
+async function handleInsert(message: InsertRequest): Promise<{ ok: boolean; error?: string }> {
+  if (!(await insertAllowed())) {
+    return { ok: false, error: "Insert is turned off right now. Use Copy instead." };
+  }
+
+  // A connection note goes into the invitation dialog, and only for the
+  // person it was written for.
+  if (message.mode === "connect") {
+    const expected = profilePath(message.expect?.profileUrl ?? "");
+    if (!expected || !isProfilePage() || profilePath(window.location.href) !== expected) {
+      return { ok: false, error: "This note is for a different profile than the one open. Open their profile, click Connect, then Insert." };
+    }
+    if (lastConnectTargetPath !== expected) {
+      return { ok: false, error: "Click Connect on this profile again, then Insert." };
+    }
+    return insertIntoNoteBox(message.text);
+  }
+
+  if (message.mode === "message") {
+    const expected = message.expect;
+    return insertIntoComposeBox(
+      message.text,
+      expected?.threadPath && expected.contactName
+        ? { threadPath: expected.threadPath, contactName: expected.contactName }
+        : undefined,
+    );
+  }
+
+  // Older panels send no mode; they only know about comments.
+  return insertIntoCommentBox(message.text, message.mode === "reply" ? "reply" : "comment");
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -842,21 +918,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === READ_CONVERSATION_MESSAGE_TYPE) {
+    readConversation()
+      .then(sendResponse)
+      .catch((err) => sendResponse({ ok: false, error: String(err) }));
+    return true;
+  }
+
   if (!message || message.type !== INSERT_MESSAGE_TYPE || typeof message.text !== "string") {
     return; // not our message — leave the channel alone for other listeners
   }
 
-  // A connection note goes into the invitation dialog, not a comment box.
-  if (message.mode === "connect") {
-    sendResponse(insertIntoNoteBox(message.text));
-    return;
-  }
-
-  // Older panels send no mode; they only know about comments.
-  insertIntoCommentBox(message.text, message.mode === "reply" ? "reply" : "comment")
+  handleInsert(message as InsertRequest)
     .then(sendResponse)
     .catch((err) => sendResponse({ ok: false, error: String(err) }));
-
   return true; // keep the channel open for the async sendResponse above
 });
 

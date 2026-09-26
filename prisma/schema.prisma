@@ -112,12 +112,14 @@ model User {
   // ── CarouseLabs Comment extension ──
   defaultCommentProfileId    String?
   defaultConnectionProfileId String?
+  defaultMessageProfileId    String?
   insertWarningHidden        Boolean             @default(false)
   // Preferred language for new comment profiles. Nullable rather than
   // defaulted, so "never chosen" stays distinguishable from "chose English".
   defaultLanguage            String?
   commentProfiles            CommentProfile[]
   connectionProfiles         ConnectionProfile[]
+  messageProfiles            MessageProfile[]
   commentHistory             CommentHistory[]
   extensionTokens            ExtensionToken[]
 
@@ -420,6 +422,35 @@ model ConnectionProfile {
   goal          String
   tone          String
   length        String
+  alwaysDo      String?
+  neverDo       String?
+  samples       String[]
+  isDefault     Boolean  @default(false)
+  isSystem      Boolean  @default(false)
+  isRecommended Boolean  @default(false)
+  testsUsed     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Conversation Assistant (app/api/ext/message). What an ongoing reply/opener
+// is FOR — no length field, unlike CommentProfile/ConnectionProfile: a
+// message thread isn't bound to a single-comment or a 280-character invite,
+// so length is left to the model's judgement (short opener, longer reply,
+// whatever the moment calls for) rather than a range the user sets once.
+model MessageProfile {
+  id            String   @id @default(cuid())
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  // The relationship's purpose: why this conversation is happening, in the
+  // sender's own words — "warm intro", "qualifying a lead", "just building
+  // my network". Read alongside the live thread on every generation, so it
+  // stays the throughline across replies sent weeks apart.
+  goal          String
+  tone          String
   alwaysDo      String?
   neverDo       String?
   samples       String[]

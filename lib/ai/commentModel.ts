@@ -7,14 +7,21 @@ import Anthropic from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 import { BANNED_PHRASES } from "@/lib/ai/prompts/commentPrompt"
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+// The SDK defaults (10-minute timeout, 2 retries each) let one Generate —
+// two attempts, each primary then fallback — run for many minutes while the
+// user watches a spinner. A comment-sized request that hasn't answered in 30s
+// is better failed over to the other model.
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 30_000, maxRetries: 1 })
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 30_000, maxRetries: 1 })
 
-// Haiku rather than the Sonnet used by the carousel/image routes: a comment is
-// a few dozen words and the user is watching a side panel spinner, so latency
+// Luna primary, Claude Haiku 4.5 as fallback. Both are the cheap/fast tier of
+// their respective families rather than a flagship model: a comment is a few
+// dozen words and the user is watching a side panel spinner, so latency
 // matters more here than headroom.
-export const CLAUDE_MODEL = "claude-haiku-4-5-20251001"
-export const FALLBACK_MODEL = "gpt-4o"
+export const PRIMARY_MODEL = "gpt-6-luna"
+// Only called if Luna errors or refuses — same cost/latency tier as
+// PRIMARY_MODEL, not a bigger fallback model.
+export const FALLBACK_MODEL = "claude-haiku-4-5-20251001"
 
 // Same check as app/api/generate/image-prompt: a real generation is JSON
 // starting with "{", so refusal prose only ever appears at the very start.
@@ -98,41 +105,45 @@ export function sanitizeComment(raw: string): { comment: string; removedChars: n
   return { comment, removedChars: before.length - comment.length }
 }
 
-// Claude primary, GPT-4o on refusal or error. `label` only tags the log lines
-// so the two routes stay distinguishable in output.
+// Luna primary, Claude Haiku 4.5 on refusal or error. `label` only tags the
+// log lines so the two routes stay distinguishable in output.
 export async function callCommentModel(
   systemMessage: string,
   userMessage: string,
   label: string,
 ): Promise<string> {
   try {
-    const response = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
+    const response = await openai.chat.completions.create({
+      model: PRIMARY_MODEL,
       max_tokens: 1024,
-      system: systemMessage,
-      messages: [{ role: "user", content: userMessage }],
+      // Luna is a reasoning model (default effort "medium"); reasoning
+      // tokens would eat into max_tokens and add latency for no benefit on a
+      // task this short, so it's turned off — same "latency over headroom"
+      // call FALLBACK_MODEL (Haiku) already makes for its own tier.
+      reasoning_effort: "none",
+      messages: [
+        { role: "system", content: systemMessage },
+        { role: "user", content: userMessage },
+      ],
     })
 
-    const raw = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("")
-
+    const raw = response.choices[0]?.message?.content ?? ""
     if (!isRefusal(raw) && raw.trim()) return raw
-    console.warn(`[${label}] Claude refused or returned empty, falling back to GPT-4o`)
+    console.warn(`[${label}] Luna refused or returned empty, falling back to Claude Haiku`)
   } catch (err) {
     const e = err as { message?: string }
-    console.warn(`[${label}] Claude error, falling back to GPT-4o:`, e?.message ?? err)
+    console.warn(`[${label}] Luna error, falling back to ${FALLBACK_MODEL}:`, e?.message ?? err)
   }
 
-  const response = await openai.chat.completions.create({
+  const response = await anthropic.messages.create({
     model: FALLBACK_MODEL,
     max_tokens: 1024,
-    messages: [
-      { role: "system", content: systemMessage },
-      { role: "user", content: userMessage },
-    ],
+    system: systemMessage,
+    messages: [{ role: "user", content: userMessage }],
   })
 
-  return response.choices[0]?.message?.content ?? ""
+  return response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("")
 }

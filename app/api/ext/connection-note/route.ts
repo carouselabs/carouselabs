@@ -6,15 +6,14 @@
 // it is false, not removed.
 // ════════════════════════════════════════════════════════════════════════════
 // app/api/ext/connection-note/route.ts — Connection Request Notes for the
-// Comment extension. Same shape as app/api/ext/generate: Bearer-token auth, a
-// per-user rate limit, the balance checked before any model call and charged
-// only after a note survives validation.
+// Comment extension. Same shape as app/api/ext/generate: Bearer-token auth, the
+// shared daily generation limit, the balance checked before any model call and
+// charged only after a note survives validation.
 //
 // No CommentHistory row is written: that table requires a comment profileId,
 // which a connection note doesn't have. Notes are not in History for now.
 import { NextResponse } from "next/server"
-import { Ratelimit } from "@upstash/ratelimit"
-import { Redis } from "@upstash/redis"
+import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import { availableCredits } from "@/lib/credits"
@@ -35,14 +34,6 @@ import {
 } from "@/lib/ai/prompts/connectionNotePrompt"
 import { callCommentModel, parseComment, sanitizeComment } from "@/lib/ai/commentModel"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
-
-// Same limit as generate and rewrite. Independent of COMMENT_CREDITS_ENFORCED,
-// so it stays the brake on model spend while credits are off.
-const ratelimit = new Ratelimit({
-  redis: Redis.fromEnv(),
-  limiter: Ratelimit.slidingWindow(40, "1 h"),
-  analytics: false,
-})
 
 const MAX_FIELD_CHARS = 300
 const MAX_ABOUT_CHARS = 2000
@@ -103,10 +94,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   }
 
-  const { success } = await ratelimit.limit(`ext:connection-note:${user.id}`)
-  if (!success) {
-    return NextResponse.json({ error: "Too many notes generated. Please try again later." }, { status: 429 })
-  }
+  const limited = await extDailyLimitResponse(user.id)
+  if (limited) return limited
 
   let target: ConnectionTargetInput
   let context: ConnectionContextInput

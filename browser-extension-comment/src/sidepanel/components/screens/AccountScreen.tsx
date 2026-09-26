@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch, ApiError, BILLING_URL, type MeResponse } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { clearAccountData } from "@/lib/account";
 
 export function AccountScreen() {
   const [me, setMe] = useState<MeResponse | null>(null);
@@ -33,15 +34,20 @@ export function AccountScreen() {
       // account with no way for the user to reach it again from here.
       await apiFetch("/api/ext/auth/signout", { method: "POST" });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't sign out, try again");
-      setSigningOut(false);
-      return;
+      // 401 means the server already doesn't accept this token (revoked or
+      // expired) — there is nothing left to revoke, so finish signing out
+      // locally. Anything else, keep it: it may still be live.
+      if (!(err instanceof ApiError && err.status === 401)) {
+        setError(err instanceof ApiError ? err.message : "Couldn't sign out, try again");
+        setSigningOut(false);
+        return;
+      }
     }
 
     // App.tsx watches extensionToken via chrome.storage.onChanged, so removing
-    // it flips the panel back to the signed-out screen with no reload. The
-    // selected post is cleared too: it belongs to the session that just ended.
-    await chrome.storage.local.remove(["extensionToken", "lastSelectedPost"]);
+    // it flips the panel back to the signed-out screen with no reload. Every
+    // other piece of this person's data goes with it — see lib/account.ts.
+    await clearAccountData();
   }
 
   if (loading) {
@@ -82,12 +88,14 @@ export function AccountScreen() {
           {/* Opens a real browser tab: billing is a full web flow and the side
               panel is far too narrow to complete it in. */}
           <Button onClick={() => chrome.tabs.create({ url: BILLING_URL })}>Upgrade</Button>
-
-          <Button variant="outline" disabled={signingOut} onClick={handleSignOut}>
-            {signingOut ? "Signing out…" : "Sign out"}
-          </Button>
         </>
       )}
+
+      {/* Always available, even when the account can't be loaded: a revoked
+          or expired token would otherwise leave the user stuck signed in. */}
+      <Button variant="outline" disabled={signingOut} onClick={handleSignOut}>
+        {signingOut ? "Signing out…" : "Sign out"}
+      </Button>
     </div>
   );
 }

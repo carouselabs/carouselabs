@@ -15,8 +15,7 @@
 // request that fails after its automatic retry is never charged and writes no
 // CommentHistory row, so a user is not billed for output they never saw.
 import { NextResponse } from "next/server"
-import { Ratelimit } from "@upstash/ratelimit"
-import { Redis } from "@upstash/redis"
+import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import { availableCredits } from "@/lib/credits"
@@ -35,13 +34,9 @@ import {
   type CommentReplyInput,
   type ReplyThreadEntryInput,
 } from "@/lib/ai/prompts/commentPrompt"
-import { callCommentModel, parseComment, sanitizeComment, CLAUDE_MODEL } from "@/lib/ai/commentModel"
+import { callCommentModel, parseComment, sanitizeComment, PRIMARY_MODEL } from "@/lib/ai/commentModel"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
 
-// Same shape as app/api/ext/rewrite. Independent of COMMENT_CREDITS_ENFORCED:
-// while credits are off this is the only brake on model spend, and it stays
-// useful after launch as an abuse guard. Generate and Regenerate share it,
-// since both call this route.
 // Caps on a reply payload, which arrives from a scraped page: enough for any
 // real thread, small enough that one request can't carry a huge prompt.
 const MAX_THREAD_ENTRIES = 30
@@ -78,25 +73,16 @@ function parseReply(raw: unknown): CommentReplyInput | null {
   }
 }
 
-const ratelimit = new Ratelimit({
-  redis: Redis.fromEnv(),
-  limiter: Ratelimit.slidingWindow(40, "1 h"),
-  analytics: false,
-})
-
 export async function POST(req: Request) {
   const user = await getUserFromCommentExtensionToken(req)
   if (!user) {
     return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   }
 
-  const { success } = await ratelimit.limit(`ext:generate:${user.id}`)
-  if (!success) {
-    return NextResponse.json(
-      { error: "Too many comments generated. Please try again later." },
-      { status: 429 },
-    )
-  }
+  // Shared daily cap across every extension generation route. Generate and
+  // Regenerate both count, since both call this route.
+  const limited = await extDailyLimitResponse(user.id)
+  if (limited) return limited
 
   let profileId: string
   let post: CommentPostInput
@@ -309,7 +295,7 @@ export async function POST(req: Request) {
       action: "NONE",
       // Records what was actually charged: 0 during the free testing phase.
       creditsUsed: COMMENT_CREDITS_ENFORCED ? CREDIT_COSTS.comment_generate : 0,
-      model: CLAUDE_MODEL,
+      model: PRIMARY_MODEL,
     },
   })
 

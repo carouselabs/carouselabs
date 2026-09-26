@@ -55,6 +55,7 @@ export async function GET(req: Request) {
     commentsToday,
     defaultCommentProfileId: user.defaultCommentProfileId,
     defaultConnectionProfileId: user.defaultConnectionProfileId,
+    defaultMessageProfileId: user.defaultMessageProfileId,
     defaultLanguage: user.defaultLanguage,
     // Whether the user has dismissed the Insert risk warning. Server-side
     // rather than per-install, since the risk being acknowledged is to their

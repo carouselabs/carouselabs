@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { Sparkles, Clock, Bookmark, Settings, Award, Calendar, Wrench } from "lucide-react"
+import { Sparkles, Clock, Bookmark, Settings, Award, Calendar, Wrench, Puzzle } from "lucide-react"
 import { NavItem } from "./NavItem"
 import { UserMenu } from "./UserMenu"
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser"
@@ -16,6 +16,9 @@ const NAV_ITEMS = [
   // through it (e.g. /thumbnail) have no entry of their own, so it is also the
   // item highlighted while on them — see isActive.
   { href: "/toolkit", label: "Toolkit", icon: Wrench },
+  // The LinkedIn extension's home on the website: its voice profiles,
+  // history, settings and plan (app/(app)/extension/*).
+  { href: "/extension", label: "Extension", icon: Puzzle },
   { href: "/history", label: "History", icon: Clock },
   { href: "/pinned", label: "Pinned", icon: Bookmark },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -40,6 +43,7 @@ export function Sidebar({ isEmployeeSubdomain = false }: { isEmployeeSubdomain?:
 
   function isActive(href: string) {
     if (href === "/settings") return pathname.startsWith("/settings")
+    if (href === "/extension") return pathname === "/extension" || pathname.startsWith("/extension/")
     if (href === "/toolkit") {
       return (
         pathname === "/toolkit" ||

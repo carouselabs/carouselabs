@@ -113,7 +113,7 @@ model User {
   defaultCommentProfileId    String?
   defaultConnectionProfileId String?
   defaultMessageProfileId    String?
-  insertWarningHidden        Boolean             @default(false)
+  insertWarningHidden        Boolean                @default(false)
   // Preferred language for new comment profiles. Nullable rather than
   // defaulted, so "never chosen" stays distinguishable from "chose English".
   defaultLanguage            String?
@@ -122,6 +122,24 @@ model User {
   messageProfiles            MessageProfile[]
   commentHistory             CommentHistory[]
   extensionTokens            ExtensionToken[]
+  // Free generations used, for life. The first EXT_FREE_GENERATIONS
+  // (lib/extensionAccessRules.ts) are free; after that the extension needs
+  // an active ExtensionSubscription.
+  extensionTrialUsed         Int                    @default(0)
+  extensionSubscription      ExtensionSubscription?
+  // Extension settings that used to live only in one browser, moved here so
+  // the website's Extension section can edit them too. All nullable: null
+  // means "never set", which the extension treats as its old local value
+  // (uploaded once) or its built-in default.
+  //   connectNoteContext  { choice: "profile"|"custom"|"none", purpose }
+  //   connectNoteLength   { preset: "short"|"medium"|"custom", min, max }
+  //   linkedinProfile     { name, headline, currentRole, about, url, capturedAt }
+  //                       — the user's own profile, for "Use my LinkedIn profile"
+  connectNoteContext         Json?
+  connectNoteLength          Json?
+  linkedinProfile            Json?
+  insertButtonHidden         Boolean?
+  contactContexts            ContactContext[]
 
   // ── Referral program ──
   referralCode       String?              @unique
@@ -440,6 +458,28 @@ model ConnectionProfile {
 // message thread isn't bound to a single-comment or a 280-character invite,
 // so length is left to the model's judgement (short opener, longer reply,
 // whatever the moment calls for) rather than a range the user sets once.
+// The browser extension's own $15/month Lemon Squeezy subscription. Separate
+// from Subscription (the web app's Free/Pro/Growth plan) on purpose: one user
+// can have both, and neither may change the other. Written only by
+// lib/extensionBilling.ts from Lemon Squeezy webhooks.
+model ExtensionSubscription {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lsSubscriptionId  String    @unique
+  lsCustomerId      String?
+  lsVariantId       String?
+  // Lemon Squeezy's status, verbatim: on_trial, active, paused, past_due,
+  // unpaid, cancelled, expired.
+  status            String
+  renewsAt          DateTime?
+  // Set once cancelled: access continues until this moment.
+  endsAt            DateTime?
+  customerPortalUrl String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
 model MessageProfile {
   id            String   @id @default(cuid())
   userId        String?
@@ -490,17 +530,23 @@ model CommentProfile {
   @@index([userId])
 }
 
-// One row per AI-generated LinkedIn comment (see
-// app/api/ext/comments/generate, added in a later part) — the extension's
-// equivalent of IdeaHistory, driving the History screen. profileId is a
-// plain string, not a relation — deliberately no FK to CommentProfile, so a
-// history row (and the credits it recorded as spent) survives even if the
-// profile it was generated with is later edited or deleted.
+// One row per AI generation in the LinkedIn extension — comments, replies,
+// connection notes and messages (`kind`) — driving the History screen in the
+// side panel and on the website (app/(app)/extension/history). profileId is
+// a plain string, not a relation — deliberately no FK, so a history row
+// survives even if the profile it was generated with is later edited or
+// deleted. It points at a CommentProfile for comments/replies, a
+// ConnectionProfile or MessageProfile for notes/messages, and is null when a
+// note or message used a one-off reason instead of a saved profile.
+// profileName is the name at generation time, so the row still reads right
+// after a rename or delete.
 model CommentHistory {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  profileId   String
+  kind        String   @default("comment") // "comment" | "reply" | "connection_note" | "message"
+  profileId   String?
+  profileName String?
   postAuthor  String
   postUrl     String
   postSnippet String
@@ -513,6 +559,31 @@ model CommentHistory {
   @@index([userId])
   @@index([profileId])
   @@index([userId, createdAt])
+  @@index([userId, kind, createdAt])
+}
+
+// The Conversation Assistant's per-person memory: which reason and tone a
+// conversation with one contact uses, so reopening that chat picks up where
+// it left off. One row per (user, contact). contactUrl is the contact's
+// LinkedIn profile path as the extension reads it ("/in/…", lowercase).
+// profileId points at a MessageProfile when choice is "profile"; a plain
+// string, like CommentHistory.profileId, so deleting the profile leaves the
+// row readable.
+model ContactContext {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contactUrl  String
+  contactName String   @default("")
+  choice      String // "profile" | "custom" | "flow"
+  profileId   String?
+  purpose     String   @default("")
+  tone        String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, contactUrl])
+  @@index([userId, updatedAt])
 }
 
 // Long-lived credential for browser-extension-comment/ to call app/api/ext/*

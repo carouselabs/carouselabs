@@ -1,11 +1,11 @@
 // app/api/ext/history/[id]/route.ts — records what the user did with a
-// generated comment. The row is created by app/api/ext/generate with
-// action "NONE"; the extension PATCHes it to "COPIED" or "INSERTED" once the
-// comment actually leaves the panel, which is what makes the history
-// distinguishable from comments that were generated and then abandoned.
+// generation, and deletes one. The row is created by app/api/ext/generate,
+// connection-note or message with action "NONE"; the extension PATCHes it to
+// "COPIED" or "INSERTED" once the text actually leaves the panel, which is
+// what makes the history distinguishable from generations that were abandoned.
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
+import { getExtensionUser } from "@/lib/extensionCommentAuth"
 
 const ALLOWED_ACTIONS = ["COPIED", "INSERTED", "NONE"] as const
 type Action = (typeof ALLOWED_ACTIONS)[number]
@@ -27,9 +27,9 @@ function isAction(value: unknown): value is Action {
 // app/api/ext/rewrite — optional, scoped by userId, and never the reason a
 // request fails.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getUserFromCommentExtensionToken(req)
+  const user = await getExtensionUser(req)
   if (!user) {
-    return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 })
   }
 
   const { id } = await params
@@ -68,4 +68,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   return NextResponse.json({ ok: true, action })
+}
+
+// DELETE /api/ext/history/:id — removes one entry (the website's History
+// tab). Scoped by userId like PATCH above.
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const user = await getExtensionUser(req)
+  if (!user) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 })
+  }
+
+  const { id } = await params
+  const result = await db.commentHistory.deleteMany({ where: { id, userId: user.id } })
+  if (result.count === 0) {
+    return NextResponse.json({ error: "History entry not found" }, { status: 404 })
+  }
+  return NextResponse.json({ ok: true })
 }

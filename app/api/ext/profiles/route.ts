@@ -3,16 +3,16 @@
 // authenticated, same as app/api/ext/me (see lib/extensionCommentAuth.ts).
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
-import { parseProfileInput, customProfileLimit } from "@/lib/commentProfiles"
+import { getExtensionUser } from "@/lib/extensionCommentAuth"
+import { parseProfileInput } from "@/lib/commentProfiles"
 
 // GET /api/ext/profiles — every isSystem profile (shared, built-in presets —
 // see scripts/seed-comment-profiles.js) plus this user's own custom
 // profiles — recommended presets first, then system, then custom.
 export async function GET(req: Request) {
-  const user = await getUserFromCommentExtensionToken(req)
+  const user = await getExtensionUser(req)
   if (!user) {
-    return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 })
   }
 
   // Recommended presets first, then the original system profiles, then the
@@ -26,13 +26,12 @@ export async function GET(req: Request) {
   return NextResponse.json({ profiles })
 }
 
-// POST /api/ext/profiles — create a custom profile for this user. Plan limits
-// are enforced here rather than only in the UI: the extension is a client the
-// user controls, so the client-side count is a hint and this is the rule.
+// POST /api/ext/profiles — create a custom profile for this user. There is no
+// limit on how many.
 export async function POST(req: Request) {
-  const user = await getUserFromCommentExtensionToken(req)
+  const user = await getExtensionUser(req)
   if (!user) {
-    return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 })
   }
 
   const body = await req.json().catch(() => null)
@@ -41,24 +40,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error }, { status: 400 })
   }
 
-  const [subscription, existingCount] = await Promise.all([
-    db.subscription.findUnique({ where: { userId: user.id } }),
-    db.commentProfile.count({ where: { userId: user.id, isSystem: false } }),
-  ])
-
-  const plan = subscription?.plan ?? "FREE"
-  const limit = customProfileLimit(plan)
-  if (limit !== null && existingCount >= limit) {
-    return NextResponse.json(
-      {
-        error: `Your ${plan} plan allows ${limit} custom profile${limit === 1 ? "" : "s"}. Upgrade to create more profiles.`,
-        requiresUpgrade: true,
-        limit,
-      },
-      { status: 403 },
-    )
-  }
-
+  // No limit on how many: custom tones are unlimited for everyone, and
+  // the website's Free/Pro/Growth plans have nothing to do with them.
   const profile = await db.commentProfile.create({
     data: { ...parsed.value, userId: user.id, isSystem: false, isDefault: false },
   })

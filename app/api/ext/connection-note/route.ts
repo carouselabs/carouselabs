@@ -1,25 +1,16 @@
-// ════════════════════════════════════════════════════════════════════════════
-// TESTING PHASE ONLY - credit checks disabled as of 2026-09-22. MUST restore
-// before public launch. See this comment in generate/route.ts, rewrite/route.ts
-// and this file. The switch is COMMENT_CREDITS_ENFORCED in
-// lib/commentCredits.ts; the balance check and charge below are skipped while
-// it is false, not removed.
-// ════════════════════════════════════════════════════════════════════════════
 // app/api/ext/connection-note/route.ts — Connection Request Notes for the
 // Comment extension. Same shape as app/api/ext/generate: Bearer-token auth, the
-// shared daily generation limit, the balance checked before any model call and
-// charged only after a note survives validation.
+// shared daily generation limit, and the extension access gate
+// (lib/extAccess.ts) reserved before the model call and given back if no note
+// survives validation.
 //
-// No CommentHistory row is written: that table requires a comment profileId,
-// which a connection note doesn't have. Notes are not in History for now.
+// Each note is saved to history (kind "connection_note"), so it shows in the
+// History screens in the panel and on the website.
 import { NextResponse } from "next/server"
 import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
-import { availableCredits } from "@/lib/credits"
-import { chargeCreditsForAction } from "@/lib/chargeCredits"
-import { CREDIT_COSTS } from "@/lib/creditActions"
-import { COMMENT_CREDITS_ENFORCED } from "@/lib/commentCredits"
+import { reserveExtGeneration } from "@/lib/extAccess"
 import { ANTI_FABRICATION_REMINDER, WEAK_COMMENT_PATTERNS } from "@/lib/ai/prompts/commentPrompt"
 import {
   buildConnectionNoteSystemMessage,
@@ -32,7 +23,8 @@ import {
   type ConnectionProfileInput,
   type ConnectionTargetInput,
 } from "@/lib/ai/prompts/connectionNotePrompt"
-import { callCommentModel, parseComment, sanitizeComment } from "@/lib/ai/commentModel"
+import { callCommentModel, parseComment, sanitizeComment, PRIMARY_MODEL } from "@/lib/ai/commentModel"
+import { HISTORY_SNIPPET_CHARS, linkedInUrl } from "@/lib/extensionHistory"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
 
 const MAX_FIELD_CHARS = 300
@@ -98,6 +90,8 @@ export async function POST(req: Request) {
   if (limited) return limited
 
   let target: ConnectionTargetInput
+  // The person's profile link, for History only; never sent to the model.
+  let targetUrl: string
   let context: ConnectionContextInput
   let range: { min: number; max: number }
   let extraInstruction: string | undefined
@@ -107,6 +101,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     target = parseTarget(body.target)
+    targetUrl = linkedInUrl(body.target?.url)
     context = parseContext(body.context)
     range = parseRange(body.length)
     profileId = typeof body.profileId === "string" && body.profileId ? body.profileId : undefined
@@ -122,14 +117,11 @@ export async function POST(req: Request) {
   }
 
   // System profiles are shared; custom ones must belong to the caller.
-  const [subscription, profile] = await Promise.all([
-    db.subscription.findUnique({ where: { userId: user.id } }),
-    profileId
-      ? db.connectionProfile.findFirst({
-          where: { id: profileId, OR: [{ isSystem: true }, { userId: user.id }] },
-        })
-      : Promise.resolve(null),
-  ])
+  const profile = profileId
+    ? await db.connectionProfile.findFirst({
+        where: { id: profileId, OR: [{ isSystem: true }, { userId: user.id }] },
+      })
+    : null
 
   if (profileId && !profile) {
     return NextResponse.json({ error: "Connection profile not found" }, { status: 404 })
@@ -139,16 +131,9 @@ export async function POST(req: Request) {
   // and the length rules were written alongside its samples.
   if (profile) range = parseRange(rangeFromLength(profile.length))
 
-  // TESTING PHASE ONLY: skipped while COMMENT_CREDITS_ENFORCED is false.
-  if (
-    COMMENT_CREDITS_ENFORCED &&
-    (!subscription || availableCredits(subscription) < CREDIT_COSTS.connection_note)
-  ) {
-    return NextResponse.json(
-      { error: "You're out of credits.", requiresUpgrade: subscription?.plan === "FREE" },
-      { status: 402 },
-    )
-  }
+  // Last check before the model call, so a blocked account never burns one.
+  const gate = await reserveExtGeneration(user.id)
+  if (!gate.ok) return gate.response
 
   const systemMessage = buildConnectionNoteSystemMessage(range, context.kind, profile as ConnectionProfileInput | null)
   const userMessage = buildConnectionNoteUserMessage(target, context, extraInstruction)
@@ -224,21 +209,34 @@ export async function POST(req: Request) {
   note = trimToLimit(note)
 
   if (!note) {
+    await gate.release()
     return NextResponse.json({ error: "Something went wrong, try again" }, { status: 502 })
   }
 
-  // TESTING PHASE ONLY: no charge while COMMENT_CREDITS_ENFORCED is false.
-  let creditsRemaining = subscription ? availableCredits(subscription) : 0
-  if (COMMENT_CREDITS_ENFORCED) {
-    const charge = await chargeCreditsForAction({ ...user, subscription }, "connection_note")
-    if (!charge.ok) {
-      return NextResponse.json(
-        { error: "You're out of credits.", requiresUpgrade: charge.requiresUpgrade },
-        { status: 402 },
-      )
-    }
-    creditsRemaining = charge.remaining
+  // Best effort: the note already exists, and failing the request over a
+  // history write would lose it. A null historyId just means Copy/Insert
+  // can't be recorded against a row.
+  let historyId: string | null = null
+  try {
+    const history = await db.commentHistory.create({
+      data: {
+        userId: user.id,
+        kind: "connection_note",
+        profileId: profile?.id ?? null,
+        profileName: profile?.name ?? "Custom note",
+        postAuthor: target.name,
+        postUrl: targetUrl,
+        postSnippet: (target.headline || target.currentRole).slice(0, HISTORY_SNIPPET_CHARS),
+        comment: note,
+        action: "NONE",
+        creditsUsed: 0,
+        model: PRIMARY_MODEL,
+      },
+    })
+    historyId = history.id
+  } catch (err) {
+    console.error("[ext/connection-note] history write failed:", err)
   }
 
-  return NextResponse.json({ note, creditsRemaining })
+  return NextResponse.json({ note, freeRemaining: gate.freeRemaining, historyId })
 }

@@ -1,27 +1,17 @@
-// ════════════════════════════════════════════════════════════════════════════
-// TESTING PHASE ONLY - credit checks disabled as of 2026-09-22. MUST restore
-// before public launch. See this comment in generate/route.ts, rewrite/route.ts
-// and connection-note/route.ts. Reply generation has no route of its own: it goes through
-// this one (body.reply), so the same skipped check covers it. The switch is
-// COMMENT_CREDITS_ENFORCED in lib/commentCredits.ts; both the balance check and
-// the charge below are skipped while it is false, not removed.
-// ════════════════════════════════════════════════════════════════════════════
 // app/api/ext/generate/route.ts — the Comment extension's core Generate flow.
 // Bearer-token authenticated, same as the rest of app/api/ext/* (see
-// lib/extensionCommentAuth.ts).
+// lib/extensionCommentAuth.ts). Reply generation has no route of its own: it
+// goes through this one (body.reply).
 //
-// Credit handling is deliberately ordered: balance is checked BEFORE any model
-// call, but the charge only lands after a generation survives validation. A
-// request that fails after its automatic retry is never charged and writes no
-// CommentHistory row, so a user is not billed for output they never saw.
+// Access (lib/extAccess.ts): an active extension subscription, or one of the
+// account's free generations. The free use is reserved just before the model
+// call and given back if the request fails, so a user is never charged for
+// output they never saw, and a failed request writes no CommentHistory row.
 import { NextResponse } from "next/server"
 import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
-import { availableCredits } from "@/lib/credits"
-import { chargeCreditsForAction } from "@/lib/chargeCredits"
-import { CREDIT_COSTS } from "@/lib/creditActions"
-import { COMMENT_CREDITS_ENFORCED } from "@/lib/commentCredits"
+import { reserveExtGeneration } from "@/lib/extAccess"
 import {
   buildCommentSystemMessage,
   buildCommentUserMessage,
@@ -126,32 +116,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: message }, { status: 400 })
   }
 
-  // System profiles are shared; custom ones must belong to the caller. The
-  // subscription is fetched alongside because the balance check and the later
-  // charge both need it — hasGenerationBalance would re-query for the same row,
-  // and chargeCreditsForAction needs the plan to decide on low-balance email.
-  const [profile, subscription] = await Promise.all([
-    db.commentProfile.findFirst({
-      where: { id: profileId, OR: [{ isSystem: true }, { userId: user.id }] },
-    }),
-    db.subscription.findUnique({ where: { userId: user.id } }),
-  ])
-
-  // Checked before the model call so a drained account never burns an API call.
-  // TESTING PHASE ONLY: skipped while COMMENT_CREDITS_ENFORCED is false.
-  if (
-    COMMENT_CREDITS_ENFORCED &&
-    (!subscription || availableCredits(subscription) < CREDIT_COSTS.comment_generate)
-  ) {
-    return NextResponse.json(
-      { error: "You're out of credits.", requiresUpgrade: subscription?.plan === "FREE" },
-      { status: 402 },
-    )
-  }
-
+  // System profiles are shared; custom ones must belong to the caller.
+  const profile = await db.commentProfile.findFirst({
+    where: { id: profileId, OR: [{ isSystem: true }, { userId: user.id }] },
+  })
   if (!profile) {
     return NextResponse.json({ error: "Comment profile not found" }, { status: 404 })
   }
+
+  // Last check before the model call, so a blocked account never burns one.
+  const gate = await reserveExtGeneration(user.id)
+  if (!gate.ok) return gate.response
 
   const systemMessage = reply
     ? buildReplySystemMessage(profile, reply.isOwnPost)
@@ -256,25 +231,13 @@ export async function POST(req: Request) {
   if (!comment) comment = offLengthFallback
 
   if (!comment) {
-    // Nothing charged, no history row — the user sees an error and can retry.
+    // The free use is given back and no history row is written — the user
+    // sees an error and can retry.
+    await gate.release()
     return NextResponse.json(
       { error: "Something went wrong, try again" },
       { status: 502 },
     )
-  }
-
-  // TESTING PHASE ONLY: no charge while COMMENT_CREDITS_ENFORCED is false. The
-  // balance is still reported so the panel's credit figure stays accurate.
-  let creditsRemaining = subscription ? availableCredits(subscription) : 0
-  if (COMMENT_CREDITS_ENFORCED) {
-    const charge = await chargeCreditsForAction({ ...user, subscription }, "comment_generate")
-    if (!charge.ok) {
-      return NextResponse.json(
-        { error: "You're out of credits.", requiresUpgrade: charge.requiresUpgrade },
-        { status: 402 },
-      )
-    }
-    creditsRemaining = charge.remaining
   }
 
   // action stays NONE until the user actually copies or inserts the comment;
@@ -282,7 +245,9 @@ export async function POST(req: Request) {
   const history = await db.commentHistory.create({
     data: {
       userId: user.id,
+      kind: reply ? "reply" : "comment",
       profileId: profile.id,
+      profileName: profile.name,
       postAuthor: post.author,
       postUrl: post.url,
       // No mode column on CommentHistory, so a reply is recorded by what it
@@ -293,15 +258,16 @@ export async function POST(req: Request) {
       ).slice(0, 280),
       comment,
       action: "NONE",
-      // Records what was actually charged: 0 during the free testing phase.
-      creditsUsed: COMMENT_CREDITS_ENFORCED ? CREDIT_COSTS.comment_generate : 0,
+      // The extension doesn't spend web-app credits (it has its own
+      // subscription), so nothing is charged against the web balance.
+      creditsUsed: 0,
       model: PRIMARY_MODEL,
     },
   })
 
   return NextResponse.json({
     comment,
-    creditsRemaining,
+    freeRemaining: gate.freeRemaining,
     historyId: history.id,
   })
 }

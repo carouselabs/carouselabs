@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  loadConnectContext,
-  loadSelfProfile,
-  saveConnectContext,
   MAX_PURPOSE_CHARS,
   OWN_PROFILE_URL,
   READ_SELF_PROFILE_MESSAGE_TYPE,
@@ -12,6 +9,13 @@ import {
   type ConnectContextSetting,
   type LinkedInProfileInfo,
 } from "@/lib/connectionNote";
+// Kept on the account, so the website's Extension section edits the same values.
+import {
+  loadSyncedConnectContext,
+  loadSyncedSelfProfile,
+  saveSyncedConnectContext,
+  saveSyncedSelfProfile,
+} from "@/lib/syncedSettings";
 
 const OPTIONS: { choice: ConnectContextChoice; title: string; hint: string }[] = [
   { choice: "profile", title: "Use my LinkedIn profile", hint: "Your name, headline and role, read from your own profile page." },
@@ -31,7 +35,7 @@ export function ConnectContextEditor({ onSaved }: { onSaved?: (setting: ConnectC
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([loadConnectContext(), loadSelfProfile()]).then(([stored, profile]) => {
+    Promise.all([loadSyncedConnectContext(), loadSyncedSelfProfile()]).then(([stored, profile]) => {
       if (cancelled) return;
       setSetting(stored);
       setPurposeDraft(stored?.purpose ?? "");
@@ -53,7 +57,7 @@ export function ConnectContextEditor({ onSaved }: { onSaved?: (setting: ConnectC
 
   async function save(next: ConnectContextSetting) {
     setSetting(next);
-    await saveConnectContext(next);
+    await saveSyncedConnectContext(next);
     onSaved?.(next);
   }
 
@@ -67,7 +71,10 @@ export function ConnectContextEditor({ onSaved }: { onSaved?: (setting: ConnectC
         | { ok: boolean; profile?: LinkedInProfileInfo; error?: string }
         | undefined;
       if (!res?.ok) setMessage(res?.error ?? "Couldn't read your profile.");
-      else if (res.profile) setSelf(res.profile);
+      else if (res.profile) {
+        setSelf(res.profile);
+        void saveSyncedSelfProfile(res.profile);
+      }
     } catch {
       setMessage("Open LinkedIn in the active tab first.");
     } finally {

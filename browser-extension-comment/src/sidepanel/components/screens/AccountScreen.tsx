@@ -1,19 +1,45 @@
 import { useEffect, useState } from "react";
-import { apiFetch, ApiError, BILLING_URL, type MeResponse } from "@/lib/api";
+import { apiFetch, ApiError, openWebsite, type ExtensionAccess, type MeResponse } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { clearAccountData } from "@/lib/account";
+import {
+  EXTENSION_PRICE_LABEL,
+  freeGenerationsLeft,
+  openCheckout,
+  setExtensionAccess,
+  useExtensionAccess,
+} from "@/lib/extensionAccess";
+
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
+function planLabel(access: ExtensionAccess): string {
+  if (access.access === "testing") return "Testing (paywall off)";
+  if (access.access === "unlimited") {
+    if (access.status === "cancelled" && access.endsAt) return `Unlimited until ${formatDate(access.endsAt)}`;
+    if (access.status === "past_due") return "Unlimited (payment failed)";
+    return "Unlimited";
+  }
+  return `Free — ${freeGenerationsLeft(access)} of ${access.freeLimit} left`;
+}
 
 export function AccountScreen() {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
+  const [openingCheckout, setOpeningCheckout] = useState(false);
+  const access = useExtensionAccess();
 
   useEffect(() => {
     let cancelled = false;
 
     apiFetch<MeResponse>("/api/ext/me")
-      .then((res) => !cancelled && setMe(res))
+      .then((res) => {
+        if (cancelled) return;
+        setMe(res);
+        setExtensionAccess(res.extension);
+      })
       .catch((err) => {
         if (!cancelled) setError(err instanceof ApiError ? err.message : "Failed to load account");
       })
@@ -48,6 +74,19 @@ export function AccountScreen() {
     // it flips the panel back to the signed-out screen with no reload. Every
     // other piece of this person's data goes with it — see lib/account.ts.
     await clearAccountData();
+    setExtensionAccess(null);
+  }
+
+  async function handleGetUnlimited() {
+    setOpeningCheckout(true);
+    setError(null);
+    try {
+      await openCheckout();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't open checkout. Try again.");
+    } finally {
+      setOpeningCheckout(false);
+    }
   }
 
   if (loading) {
@@ -71,23 +110,42 @@ export function AccountScreen() {
               <span className="text-xs text-muted-foreground">Signed in as</span>
               <span className="truncate text-xs font-medium">{me.email}</span>
             </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">Plan</span>
-              <span className="text-xs font-medium">{me.plan}</span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">Credits remaining</span>
-              <span className="text-xs font-medium">{me.creditsAvailable}</span>
-            </div>
+            {access && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground">Extension plan</span>
+                <span className="text-xs font-medium">{planLabel(access)}</span>
+              </div>
+            )}
+            {access?.access === "unlimited" && access.status !== "cancelled" && access.renewsAt && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground">Renews</span>
+                <span className="text-xs font-medium">{formatDate(access.renewsAt)}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs text-muted-foreground">Comments this month</span>
               <span className="text-xs font-medium">{me.commentsThisMonth}</span>
             </div>
           </div>
 
-          {/* Opens a real browser tab: billing is a full web flow and the side
-              panel is far too narrow to complete it in. */}
-          <Button onClick={() => chrome.tabs.create({ url: BILLING_URL })}>Upgrade</Button>
+          {/* Both open a real browser tab: checkout and the Lemon Squeezy
+              portal are full web flows, far too wide for the side panel. */}
+          {access?.access === "free" && (
+            <Button disabled={openingCheckout} onClick={handleGetUnlimited}>
+              {openingCheckout ? "Opening checkout…" : `Get unlimited — ${EXTENSION_PRICE_LABEL}`}
+            </Button>
+          )}
+          {access?.access === "unlimited" && access.manageUrl && (
+            <Button variant="secondary" onClick={() => chrome.tabs.create({ url: access.manageUrl! })}>
+              Manage subscription
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => void openWebsite("/extension")}>
+            Open on carouselabs.com
+          </Button>
+          <p className="text-[11px] text-muted-foreground">
+            Your voice profiles, full history, settings and payments are on the website too.
+          </p>
         </>
       )}
 

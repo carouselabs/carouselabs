@@ -12,6 +12,8 @@ import { TopUpCredits } from "@/components/billing/TopUpCredits"
 import { BillingRefresher } from "@/components/billing/BillingRefresher"
 import { PlanCard } from "@/components/marketing/PlanCard"
 import { FREE_PLAN, PRO_PLAN, GROWTH_PLAN } from "@/lib/plans"
+import { extAccessSummary } from "@/lib/extAccess"
+import { ExtensionPlanSection } from "@/components/extension/ExtensionPlanSection"
 
 // Always fetch fresh data — credit balances change out-of-band (top-up
 // webhooks land while the user is on the Lemon Squeezy checkout tab), so a
@@ -118,6 +120,7 @@ export default async function BillingPage() {
   const percentUsed = effectiveTotal > 0 ? (creditSub.creditsUsed / effectiveTotal) * 100 : 0
 
   const growthCheckoutUrl = process.env.NEXT_PUBLIC_LEMONSQUEEZY_GROWTH_CHECKOUT_URL
+  const extension = await extAccessSummary(user.id)
 
   return (
     <div className="max-w-5xl mx-auto flex flex-col gap-10">
@@ -276,6 +279,14 @@ export default async function BillingPage() {
             }
           />
         </div>
+      </div>
+
+      <div id="extension" className="flex flex-col gap-3 scroll-mt-24">
+        <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Chrome extension</h2>
+        <ExtensionPlanSection ext={extension} />
+        <a href="/extension/billing" className="text-[12.5px] font-medium text-[#7C3AED] hover:underline w-fit">
+          Payment history and everything else for the extension →
+        </a>
       </div>
     </div>
   )

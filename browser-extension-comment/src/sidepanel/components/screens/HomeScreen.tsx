@@ -1,13 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { InsertWarningModal } from "../InsertWarningModal";
 import { noContentScriptMessage } from "@/lib/tabs";
+import { markHistoryAction } from "@/lib/history";
+import { loadShowInsert } from "@/lib/syncedSettings";
 import { ConnectionNotePanel } from "../ConnectionNotePanel";
 import { RecommendedBadge } from "../RecommendedBadge";
+import { FreeGenerationsNote, UnlockCard } from "../UnlockCard";
+import {
+  isPaywalled,
+  noteFreeRemaining,
+  notePaywallError,
+  setExtensionAccess,
+  useExtensionAccess,
+} from "@/lib/extensionAccess";
 import {
   apiFetch,
   ApiError,
   fetchExtConfig,
-  BILLING_URL,
   LINKEDIN_FEED_URL,
   DAILY_NUDGE_THRESHOLD,
   type CommentProfile,
@@ -43,11 +52,6 @@ const LAST_POST_STORAGE_KEY = "lastSelectedPost";
 // Must match INSERT_MESSAGE_TYPE in src/content-script.ts exactly.
 const INSERT_MESSAGE_TYPE = "carouselabs:insert-comment";
 
-// Per-install UI preference, so it lives in chrome.storage rather than on the
-// User row. Unlike insertWarningHidden — which records that a risk was
-// acknowledged and therefore belongs to the account — this is only about
-// whether one browser shows a button.
-const SHOW_INSERT_STORAGE_KEY = "showInsertButton";
 
 // Must match GENERATE_SHORTCUT_MESSAGE_TYPE in src/background.ts. Relayed from
 // the service worker, which is where the keyboard command actually fires.
@@ -134,10 +138,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [rewriting, setRewriting] = useState<"shorter" | "longer" | null>(null);
   const [copied, setCopied] = useState(false);
-  const [credits, setCredits] = useState<number | null>(null);
-  // Defaults to enforced, so a server that doesn't send the flag keeps the
-  // normal out-of-credits behaviour.
-  const [creditsEnforced, setCreditsEnforced] = useState(true);
+  const access = useExtensionAccess();
 
   // Insert gating: the server kill switch, the per-install preference, and the
   // per-account "warning already acknowledged" flag are three separate things.
@@ -148,7 +149,13 @@ export function HomeScreen({ onCreateProfile }: Props) {
   const [inserting, setInserting] = useState(false);
   // What the Insert warning is about to insert, so the same modal serves the
   // comment flow and Connection Note mode.
-  const [pendingInsert, setPendingInsert] = useState<{ text: string; mode: InsertMode } | null>(null);
+  // historyId is only set for a connection note, whose row the note panel
+  // owns; comments and replies use this screen's own historyId.
+  const [pendingInsert, setPendingInsert] = useState<{
+    text: string;
+    mode: InsertMode;
+    historyId?: string | null;
+  } | null>(null);
   // Insert failures in Connection Note mode, shown inside that panel.
   const [connectInsertError, setConnectInsertError] = useState<string | null>(null);
 
@@ -252,8 +259,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
           fetchedProfiles[0];
 
         setSelectedId(preselected?.id ?? "");
-        setCredits(me.creditsAvailable);
-        setCreditsEnforced(me.creditsEnforced !== false);
+        setExtensionAccess(me.extension);
         setCommentsToday(me.commentsToday);
         setInsertWarningHidden(me.insertWarningHidden);
         setState("ready");
@@ -291,12 +297,10 @@ export function HomeScreen({ onCreateProfile }: Props) {
   // unauthenticated user never reaches these controls.
   const busy = generating || rewriting !== null;
   const hasComment = comment.trim().length > 0;
-  // credits is null only while /api/ext/me is still in flight; treating that
-  // as "out" would disable Generate during every panel open.
-  //
-  // TESTING PHASE ONLY: never true while the server reports credits as not
-  // enforced (lib/commentCredits.ts), so a zero balance doesn't block testing.
-  const outOfCredits = creditsEnforced && credits !== null && credits <= 0;
+  // True only once the free generations are known to be used up without a
+  // subscription. Never while /api/ext/me is still in flight, nor while the
+  // server reports the paywall off for testing (lib/commentCredits.ts).
+  const paywalled = isPaywalled(access);
   // A captured post with no body text cannot be commented on, and the route
   // rejects it with a 400. Blocking it here turns a failed round trip into an
   // explained disabled button.
@@ -307,9 +311,11 @@ export function HomeScreen({ onCreateProfile }: Props) {
   const postHasNoText =
     !!selectedPost && (reply ? !reply.targetText.trim() : !selectedPost.text.trim());
   const generateDisabled =
-    !selectedPost || !selectedId || outOfCredits || postHasNoText || busy;
-  // Copy / Shorter / Longer all need a comment to act on.
+    !selectedPost || !selectedId || paywalled || postHasNoText || busy;
+  // Copy / Shorter / Longer all need a comment to act on. Shorter / Longer
+  // are model calls too, so the paywall stops them; Copy and Insert never.
   const actionsDisabled = !hasComment || busy;
+  const rewriteDisabled = actionsDisabled || paywalled;
 
   // The server kill switch and the per-install preference are read separately
   // from the account data above, since the config route is public and the
@@ -325,9 +331,10 @@ export function HomeScreen({ onCreateProfile }: Props) {
       // for a feature whose own warning says it carries account risk.
       .catch(() => {});
 
-    chrome.storage.local.get(SHOW_INSERT_STORAGE_KEY).then((stored) => {
-      const value = stored[SHOW_INSERT_STORAGE_KEY];
-      if (!cancelled && typeof value === "boolean") setShowInsertPref(value);
+    // Whether the Insert button shows is an account setting (the website can
+    // change it too): see src/lib/syncedSettings.ts.
+    loadShowInsert().then((show) => {
+      if (!cancelled) setShowInsertPref(show);
     });
 
     chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
@@ -372,10 +379,11 @@ export function HomeScreen({ onCreateProfile }: Props) {
 
       setComment(res.comment);
       setHistoryId(res.historyId);
-      setCredits(res.creditsRemaining);
+      noteFreeRemaining(res.freeRemaining);
       outputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     } catch (err) {
-      setGenerateError(userFacingError(err));
+      // The paywall's 402 swaps in the unlock card, which says it better.
+      if (!notePaywallError(err)) setGenerateError(userFacingError(err));
     } finally {
       setGenerating(false);
     }
@@ -405,8 +413,9 @@ export function HomeScreen({ onCreateProfile }: Props) {
       });
 
       setComment(res.comment);
+      noteFreeRemaining(res.freeRemaining);
     } catch (err) {
-      setGenerateError(userFacingError(err));
+      if (!notePaywallError(err)) setGenerateError(userFacingError(err));
     } finally {
       setRewriting(null);
     }
@@ -415,12 +424,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
   // Records what the user did with the generated comment. Best effort, same
   // as Copy: the action already happened, so a failed write must not surface.
   function markHistory(action: "COPIED" | "INSERTED") {
-    if (!historyId) return;
-    apiFetch(`/api/ext/history/${historyId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, comment }),
-    }).catch(() => {});
+    markHistoryAction(historyId, action, comment);
   }
 
   // Entry point for the Insert button. The warning is shown unless this user
@@ -430,16 +434,16 @@ export function HomeScreen({ onCreateProfile }: Props) {
     requestInsert(comment, reply ? "reply" : "comment");
   }
 
-  function requestInsert(text: string, mode: InsertMode) {
+  function requestInsert(text: string, mode: InsertMode, noteHistoryId?: string | null) {
     if (insertWarningHidden) {
-      void performInsert(text, mode);
+      void performInsert(text, mode, noteHistoryId);
       return;
     }
-    setPendingInsert({ text, mode });
+    setPendingInsert({ text, mode, historyId: noteHistoryId });
     setShowInsertWarning(true);
   }
 
-  async function performInsert(text: string, mode: InsertMode) {
+  async function performInsert(text: string, mode: InsertMode, noteHistoryId?: string | null) {
     const setError = mode === "connect" ? setConnectInsertError : setGenerateError;
     setInserting(true);
     setError(null);
@@ -467,8 +471,8 @@ export function HomeScreen({ onCreateProfile }: Props) {
         return;
       }
 
-      // Connection notes have no history row to mark.
-      if (mode !== "connect") markHistory("INSERTED");
+      if (mode === "connect") markHistoryAction(noteHistoryId, "INSERTED", text);
+      else markHistory("INSERTED");
     } catch {
       // The active tab has no content script: not LinkedIn, or a LinkedIn
       // tab opened before the extension was updated.
@@ -503,7 +507,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
       }).catch(() => {});
     }
 
-    await performInsert(pending.text, pending.mode);
+    await performInsert(pending.text, pending.mode, pending.historyId);
   }
 
   async function handleCopy() {
@@ -553,11 +557,11 @@ export function HomeScreen({ onCreateProfile }: Props) {
         <ConnectionNotePanel
           key={selectedPost.capturedAt}
           target={connectTarget}
-          outOfCredits={outOfCredits}
+          paywalled={paywalled}
           showInsert={insertEnabled && showInsertPref}
           inserting={inserting}
           insertError={connectInsertError}
-          onInsert={(text) => requestInsert(text, "connect")}
+          onInsert={(text, noteHistoryId) => requestInsert(text, "connect", noteHistoryId)}
           onCreateProfile={() => onCreateProfile("connection")}
         />
       </div>
@@ -711,23 +715,19 @@ export function HomeScreen({ onCreateProfile }: Props) {
         />
       </div>
 
-      {/* Out of credits replaces Generate entirely rather than disabling it:
-          a disabled button with a note underneath gives the user nothing to
-          act on, and topping up is the only thing that helps. */}
-      {outOfCredits ? (
-        <>
-          <Button onClick={() => chrome.tabs.create({ url: BILLING_URL })}>Top up credits</Button>
-          <p className="text-xs text-muted-foreground">
-            You&apos;re out of credits. Top up to keep generating comments.
-          </p>
-        </>
+      {/* Used-up free generations replace Generate entirely (see UnlockCard). */}
+      {paywalled ? (
+        <UnlockCard />
       ) : (
-        <Button disabled={generateDisabled} onClick={handleGenerate}>
-          {generating ? "Generating…" : comment ? "Regenerate" : "Generate"}
-        </Button>
+        <>
+          <Button disabled={generateDisabled} onClick={handleGenerate}>
+            {generating ? "Generating…" : comment ? "Regenerate" : "Generate"}
+          </Button>
+          <FreeGenerationsNote />
+        </>
       )}
 
-      {postHasNoText && !outOfCredits && (
+      {postHasNoText && !paywalled && (
         <p className="text-xs text-muted-foreground">
           {reply
             ? "Couldn't read that comment. Click Reply on it again."
@@ -770,7 +770,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
         <Button
           size="sm"
           variant="outline"
-          disabled={actionsDisabled}
+          disabled={rewriteDisabled}
           onClick={() => handleRewrite("shorter")}
         >
           {rewriting === "shorter" ? "Shortening…" : "Shorter"}
@@ -778,7 +778,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
         <Button
           size="sm"
           variant="outline"
-          disabled={actionsDisabled}
+          disabled={rewriteDisabled}
           onClick={() => handleRewrite("longer")}
         >
           {rewriting === "longer" ? "Lengthening…" : "Longer"}

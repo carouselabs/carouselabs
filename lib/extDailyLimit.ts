@@ -4,9 +4,11 @@
 // old per-route hourly limits: a user can generate in bursts, but not more
 // than this many in any 24 hours, across all features combined.
 //
-// Independent of COMMENT_CREDITS_ENFORCED, so while credits are off for
-// testing this is still the brake on model spend (~450 × ~$0.002 per user
-// per day at current prices).
+// This is the fair-use brake behind the "unlimited" $15/month plan
+// (lib/extAccess.ts), so it applies to subscribers too. It is worded to the
+// user as a cooldown rather than a quota, and is independent of
+// COMMENT_CREDITS_ENFORCED, so it stays active while the paywall is off for
+// testing.
 import { NextResponse } from "next/server"
 import { Ratelimit } from "@upstash/ratelimit"
 import { Redis } from "@upstash/redis"
@@ -27,7 +29,9 @@ export async function extDailyLimitResponse(userId: string): Promise<NextRespons
   if (success) return null
   return NextResponse.json(
     {
-      error: `You've reached today's limit of ${EXT_DAILY_GENERATION_LIMIT} generations. It frees up gradually over the next 24 hours.`,
+      error:
+        "You've been generating a lot today, so we've paused things for a bit to keep your LinkedIn account safe. You can generate again later — it comes back gradually over the next 24 hours.",
+      cooldown: true,
     },
     { status: 429 },
   )

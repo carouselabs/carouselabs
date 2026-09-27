@@ -17,7 +17,12 @@ function server(routes: Record<string, { status: number; body: unknown }>) {
   );
 }
 
-const ME = { email: "a@b.co", plan: "FREE", creditsAvailable: 5, commentsThisMonth: 2 };
+const ME = {
+  email: "a@b.co",
+  plan: "FREE",
+  commentsThisMonth: 2,
+  extension: { access: "free", freeUsed: 3, freeLimit: 10, status: null, renewsAt: null, endsAt: null, manageUrl: null },
+};
 
 describe("Account screen", () => {
   it("signs out: revokes server-side, then clears the local token", async () => {

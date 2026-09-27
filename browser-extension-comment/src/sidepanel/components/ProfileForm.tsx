@@ -8,6 +8,7 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { CharRangePicker } from "./CharRangePicker";
+import { noteFreeRemaining, notePaywallError } from "@/lib/extensionAccess";
 
 const GOALS = [
   "adds one useful insight",
@@ -225,7 +226,11 @@ export function ProfileForm({ existing, seed, onSaved, onCancel }: Props) {
       setTestLimit(res.testLimit);
       if (res.testsUsed !== null) setServerTests(res.testsUsed);
       else setLocalTests((n) => n + 1);
+      // A Test is a generation, so on the free plan it uses one of the free ones.
+      noteFreeRemaining(res.freeRemaining);
     } catch (err) {
+      // No unlock card in the builder: the 402's own message names the plan.
+      notePaywallError(err);
       setError(err instanceof ApiError ? err.message : "Something went wrong, try again");
     } finally {
       setTesting(false);
@@ -382,7 +387,7 @@ export function ProfileForm({ existing, seed, onSaved, onCancel }: Props) {
       <div className="space-y-1.5 rounded-md border border-input p-3">
         <label className="text-xs font-medium text-muted-foreground">
           Test this profile{" "}
-          <span className="font-normal">({testsLeft} of {testLimit} free tests left)</span>
+          <span className="font-normal">({testsLeft} of {testLimit} tests left)</span>
         </label>
         <textarea
           className={`${fieldClass} resize-y`}

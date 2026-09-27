@@ -1,29 +1,15 @@
-// ════════════════════════════════════════════════════════════════════════════
-// TESTING PHASE ONLY - credit checks disabled as of 2026-09-22. MUST restore
-// before public launch. See this comment in generate/route.ts, rewrite/route.ts
-// and connection-note/route.ts (reply generation goes through generate/route.ts). The
-// switch is COMMENT_CREDITS_ENFORCED in lib/commentCredits.ts.
-//
-// This route has never charged (see CREDITS below), so there is no check here
-// to skip today. Restoring before launch means deciding its charge — the
-// planned 0.5 credits needs the Int credit columns resolved first — and gating
-// it on COMMENT_CREDITS_ENFORCED like generate/route.ts. The shared daily
-// generation limit (lib/extDailyLimit.ts) is independent of the flag and stays
-// active.
-// ════════════════════════════════════════════════════════════════════════════
 // app/api/ext/rewrite/route.ts — the Shorter / Longer buttons. Takes a comment
 // that already exists and resizes it, rather than generating a new one, so the
 // specific detail and the voice that made the original work survive.
 //
-// CREDITS: currently free. The spec calls for 0.5 credits, but
-// Subscription.creditsUsed / creditsTotal / extraCredits are Int columns, so a
-// fractional deduction would be silently rounded. Charging is deferred rather
-// than made wrong; see CREDIT_COSTS.comment_rewrite. Because that leaves an
-// unmetered model call, every rewrite counts against the shared daily limit.
+// Access: a rewrite is a model call like any other, so it goes through the
+// same extension access gate (lib/extAccess.ts) and shared daily limit as
+// generate/route.ts.
 import { NextResponse } from "next/server"
 import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
+import { reserveExtGeneration } from "@/lib/extAccess"
 import {
   buildRewriteSystemMessage,
   buildRewriteUserMessage,
@@ -75,6 +61,9 @@ export async function POST(req: Request) {
   const systemMessage = buildRewriteSystemMessage(direction, currentComment.length, countSentences(currentComment))
   const userMessage = buildRewriteUserMessage(currentComment)
   const { limit } = rewriteBounds(currentComment.length, direction)
+
+  const gate = await reserveExtGeneration(user.id)
+  if (!gate.ok) return gate.response
 
   // Held in case the retry errors outright: a weakly-resized comment still
   // beats failing a cosmetic operation.
@@ -145,6 +134,7 @@ export async function POST(req: Request) {
   if (!finalComment) finalComment = undersizedFallback
 
   if (!finalComment) {
+    await gate.release()
     return NextResponse.json({ error: "Something went wrong, try again" }, { status: 502 })
   }
 
@@ -169,5 +159,5 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ comment: finalComment })
+  return NextResponse.json({ comment: finalComment, freeRemaining: gate.freeRemaining })
 }

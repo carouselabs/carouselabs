@@ -8,6 +8,8 @@
 // devtools console:
 //   chrome.storage.local.set({ apiBaseUrl: "http://localhost:3000" })
 
+import type { ConnectContextSetting, ConnectLengthSetting, LinkedInProfileInfo } from "@/lib/connectionNote";
+
 // Chosen by build mode, the same switch manifest.config.ts uses for its
 // localhost host permissions: `npm run build` (production) talks to the live
 // site, `npm run build:dev` / `npm run dev` to a local server. The two must
@@ -38,9 +40,14 @@ export interface CommentProfile {
   updatedAt: string;
 }
 
+// Free generations left after this one, or null when the account is on the
+// unlimited plan (or the paywall is off for testing). Every generation route
+// returns it; src/lib/extensionAccess.ts keeps the panel's count in step.
+type FreeRemaining = number | null;
+
 export interface GenerateResponse {
   comment: string;
-  creditsRemaining: number;
+  freeRemaining: FreeRemaining;
   // Id of the CommentHistory row this generation created, so a later Copy can
   // PATCH its action field. See app/api/ext/history/[id].
   historyId: string;
@@ -48,6 +55,7 @@ export interface GenerateResponse {
 
 export interface RewriteResponse {
   comment: string;
+  freeRemaining: FreeRemaining;
 }
 
 // Connection Note profiles — the same shape as CommentProfile minus the fields
@@ -81,7 +89,9 @@ export interface ConnectionProfileDraft {
 
 export interface ConnectionNoteResponse {
   note: string;
-  creditsRemaining: number;
+  freeRemaining: FreeRemaining;
+  // History row for this note, for marking Copy/Insert. null if the save failed.
+  historyId: string | null;
 }
 
 // Conversation Assistant profiles — mirrors ConnectionProfile minus `length`:
@@ -112,16 +122,32 @@ export interface MessageProfileDraft {
 
 export interface MessageGenerateResponse {
   message: string;
-  creditsRemaining: number;
+  freeRemaining: FreeRemaining;
+  // History row for this message, for marking Copy/Insert. null if the save failed.
+  historyId: string | null;
+}
+
+// The extension paywall, as app/api/ext/me reports it (lib/extAccess.ts):
+// "unlimited" with an active $15/month subscription, "free" on the lifetime
+// free generations, "testing" while the server's paywall is switched off.
+export interface ExtensionAccess {
+  access: "unlimited" | "free" | "testing";
+  freeUsed: number;
+  freeLimit: number;
+  // Lemon Squeezy status of the extension subscription, if there ever was one.
+  status: string | null;
+  renewsAt: string | null;
+  endsAt: string | null;
+  // Lemon Squeezy customer portal: cancel, change card, invoices.
+  manageUrl: string | null;
 }
 
 export interface MeResponse {
   email: string;
+  // The web app's plan. Only sets custom-profile limits; the extension itself
+  // is paid for separately (extension below).
   plan: string;
-  creditsAvailable: number;
-  // TESTING PHASE ONLY: false while the server's COMMENT_CREDITS_ENFORCED
-  // flag is off. Optional because a server predating the flag omits it.
-  creditsEnforced?: boolean;
+  extension: ExtensionAccess;
   commentsThisMonth: number;
   commentsToday: number;
   defaultCommentProfileId: string | null;
@@ -131,8 +157,12 @@ export interface MeResponse {
   insertWarningHidden: boolean;
 }
 
+export type HistoryKind = "comment" | "reply" | "connection_note" | "message";
+
 export interface HistoryEntry {
   id: string;
+  // Optional because a server from before notes/messages were saved omits it.
+  kind?: HistoryKind;
   postAuthor: string;
   postUrl: string;
   postSnippet: string;
@@ -159,13 +189,17 @@ export interface SettingsResponse {
   defaultMessageProfileId: string | null;
   defaultLanguage: string | null;
   insertWarningHidden: boolean;
+  // Settings that used to live only in this browser (src/lib/syncedSettings.ts).
+  // null = never set on the account. Optional for an older server.
+  connectNoteContext?: ConnectContextSetting | null;
+  connectNoteLength?: ConnectLengthSetting | null;
+  linkedinProfile?: LinkedInProfileInfo | null;
+  insertButtonHidden?: boolean | null;
 }
 
 // Mirrors LANGUAGES in app/api/ext/settings/route.ts, which validates against
 // the same list — a value not in it is rejected server-side.
 export const LANGUAGES = ["English", "Spanish", "French", "German", "Portuguese", "Hindi"];
-
-export const BILLING_URL = "https://carouselabs.com/settings/billing";
 
 // Public selector config (app/api/ext/config). Only the fields the side panel
 // reads; the content script has its own fuller copy of this shape.
@@ -201,23 +235,27 @@ export interface TestResponse {
   // null for an unsaved draft, which has no row to count against.
   testsUsed: number | null;
   testLimit: number;
+  freeRemaining: FreeRemaining;
 }
-
-// How many custom profiles each plan may own. Mirrors CUSTOM_PROFILE_LIMITS in
-// lib/commentProfiles — the server is authoritative and re-checks on create;
-// this only drives the UI so the limit is visible before the user fills a form.
-export const CUSTOM_PROFILE_LIMITS: Record<string, number | null> = {
-  FREE: 1,
-  PRO: 5,
-  GROWTH: null,
-};
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  // The error response's JSON body, for flags beyond the message (e.g.
+  // requiresSubscription on the paywall's 402). Empty when there was none.
+  data: Record<string, unknown>;
+  constructor(status: number, message: string, data: Record<string, unknown> = {}) {
     super(message);
     this.status = status;
+    this.data = data;
   }
+}
+
+// Opens a page of the website in a new tab — the same host the API calls go
+// to, so a dev build opens the local site. The website's Extension section
+// (/extension) shows the same profiles, history and settings as the panel.
+export async function openWebsite(path: string): Promise<void> {
+  const baseUrl = await getApiBaseUrl();
+  await chrome.tabs.create({ url: `${baseUrl}${path}` });
 }
 
 export async function getApiBaseUrl(): Promise<string> {
@@ -259,8 +297,10 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}) as { error?: string });
-    throw new ApiError(res.status, body.error ?? `Request failed (${res.status})`);
+    const parsed: unknown = await res.json().catch(() => ({}));
+    const body = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+    const message = typeof body.error === "string" ? body.error : `Request failed (${res.status})`;
+    throw new ApiError(res.status, message, body);
   }
 
   return (await res.json()) as T;

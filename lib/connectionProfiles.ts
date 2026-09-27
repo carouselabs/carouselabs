@@ -1,4 +1,4 @@
-// lib/connectionProfiles.ts — validation and plan limits for Connection Note
+// lib/connectionProfiles.ts — validation for Connection Note
 // profiles (app/api/ext/connection-profiles and .../[id]). Mirrors
 // lib/commentProfiles.ts, which does the same job for comment profiles, so
 // create and edit cannot drift on what counts as a valid profile.
@@ -6,22 +6,7 @@
 // Kept separate rather than generalised: a connection note has no emoji or
 // language field, its length ceiling is LinkedIn's invitation limit rather
 // than a comment's, and the two are free to diverge further.
-import type { Plan } from "@prisma/client"
 import { CONNECTION_NOTE_HARD_MAX, CONNECTION_NOTE_MIN } from "@/lib/ai/prompts/connectionNotePrompt"
-
-// How many CUSTOM connection profiles a plan may own. System profiles are
-// shared and never count against this. null means unlimited. Same shape as
-// CUSTOM_PROFILE_LIMITS for comments, counted separately: a user's one free
-// comment profile should not cost them their connection profile.
-export const CUSTOM_CONNECTION_PROFILE_LIMITS: Record<Plan, number | null> = {
-  FREE: 1,
-  PRO: 5,
-  GROWTH: null,
-}
-
-export function customConnectionProfileLimit(plan: Plan): number | null {
-  return CUSTOM_CONNECTION_PROFILE_LIMITS[plan]
-}
 
 const MAX_LENGTHS = {
   name: 80,

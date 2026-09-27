@@ -1,25 +1,15 @@
-// ════════════════════════════════════════════════════════════════════════════
-// TESTING PHASE ONLY - credit checks disabled as of 2026-09-22. MUST restore
-// before public launch. See this comment in generate/route.ts, rewrite/route.ts,
-// connection-note/route.ts and this file. The switch is
-// COMMENT_CREDITS_ENFORCED in lib/commentCredits.ts; the balance check and
-// the charge below are skipped while it is false, not removed.
-// ════════════════════════════════════════════════════════════════════════════
 // app/api/ext/message/route.ts — the Conversation Assistant. Same shape as
 // app/api/ext/connection-note: Bearer-token auth, the shared daily generation
-// limit, the balance checked before any model call and charged only after a
-// message survives validation.
+// limit, and the extension access gate (lib/extAccess.ts) reserved before the
+// model call and given back if no message survives validation.
 //
-// No CommentHistory row is written, same reasoning as connection-note: that
-// table is keyed to a CommentProfile, which a MessageProfile isn't.
+// Each message is saved to history (kind "message"), so it shows in the
+// History screens in the panel and on the website.
 import { NextResponse } from "next/server"
 import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
-import { availableCredits } from "@/lib/credits"
-import { chargeCreditsForAction } from "@/lib/chargeCredits"
-import { CREDIT_COSTS } from "@/lib/creditActions"
-import { COMMENT_CREDITS_ENFORCED } from "@/lib/commentCredits"
+import { reserveExtGeneration } from "@/lib/extAccess"
 import { ANTI_FABRICATION_REMINDER, WEAK_COMMENT_PATTERNS } from "@/lib/ai/prompts/commentPrompt"
 import {
   buildMessageSystemMessage,
@@ -30,7 +20,8 @@ import {
   type MessageProfileInput,
   type MessageThreadEntryInput,
 } from "@/lib/ai/prompts/messagePrompt"
-import { callCommentModel, parseComment, sanitizeComment } from "@/lib/ai/commentModel"
+import { callCommentModel, parseComment, sanitizeComment, PRIMARY_MODEL } from "@/lib/ai/commentModel"
+import { HISTORY_SNIPPET_CHARS, linkedInUrl } from "@/lib/extensionHistory"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
 
 const MAX_FIELD_CHARS = 300
@@ -88,6 +79,8 @@ export async function POST(req: Request) {
     "No specific reason was given for this conversation. Read the thread in <thread> carefully and continue it naturally, staying consistent with what's already been said. If the thread is empty, write a warm, genuine opener with no particular angle."
 
   let contact: MessageContactInput
+  // The conversation's link, for History only; never sent to the model.
+  let threadUrl: string
   let thread: MessageThreadEntryInput[]
   let goal: string | undefined
   let tone: string | undefined
@@ -101,6 +94,10 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     contact = parseContact(body.contact)
+    threadUrl =
+      typeof body.threadPath === "string" && body.threadPath.startsWith("/messaging/thread/")
+        ? linkedInUrl(`https://www.linkedin.com${body.threadPath}`)
+        : ""
     thread = parseThread(body.thread)
     profileId = typeof body.profileId === "string" && body.profileId ? body.profileId : undefined
     goal = str(body.goal, MAX_GOAL_CHARS) || undefined
@@ -125,14 +122,11 @@ export async function POST(req: Request) {
   }
 
   // System profiles are shared; custom ones must belong to the caller.
-  const [subscription, profile] = await Promise.all([
-    db.subscription.findUnique({ where: { userId: user.id } }),
-    profileId
-      ? db.messageProfile.findFirst({
-          where: { id: profileId, OR: [{ isSystem: true }, { userId: user.id }] },
-        })
-      : Promise.resolve(null),
-  ])
+  const profile = profileId
+    ? await db.messageProfile.findFirst({
+        where: { id: profileId, OR: [{ isSystem: true }, { userId: user.id }] },
+      })
+    : null
 
   if (profileId && !profile) {
     return NextResponse.json({ error: "Message profile not found" }, { status: 404 })
@@ -145,16 +139,9 @@ export async function POST(req: Request) {
     ? { ...profile, tone: tone || profile.tone }
     : { goal: goal ?? FLOW_DEFAULT_GOAL, tone: tone || "Natural" }
 
-  // TESTING PHASE ONLY: skipped while COMMENT_CREDITS_ENFORCED is false.
-  if (
-    COMMENT_CREDITS_ENFORCED &&
-    (!subscription || availableCredits(subscription) < CREDIT_COSTS.message_generate)
-  ) {
-    return NextResponse.json(
-      { error: "You're out of credits.", requiresUpgrade: subscription?.plan === "FREE" },
-      { status: 402 },
-    )
-  }
+  // Last check before the model call, so a blocked account never burns one.
+  const gate = await reserveExtGeneration(user.id)
+  if (!gate.ok) return gate.response
 
   const isOpener = thread.length === 0
   const systemMessage = buildMessageSystemMessage(profileInput, isOpener)
@@ -226,21 +213,36 @@ export async function POST(req: Request) {
   if (!message) message = fallback
 
   if (!message) {
+    await gate.release()
     return NextResponse.json({ error: "Something went wrong, try again" }, { status: 502 })
   }
 
-  // TESTING PHASE ONLY: no charge while COMMENT_CREDITS_ENFORCED is false.
-  let creditsRemaining = subscription ? availableCredits(subscription) : 0
-  if (COMMENT_CREDITS_ENFORCED) {
-    const charge = await chargeCreditsForAction({ ...user, subscription }, "message_generate")
-    if (!charge.ok) {
-      return NextResponse.json(
-        { error: "You're out of credits.", requiresUpgrade: charge.requiresUpgrade },
-        { status: 402 },
-      )
-    }
-    creditsRemaining = charge.remaining
+  // What this message answers: their latest message, or the opener marker.
+  const lastFromThem = [...thread].reverse().find((entry) => entry.sender === "them")
+  const answered = isOpener ? "Opening message" : (lastFromThem ?? thread[thread.length - 1]).text
+
+  // Best effort, same as connection-note: the message already exists.
+  let historyId: string | null = null
+  try {
+    const history = await db.commentHistory.create({
+      data: {
+        userId: user.id,
+        kind: "message",
+        profileId: profile?.id ?? null,
+        profileName: profile?.name ?? (flow && !goal ? "Just continue" : "Custom reason"),
+        postAuthor: contact.name,
+        postUrl: threadUrl,
+        postSnippet: answered.slice(0, HISTORY_SNIPPET_CHARS),
+        comment: message,
+        action: "NONE",
+        creditsUsed: 0,
+        model: PRIMARY_MODEL,
+      },
+    })
+    historyId = history.id
+  } catch (err) {
+    console.error("[ext/message] history write failed:", err)
   }
 
-  return NextResponse.json({ message, creditsRemaining })
+  return NextResponse.json({ message, freeRemaining: gate.freeRemaining, historyId })
 }

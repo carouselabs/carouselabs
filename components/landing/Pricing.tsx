@@ -2,7 +2,16 @@ import Link from "next/link"
 import { ArrowRight } from "lucide-react"
 import { AnimatedSection } from "@/components/marketing/AnimatedSection"
 import { PlanCard } from "@/components/marketing/PlanCard"
-import { FREE_PLAN, PRO_PLAN, GROWTH_PLAN, CREDIT_COST_LINES, PRICING_FAQ } from "@/lib/plans"
+import { ExtensionCTA, ExtensionPlanCard } from "@/components/marketing/ExtensionPlanCard"
+import {
+  FREE_PLAN,
+  PRO_PLAN,
+  GROWTH_PLAN,
+  CREDIT_COST_LINES,
+  PRICING_FAQ,
+  EXTENSION_CHECKOUT_PATH,
+  EXTENSION_PLAN,
+} from "@/lib/plans"
 
 // Raw checkout links are safe HERE because marketing visitors aren't logged
 // in and have no existing subscription to conflict with. Inside the app,
@@ -94,6 +103,16 @@ export function Pricing() {
             />
           </AnimatedSection>
         </div>
+
+        {/* The Chrome extension — a separate product, so it sits under the
+            web plans rather than in their row. Visitors here are signed out
+            (the home page redirects signed-in users), so the checkout route
+            takes them through sign-up first. */}
+        <AnimatedSection>
+          <ExtensionPlanCard
+            cta={<ExtensionCTA href={EXTENSION_CHECKOUT_PATH} label={`Get the extension — $${EXTENSION_PLAN.price}/month`} />}
+          />
+        </AnimatedSection>
 
         {/* How credits work */}
         <AnimatedSection className="max-w-2xl mx-auto w-full text-center flex flex-col gap-2 p-6 rounded-2xl bg-[#F4F2EC] border border-[#E9E7E1]">

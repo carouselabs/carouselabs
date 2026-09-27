@@ -3,12 +3,29 @@ import {
   apiFetch,
   ApiError,
   type HistoryEntry,
+  type HistoryKind,
   type HistoryResponse,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 const fieldClass =
   "w-full rounded-md border border-input bg-background p-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
+
+// History holds every kind of generation. Rows from before that carry no
+// kind and are comments.
+const KIND_LABELS: Record<HistoryKind, string> = {
+  comment: "Comment",
+  reply: "Reply",
+  connection_note: "Connection note",
+  message: "Message",
+};
+
+const LINK_LABELS: Record<HistoryKind, string> = {
+  comment: "View post",
+  reply: "View post",
+  connection_note: "View profile",
+  message: "Open chat",
+};
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -97,8 +114,8 @@ export function HistoryScreen() {
 
       {entries.length === 0 ? (
         <p className="rounded-md border border-dashed border-input p-3 text-xs text-muted-foreground">
-          No comments yet. Click Comment on a LinkedIn post and generate one, and it'll show up
-          here.
+          Nothing yet. Comments, replies, connection notes and messages you generate show up
+          here, and on carouselabs.com under Extension.
         </p>
       ) : (
         <>
@@ -131,6 +148,9 @@ export function HistoryScreen() {
               </p>
 
               <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                  {KIND_LABELS[entry.kind ?? "comment"]}
+                </span>
                 <span className="rounded bg-muted px-1.5 py-0.5">{entry.profileName}</span>
                 {entry.action !== "NONE" && (
                   <span className="rounded bg-muted px-1.5 py-0.5 uppercase">{entry.action}</span>
@@ -147,7 +167,7 @@ export function HistoryScreen() {
                     variant="outline"
                     onClick={() => chrome.tabs.create({ url: entry.postUrl })}
                   >
-                    View post
+                    {LINK_LABELS[entry.kind ?? "comment"]}
                   </Button>
                 )}
               </div>

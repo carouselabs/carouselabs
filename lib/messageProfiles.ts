@@ -1,19 +1,6 @@
-// lib/messageProfiles.ts — validation and plan limits for Conversation
+// lib/messageProfiles.ts — validation for Conversation
 // Assistant profiles (app/api/ext/message-profiles and .../[id]). Mirrors
 // lib/connectionProfiles.ts, which does the same job for connection notes.
-import type { Plan } from "@prisma/client"
-
-// Counted separately from comment and connection profiles — a user's one
-// free comment profile shouldn't cost them their one free message profile.
-export const CUSTOM_MESSAGE_PROFILE_LIMITS: Record<Plan, number | null> = {
-  FREE: 1,
-  PRO: 5,
-  GROWTH: null,
-}
-
-export function customMessageProfileLimit(plan: Plan): number | null {
-  return CUSTOM_MESSAGE_PROFILE_LIMITS[plan]
-}
 
 const MAX_LENGTHS = {
   name: 80,

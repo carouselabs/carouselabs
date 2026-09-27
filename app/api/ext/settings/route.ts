@@ -1,21 +1,29 @@
-// app/api/ext/settings/route.ts — the Comment extension's Settings screen.
-// Bearer-token authenticated, same as the rest of app/api/ext/*.
+// app/api/ext/settings/route.ts — the extension's account settings, for the
+// side panel and the website's Extension section (either caller: see
+// getExtensionUser).
 //
-// Only account-level settings live here. Purely local UI preferences (whether
-// this browser renders the Insert button) stay in chrome.storage.local: they
-// describe one install, not the account, and round-tripping them through the
-// server would make them follow a user to a machine where they meant nothing.
+// Everything the extension lets a user edit lives here or in its own route
+// (profiles, contacts), so the website can edit it too. That includes what
+// used to be kept only in one browser — the connection note's context and
+// length, the user's own LinkedIn profile, and whether the Insert button
+// shows (lib/extensionPreferences.ts validates those).
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
+import { getExtensionUser } from "@/lib/extensionCommentAuth"
+import { Prisma } from "@prisma/client"
+import {
+  parseConnectNoteContext,
+  parseConnectNoteLength,
+  parseLinkedinProfile,
+} from "@/lib/extensionPreferences"
 
 // Mirrors the language list the profile builder offers.
 const LANGUAGES = ["English", "Spanish", "French", "German", "Portuguese", "Hindi"]
 
 export async function GET(req: Request) {
-  const user = await getUserFromCommentExtensionToken(req)
+  const user = await getExtensionUser(req)
   if (!user) {
-    return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 })
   }
 
   return NextResponse.json({
@@ -24,6 +32,10 @@ export async function GET(req: Request) {
     defaultMessageProfileId: user.defaultMessageProfileId,
     defaultLanguage: user.defaultLanguage,
     insertWarningHidden: user.insertWarningHidden,
+    connectNoteContext: user.connectNoteContext,
+    connectNoteLength: user.connectNoteLength,
+    linkedinProfile: user.linkedinProfile,
+    insertButtonHidden: user.insertButtonHidden,
   })
 }
 
@@ -31,9 +43,9 @@ export async function GET(req: Request) {
 // Written as a named allowlist rather than spreading the body, so a future
 // User column cannot be set from the extension by accident.
 export async function PATCH(req: Request) {
-  const user = await getUserFromCommentExtensionToken(req)
+  const user = await getExtensionUser(req)
   if (!user) {
-    return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 })
   }
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
@@ -45,7 +57,32 @@ export async function PATCH(req: Request) {
     defaultMessageProfileId?: string | null
     defaultLanguage?: string | null
     insertWarningHidden?: boolean
+    connectNoteContext?: Prisma.InputJsonValue | typeof Prisma.DbNull
+    connectNoteLength?: Prisma.InputJsonValue | typeof Prisma.DbNull
+    linkedinProfile?: Prisma.InputJsonValue | typeof Prisma.DbNull
+    insertButtonHidden?: boolean | null
   } = {}
+
+  // The JSON settings share one shape of handling: validate, then store the
+  // cleaned value, or a database NULL when cleared.
+  const jsonSettings = [
+    ["connectNoteContext", parseConnectNoteContext],
+    ["connectNoteLength", parseConnectNoteLength],
+    ["linkedinProfile", parseLinkedinProfile],
+  ] as const
+  for (const [key, parse] of jsonSettings) {
+    if (!(key in body)) continue
+    const parsed = parse(body[key])
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
+    data[key] = parsed.value === null ? Prisma.DbNull : (parsed.value as unknown as Prisma.InputJsonValue)
+  }
+
+  if ("insertButtonHidden" in body) {
+    if (body.insertButtonHidden !== null && typeof body.insertButtonHidden !== "boolean") {
+      return NextResponse.json({ error: "insertButtonHidden must be a boolean or null" }, { status: 400 })
+    }
+    data.insertButtonHidden = body.insertButtonHidden as boolean | null
+  }
 
   if ("defaultCommentProfileId" in body) {
     const id = body.defaultCommentProfileId
@@ -139,6 +176,10 @@ export async function PATCH(req: Request) {
       defaultMessageProfileId: true,
       defaultLanguage: true,
       insertWarningHidden: true,
+      connectNoteContext: true,
+      connectNoteLength: true,
+      linkedinProfile: true,
+      insertButtonHidden: true,
     },
   })
 

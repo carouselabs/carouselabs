@@ -9,6 +9,7 @@ import {
   sendTopUpEmail,
 } from "@/lib/email"
 import { createCommissionForPayment } from "@/lib/referral"
+import { handleExtensionWebhook, isExtensionWebhook } from "@/lib/extensionBilling"
 
 // Lemon Squeezy events are signed with HMAC-SHA256 over the raw body, so this
 // route must read req.text() (not req.json()) before parsing.
@@ -92,6 +93,16 @@ export async function POST(req: Request) {
   const attrs = payload.data?.attributes ?? {}
 
   try {
+    // The browser extension's $15/month subscription is a separate product
+    // with its own table (lib/extensionBilling.ts). It must be routed away
+    // before everything below: the web-plan code finds the buyer by email and
+    // maps unknown variants to Pro, so an extension purchase would grant web
+    // Pro, and its later expiry would downgrade the buyer's web plan to Free.
+    if (await isExtensionWebhook(payload)) {
+      await handleExtensionWebhook(payload)
+      return new Response("OK", { status: 200 })
+    }
+
     // Top-up grants resolve the buyer from meta.custom_data.user_id (stamped
     // from the authenticated session when the overlay checkout was opened)
     // instead of the checkout email — the Lemon Squeezy form lets buyers type

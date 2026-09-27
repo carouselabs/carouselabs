@@ -5,14 +5,14 @@
 // Mirrors app/api/ext/connection-profiles/[id].
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
+import { getExtensionUser } from "@/lib/extensionCommentAuth"
 import { parseMessageProfileInput } from "@/lib/messageProfiles"
 
 // PUT /api/ext/message-profiles/:id
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getUserFromCommentExtensionToken(req)
+  const user = await getExtensionUser(req)
   if (!user) {
-    return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 })
   }
 
   const { id } = await params
@@ -43,9 +43,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
 // DELETE /api/ext/message-profiles/:id
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getUserFromCommentExtensionToken(req)
+  const user = await getExtensionUser(req)
   if (!user) {
-    return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 })
   }
 
   const { id } = await params

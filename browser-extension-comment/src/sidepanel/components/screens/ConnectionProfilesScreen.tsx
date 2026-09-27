@@ -6,15 +6,8 @@ import { RecommendedBadge } from "../RecommendedBadge";
 
 // Connection Note profiles, the counterpart to ProfilesScreen for comments.
 // Same structure deliberately: presets are duplicated rather than edited (they
-// are shared by every user), and plan limits are shown before the form.
+// are shared by every user).
 
-// Mirrors CUSTOM_CONNECTION_PROFILE_LIMITS in lib/connectionProfiles. The
-// server re-checks on create; this only drives the UI.
-const CUSTOM_CONNECTION_PROFILE_LIMITS: Record<string, number | null> = {
-  FREE: 1,
-  PRO: 5,
-  GROWTH: null,
-};
 
 type View =
   | { mode: "list" }
@@ -67,8 +60,6 @@ export function ConnectionProfilesScreen({ startInBuilder, onBuilderOpened }: Pr
   const customProfiles = profiles.filter((p) => !p.isSystem);
   const recommendedProfiles = profiles.filter((p) => p.isRecommended);
   const systemProfiles = profiles.filter((p) => p.isSystem && !p.isRecommended);
-  const limit = me ? (CUSTOM_CONNECTION_PROFILE_LIMITS[me.plan] ?? null) : null;
-  const atLimit = limit !== null && customProfiles.length >= limit;
 
   async function handleDelete(profile: ConnectionProfile) {
     setPendingId(profile.id);
@@ -141,7 +132,7 @@ export function ConnectionProfilesScreen({ startInBuilder, onBuilderOpened }: Pr
         <p className="text-[11px] text-muted-foreground">
           {profile.goal} · {profile.length}
         </p>
-        <Button size="sm" variant="outline" disabled={atLimit} onClick={() => setView({ mode: "duplicate", profile })}>
+        <Button size="sm" variant="outline" onClick={() => setView({ mode: "duplicate", profile })}>
           Duplicate
         </Button>
       </div>
@@ -154,8 +145,7 @@ export function ConnectionProfilesScreen({ startInBuilder, onBuilderOpened }: Pr
         <h2 className="text-sm font-semibold">Connection note profiles</h2>
         {me && (
           <span className="text-xs text-muted-foreground">
-            {customProfiles.length}
-            {limit === null ? "" : ` / ${limit}`} custom
+            {customProfiles.length} custom
           </span>
         )}
       </div>
@@ -171,15 +161,9 @@ export function ConnectionProfilesScreen({ startInBuilder, onBuilderOpened }: Pr
       {state === "ready" && (
         <>
           <div className="space-y-1.5">
-            <Button disabled={atLimit} onClick={() => setView({ mode: "create" })}>
+            <Button onClick={() => setView({ mode: "create" })}>
               + New connection profile
             </Button>
-            {atLimit && (
-              <p className="text-xs text-muted-foreground">
-                Your {me?.plan} plan allows {limit} custom connection profile{limit === 1 ? "" : "s"}.
-                Upgrade to create more — see the Account screen.
-              </p>
-            )}
           </div>
 
           {recommendedProfiles.length > 0 && (
@@ -214,7 +198,7 @@ export function ConnectionProfilesScreen({ startInBuilder, onBuilderOpened }: Pr
                     <Button size="sm" variant="outline" disabled={pendingId === profile.id} onClick={() => setView({ mode: "edit", profile })}>
                       Edit
                     </Button>
-                    <Button size="sm" variant="outline" disabled={atLimit || pendingId === profile.id} onClick={() => setView({ mode: "duplicate", profile })}>
+                    <Button size="sm" variant="outline" disabled={pendingId === profile.id} onClick={() => setView({ mode: "duplicate", profile })}>
                       Duplicate
                     </Button>
                     <Button

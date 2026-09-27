@@ -1,20 +1,7 @@
-// lib/commentProfiles.ts — validation and plan limits shared by the Comment
+// lib/commentProfiles.ts — validation shared by the Comment
 // extension's profile routes (app/api/ext/profiles, .../[id], .../test).
 // Kept in one place so create, edit and test cannot drift on what counts as a
 // valid profile.
-import type { Plan } from "@prisma/client"
-
-// How many CUSTOM profiles a plan may own. System profiles are shared and
-// never count against this. null means unlimited.
-export const CUSTOM_PROFILE_LIMITS: Record<Plan, number | null> = {
-  FREE: 1,
-  PRO: 5,
-  GROWTH: null,
-}
-
-export function customProfileLimit(plan: Plan): number | null {
-  return CUSTOM_PROFILE_LIMITS[plan]
-}
 
 // Free tests per profile. A brand-new draft has no row to count against, so
 // the form tracks its own allowance client-side until first save; from then on

@@ -8,11 +8,16 @@ import {
   type MeResponse,
 } from "@/lib/api";
 import { RecommendedBadge } from "./RecommendedBadge";
+import { FreeGenerationsNote, UnlockCard } from "./UnlockCard";
+import { noteFreeRemaining, notePaywallError } from "@/lib/extensionAccess";
+import { markHistoryAction } from "@/lib/history";
 import {
-  loadConnectContext,
-  loadConnectLength,
-  loadSelfProfile,
-  saveConnectLength,
+  loadSyncedConnectContext,
+  loadSyncedConnectLength,
+  loadSyncedSelfProfile,
+  saveSyncedConnectLength,
+} from "@/lib/syncedSettings";
+import {
   CONNECT_LENGTH_PRESETS,
   CONNECT_NOTE_HARD_MAX,
   CONNECT_NOTE_MIN,
@@ -44,13 +49,16 @@ function userFacingError(err: unknown): string {
 
 interface Props {
   target: LinkedInProfileInfo;
-  outOfCredits: boolean;
+  // Free generations used up, no subscription: the unlock card replaces
+  // Generate. Owned by HomeScreen, which reads the shared access store.
+  paywalled: boolean;
   // Insert gating and the warning modal live in HomeScreen, shared with the
   // comment flow; this panel only asks for an insert.
   showInsert: boolean;
   inserting: boolean;
   insertError: string | null;
-  onInsert: (text: string) => void;
+  // historyId is the note's History row, so HomeScreen can mark it INSERTED.
+  onInsert: (text: string, historyId: string | null) => void;
   // Opens the connection-profile builder; owned by App, like the comment one.
   onCreateProfile: () => void;
 }
@@ -63,7 +71,7 @@ const CREATE_CUSTOM_VALUE = "__create_custom__";
 
 export function ConnectionNotePanel({
   target,
-  outOfCredits,
+  paywalled,
   showInsert,
   inserting,
   insertError,
@@ -84,6 +92,8 @@ export function ConnectionNotePanel({
   const [length, setLength] = useState<ConnectLengthSetting | null>(null);
   const [extraInstruction, setExtraInstruction] = useState("");
   const [note, setNote] = useState("");
+  // The note's History row (see markHistoryAction).
+  const [historyId, setHistoryId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -95,7 +105,7 @@ export function ConnectionNotePanel({
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([loadConnectContext(), loadConnectLength(), loadSelfProfile()]).then(([c, l, s]) => {
+    Promise.all([loadSyncedConnectContext(), loadSyncedConnectLength(), loadSyncedSelfProfile()]).then(([c, l, s]) => {
       if (cancelled) return;
       setContext(c);
       setLength(l);
@@ -147,7 +157,7 @@ export function ConnectionNotePanel({
 
   function updateLength(next: ConnectLengthSetting) {
     setLength(next);
-    void saveConnectLength(next);
+    void saveSyncedConnectLength(next);
   }
 
   const selectedProfile = profiles.find((p) => p.id === profileId) ?? null;
@@ -168,7 +178,7 @@ export function ConnectionNotePanel({
         : null;
 
   const busy = generating || inserting;
-  const generateDisabled = !context || !length || !!contextProblem || outOfCredits || busy;
+  const generateDisabled = !context || !length || !!contextProblem || paywalled || busy;
   const hasNote = note.trim().length > 0;
   const overLimit = note.length > CONNECT_NOTE_HARD_MAX;
 
@@ -193,19 +203,28 @@ export function ConnectionNotePanel({
           // The profile's own length range wins server-side, so the picker
           // below is only used when no profile is selected.
           profileId: profileId || undefined,
-          target: { name: target.name, headline: target.headline, currentRole: target.currentRole, about: target.about },
+          // url is for History only; the server never sends it to the model.
+          target: {
+            name: target.name,
+            headline: target.headline,
+            currentRole: target.currentRole,
+            about: target.about,
+            url: target.url,
+          },
           context: contextPayload,
           length: { min: length.min, max: length.max },
           extraInstruction: extraInstruction.trim() || undefined,
         }),
       });
       setNote(res.note);
+      setHistoryId(res.historyId ?? null);
+      noteFreeRemaining(res.freeRemaining);
       outputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       // Confirms the round trip in the side panel's own console (right-click
       // the panel → Inspect), the counterpart to the content script's lines.
       console.log(`[sidepanel] connection note generated — ${res.note.length} chars: "${res.note}"`);
     } catch (err) {
-      setError(userFacingError(err));
+      if (!notePaywallError(err)) setError(userFacingError(err));
     } finally {
       setGenerating(false);
     }
@@ -214,6 +233,7 @@ export function ConnectionNotePanel({
   async function handleCopy() {
     try {
       await navigator.clipboard.writeText(note);
+      markHistoryAction(historyId, "COPIED", note);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -368,12 +388,18 @@ export function ConnectionNotePanel({
         />
       </div>
 
-      <Button disabled={generateDisabled} onClick={handleGenerate}>
-        {generating ? "Generating…" : hasNote ? "Regenerate" : "Generate note"}
-      </Button>
+      {paywalled ? (
+        <UnlockCard />
+      ) : (
+        <>
+          <Button disabled={generateDisabled} onClick={handleGenerate}>
+            {generating ? "Generating…" : hasNote ? "Regenerate" : "Generate note"}
+          </Button>
+          <FreeGenerationsNote />
+        </>
+      )}
 
       {contextProblem && <p className="text-xs text-muted-foreground">{contextProblem}</p>}
-      {outOfCredits && <p className="text-xs text-muted-foreground">You&apos;re out of credits.</p>}
 
       {(error || insertError) && (
         <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
@@ -403,6 +429,7 @@ export function ConnectionNotePanel({
               navigator.clipboard
                 .writeText(note)
                 .then(() => {
+                  markHistoryAction(historyId, "COPIED", note);
                   setFallbackCopied(true);
                   setTimeout(() => setFallbackCopied(false), 2000);
                 })
@@ -444,7 +471,7 @@ export function ConnectionNotePanel({
           {copied ? "Copied" : "Copy"}
         </Button>
         {showInsert && (
-          <Button size="sm" variant="outline" disabled={!hasNote || busy} onClick={() => onInsert(note)}>
+          <Button size="sm" variant="outline" disabled={!hasNote || busy} onClick={() => onInsert(note, historyId)}>
             {inserting ? "Inserting…" : "Insert"}
           </Button>
         )}

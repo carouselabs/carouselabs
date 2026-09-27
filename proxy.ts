@@ -33,6 +33,9 @@ const isPublicRoute = createRouteMatcher([
   "/verify-certificate(.*)", // Public intern-certificate verification page
   "/start(.*)", // Public link-in-bio Start Pages (carouselabs.com/start/[slug])
   "/l/(.*)", // Public short-link redirects (carouselabs.com/l/[slug])
+  // "Buy the extension" buttons. The handler sends signed-out visitors to
+  // sign-up itself (then back here), so Clerk mustn't redirect them first.
+  "/checkout/extension",
   "/sitemap.xml",
   "/robots.txt",
   "/api/contact(.*)",

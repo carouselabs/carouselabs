@@ -2,6 +2,9 @@ import Link from "next/link"
 import type { Metadata } from "next"
 import type { LucideIcon } from "lucide-react"
 import { ArrowRight, ExternalLink, Hand, ImageIcon, Lightbulb, MessageSquare } from "lucide-react"
+import { getCurrentUser } from "@/lib/auth"
+import { extAccessSummary } from "@/lib/extAccess"
+import { EXTENSION_CHECKOUT_PATH, EXTENSION_PLAN, EXTENSION_STORE_URL } from "@/lib/plans"
 
 export const metadata: Metadata = {
   title: "Toolkit",
@@ -10,11 +13,10 @@ export const metadata: Metadata = {
 
 // Chrome Web Store listing URLs. null renders a disabled button rather than a
 // link, so a listing that is not live yet can never ship as a broken href.
-//
-// TODO(comment): set once the Comment extension clears Web Store review.
+// The Comment extension's lives in lib/plans.ts with the rest of its product
+// data, since the billing page links to it too.
 const IDEAS_BOARD_STORE_URL: string | null =
   "https://chromewebstore.google.com/detail/carouselabs-ideas-board/jiambimimcofcfnefffcpcciocfpajma"
-const COMMENT_STORE_URL: string | null = null
 
 type ToolCard =
   | { kind: "tool"; name: string; description: string; icon: LucideIcon; href: string }
@@ -24,6 +26,8 @@ type ToolCard =
       description: string
       icon: LucideIcon
       storeUrl: string | null
+      // Paid extensions: the $15/month plan, bought separately (lib/plans.ts).
+      paid?: boolean
     }
 
 const TOOLS: ToolCard[] = [
@@ -51,14 +55,37 @@ const TOOLS: ToolCard[] = [
   {
     kind: "extension",
     name: "CarouseLabs Comment",
-    description: "Generate genuine LinkedIn comments in your own voice.",
+    description:
+      "Unlimited LinkedIn comments, replies, connection notes and conversations in your own voice — $15/month, sold separately.",
     icon: MessageSquare,
-    storeUrl: COMMENT_STORE_URL,
+    storeUrl: EXTENSION_STORE_URL,
+    paid: true,
   },
 ]
 
 const ctaClass =
   "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#1A1A1A] hover:bg-[#000000] text-[12px] font-semibold text-white transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+
+const secondaryClass =
+  "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[#7C3AED]/30 bg-white hover:bg-[rgba(124,58,237,0.06)] text-[12px] font-semibold text-[#7C3AED] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+
+// The paid extension's second button: buy it, or show it's already unlocked.
+// Installing and trying it is free (10 generations), so Install stays the
+// primary action once the listing is live.
+function PlanCta({ unlimited }: { unlimited: boolean }) {
+  if (unlimited) {
+    return (
+      <Link href="/extension" className={secondaryClass}>
+        Unlimited — open
+      </Link>
+    )
+  }
+  return (
+    <a href={EXTENSION_CHECKOUT_PATH} className={secondaryClass}>
+      Get unlimited — ${EXTENSION_PLAN.price}/month
+    </a>
+  )
+}
 
 function Cta({ tool }: { tool: ToolCard }) {
   if (tool.kind === "tool") {
@@ -91,7 +118,12 @@ function Cta({ tool }: { tool: ToolCard }) {
   )
 }
 
-export default function ToolkitPage() {
+export default async function ToolkitPage() {
+  // The (app) layout has already required a signed-in user.
+  const user = await getCurrentUser()
+  const extension = user ? await extAccessSummary(user.id) : null
+  const unlimited = extension?.access === "unlimited"
+
   return (
     <div className="max-w-5xl mx-auto flex flex-col gap-6">
       <div className="flex flex-col gap-1">
@@ -125,8 +157,11 @@ export default function ToolkitPage() {
                 <p className="text-[12px] text-[#6B7280] leading-[1.5]">{tool.description}</p>
               </div>
 
-              <div className="mt-auto pt-1">
-                <Cta tool={tool} />
+              <div className="mt-auto pt-1 flex flex-wrap items-center gap-2">
+                {/* A paid extension with no listing yet shows only its plan
+                    button, never a dead "Coming soon". */}
+                {!(tool.kind === "extension" && tool.paid && !tool.storeUrl) && <Cta tool={tool} />}
+                {tool.kind === "extension" && tool.paid && <PlanCta unlimited={unlimited} />}
               </div>
             </article>
           )

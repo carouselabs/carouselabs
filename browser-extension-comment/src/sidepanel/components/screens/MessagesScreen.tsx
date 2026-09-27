@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { InsertWarningModal } from "../InsertWarningModal";
+import { FreeGenerationsNote, UnlockCard } from "../UnlockCard";
+import {
+  isPaywalled,
+  noteFreeRemaining,
+  notePaywallError,
+  setExtensionAccess,
+  useExtensionAccess,
+} from "@/lib/extensionAccess";
 import { noContentScriptMessage } from "@/lib/tabs";
+import { markHistoryAction } from "@/lib/history";
+// Kept on the account, so the website's Extension section edits the same values.
+import { loadShowInsert, loadSyncedMessageContext, saveSyncedMessageContext } from "@/lib/syncedSettings";
 import {
   apiFetch,
   ApiError,
@@ -11,8 +22,6 @@ import {
   type MessageProfile,
 } from "@/lib/api";
 import {
-  loadMessageContext,
-  saveMessageContext,
   READ_CONVERSATION_MESSAGE_TYPE,
   MAX_MESSAGE_PURPOSE_CHARS,
   MESSAGE_TONES,
@@ -31,10 +40,6 @@ import {
 
 // Must match INSERT_MESSAGE_TYPE in src/content-script.ts exactly.
 const INSERT_MESSAGE_TYPE = "carouselabs:insert-comment";
-
-// Per-install UI preference, same key HomeScreen uses — one install-wide
-// choice, not one per screen.
-const SHOW_INSERT_STORAGE_KEY = "showInsertButton";
 
 function userFacingError(err: unknown): string {
   if (err instanceof ApiError && err.status >= 400 && err.status < 500) return err.message;
@@ -65,8 +70,9 @@ export function MessagesScreen({ onCreateProfile }: Props) {
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-  const [credits, setCredits] = useState<number | null>(null);
-  const [creditsEnforced, setCreditsEnforced] = useState(true);
+  // The message's History row (see markHistoryAction).
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const access = useExtensionAccess();
   const [copied, setCopied] = useState(false);
   // The output can land below the fold once a purpose/tone/thread preview
   // has pushed the page tall — scrolled into view automatically so a fresh
@@ -91,8 +97,7 @@ export function MessagesScreen({ onCreateProfile }: Props) {
         if (cancelled) return;
         setProfiles(fetched);
         setMe(meRes);
-        setCredits(meRes.creditsAvailable);
-        setCreditsEnforced(meRes.creditsEnforced !== false);
+        setExtensionAccess(meRes.extension);
         setInsertWarningHidden(meRes.insertWarningHidden);
       })
       .catch((err) => {
@@ -105,10 +110,8 @@ export function MessagesScreen({ onCreateProfile }: Props) {
       })
       .catch(() => {});
 
-    chrome.storage.local.get(SHOW_INSERT_STORAGE_KEY).then((stored) => {
-      if (cancelled) return;
-      const value = stored[SHOW_INSERT_STORAGE_KEY];
-      setShowInsertPref(value !== false);
+    loadShowInsert().then((show) => {
+      if (!cancelled) setShowInsertPref(show);
     });
 
     return () => {
@@ -131,12 +134,12 @@ export function MessagesScreen({ onCreateProfile }: Props) {
   }
 
   async function applyContextForContact(url: string) {
-    const stored = await loadMessageContext(url);
+    const stored = await loadSyncedMessageContext(url);
     if (stored) {
       setChoice(stored.choice);
       setProfileId(stored.profileId || defaultProfileId());
       setPurpose(stored.purpose);
-      // loadMessageContext already applies the choice-aware default (empty
+      // The loader already applies the choice-aware default (empty
       // for "profile" — meaning no override — vs MESSAGE_TONES[0] for
       // custom/flow), so it is used as-is rather than re-defaulted here.
       setTone(stored.tone);
@@ -167,6 +170,7 @@ export function MessagesScreen({ onCreateProfile }: Props) {
 
       setConversation(res.conversation);
       setMessage("");
+      setHistoryId(null);
       setCopied(false);
       setInsertError(null);
 
@@ -187,7 +191,7 @@ export function MessagesScreen({ onCreateProfile }: Props) {
 
   async function persistContext(next: MessageContextSetting) {
     if (!conversation?.contact.profileUrl) return;
-    await saveMessageContext(conversation.contact.profileUrl, next);
+    await saveSyncedMessageContext(conversation.contact.profileUrl, next, conversation.contact.name);
   }
 
   function handleChoiceChange(next: MessageContextChoice) {
@@ -233,6 +237,8 @@ export function MessagesScreen({ onCreateProfile }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contact: { name: conversation.contact.name, headline: conversation.contact.headline },
+          // For History's "Open chat" link only; never sent to the model.
+          threadPath: conversation.threadPath,
           thread: conversation.thread,
           profileId: choice === "profile" ? profileId : undefined,
           goal: choice === "custom" ? purpose.trim() : undefined,
@@ -244,10 +250,12 @@ export function MessagesScreen({ onCreateProfile }: Props) {
         }),
       });
       setMessage(res.message);
-      setCredits(res.creditsRemaining);
+      setHistoryId(res.historyId ?? null);
+      noteFreeRemaining(res.freeRemaining);
       setCopied(false);
     } catch (err) {
-      setGenerateError(userFacingError(err));
+      // The paywall's 402 swaps in the unlock card, which says it better.
+      if (!notePaywallError(err)) setGenerateError(userFacingError(err));
     } finally {
       setGenerating(false);
     }
@@ -261,6 +269,7 @@ export function MessagesScreen({ onCreateProfile }: Props) {
       setGenerateError("Couldn't copy to clipboard");
       return;
     }
+    markHistoryAction(historyId, "COPIED", message);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -294,7 +303,9 @@ export function MessagesScreen({ onCreateProfile }: Props) {
 
       if (!res?.ok) {
         setInsertError(res?.error ?? "Couldn't insert into LinkedIn. Try Copy instead.");
+        return;
       }
+      markHistoryAction(historyId, "INSERTED", text);
     } catch {
       setInsertError(noContentScriptMessage(tab, "Open the LinkedIn conversation in the active tab, then try again."));
     } finally {
@@ -323,7 +334,7 @@ export function MessagesScreen({ onCreateProfile }: Props) {
   const recommendedProfiles = profiles.filter((p) => p.isRecommended);
   const systemProfiles = profiles.filter((p) => p.isSystem && !p.isRecommended);
   const customProfiles = profiles.filter((p) => !p.isSystem);
-  const outOfCredits = creditsEnforced && credits !== null && credits <= 0;
+  const paywalled = isPaywalled(access);
   const showInsert = insertEnabled && showInsertPref;
 
   const insertWarningModal = showInsertWarning && (
@@ -345,14 +356,7 @@ export function MessagesScreen({ onCreateProfile }: Props) {
     <div className="flex flex-col gap-4 p-4">
       {insertWarningModal}
 
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Conversation Assistant</h2>
-        {me && (
-          <span className="text-xs text-muted-foreground">
-            {credits ?? "—"} credit{credits === 1 ? "" : "s"}
-          </span>
-        )}
-      </div>
+      <h2 className="text-sm font-semibold">Conversation Assistant</h2>
 
       {loadError && (
         <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
@@ -508,13 +512,16 @@ export function MessagesScreen({ onCreateProfile }: Props) {
             />
           </div>
 
-          {outOfCredits && (
-            <p className="text-xs text-destructive">You&apos;re out of credits.</p>
+          {paywalled ? (
+            <UnlockCard />
+          ) : (
+            <>
+              <Button disabled={!canGenerate || generating} onClick={handleGenerate}>
+                {generating ? "Generating…" : isOpener ? "Generate opener" : "Generate reply"}
+              </Button>
+              <FreeGenerationsNote />
+            </>
           )}
-
-          <Button disabled={!canGenerate || generating || outOfCredits} onClick={handleGenerate}>
-            {generating ? "Generating…" : isOpener ? "Generate opener" : "Generate reply"}
-          </Button>
 
           {generateError && <p className="text-xs text-destructive">{generateError}</p>}
 

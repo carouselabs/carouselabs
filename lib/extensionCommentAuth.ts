@@ -7,6 +7,7 @@
 // ExtensionApiKey, not a reused one).
 import crypto from "node:crypto"
 import { db } from "@/lib/db"
+import { getCurrentUser } from "@/lib/auth"
 import type { User } from "@prisma/client"
 
 const TOKEN_PREFIX = "cl_cmt_"
@@ -42,4 +43,31 @@ export async function getUserFromCommentExtensionToken(req: Request): Promise<Us
     })
 
   return record.user
+}
+
+// The routes the website's Extension section shares with the side panel
+// (profiles, history, settings, account — never generation) accept either
+// caller: the extension's bearer token, or the website's own Clerk session.
+// One set of routes means one set of rules, so a profile saved on the website
+// is exactly what the panel would have saved.
+//
+// An Authorization header means the caller is the extension: then only the
+// token counts, never a session cookie that happens to ride along.
+export async function getExtensionUser(req: Request): Promise<User | null> {
+  if (req.headers.get("authorization")) return getUserFromCommentExtensionToken(req)
+  // A cookie rides along on any request to this site, so a cookie-authenticated
+  // write must also prove it came from one of our own pages. Browsers send
+  // Origin on every non-GET fetch, and a page can't forge it.
+  if (req.method !== "GET" && req.method !== "HEAD" && !isSameOrigin(req)) return null
+  return getCurrentUser()
+}
+
+function isSameOrigin(req: Request): boolean {
+  const origin = req.headers.get("origin")
+  if (!origin) return false
+  try {
+    return new URL(origin).host === new URL(req.url).host
+  } catch {
+    return false
+  }
 }

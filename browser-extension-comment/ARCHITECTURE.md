@@ -51,11 +51,12 @@ Capture (Comment / Reply / Connect click on LinkedIn)
   → HomeScreen (dedupes on capturedAt) + CaptureToast
 
 Generate
-  Panel → apiFetch POST /api/ext/{generate,rewrite,connection-note,message}
+  Panel → apiFetch POST /api/ext/{generate,rewrite,connection-note,message,profiles/test}
   → backend: bearer auth → shared daily limit 450 generations/user/24h across
-    all extension routes (lib/extDailyLimit.ts, no hourly limit) → credits
-    (bypassed while COMMENT_CREDITS_ENFORCED=false) → gpt-6-luna, Claude Haiku
-    fallback → number / placeholder / weak-pattern guards → text
+    all extension routes (lib/extDailyLimit.ts, shown as a cooldown, no hourly
+    limit) → paywall gate (lib/extAccess.ts, see Paywall below) → gpt-6-luna,
+    Claude Haiku fallback → number / placeholder / weak-pattern guards → text
+    + freeRemaining (a failed generation gives its free use back)
 
 Insert (never submits)
   Panel → chrome.tabs.sendMessage(activeTab, {type:"carouselabs:insert-comment", text, mode})
@@ -79,14 +80,20 @@ Shortcut
 | `extensionToken` | background | Long-lived bearer token (`cl_cmt_…`). Server stores only its SHA-256. |
 | `apiBaseUrl` | developer, manually | Optional API host override. |
 | `lastSelectedPost` | content script | Last captured post/reply/connect target (other people's names + post text). |
-| `showInsertButton` | Settings | Per-install Insert visibility. |
+| `showInsertButton` | Settings | Cache of the account's Insert visibility (`User.insertButtonHidden`). |
 | onboarding flag | Onboarding | Done/not done. |
 | `linkedinSelfName` | content script | User's own LinkedIn display name. |
-| `linkedinSelfProfile` | content script | User's own name/headline/role/about. |
-| `connectNoteContext`, `connectNoteLength` | panel | Connection-note preferences. |
-| `messageContext:<profileUrl>` | panel | Per-contact reason/profile/tone. One key per contact, never pruned. |
+| `linkedinSelfProfile` | content script | User's own name/headline/role/about. Cache of `User.linkedinProfile` (newer copy wins). |
+| `connectNoteContext`, `connectNoteLength` | panel | Cache of `User.connectNoteContext` / `.connectNoteLength`. |
+| `messageContext:<profileUrl>` | panel | Cache of one `ContactContext` row (per-contact reason/profile/tone). |
+| `settingsUploadedToAccount` | panel | Set once this browser's old local settings were uploaded to the account. |
 
-Account-level state (profiles, history, settings, credits, `insertWarningHidden`) lives server-side.
+Account-level state (profiles, history, settings, paywall state, `insertWarningHidden`) lives server-side —
+and since the website's Extension section, so does everything the panel lets you edit (see
+`src/lib/syncedSettings.ts`). The cached keys above are read only when the server can't be
+reached. The first time a browser signs in after this change, its old local values are uploaded
+once for anything the account doesn't have yet; after that the account always wins, so a
+conversation deleted on the website doesn't come back from a local copy.
 
 **Sign out** (`src/lib/account.ts`) removes the token, `lastSelectedPost`,
 `linkedinSelfName`, `linkedinSelfProfile`, `connectNoteContext` and every
@@ -151,3 +158,69 @@ No `tabs`, `scripting`, `alarms`, `webRequest`, `cookies`, `externally_connectab
 - Contact headline: `[title]` element echoing its own text near the title (confirmed)
 - Compose box `div.msg-form__contenteditable` (confirmed), `[contenteditable][aria-label*='Write a message']` **EN**; never inside a pop-up or hidden thread
 - Insert is bound to the thread path + contact name captured at Read
+
+## Paywall
+
+10 free generations per account, for life, then **$15/month unlimited**
+(Lemon Squeezy). Every model call counts: Generate, Regenerate, Reply,
+Shorter/Longer, connection notes, messages, profile Test. "Unlimited" is
+backed by the 450/day cap above, which applies to subscribers too.
+
+| Piece | Where |
+|---|---|
+| Rules (free count, which statuses are usable, webhook classification) | `lib/extensionAccessRules.ts` (pure, unit-tested) |
+| Gate: reserve a free use atomically before the model call, give it back on failure | `lib/extAccess.ts` → every generation route |
+| State | `User.extensionTrialUsed`, `ExtensionSubscription` (one per user; never touches the web `Subscription`) |
+| Checkout link, stamped with the user's id | `GET /api/ext/checkout` |
+| Webhook | `app/api/webhooks/lemonsqueezy` routes extension events to `lib/extensionBilling.ts` **before** any web-plan code |
+| Panel | `src/lib/extensionAccess.ts` (shared store, refresh on focus), `UnlockCard.tsx`, Account screen |
+
+- The buyer is identified by `custom_data.user_id` from the checkout link, or
+  by the stored subscription id — never by the checkout email.
+- An event about an older subscription can't overwrite a newer one; only
+  `subscription_created` replaces the stored subscription.
+- A cancelled subscription keeps working until `endsAt`; `past_due` keeps
+  working while Lemon Squeezy retries the card.
+- `COMMENT_CREDITS_ENFORCED=false` (local only) switches the paywall off on the
+  server, and `/api/ext/me` reports `access: "testing"` so the panel lifts it too.
+- Web plans (Free/Pro/Growth) give the extension nothing, and custom tones
+  (custom profiles) are unlimited for everyone.
+- Referrers earn 8% of every extension payment (first and renewals), the same
+  as for web plans: `subscription_payment_success` → `createCommissionForPayment`,
+  keyed by the invoice id so a redelivery can't pay twice.
+
+## On the website (`/extension`)
+
+The website has an **Extension** section (left menu): Overview, Voice
+profiles, History, Settings, Plan & payments. It **never generates** —
+generation only happens in the extension, on LinkedIn. It manages what the
+extension uses:
+
+| Tab | What | Route it calls |
+|---|---|---|
+| Overview | plan, this month's counts by kind, signed-in browsers (remote Sign out) | `/api/ext/devices` |
+| Custom tones | custom profiles for comments, connection notes, conversations (create / edit / delete / default); every-note settings (your context, your LinkedIn profile, note length); each conversation's reason and tone | `/api/ext/{profiles,connection-profiles,message-profiles,settings,contacts}` |
+| History | every generation, filter by kind, copy, open on LinkedIn, delete (kept 90 days) | `/api/ext/history` |
+| Settings | default language, default voice per kind, Insert button, Insert warning | `/api/ext/settings` |
+| Plan & payments | the $15 plan card, payments read live from Lemon Squeezy | `/api/ext/payments` |
+
+**One set of routes.** The website calls the same `app/api/ext/*` routes as
+the panel. `getExtensionUser` (`lib/extensionCommentAuth.ts`) accepts the
+extension's bearer token *or* the website's Clerk session, so both get the
+same validation and plan limits and read the same rows — a change on either
+side shows on the other with no sync step. Rules:
+
+- If an `Authorization` header is present, only the token counts (a bad token
+  never falls back to a cookie).
+- A cookie-authenticated write (POST/PUT/PATCH/DELETE) must carry a
+  same-origin `Origin` header.
+- Generation routes (`generate`, `rewrite`, `connection-note`, `message`,
+  `profiles/test`) stay token-only.
+
+**History covers every kind.** `CommentHistory.kind` is `comment`, `reply`,
+`connection_note` or `message`; `profileName` is the name at generation time;
+`profileId` is optional (a note or message may use a one-off reason). Notes and
+messages return a `historyId`, and the panel marks Copy/Insert on it like it
+does for comments. The pacing nudge (`commentsToday`) still counts comments and
+replies only.
+

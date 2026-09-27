@@ -9,11 +9,8 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ConnectContextEditor } from "../ConnectContextEditor";
+import { loadShowInsert, saveShowInsert } from "@/lib/syncedSettings";
 
-// Per-install UI preference, so it lives in chrome.storage rather than on the
-// User row. Unlike insertWarningHidden — which records that an account-level
-// risk was acknowledged — this only decides whether one browser shows a button.
-const SHOW_INSERT_STORAGE_KEY = "showInsertButton";
 
 const fieldClass =
   "w-full rounded-md border border-input bg-background p-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50";
@@ -61,9 +58,10 @@ export function SettingsScreen() {
       .then((c) => !cancelled && setInsertEnabled(c.insertEnabled))
       .catch(() => !cancelled && setInsertEnabled(false));
 
-    chrome.storage.local.get(SHOW_INSERT_STORAGE_KEY).then((stored) => {
-      const value = stored[SHOW_INSERT_STORAGE_KEY];
-      if (!cancelled && typeof value === "boolean") setShowInsert(value);
+    // An account setting, so the website's Extension → Settings shows the
+    // same value (src/lib/syncedSettings.ts).
+    loadShowInsert().then((show) => {
+      if (!cancelled) setShowInsert(show);
     });
 
     // Chrome owns the binding; an extension can read it but cannot set it.
@@ -98,7 +96,7 @@ export function SettingsScreen() {
 
   function handleShowInsert(next: boolean) {
     setShowInsert(next);
-    chrome.storage.local.set({ [SHOW_INSERT_STORAGE_KEY]: next });
+    void saveShowInsert(next);
   }
 
   if (loading) {

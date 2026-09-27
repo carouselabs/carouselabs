@@ -6,12 +6,14 @@
 // app/api/ext/generate, deliberately: a preview built from a near-copy of the
 // real prompt would drift and stop predicting what Generate actually produces.
 //
-// Charges no credits. The spend cap is instead TEST_LIMIT per profile, plus
-// the shared daily generation limit, since this is an unmetered model call.
+// Capped at TEST_LIMIT per profile, and like every other extension model call
+// it goes through the access gate (lib/extAccess.ts: a free user's Test uses
+// one of their free generations) and the shared daily generation limit.
 import { NextResponse } from "next/server"
 import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
+import { reserveExtGeneration } from "@/lib/extAccess"
 import { parseProfileInput, TEST_LIMIT } from "@/lib/commentProfiles"
 import {
   buildCommentSystemMessage,
@@ -77,6 +79,9 @@ export async function POST(req: Request) {
     url: "",
   })
 
+  const gate = await reserveExtGeneration(user.id)
+  if (!gate.ok) return gate.response
+
   let comment = ""
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
@@ -91,6 +96,7 @@ export async function POST(req: Request) {
   }
 
   if (!comment) {
+    await gate.release()
     return NextResponse.json({ error: "Something went wrong, try again" }, { status: 502 })
   }
 
@@ -104,5 +110,5 @@ export async function POST(req: Request) {
     })
   }
 
-  return NextResponse.json({ comment, testsUsed, testLimit: TEST_LIMIT })
+  return NextResponse.json({ comment, testsUsed, testLimit: TEST_LIMIT, freeRemaining: gate.freeRemaining })
 }

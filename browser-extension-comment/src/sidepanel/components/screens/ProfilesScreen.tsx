@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import {
   apiFetch,
   ApiError,
-  CUSTOM_PROFILE_LIMITS,
+ 
+  openWebsite,
   type CommentProfile,
   type MeResponse,
 } from "@/lib/api";
@@ -74,8 +75,6 @@ export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) 
   const customProfiles = profiles.filter((p) => !p.isSystem);
   const recommendedProfiles = profiles.filter((p) => p.isRecommended);
   const systemProfiles = profiles.filter((p) => p.isSystem && !p.isRecommended);
-  const limit = me ? CUSTOM_PROFILE_LIMITS[me.plan] ?? null : null;
-  const atLimit = limit !== null && customProfiles.length >= limit;
 
   // One renderer for both system sections, so recommended and built-in cards
   // differ only in the badge. System profiles are shared across every user, so
@@ -89,7 +88,7 @@ export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) 
           {recommended && <RecommendedBadge />}
         </div>
         <p className="line-clamp-2 text-xs text-muted-foreground">{profile.whoIAm}</p>
-        <Button size="sm" variant="outline" disabled={atLimit} onClick={() => setView({ mode: "duplicate", profile })}>
+        <Button size="sm" variant="outline" onClick={() => setView({ mode: "duplicate", profile })}>
           Duplicate
         </Button>
       </div>
@@ -205,11 +204,18 @@ export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) 
         <h2 className="text-sm font-semibold">Comment profiles</h2>
         {me && (
           <span className="text-xs text-muted-foreground">
-            {customProfiles.length}
-            {limit === null ? "" : ` / ${limit}`} custom
+            {customProfiles.length} custom
           </span>
         )}
       </div>
+
+      <button
+        type="button"
+        onClick={() => void openWebsite("/extension/profiles")}
+        className="w-fit text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+      >
+        Easier on a big screen? Edit profiles on carouselabs.com
+      </button>
 
       {state === "loading" && <p className="text-sm text-muted-foreground">Loading profiles…</p>}
 
@@ -222,15 +228,9 @@ export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) 
       {state === "ready" && (
         <>
           <div className="space-y-1.5">
-            <Button disabled={atLimit} onClick={() => setView({ mode: "create" })}>
+            <Button onClick={() => setView({ mode: "create" })}>
               + New custom profile
             </Button>
-            {atLimit && (
-              <p className="text-xs text-muted-foreground">
-                Your {me?.plan} plan allows {limit} custom profile{limit === 1 ? "" : "s"}. Upgrade
-                to create more profiles — see the Account screen.
-              </p>
-            )}
           </div>
 
           {recommendedProfiles.length > 0 && (
@@ -263,7 +263,7 @@ export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) 
                     <Button size="sm" variant="outline" disabled={pendingId === profile.id} onClick={() => setView({ mode: "edit", profile })}>
                       Edit
                     </Button>
-                    <Button size="sm" variant="outline" disabled={atLimit || pendingId === profile.id} onClick={() => setView({ mode: "duplicate", profile })}>
+                    <Button size="sm" variant="outline" disabled={pendingId === profile.id} onClick={() => setView({ mode: "duplicate", profile })}>
                       Duplicate
                     </Button>
                     <Button size="sm" variant="outline" disabled={pendingId === profile.id || me?.defaultCommentProfileId === profile.id} onClick={() => handleSetDefault(profile)}>

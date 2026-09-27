@@ -2,16 +2,18 @@
 
 Scope: the Chrome extension (`browser-extension-comment/`) plus the backend
 pieces it depends on at runtime (`lib/ai/commentModel.ts`,
-`lib/ai/prompts/messagePrompt.ts`). All LinkedIn testing is against local
+`lib/ai/prompts/messagePrompt.ts`, and the paywall: `lib/extAccess.ts`,
+`lib/extensionAccessRules.ts`, `lib/extensionBilling.ts` and the Lemon Squeezy
+webhook's routing). All LinkedIn testing is against local
 fixtures in `tests/fixtures/linkedin/`; nothing touches a live account, and
 the E2E harness aborts any request that isn't a fixture or a canned API reply.
 
 ## How to run
 
 ```
-npm run test:unit       # Vitest + jsdom — 109 tests
+npm run test:unit       # Vitest + jsdom — 195 tests
 npm run test:coverage   # same, with coverage
-npm run test:e2e        # builds dist/ (dev mode), then Playwright in real Chromium — 9 tests
+npm run test:e2e        # builds dist/ (dev mode), then Playwright in real Chromium — 11 tests
 npm test                # both
 ```
 
@@ -20,6 +22,11 @@ npm test                # both
 | Suite | Before fixes | After fixes |
 |---|---|---|
 | Unit (Vitest, 11 files) | 26 failed / 82 passed | **109 passed** |
+| Unit, after the paywall (14 files) | — | **149 passed** |
+| Unit, after the website Extension section (16 files) | — | **166 passed** |
+| Unit, after moving the extension's settings to the account (18 files) | — | **188 passed** |
+| After LinkedIn's new Messaging layout (frame) | — | **193 unit + 11 E2E passed** |
+| After unlimited custom tones + referral commission on extension payments | — | **195 unit + 11 E2E passed** |
 | E2E (Playwright, real Chromium, extension loaded) | 4 failed / 5 passed | **9 passed** |
 | Typecheck (extension + backend) | clean | clean |
 | Production build | — | no diagnostics, no localhost, permissions unchanged |
@@ -27,6 +34,15 @@ npm test                # both
 Every fix has a test that failed on the original code and passes now. Two of
 the fixes were re-broken on purpose afterwards (the DM thread-path guard and
 the Insert kill switch) to confirm the tests catch a regression — both did.
+The paywall got the same treatment: disabling the webhook's extension routing
+fails 4 tests, removing the atomic free-use guard fails 3, and accepting any
+402 as the paywall fails 1. For the website section: removing the same-origin
+check on cookie writes fails 1, letting a bad token fall back to the website
+session fails 2, and letting History link to non-LinkedIn URLs fails 1.
+Dropping the userId scope from deleting a history row, forgetting a
+conversation, or signing out a browser each fails 1 (the test database fakes
+Prisma's real `where` behaviour, so a missing scope can't be hidden by the
+fake), and running the settings upload more than once fails 1.
 
 Coverage (unit): `messageThread.ts` 87% lines, `editor.ts` 100%,
 `authRelay.ts` 94%, `api.ts` 87%, `background.ts` 82%, `connectNote.ts` 70%,
@@ -125,8 +141,61 @@ Run these on your real account, with DevTools open on the LinkedIn tab (dev buil
 - **Q2 — chat pop-ups:** not answered; the Conversation Assistant stays on the full Messaging page only.
 - **Q3 — sign out:** clears the person's data, keeps device settings (L2, fixed).
 - **Q4 — note Insert:** keeps replacing what's in the note box. Appending would garble a 200–300 character note and usually overflow the limit. The replace goes through the browser's own editing, so **Ctrl+Z restores what the user had typed** (E2E test).
-- **Q5 — limits:** no hourly limit. One daily cap of **450 generations per user per rolling 24 hours**, shared by Generate, Regenerate, Shorter/Longer, connection notes, messages and profile Test (`lib/extDailyLimit.ts`). Over the cap, the panel shows "You've reached today's limit of 450 generations." Not covered by automated tests (it needs Upstash Redis); confirm on the manual checklist.
+- **Q5 — limits:** no hourly limit. One daily cap of **450 generations per user per rolling 24 hours**, shared by Generate, Regenerate, Shorter/Longer, connection notes, messages and profile Test (`lib/extDailyLimit.ts`). Over the cap, the panel shows a cooldown message ("You've been generating a lot today, so we've paused things for a bit…") rather than a number, since the $15 plan is sold as unlimited. Not covered by automated tests (it needs Upstash Redis); confirm on the manual checklist.
+
+- **Q6 — pricing:** 10 free generations per account for life (every feature counts, profile Test included), then $15/month, shown as "unlimited" with the 450/day cap behind it as a cooldown. Everyone pays the $15, including web Pro/Growth subscribers. The paywall's server logic and webhook routing are unit-tested against a mocked database; the real Lemon Squeezy round trip is on the manual checklist (18–22).
 
 ## Manual check for the daily limit
 
 17. **Daily limit.** Temporarily set `EXT_DAILY_GENERATION_LIMIT` to 3 in `lib/extDailyLimit.ts`, generate 4 times across different features (comment, note, message) → the 4th shows the daily-limit message. Set it back to 450.
+
+## Manual checks for the paywall
+
+Needs the Lemon Squeezy product in **test mode**, the env vars set, the SQL in
+`scripts/extension-schema.sql` run, and `COMMENT_CREDITS_ENFORCED=false`
+**removed** from `.env.local` (otherwise the paywall is off).
+
+18. **Free count.** New account → Home shows "10 of 10 free generations left". Generate once → 9. Shorter → 8. A failed generation (stop the server mid-request) doesn't lower it.
+19. **Paywall.** Use up the 10 → Generate is replaced by the unlock card on Home, Connection note and Messages; Shorter/Longer are disabled; Copy and Insert still work.
+20. **Checkout.** "Get unlimited — $15/month" opens Lemon Squeezy with your email filled in. Pay with a test card, come back to the panel → it unlocks (or press "Already subscribed? Refresh"). In Supabase, `ExtensionSubscription` has your row and your web `Subscription` row is **unchanged**.
+21. **Account.** Shows "Unlimited" and a renewal date; "Manage subscription" opens the Lemon Squeezy portal. Cancel there → "Unlimited until <date>".
+22. **Renewal / expiry.** In Lemon Squeezy test mode, trigger a renewal and an expiry → the renewal leaves your web plan and credits alone; the expiry brings the paywall back.
+
+## Manual checks for the website's Extension section
+
+Needs `scripts/extension-schema.sql` run first. Sign in on the website and
+have the extension signed in to the same account.
+
+23. **Left menu → Extension** opens Overview: plan, this month's counts, and your browser under "Signed-in browsers".
+24. **Custom tones both ways.** Create a comment profile on the website → open the panel's Profiles screen → it's there. Edit it in the panel → reload the website → the edit shows. Same for a connection note and a conversation profile.
+25. **Default.** "Make default" on the website → the panel preselects it on the next Comment click.
+26. **History.** Generate a comment, a connection note and a message in the extension, Copy one and Insert one → all three appear on the website's History with the right type and "Copied"/"Inserted". Filters narrow the list; Delete removes a row (and it's gone from the panel too).
+27. **Settings.** Change the default language on the website → the panel's Settings shows it.
+28. **Remote sign out.** Overview → Sign out your browser → the panel drops to Sign in on its next action.
+29. **Payments.** After a test purchase, Plan & payments lists it with an invoice link.
+30. **Nothing generates on the website.** There is no Generate or Test button anywhere in the section.
+31. **Old settings carried over.** In a browser that already had a note purpose, note length and some conversation reasons saved, reload the extension and open it → the website's Custom tones shows the same purpose, length and conversations.
+32. **Note settings both ways.** Change "Your context", your profile's headline, or the note length on the website → the extension's next connection note uses them. Change them in the panel → the website shows the change after a reload.
+33. **Conversations.** Change a person's reason or tone on the website → reopen that chat in the extension → it's preselected. Forget them on the website → the extension asks for a reason again next time.
+34. **Insert button.** Untick "Show the Insert button" on the website → Insert disappears from the panel after reopening it.
+
+## LinkedIn's newer design (found 2026-09-27)
+
+On accounts with LinkedIn's newer page design, `/messaging/thread/<id>/` is a
+new shell page (hashed class names, a hidden feed with its own comment editor)
+with the classic Messaging app inside a full-screen, same-origin frame:
+`<iframe data-testid="interop-iframe" src="/preload/?_bprMode=vanilla">`. The
+reader looked only at the page, so every read said "No conversation is open".
+It now reads the frame when the page itself shows no thread
+(`messagingDocument()` in `src/content/messageThread.ts`), and Insert types into
+the frame's own message box. Fixture: `messaging-new-shell.html` (with
+`messaging-thread.html` loaded into the frame). Unit and real-Chromium tests
+cover read, Insert, the thread-switch refusal, and never touching the hidden
+feed's comment box.
+
+When LinkedIn shows only the chat list (a narrow tab — the side panel takes
+width), the thread exists but is hidden; the panel now says so instead of
+"No conversation is open".
+
+35. **New design, live.** On LinkedIn Messaging with a chat open, Read → the contact and messages load. Insert → text lands in that chat's box.
+

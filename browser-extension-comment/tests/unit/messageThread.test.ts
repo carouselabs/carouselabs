@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { extractConversation, insertIntoComposeBox } from "@/content/messageThread";
-import { byFixture, loadFixture } from "./helpers";
+import { extractConversation, insertIntoComposeBox, readConversation } from "@/content/messageThread";
+import { byFixture, loadFixture, loadFixtureInMessagingFrame } from "./helpers";
 
 const BHARTI_PATH = "/messaging/thread/2-bharti/";
 const EXPECT_BHARTI = { threadPath: BHARTI_PATH, contactName: "Bharti Agrawal" };
@@ -123,3 +123,51 @@ describe("inserting into the message box", () => {
     expect(text.indexOf("Quick note first.")).toBeLessThan(text.indexOf("Hello Bharti"));
   });
 });
+
+// LinkedIn's newer design (seen live 2026-09-27): the page is a new shell with
+// a hidden feed, and Messaging is the classic app inside a full-screen frame.
+// Before this was handled, every read said "No conversation is open".
+describe("LinkedIn's newer design, with Messaging in a frame", () => {
+  it("reads the conversation from inside the frame, with the same guards as before", async () => {
+    loadFixtureInMessagingFrame("messaging-thread.html", BHARTI_PATH);
+    const res = await readConversation();
+    expect(res.ok).toBe(true);
+    expect(res.conversation?.contact.name).toBe("Bharti Agrawal");
+    // Thread path still comes from the page's own address.
+    expect(res.conversation?.threadPath).toBe(BHARTI_PATH);
+    const thread = res.conversation!.thread;
+    expect(thread.map((m) => m.sender)).toEqual(["me", "them", "me", "me"]);
+    // The frame's hidden stale thread and chat pop-up stay out, as on the page.
+    expect(JSON.stringify(thread)).not.toMatch(/Emma|Thursday/);
+  });
+
+  it("inserts into the frame's message box, never the hidden feed's comment box", () => {
+    const frameDoc = loadFixtureInMessagingFrame("messaging-thread.html", BHARTI_PATH);
+    const result = insertIntoComposeBox("Hello Bharti", EXPECT_BHARTI);
+    expect(result.ok).toBe(true);
+    expect(frameDoc.querySelector('[data-fixture="main-compose"]')?.textContent).toContain("Hello Bharti");
+    expect(frameDoc.querySelector('[data-fixture="overlay-compose"]')?.textContent).toBe("");
+    expect(byFixture("feed-comment-box").textContent).toBe("");
+  });
+
+  it("still refuses an Insert after switching to another conversation", () => {
+    loadFixtureInMessagingFrame("messaging-thread.html", BHARTI_PATH);
+    history.replaceState(null, "", "/messaging/thread/2-emma/");
+    expect(insertIntoComposeBox("Hello Bharti", EXPECT_BHARTI).ok).toBe(false);
+  });
+
+  it("says the conversation is hidden, not missing, when LinkedIn shows only the chat list", async () => {
+    const frameDoc = loadFixtureInMessagingFrame("messaging-thread.html", BHARTI_PATH);
+    (frameDoc.querySelector('[data-fixture="open-thread"]') as HTMLElement).style.display = "none";
+    const res = await readConversation();
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/chat list/);
+  });
+
+  it("leaves the classic design alone: a thread on the page itself is read from the page", async () => {
+    const { contact } = await readBharti();
+    expect(contact.name).toBe("Bharti Agrawal");
+    expect(document.querySelector('iframe[data-testid="interop-iframe"]')).toBeNull();
+  });
+});
+

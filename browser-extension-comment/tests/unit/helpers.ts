@@ -19,6 +19,41 @@ export function loadFixture(name: string, urlPath: string) {
   history.replaceState(null, "", urlPath);
 }
 
+// LinkedIn's newer design: the page is the new shell and Messaging lives in a
+// same-origin frame. Loads the shell, then `frameFixture` into the frame, and
+// gives the frame's window the same jsdom polyfills the page has
+// (tests/setup/dom.ts) — a frame has its own HTMLElement, so the page's
+// polyfills don't reach it. Returns the frame's document.
+export function loadFixtureInMessagingFrame(frameFixture: string, urlPath: string): Document {
+  loadFixture("messaging-new-shell.html", urlPath);
+  const frame = document.querySelector<HTMLIFrameElement>('iframe[data-testid="interop-iframe"]');
+  const win = frame?.contentWindow as (Window & typeof globalThis) | null;
+  const doc = frame?.contentDocument;
+  if (!win || !doc) throw new Error("messaging frame did not load");
+
+  // jsdom never loads the frame's src, so its document starts with no <html>.
+  const parsed = new DOMParser().parseFromString(readFixture(frameFixture), "text/html");
+  const root = doc.documentElement ?? doc.appendChild(doc.createElement("html"));
+  root.innerHTML = parsed.documentElement.innerHTML;
+
+  const proto = win.HTMLElement.prototype;
+  Object.defineProperty(proto, "innerText", Object.getOwnPropertyDescriptor(HTMLElement.prototype, "innerText")!);
+  // Same approximation as the page's, without `instanceof` (the frame's
+  // elements aren't instances of the page's HTMLElement).
+  Object.defineProperty(proto, "offsetParent", {
+    configurable: true,
+    get(this: HTMLElement) {
+      if (!this.isConnected) return null;
+      for (let el: Element | null = this; el; el = el.parentElement) {
+        const h = el as HTMLElement;
+        if (h.hidden || h.style?.display === "none") return null;
+      }
+      return this.parentElement ?? doc.body;
+    },
+  });
+  return doc;
+}
+
 export function byFixture<T extends Element = HTMLElement>(id: string): T {
   const el = document.querySelector<T>(`[data-fixture="${id}"]`);
   if (!el) throw new Error(`fixture element "${id}" not found`);

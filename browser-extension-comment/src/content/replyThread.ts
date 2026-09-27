@@ -279,11 +279,13 @@ interface SelfNameCandidate {
   parentLabel: string | null;
 }
 
-function inspectSelfNameChrome(): { scopesFound: number; candidates: SelfNameCandidate[] } {
-  const scopes = document.querySelectorAll(SELF_CHROME_SCOPES);
+// root: the page by default; the Conversation Assistant also passes LinkedIn's
+// Messaging frame, which has its own nav (src/content/messageThread.ts).
+function inspectSelfNameChrome(root: ParentNode = document): { scopesFound: number; candidates: SelfNameCandidate[] } {
+  const scopes = root.querySelectorAll(SELF_CHROME_SCOPES);
   const candidates: SelfNameCandidate[] = [];
 
-  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(`:is(${SELF_CHROME_SCOPES}) img`))) {
+  for (const img of Array.from(root.querySelectorAll<HTMLImageElement>(`:is(${SELF_CHROME_SCOPES}) img`))) {
     const alt = img.getAttribute("alt") ?? "";
     const name = nameFromAlt(alt);
     const reason = !img.hasAttribute("alt")
@@ -311,8 +313,10 @@ function inspectSelfNameChrome(): { scopesFound: number; candidates: SelfNameCan
 
 export type SelfNameSource = "page" | "cache" | "none";
 
-export async function getSelfName(): Promise<{ name: string; source: SelfNameSource; reason: string }> {
-  const { scopesFound, candidates } = inspectSelfNameChrome();
+export async function getSelfName(
+  root: ParentNode = document,
+): Promise<{ name: string; source: SelfNameSource; reason: string }> {
+  const { scopesFound, candidates } = inspectSelfNameChrome(root);
   const fromPage = candidates.find((c) => c.accepted)?.name ?? "";
   if (fromPage) {
     chrome.storage.local

@@ -66,6 +66,32 @@ test("Message Insert goes to the open thread and is refused after switching thre
   expect(refused.ok).toBe(false);
 });
 
+// LinkedIn's newer design (seen live 2026-09-27): a new shell page with a
+// hidden feed, and Messaging inside a full-screen same-origin frame.
+test("New LinkedIn design: reads the conversation inside the Messaging frame", async ({ harness }) => {
+  harness.pages.set("/preload/", "messaging-thread.html");
+  const page = await harness.open("/messaging/thread/2-bharti/", "messaging-new-shell.html");
+  await page.frameLocator('iframe[data-testid="interop-iframe"]').locator(".msg-entity-lockup__entity-title").first().waitFor();
+  const res = await harness.sendToLinkedInTab<{ ok: boolean; conversation: any; error?: string }>({ type: READ });
+  expect(res.error).toBeUndefined();
+  expect(res.conversation.contact.name).toBe("Bharti Agrawal");
+  const thread = res.conversation.thread as Array<{ sender: string; text: string }>;
+  expect(thread.map((m) => m.sender)).toEqual(["me", "them", "me", "me"]);
+  expect(JSON.stringify(thread)).not.toMatch(/Thursday|Emma/);
+});
+
+test("New LinkedIn design: Insert types into the frame's message box, not the hidden feed", async ({ harness }) => {
+  harness.pages.set("/preload/", "messaging-thread.html");
+  const page = await harness.open("/messaging/thread/2-bharti/", "messaging-new-shell.html");
+  const frame = page.frameLocator('iframe[data-testid="interop-iframe"]');
+  await frame.locator("[data-fixture='main-compose']").waitFor();
+  const ok = await harness.sendToLinkedInTab<{ ok: boolean; error?: string }>({ type: INSERT, mode: "message", text: "Hi Bharti", expect: BHARTI });
+  expect(ok.error).toBeUndefined();
+  await expect(frame.locator("[data-fixture='main-compose']")).toContainText("Hi Bharti");
+  await expect(frame.locator("[data-fixture='overlay-compose']")).toHaveText("");
+  await expect(page.locator("[data-fixture='feed-comment-box']")).toHaveText("");
+});
+
 test("Connection note: a note over the account's limit is refused, not silently cut", async ({ harness }) => {
   const page = await harness.open("/in/jane-doe/", "profile.html");
   await page.locator("[data-fixture='topcard-connect']").click();

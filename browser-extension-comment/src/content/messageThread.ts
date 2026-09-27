@@ -65,6 +65,44 @@ export function isMessagingPage(): boolean {
   return /^\/messaging(\/|$)/.test(window.location.pathname);
 }
 
+// LinkedIn's newer page design renders Messaging inside a full-screen frame
+// laid over its new shell (confirmed live: <iframe data-testid="interop-iframe"
+// src="/preload/?_bprMode=vanilla">). The outer page then holds only a hidden
+// feed, and the conversation — still in the classic markup this file reads —
+// is inside the frame. It is same-origin, so it is read directly. The URL
+// that says which thread is open is still the outer page's.
+const INTEROP_FRAME_SELECTOR = 'iframe[data-testid="interop-iframe"]';
+
+function frameDocuments(): Document[] {
+  const docs: Document[] = [];
+  for (const frame of Array.from(document.querySelectorAll<HTMLIFrameElement>(INTEROP_FRAME_SELECTOR))) {
+    try {
+      if (frame.contentDocument) docs.push(frame.contentDocument);
+    } catch {
+      // Not same-origin: not LinkedIn's Messaging frame, nothing to read.
+    }
+  }
+  return docs;
+}
+
+// Where the open conversation lives: the page itself (classic design) or
+// LinkedIn's Messaging frame (new design). The page wins whenever it shows a
+// thread itself, so the classic design behaves exactly as before.
+export function messagingDocument(): Document {
+  if (openThreadTitle(document)) return document;
+  return frameDocuments().find((doc) => openThreadTitle(doc)) ?? document;
+}
+
+// A thread that exists but isn't on screen — seen live in the Messaging frame
+// when the tab is narrow (the side panel takes width), where LinkedIn shows
+// only the conversation list. Worth its own message: "no conversation is
+// open" is wrong when the user just clicked one.
+function hasHiddenThread(): boolean {
+  return [document, ...frameDocuments()].some((doc) =>
+    Array.from(doc.querySelectorAll(".msg-entity-lockup__entity-title")).some((el) => !isInOverlay(el) && !isRendered(el)),
+  );
+}
+
 // Loose name match: equal, or one is a whole-word part of the other
 // ("Anant" in "Anant Goyal"; "Tom Brook" in the group title "Priya Shah, Tom
 // Brook"). Emoji, accents, case and punctuation are ignored.
@@ -91,9 +129,9 @@ const MESSAGE_ITEM_SELECTORS = [
   "li[componentkey*='message' i]",
 ];
 
-function findMessageItems(): Element[] {
+function findMessageItems(doc: Document): Element[] {
   for (const selector of MESSAGE_ITEM_SELECTORS) {
-    const items = Array.from(document.querySelectorAll(selector)).filter(isLive);
+    const items = Array.from(doc.querySelectorAll(selector)).filter(isLive);
     if (items.length > 0) return items;
   }
   return [];
@@ -108,7 +146,9 @@ function messageTextOf(item: Element): string {
   const candidates = Array.from(item.querySelectorAll("p, span, div"))
     .map((el) => ownText(el))
     .filter((text) => text.length > 1 && !/^[\d:/, ]+(AM|PM)?$/i.test(text));
-  const fallback = collapse(item instanceof HTMLElement ? item.innerText : item.textContent);
+  // Not `instanceof HTMLElement`: an element inside LinkedIn's Messaging frame
+  // belongs to the frame's window, so that check would always fail for it.
+  const fallback = collapse((item as HTMLElement).innerText ?? item.textContent);
   const best = candidates.sort((a, b) => b.length - a.length)[0] ?? "";
   return best.length > fallback.length ? best : fallback;
 }
@@ -189,11 +229,12 @@ interface SenderAttribution {
 }
 
 function attributeSenders(
+  doc: Document,
   items: Element[],
   contact: { name: string; headerUrl: string },
   selfName: string,
 ): SenderAttribution {
-  const rows: SenderRow[] = Array.from(document.querySelectorAll(SENDER_ROW_MARKER))
+  const rows: SenderRow[] = Array.from(doc.querySelectorAll(SENDER_ROW_MARKER))
     .filter(isLive)
     .map((marker) => {
       const row = senderRowOf(marker);
@@ -285,12 +326,12 @@ function findHeaderProfileLink(title: Element): string {
 // There is no page-title or avatar fallback any more: on Messaging, the page
 // title is "Messaging" (it was once read as the contact's name), and avatar
 // alt text also appears in the conversation list, for other people.
-function openThreadTitle(): Element | null {
-  return Array.from(document.querySelectorAll(".msg-entity-lockup__entity-title")).find(isLive) ?? null;
+function openThreadTitle(doc: Document): Element | null {
+  return Array.from(doc.querySelectorAll(".msg-entity-lockup__entity-title")).find(isLive) ?? null;
 }
 
-function extractContact(): { name: string; headline: string; headerUrl: string; strategy: string } {
-  const title = openThreadTitle();
+function extractContact(doc: Document): { name: string; headline: string; headerUrl: string; strategy: string } {
+  const title = openThreadTitle(doc);
   const name = collapse(title?.textContent);
   if (!title || !name) return { name: "", headline: "", headerUrl: "", strategy: "none" };
   return {
@@ -307,10 +348,17 @@ export interface ConversationExtraction {
 }
 
 export async function extractConversation(): Promise<ConversationExtraction> {
-  const found = extractContact();
-  const self = await getSelfName();
-  const items = findMessageItems();
-  const { senders, contactUrl } = attributeSenders(items, found, self.name);
+  const doc = messagingDocument();
+  const found = extractContact(doc);
+  // The name in LinkedIn's nav: the outer page's, else the Messaging frame's
+  // own nav, else the cached one (getSelfName falls back to it).
+  let self = await getSelfName();
+  if (self.source !== "page" && doc !== document) {
+    const fromFrame = await getSelfName(doc);
+    if (fromFrame.source === "page") self = fromFrame;
+  }
+  const items = findMessageItems(doc);
+  const { senders, contactUrl } = attributeSenders(doc, items, found, self.name);
 
   const contact: ConversationContact = { name: found.name, headline: found.headline, profileUrl: contactUrl };
   const thread: MessageThreadEntry[] = items
@@ -320,9 +368,9 @@ export async function extractConversation(): Promise<ConversationExtraction> {
   return {
     result: { contact, thread, capturedAt: Date.now(), threadPath: window.location.pathname },
     strategies: {
-      contact: found.strategy,
+      contact: doc === document ? found.strategy : `${found.strategy} (messaging frame)`,
       itemsFound: items.length,
-      senderRows: document.querySelectorAll(SENDER_ROW_MARKER).length,
+      senderRows: doc.querySelectorAll(SENDER_ROW_MARKER).length,
     },
   };
 }
@@ -334,8 +382,15 @@ export async function readConversation(): Promise<{ ok: boolean; conversation?: 
     return { ok: false, error: "Open the conversation on LinkedIn's Messaging page (not a chat pop-up), then try again." };
   }
   const extraction = await extractConversation();
-  if (import.meta.env.MODE !== "production") logConversationDiagnostics(extraction);
+  if (import.meta.env.MODE !== "production") logConversationDiagnostics(extraction, messagingDocument());
   if (!extraction.result.contact.name) {
+    if (hasHiddenThread()) {
+      return {
+        ok: false,
+        error:
+          "LinkedIn is showing only your chat list right now, so the conversation isn't visible. Make the LinkedIn window wider (or open the chat so it fills the page), then try again.",
+      };
+    }
     return { ok: false, error: "No conversation is open. Pick a conversation on the left, then try again." };
   }
   return { ok: true, conversation: extraction.result };
@@ -351,9 +406,9 @@ const COMPOSE_BOX_SELECTORS = [
   "[contenteditable='true'][aria-label*='Write a message' i]",
 ];
 
-function findComposeBox(): HTMLElement | null {
+function findComposeBox(doc: Document): HTMLElement | null {
   for (const selector of COMPOSE_BOX_SELECTORS) {
-    const box = Array.from(document.querySelectorAll<HTMLElement>(selector)).find(isLive);
+    const box = Array.from(doc.querySelectorAll<HTMLElement>(selector)).find(isLive);
     if (box) return box;
   }
   return null;
@@ -368,7 +423,8 @@ export function insertIntoComposeBox(
   if (!expected?.threadPath || !expected.contactName) {
     return { ok: false, error: "Click \"Re-read this conversation\", then Insert." };
   }
-  const openName = extractContact().name;
+  const doc = messagingDocument();
+  const openName = extractContact(doc).name;
   if (window.location.pathname !== expected.threadPath || normalizeName(openName) !== normalizeName(expected.contactName)) {
     return {
       ok: false,
@@ -376,7 +432,7 @@ export function insertIntoComposeBox(
     };
   }
 
-  const box = findComposeBox();
+  const box = findComposeBox(doc);
   if (!box) {
     return { ok: false, error: "Couldn't find the message box in this conversation. Click into it, then try Insert." };
   }
@@ -386,9 +442,9 @@ export function insertIntoComposeBox(
 
 // ── Development diagnostics (never runs in production builds) ──
 
-function logConversationDiagnostics(extraction: ConversationExtraction) {
+function logConversationDiagnostics(extraction: ConversationExtraction, doc: Document) {
   const self = collapse(document.querySelector("header img[alt], nav img[alt]")?.getAttribute("alt"));
-  const rows = Array.from(document.querySelectorAll(SENDER_ROW_MARKER)).map((marker) => {
+  const rows = Array.from(doc.querySelectorAll(SENDER_ROW_MARKER)).map((marker) => {
     const row = senderRowOf(marker);
     return {
       live: isLive(marker),
@@ -397,7 +453,9 @@ function logConversationDiagnostics(extraction: ConversationExtraction) {
       outerHTML: row.outerHTML.slice(0, 300),
     };
   });
-  console.log(`[DIAG message] ${window.location.pathname} — nav name: "${self}"`);
+  console.log(
+    `[DIAG message] ${window.location.pathname} — nav name: "${self}" — reading ${doc === document ? "the page" : "LinkedIn's messaging frame"}`,
+  );
   console.log("[DIAG message] extraction (copyable):\n" + JSON.stringify(extraction, null, 2));
   console.log("[DIAG message] sender rows (copyable):\n" + JSON.stringify(rows, null, 2));
 }

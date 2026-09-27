@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>(3) Messaging | LinkedIn</title>
+  <!--
+    LinkedIn's newer page design on /messaging/thread/<id>/, as captured live
+    (2026-09-27, with made-up content). What matters:
+    - The outer page is the new shell (hashed class names, React root) and
+      keeps a HIDDEN feed mounted, including a tiptap comment editor
+      (contenteditable role=textbox) — which must never be taken for the
+      message box.
+    - Messaging itself is the classic app inside a full-screen, same-origin
+      frame: <iframe data-testid="interop-iframe" src="/preload/?_bprMode=vanilla">.
+      Tests load messaging-thread.html into it.
+  -->
+</head>
+<body data-color-scheme="light" data-rehydrated="true">
+  <div id="root" data-strictmode="true">
+    <section class="_08a34440 c679f35b" style="display: none" data-fixture="hidden-feed">
+      <h2 class="c239a6d3 ce067766">Feed post</h2>
+      <div role="listitem" componentkey="update-card-focusZO5fn">
+        <p data-testid="expandable-text-box">A post in the hidden feed.</p>
+        <div contenteditable="true" role="textbox" aria-label="Text editor for creating comment" class="tiptap ProseMirror _407a7412" data-fixture="feed-comment-box"><p><br /></p></div>
+      </div>
+    </section>
+  </div>
+  <div id="interop-outlet" data-testid="interop-shadowdom" class="theme--light" style="width: 100vw; position: absolute; z-index: 500; visibility: visible;">
+    <iframe data-testid="interop-iframe" referrerpolicy="origin" src="/preload/?_bprMode=vanilla" style="opacity: 1; z-index: 0; width: 100vw; height: 100vh; position: absolute; top: 0; border: 0;" data-fixture="messaging-frame"></iframe>
+  </div>
+  <div id="sdui-a11y-announcer" role="status" aria-live="polite" aria-atomic="true" style="position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden;"></div>
+</body>
+</html>

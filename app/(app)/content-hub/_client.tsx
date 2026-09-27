@@ -149,6 +149,19 @@ const STATUS_LABEL: Record<ScheduledStatus, string> = {
   pending_connection: "Pending connection",
 }
 
+// A failed request can come back with an empty or non-JSON body (a server
+// error page, a dropped connection), and res.json() then throws the
+// meaningless "Unexpected end of JSON input". Read bodies defensively: an
+// unreadable body is just an empty object, and the caller's res.ok check
+// turns it into a proper error message.
+async function readJson(res: Response): Promise<Record<string, unknown>> {
+  try {
+    return (await res.json()) as Record<string, unknown>
+  } catch {
+    return {}
+  }
+}
+
 function startOfWeek(date: Date): Date {
   const d = new Date(date)
   const day = d.getDay()
@@ -734,9 +747,14 @@ export function ContentHubClient({
     setError(null)
     try {
       const res = await fetch("/api/content-hub/scheduled")
-      const data = await res.json()
-      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to load")
-      setScheduled((data as { scheduled: ScheduledItem[] }).scheduled)
+      const data = await readJson(res)
+      if (!res.ok) {
+        throw new Error(
+          (data as { error?: string }).error ??
+            "Couldn't load your scheduled posts. Check your connection and try again.",
+        )
+      }
+      setScheduled((data as { scheduled?: ScheduledItem[] }).scheduled ?? [])
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
     } finally {
@@ -749,7 +767,7 @@ export function ContentHubClient({
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
       const res = await fetch(`/api/content-hub/suggestions?tz=${encodeURIComponent(tz)}`)
       if (!res.ok) return
-      const data = await res.json()
+      const data = await readJson(res)
       setToday((data as { today: TodaySuggestion | null }).today)
       setSuggestions((data as { suggestions: SuggestionSlot[] }).suggestions ?? [])
     } catch {
@@ -760,7 +778,7 @@ export function ContentHubClient({
   async function loadRecurringSlots() {
     try {
       const res = await fetch("/api/content-hub/recurring")
-      const data = await res.json()
+      const data = await readJson(res)
       if (res.ok) setRecurringSlots((data as { slots: RecurringSlotSummary[] }).slots)
     } catch {
       // best-effort — calendar just shows no recurring placeholders
@@ -770,7 +788,7 @@ export function ContentHubClient({
   async function loadQueueSlots() {
     try {
       const res = await fetch("/api/content-hub/queue")
-      const data = await res.json()
+      const data = await readJson(res)
       if (res.ok) setQueueSlots((data as { slots: QueueSlotSummary[] }).slots)
     } catch {
       // best-effort — "Add to Queue" just surfaces its own error on click
@@ -781,7 +799,7 @@ export function ContentHubClient({
   async function loadTemplates() {
     try {
       const res = await fetch("/api/post-templates")
-      const data = await res.json()
+      const data = await readJson(res)
       if (res.ok) setTemplates((data as { templates: PostTemplateSummary[] }).templates)
     } catch {
       // best-effort
@@ -791,7 +809,7 @@ export function ContentHubClient({
   async function loadTags() {
     try {
       const res = await fetch("/api/post-tags")
-      const data = await res.json()
+      const data = await readJson(res)
       if (res.ok) setTags((data as { tags: PostTagSummary[] }).tags)
     } catch {
       // best-effort
@@ -801,7 +819,7 @@ export function ContentHubClient({
   async function loadHashtagGroups() {
     try {
       const res = await fetch("/api/hashtag-groups")
-      const data = await res.json()
+      const data = await readJson(res)
       if (res.ok) setHashtagGroups((data as { groups: HashtagGroupSummary[] }).groups)
     } catch {
       // best-effort
@@ -814,7 +832,7 @@ export function ContentHubClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, caption }),
     })
-    const data = await res.json()
+    const data = await readJson(res)
     if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to save template")
     setTemplates((prev) => [(data as { template: PostTemplateSummary }).template, ...prev])
   }
@@ -836,7 +854,7 @@ export function ContentHubClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, color }),
     })
-    const data = await res.json()
+    const data = await readJson(res)
     if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to create tag")
     setTags((prev) => [...prev, (data as { tag: PostTagSummary }).tag].sort((a, b) => a.name.localeCompare(b.name)))
   }
@@ -860,7 +878,7 @@ export function ContentHubClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, hashtags }),
     })
-    const data = await res.json()
+    const data = await readJson(res)
     if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to save group")
     setHashtagGroups((prev) =>
       [...prev, (data as { group: HashtagGroupSummary }).group].sort((a, b) => a.name.localeCompare(b.name)),
@@ -881,7 +899,7 @@ export function ContentHubClient({
   async function loadShortLinks() {
     try {
       const res = await fetch("/api/short-links")
-      const data = await res.json()
+      const data = await readJson(res)
       if (res.ok) setShortLinks((data as { links: ShortLinkSummary[] }).links)
     } catch {
       // best-effort
@@ -897,7 +915,7 @@ export function ContentHubClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ targetUrl, utmSource: utm.source, utmMedium: utm.medium, utmCampaign: utm.campaign }),
     })
-    const data = await res.json()
+    const data = await readJson(res)
     if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to shorten link")
     const link = (data as { link: ShortLinkSummary }).link
     setShortLinks((prev) => [link, ...prev])
@@ -989,7 +1007,7 @@ export function ContentHubClient({
             platform: slotPlatform,
           }),
         })
-        const data = await res.json()
+        const data = await readJson(res)
         if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to update slot")
       } else {
         const res = await fetch("/api/content-hub/recurring", {
@@ -1002,7 +1020,7 @@ export function ContentHubClient({
             platform: slotPlatform,
           }),
         })
-        const data = await res.json()
+        const data = await readJson(res)
         if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to create slot")
       }
       setRecurringFormOpen(false)
@@ -1079,7 +1097,7 @@ export function ContentHubClient({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ dayOfWeek: queueDay, timeOfDay: queueTime, platform: queuePlatform }),
         })
-        const data = await res.json()
+        const data = await readJson(res)
         if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to update slot")
       } else {
         const res = await fetch("/api/content-hub/queue", {
@@ -1087,7 +1105,7 @@ export function ContentHubClient({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ dayOfWeek: queueDay, timeOfDay: queueTime, platform: queuePlatform }),
         })
-        const data = await res.json()
+        const data = await readJson(res)
         if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to create slot")
       }
       setQueueFormOpen(false)
@@ -1126,14 +1144,14 @@ export function ContentHubClient({
 
   async function pauseAllQueues(): Promise<number> {
     const res = await fetch("/api/content-hub/queue/pause-all", { method: "POST" })
-    const data = await res.json()
+    const data = await readJson(res)
     await loadQueueSlots()
     return res.ok ? ((data as { paused: number }).paused ?? 0) : 0
   }
 
   async function shuffleQueue(): Promise<number> {
     const res = await fetch("/api/content-hub/queue/shuffle", { method: "POST" })
-    const data = await res.json()
+    const data = await readJson(res)
     await refreshScheduled()
     return res.ok ? ((data as { shuffled: number }).shuffled ?? 0) : 0
   }
@@ -1295,7 +1313,7 @@ export function ContentHubClient({
 
     try {
       const res = await fetch("/api/ideas-board")
-      const data = await res.json()
+      const data = await readJson(res)
       if (!res.ok) return
       const items = (data as { items: IdeaBoardItemLite[] }).items
       const item = items.find((i) => i.id === boardItemId)
@@ -1362,7 +1380,7 @@ export function ContentHubClient({
   async function checkLinkedIn() {
     try {
       const res = await fetch("/api/linkedin/status")
-      const data = await res.json()
+      const data = await readJson(res)
       setLinkedInConnected(Boolean((data as { connected?: boolean }).connected))
     } catch {
       setLinkedInConnected(false)
@@ -1373,7 +1391,7 @@ export function ContentHubClient({
     setLoadingPosts(true)
     try {
       const res = await fetch("/api/content-hub/posts")
-      const data = await res.json()
+      const data = await readJson(res)
       if (res.ok) {
         const posts = (data as { posts: PickablePost[] }).posts
         setPickablePosts(posts)
@@ -1526,7 +1544,7 @@ export function ContentHubClient({
             ...(promotingDraft ? { status: "queued" } : {}),
           }),
         })
-        const data = await res.json()
+        const data = await readJson(res)
         if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to reschedule")
       } else {
         const res = await fetch("/api/content-hub/scheduled", {
@@ -1540,7 +1558,7 @@ export function ContentHubClient({
             tagIds: selectedTagIds,
           }),
         })
-        const data = await res.json()
+        const data = await readJson(res)
         if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to schedule")
       }
       closePanel()
@@ -1646,7 +1664,7 @@ export function ContentHubClient({
           tagIds: selectedTagIds,
         }),
       })
-      const data = await res.json()
+      const data = await readJson(res)
       if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to add to queue")
       closePanel()
       await refreshScheduled()
@@ -1681,7 +1699,7 @@ export function ContentHubClient({
     setDuplicatingId(item.id)
     try {
       const res = await fetch(`/api/content-hub/posts/${item.post.id}/duplicate`, { method: "POST" })
-      const data = await res.json()
+      const data = await readJson(res)
       if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to duplicate")
       await openNewPanelForPost((data as { postId: string }).postId)
     } catch {

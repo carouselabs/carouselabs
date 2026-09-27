@@ -1,6 +1,7 @@
-// /admin/posts — all generated content with filters.
+// /admin/posts — everything users make (website posts and extension
+// generations) as an image gallery, with filters.
 import { Suspense } from "react"
-import { PostsTable } from "@/components/admin/PostsTable"
+import { PostsGallery } from "@/components/admin/PostsGallery"
 import { Spinner } from "@/components/admin/ui"
 
 export const dynamic = "force-dynamic"
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic"
 export default function AdminPostsPage() {
   return (
     <Suspense fallback={<Spinner label="Loading posts…" />}>
-      <PostsTable />
+      <PostsGallery />
     </Suspense>
   )
 }

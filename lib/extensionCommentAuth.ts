@@ -8,6 +8,7 @@
 import crypto from "node:crypto"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
+import { cookieNamesFromHeader, hasClerkSessionCookie } from "@/lib/clerkSessionCookie"
 import type { User } from "@prisma/client"
 
 const TOKEN_PREFIX = "cl_cmt_"
@@ -55,11 +56,20 @@ export async function getUserFromCommentExtensionToken(req: Request): Promise<Us
 // token counts, never a session cookie that happens to ride along.
 export async function getExtensionUser(req: Request): Promise<User | null> {
   if (req.headers.get("authorization")) return getUserFromCommentExtensionToken(req)
+  // No session cookie means no website login — and proxy.ts didn't run Clerk
+  // for this request either, so asking Clerk would throw. Not signed in.
+  if (!hasClerkSessionCookie(cookieNamesFromHeader(req.headers.get("cookie")))) return null
   // A cookie rides along on any request to this site, so a cookie-authenticated
   // write must also prove it came from one of our own pages. Browsers send
   // Origin on every non-GET fetch, and a page can't forge it.
   if (req.method !== "GET" && req.method !== "HEAD" && !isSameOrigin(req)) return null
-  return getCurrentUser()
+  try {
+    return await getCurrentUser()
+  } catch (err) {
+    // A signed-out answer beats a 500 if Clerk isn't available here.
+    console.error("[extensionCommentAuth] session lookup failed:", err)
+    return null
+  }
 }
 
 function isSameOrigin(req: Request): boolean {

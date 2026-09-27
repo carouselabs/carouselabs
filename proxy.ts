@@ -1,6 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import type { NextFetchEvent, NextRequest } from "next/server"
+import { hasClerkSessionCookie } from "@/lib/clerkSessionCookie"
 import {
   REFERRAL_CODE_PATTERN,
   REFERRAL_COOKIE_MAX_AGE_SECONDS,
@@ -227,14 +228,23 @@ function withReferralCapture(request: NextRequest, response: Response): Response
 // /api/ext/auth/exchange is the one exception: it MINTS a token from a real
 // Clerk session, so it needs clerkMiddleware to have run for getCurrentUser()
 // to see one.
+//
+// The website's Extension section (app/(app)/extension) also calls /api/ext/*
+// — with the site's session cookie and no Authorization header — and Clerk's
+// auth() only works where clerkMiddleware ran. So Clerk is skipped only for
+// the extension's own requests (an Authorization header) and cookieless ones;
+// a request carrying a Clerk session cookie goes through it like any page.
 const CLERK_SESSION_EXT_ROUTES = new Set(["/api/ext/auth/exchange"])
 
-function isBearerOnlyExtensionRoute(pathname: string): boolean {
-  return pathname.startsWith("/api/ext/") && !CLERK_SESSION_EXT_ROUTES.has(pathname)
+function skipsClerk(request: NextRequest): boolean {
+  const { pathname } = request.nextUrl
+  if (!pathname.startsWith("/api/ext/") || CLERK_SESSION_EXT_ROUTES.has(pathname)) return false
+  if (request.headers.get("authorization")) return true
+  return !hasClerkSessionCookie(request.cookies.getAll().map((cookie) => cookie.name))
 }
 
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
-  if (isBearerOnlyExtensionRoute(request.nextUrl.pathname)) {
+  if (skipsClerk(request)) {
     return NextResponse.next()
   }
 

@@ -38,8 +38,12 @@ const matches = (row: Record<string, unknown>, where: Record<string, unknown>) =
   Object.entries(where).every(([key, value]) => value === undefined || row[key] === value);
 
 const BASE = "https://carouselabs.com";
+// A browser's request from our own page: same-origin, with Clerk's cookie.
 const req = (path: string, init: RequestInit = {}) =>
-  new Request(`${BASE}${path}`, { ...init, headers: { origin: BASE, ...(init.headers ?? {}) } });
+  new Request(`${BASE}${path}`, {
+    ...init,
+    headers: { origin: BASE, cookie: "__client_uat=1700000000; __session=eyFake", ...(init.headers ?? {}) },
+  });
 
 beforeEach(() => {
   vi.clearAllMocks();

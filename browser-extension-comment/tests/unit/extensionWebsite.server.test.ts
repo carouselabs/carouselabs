@@ -19,7 +19,8 @@ const db = vi.hoisted(() => ({
 }));
 
 vi.mock("../../../lib/db", () => ({ db }));
-vi.mock("../../../lib/auth", () => ({ getCurrentUser: vi.fn(async () => state.sessionUser) }));
+const auth = vi.hoisted(() => ({ getCurrentUser: vi.fn() }));
+vi.mock("../../../lib/auth", () => auth);
 
 import { getExtensionUser, hashCommentExtensionToken } from "../../../lib/extensionCommentAuth";
 import { GET as historyGET } from "../../../app/api/ext/history/route";
@@ -39,6 +40,7 @@ const BASE = "https://carouselabs.com";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  auth.getCurrentUser.mockImplementation(async () => state.sessionUser);
   state.sessionUser = null;
   state.tokens = [
     { id: "t1", userId: "u1", tokenHash: hashCommentExtensionToken(TOKEN), revokedAt: null, device: "Chrome", lastUsedAt: new Date(), createdAt: new Date() },
@@ -74,7 +76,11 @@ beforeEach(() => {
   db.commentProfile.findMany.mockResolvedValue([{ id: "p1", name: "Founder voice" }]);
 });
 
-const req = (path: string, init: RequestInit = {}) => new Request(`${BASE}${path}`, init);
+// Website requests carry Clerk's session cookie, as a browser's would; the
+// extension's carry only its token.
+const SESSION_COOKIE = "__client_uat=1700000000; __session=eyFake";
+const req = (path: string, init: RequestInit = {}) =>
+  new Request(`${BASE}${path}`, { ...init, headers: { cookie: SESSION_COOKIE, ...(init.headers ?? {}) } });
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
 
 describe("who is calling", () => {
@@ -91,6 +97,19 @@ describe("who is calling", () => {
   it("never falls back to the session when a token was sent but is bad", async () => {
     state.sessionUser = { id: "u1", email: "u1@example.com" };
     expect(await getExtensionUser(req("/api/ext/history", { headers: { authorization: "Bearer cl_cmt_wrong" } }))).toBeNull();
+  });
+
+  it("treats a request with no session cookie as signed out, without asking Clerk", async () => {
+    state.sessionUser = { id: "u1", email: "u1@example.com" };
+    const bare = new Request(`${BASE}/api/ext/history`);
+    expect(await getExtensionUser(bare)).toBeNull();
+    expect(auth.getCurrentUser).not.toHaveBeenCalled();
+  });
+
+  it("answers signed out, not a crash, if the session lookup fails", async () => {
+    auth.getCurrentUser.mockRejectedValueOnce(new Error("Clerk: auth() was called without clerkMiddleware"));
+    expect(await getExtensionUser(req("/api/ext/history"))).toBeNull();
+    expect((await historyGET(req("/api/ext/history"))).status).toBe(401);
   });
 
   it("refuses a session-authenticated write from another site", async () => {
@@ -164,3 +183,14 @@ describe("history links", () => {
     expect(linkedInUrl(42)).toBe("");
   });
 });
+
+describe("which requests carry a website session", () => {
+  it("recognises Clerk's cookies, including the suffixed ones", async () => {
+    const { hasClerkSessionCookie, cookieNamesFromHeader } = await import("../../../lib/clerkSessionCookie");
+    expect(hasClerkSessionCookie(cookieNamesFromHeader("__session=abc; theme=dark"))).toBe(true);
+    expect(hasClerkSessionCookie(cookieNamesFromHeader("__client_uat_Xy12=1700000000"))).toBe(true);
+    expect(hasClerkSessionCookie(cookieNamesFromHeader("theme=dark; li_at=zzz"))).toBe(false);
+    expect(hasClerkSessionCookie(cookieNamesFromHeader(null))).toBe(false);
+  });
+});
+

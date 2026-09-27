@@ -16,21 +16,22 @@ const isPublicRoute = createRouteMatcher([
   "/privacy(.*)",
   "/refund(.*)",
   "/contact(.*)",
-  // ── Marketing / programmatic SEO pages — must be publicly crawlable ──
-  "/for(.*)", // 112 niche landing pages
-  "/ideas(.*)", // 112 carousel-ideas pages
-  "/how-to(.*)", // 112 step-by-step guide pages
-  "/vs(.*)", // competitor comparison pages
-  "/tools(.*)", // 112 per-niche AI tools pages
-  "/tools/tap-hold-maker(.*)", // Free client-side image maker
-  "/strategy(.*)", // 112 per-niche content-strategy playbook pages
-  "/tap-hold(.*)", // 60 Tap & Hold Image Maker SEO articles + hub
-  "/generators(.*)", // 40 generic product/feature-keyword SEO articles + hub
-  "/best(.*)", // 30 "best-of" ranked listicle SEO articles + hub
-  "/answers(.*)", // 100 direct-answer SEO pages + hub
-  "/formats(.*)", // 216 content-format SEO pages + hub
-  "/speed(.*)", // 500 speed-focused SEO pages + hub
-  "/thumbnails(.*)", // 10 thumbnail-keyword SEO pages + hub
+  "/tools(.*)", // Free client-side Tap & Hold image maker (/tools/tap-hold-maker)
+  // The programmatic SEO pages under these paths were removed. The paths stay
+  // public so a signed-out visitor on an old search-result link gets a plain
+  // "not found" page; otherwise auth.protect() would send them to sign-in.
+  "/for(.*)",
+  "/ideas(.*)",
+  "/how-to(.*)",
+  "/vs(.*)",
+  "/strategy(.*)",
+  "/tap-hold(.*)",
+  "/generators(.*)",
+  "/best(.*)",
+  "/answers(.*)",
+  "/formats(.*)",
+  "/speed(.*)",
+  "/thumbnails(.*)",
   "/verify-certificate(.*)", // Public intern-certificate verification page
   "/start(.*)", // Public link-in-bio Start Pages (carouselabs.com/start/[slug])
   "/l/(.*)", // Public short-link redirects (carouselabs.com/l/[slug])

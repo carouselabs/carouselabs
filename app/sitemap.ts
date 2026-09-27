@@ -1,20 +1,11 @@
 import type { MetadataRoute } from "next"
-import { niches } from "./(marketing)/for/data"
-import { competitors } from "./(marketing)/vs/data"
-import { tapHoldArticles } from "./(marketing)/tap-hold/data"
-import { GENERATOR_PAGES } from "./(marketing)/generators/data"
-import { BEST_OF_PAGES } from "./(marketing)/best/data"
-import { ANSWER_PAGES } from "./(marketing)/answers/data"
-import { FORMAT_PAGES } from "./(marketing)/formats/data"
-import { SPEED_PAGES } from "./(marketing)/speed/data"
-import { THUMBNAIL_SEO_PAGES } from "./(marketing)/thumbnails/data"
 
 const BASE_URL = "https://carouselabs.com"
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date()
 
-  const staticRoutes: MetadataRoute.Sitemap = [
+  return [
     { url: `${BASE_URL}/`, lastModified: now, changeFrequency: "weekly", priority: 1 },
     { url: `${BASE_URL}/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
     { url: `${BASE_URL}/privacy`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
@@ -22,135 +13,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${BASE_URL}/contact`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     { url: `${BASE_URL}/verify-certificate`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
     { url: `${BASE_URL}/tools/tap-hold-maker`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
-  ]
-
-  // Hub/index pages — these link out to every niche and comparison page, so
-  // they carry higher priority than the individual pages they point to.
-  const hubRoutes: MetadataRoute.Sitemap = [
-    { url: `${BASE_URL}/for`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
-    { url: `${BASE_URL}/ideas`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
-    { url: `${BASE_URL}/how-to`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
-    { url: `${BASE_URL}/vs`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
-    { url: `${BASE_URL}/tools`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
-    { url: `${BASE_URL}/strategy`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
-    { url: `${BASE_URL}/tap-hold`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
-    { url: `${BASE_URL}/generators`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
-    { url: `${BASE_URL}/best`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
-    { url: `${BASE_URL}/answers`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
-    { url: `${BASE_URL}/formats`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
-    { url: `${BASE_URL}/speed`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
-    { url: `${BASE_URL}/thumbnails`, lastModified: now, changeFrequency: "weekly", priority: 0.85 },
-  ]
-
-  const tapHoldRoutes: MetadataRoute.Sitemap = tapHoldArticles.map((article) => ({
-    url: `${BASE_URL}/tap-hold/${article.slug}`,
-    lastModified: now,
-    changeFrequency: "monthly" as const,
-    priority: 0.75,
-  }))
-
-  const generatorRoutes: MetadataRoute.Sitemap = GENERATOR_PAGES.map((page) => ({
-    url: `${BASE_URL}/generators/${page.slug}`,
-    lastModified: now,
-    changeFrequency: "monthly" as const,
-    priority: 0.8,
-  }))
-
-  const bestOfRoutes: MetadataRoute.Sitemap = BEST_OF_PAGES.map((page) => ({
-    url: `${BASE_URL}/best/${page.slug}`,
-    lastModified: now,
-    changeFrequency: "monthly" as const,
-    priority: 0.8,
-  }))
-
-  // Informational direct-answer pages — lower priority than product/conversion
-  // pages since they target citation/snippet placement, not signup intent.
-  const answerRoutes: MetadataRoute.Sitemap = ANSWER_PAGES.map((page) => ({
-    url: `${BASE_URL}/answers/${page.slug}`,
-    lastModified: now,
-    changeFrequency: "monthly" as const,
-    priority: 0.7,
-  }))
-
-  const formatRoutes: MetadataRoute.Sitemap = FORMAT_PAGES.map((page) => ({
-    url: `${BASE_URL}/formats/${page.slug}`,
-    lastModified: now,
-    changeFrequency: "monthly" as const,
-    priority: 0.7,
-  }))
-
-  const speedRoutes: MetadataRoute.Sitemap = SPEED_PAGES.map((page) => ({
-    url: `${BASE_URL}/speed/${page.slug}`,
-    lastModified: now,
-    changeFrequency: "monthly" as const,
-    priority: 0.7,
-  }))
-
-  const thumbnailRoutes: MetadataRoute.Sitemap = THUMBNAIL_SEO_PAGES.map((page) => ({
-    url: `${BASE_URL}/thumbnails/${page.slug}`,
-    lastModified: now,
-    changeFrequency: "monthly" as const,
-    priority: 0.8,
-  }))
-
-  const nicheRoutes: MetadataRoute.Sitemap = niches.map((niche) => ({
-    url: `${BASE_URL}/for/${niche.slug}`,
-    lastModified: new Date(),
-    changeFrequency: "monthly" as const,
-    priority: 0.8,
-  }))
-
-  const ideasRoutes: MetadataRoute.Sitemap = niches.map((niche) => ({
-    url: `${BASE_URL}/ideas/${niche.slug}`,
-    lastModified: new Date(),
-    changeFrequency: "monthly" as const,
-    priority: 0.8,
-  }))
-
-  const howToRoutes: MetadataRoute.Sitemap = niches.map((niche) => ({
-    url: `${BASE_URL}/how-to/${niche.slug}`,
-    lastModified: new Date(),
-    changeFrequency: "monthly" as const,
-    priority: 0.8,
-  }))
-
-  const toolsRoutes: MetadataRoute.Sitemap = niches.map((niche) => ({
-    url: `${BASE_URL}/tools/${niche.slug}`,
-    lastModified: new Date(),
-    changeFrequency: "monthly" as const,
-    priority: 0.8,
-  }))
-
-  const strategyRoutes: MetadataRoute.Sitemap = niches.map((niche) => ({
-    url: `${BASE_URL}/strategy/${niche.slug}`,
-    lastModified: new Date(),
-    changeFrequency: "monthly" as const,
-    priority: 0.8,
-  }))
-
-  // High-intent buyer comparison pages — higher priority than niche pages.
-  const versusRoutes: MetadataRoute.Sitemap = competitors.map((competitor) => ({
-    url: `${BASE_URL}/vs/${competitor.slug}`,
-    lastModified: new Date(),
-    changeFrequency: "monthly" as const,
-    priority: 0.9,
-  }))
-
-  return [
-    ...staticRoutes,
-    ...hubRoutes,
-    ...nicheRoutes,
-    ...ideasRoutes,
-    ...howToRoutes,
-    ...toolsRoutes,
-    ...strategyRoutes,
-    ...versusRoutes,
-    ...tapHoldRoutes,
-    ...generatorRoutes,
-    ...bestOfRoutes,
-    ...answerRoutes,
-    ...formatRoutes,
-    ...speedRoutes,
-    ...thumbnailRoutes,
   ]
 }

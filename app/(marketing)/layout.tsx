@@ -8,8 +8,8 @@ const font = Onest({
   weight: ["400", "500", "600", "700", "800"],
 })
 
-// No server-side DB call here — this layout wraps ~589 statically generated
-// SEO pages, and a getAppSettings() call here would run at build time (see
+// No server-side DB call here — this layout wraps statically generated
+// pages, and a getAppSettings() call here would run at build time (see
 // components/shared/MaintenanceBanner.tsx for why that broke the build).
 export default function MarketingLayout({
   children,

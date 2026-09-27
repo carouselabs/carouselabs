@@ -117,9 +117,10 @@ export const EXTENSION_PLAN = {
   note: "Extension only — no caption, image or carousel credits included.",
 } as const
 
-// Chrome Web Store listing for the extension. null until it's set: the
-// Toolkit then shows no Install button rather than a broken link.
-export const EXTENSION_STORE_URL: string | null = null
+// Chrome Web Store listing for the extension (CarouseLabs Comment). Set to
+// null to hide every Install button rather than show a broken link.
+export const EXTENSION_STORE_URL: string | null =
+  "https://chromewebstore.google.com/detail/carouselabs-comment/jgbmpekpdlckkeeffbamcbcnfodamnia"
 
 // Where every "Buy the extension" button points. Signed-out visitors go to
 // sign-up first and come straight back here (app/checkout/extension).

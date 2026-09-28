@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { InsertWarningModal } from "../InsertWarningModal";
-import { noContentScriptMessage } from "@/lib/tabs";
+import { ensureContentScript, noContentScriptMessage, sendToTab } from "@/lib/tabs";
 import { markHistoryAction } from "@/lib/history";
+import { loadCachedCommentProfiles, saveCachedCommentProfiles } from "@/lib/profileCache";
 import { loadShowInsert } from "@/lib/syncedSettings";
 import { ConnectionNotePanel } from "../ConnectionNotePanel";
 import { RecommendedBadge } from "../RecommendedBadge";
@@ -239,8 +240,30 @@ export function HomeScreen({ onCreateProfile }: Props) {
     };
   }, []);
 
+  // Set once the user picks a profile, so the server's list arriving after the
+  // cached one was shown doesn't switch their pick back to the default.
+  const userPickedRef = useRef(false);
+
   useEffect(() => {
     let cancelled = false;
+
+    const preselect = (list: CommentProfile[], defaultId: string | null) =>
+      (
+        list.find((p) => p.id === defaultId) ??
+        list.find((p) => p.isSystem && p.isDefault) ??
+        list[0]
+      )?.id ?? "";
+
+    // The list the server sent last time, shown at once so the panel, and
+    // Generate, doesn't wait on the network on every open. The server's answer
+    // below replaces it; functional updates keep this from overwriting that
+    // answer if it somehow came first.
+    void loadCachedCommentProfiles().then((cached) => {
+      if (cancelled || !cached || cached.profiles.length === 0) return;
+      setProfiles((current) => (current.length > 0 ? current : cached.profiles));
+      setSelectedId((current) => current || preselect(cached.profiles, cached.defaultProfileId));
+      setState((current) => (current === "loading" ? "ready" : current));
+    });
 
     async function load() {
       try {
@@ -251,22 +274,21 @@ export function HomeScreen({ onCreateProfile }: Props) {
         if (cancelled) return;
 
         setProfiles(fetchedProfiles);
-
-        const systemDefault = fetchedProfiles.find((p) => p.isSystem && p.isDefault);
-        const preselected =
-          fetchedProfiles.find((p) => p.id === me.defaultCommentProfileId) ??
-          systemDefault ??
-          fetchedProfiles[0];
-
-        setSelectedId(preselected?.id ?? "");
+        const preselected = preselect(fetchedProfiles, me.defaultCommentProfileId);
+        setSelectedId((current) =>
+          userPickedRef.current && fetchedProfiles.some((p) => p.id === current) ? current : preselected,
+        );
         setExtensionAccess(me.extension);
         setCommentsToday(me.commentsToday);
         setInsertWarningHidden(me.insertWarningHidden);
         setState("ready");
+        void saveCachedCommentProfiles({ profiles: fetchedProfiles, defaultProfileId: me.defaultCommentProfileId });
       } catch (err) {
         if (cancelled) return;
         setErrorMessage(err instanceof ApiError ? err.message : "Failed to load profiles");
-        setState("error");
+        // A cached list already showing stays usable; a generation that
+        // really can't reach the server says so itself.
+        setState((current) => (current === "ready" ? current : "error"));
       }
     }
 
@@ -289,6 +311,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
       onCreateProfile("comment");
       return;
     }
+    userPickedRef.current = true;
     setSelectedId(value);
   }
 
@@ -339,6 +362,10 @@ export function HomeScreen({ onCreateProfile }: Props) {
 
     chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       if (!cancelled) setOnLinkedIn(!!tab?.url?.includes("linkedin.com"));
+      // A LinkedIn tab left over from before an update has no working content
+      // script, so a Comment click in it would never reach this panel. Put one
+      // in now, before the user clicks.
+      void ensureContentScript(tab);
     });
 
     return () => {
@@ -456,7 +483,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
       [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id === undefined) throw new Error("no active tab");
 
-      const res = (await chrome.tabs.sendMessage(tab.id, {
+      const res = await sendToTab<{ ok: boolean; error?: string } | undefined>(tab, {
         type: INSERT_MESSAGE_TYPE,
         text,
         // Reply mode targets the captured comment's reply box, never the
@@ -464,7 +491,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
         mode,
         // A note is only inserted on the profile it was written for.
         expect: mode === "connect" ? { profileUrl: selectedPost?.connect?.target.url ?? "" } : undefined,
-      })) as { ok: boolean; error?: string } | undefined;
+      });
 
       if (!res?.ok) {
         setError(res?.error ?? "Couldn't insert into LinkedIn. Try Copy instead.");

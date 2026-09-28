@@ -17,10 +17,12 @@ import { SELF_NAME_STORAGE_KEY } from "@/content/replyThread";
 import { CONNECT_CONTEXT_STORAGE_KEY, SELF_PROFILE_STORAGE_KEY } from "@/lib/connectionNote";
 import { CONTACT_CONTEXT_STORAGE_PREFIX } from "@/lib/messageThread";
 import { SETTINGS_UPLOADED_STORAGE_KEY } from "@/lib/syncedSettings";
+import { COMMENT_PROFILES_CACHE_KEY } from "@/lib/profileCache";
 
 const ACCOUNT_KEYS = [
   "extensionToken",
   "lastSelectedPost",
+  COMMENT_PROFILES_CACHE_KEY,
   SELF_NAME_STORAGE_KEY,
   SELF_PROFILE_STORAGE_KEY,
   CONNECT_CONTEXT_STORAGE_KEY,

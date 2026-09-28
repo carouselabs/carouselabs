@@ -141,9 +141,97 @@ test("Connection note Insert replaces a typed note, and Ctrl+Z brings the typed 
   await expect(box).toHaveValue("My own note");
 });
 
-// Extension reload/update mid-session is covered by the manual checklist in
-// TEST_REPORT.md: Playwright does not re-attach to a service worker after the
-// extension reloads itself, so it can't be driven reliably from here.
+// A Web Store update restarts the extension under an open LinkedIn tab, and
+// Chrome gives that tab no new content script. The restarted extension puts
+// one in itself (src/background.ts), so the tab keeps working without a
+// reload. Playwright doesn't re-attach to a restarted service worker, so the
+// extension is reached afterwards through one of its own pages instead.
+test("after an update, a LinkedIn tab that was already open works without a reload", async ({ harness }) => {
+  const page = await harness.open("/feed/", "feed.html");
+  // What an update does to the running extension: it's replaced by a fresh
+  // instance, as a developer's Reload on chrome://extensions does (an
+  // extension calling chrome.runtime.reload() on itself isn't reloaded in
+  // this test browser, so that can't stand in for it).
+  const manager = await harness.context.newPage();
+  await manager.goto("chrome://extensions/");
+  await manager.locator("#devMode").click();
+  await manager.locator(`extensions-item#${harness.extensionId} #dev-reload-button`).click();
+  await manager.close();
+
+  // The restarted extension, through one of its own pages; it may take a
+  // moment to come back.
+  const ext = await harness.context.newPage();
+  await expect(async () => {
+    await ext.goto(`chrome-extension://${harness.extensionId}/src/sidepanel/index.html`);
+    expect(await ext.evaluate(() => Boolean(chrome.runtime?.id))).toBe(true);
+  }).toPass({ timeout: 20_000 });
+
+  const tabAnswers = () =>
+    ext.evaluate(async () => {
+      const [tab] = await chrome.tabs.query({ url: "https://www.linkedin.com/*" });
+      try {
+        return await chrome.tabs.sendMessage(tab.id!, { type: "carouselabs:ping" });
+      } catch (err) {
+        return String(err);
+      }
+    });
+
+  // The restarted worker repairs the tab by itself (on onInstalled, and when
+  // it starts). If nothing has started it yet, any extension message does, as
+  // a Comment click or the side panel would in real use.
+  let repairedBy = "the restart itself";
+  try {
+    await expect.poll(tabAnswers, { timeout: 10_000 }).toEqual({ ok: true });
+  } catch {
+    repairedBy = "the worker's next start";
+    await ext.evaluate(() => chrome.runtime.sendMessage({ type: "carouselabs:wake" }).catch(() => undefined));
+    await expect.poll(tabAnswers, { timeout: 15_000 }).toEqual({ ok: true });
+  }
+  console.log(`[e2e] the open LinkedIn tab was repaired by ${repairedBy}`);
+
+  await page.locator("[data-fixture='post-1'] button[aria-label^='Comment']").click();
+  await expect
+    .poll(() => ext.evaluate(async () => (await chrome.storage.local.get("lastSelectedPost")).lastSelectedPost?.authorName))
+    .toBe("Jane Doe");
+
+  const pong = await ext.evaluate(async () => {
+    const [tab] = await chrome.tabs.query({ url: "https://www.linkedin.com/*" });
+    return chrome.tabs.sendMessage(tab.id!, { type: "carouselabs:ping" });
+  });
+  expect(pong).toEqual({ ok: true });
+});
+
+// The same injection into a tab whose content script is alive (a race with
+// Chrome's own injection, say) must not leave two copies both acting.
+test("injecting into a tab that already has the script leaves one working copy", async ({ harness }) => {
+  const page = await harness.open("/feed/", "feed.html");
+  const second = page.waitForEvent("console", {
+    predicate: (msg) => msg.text().startsWith("[content-script] loaded on"),
+    timeout: 15_000,
+  });
+  // What src/lib/tabs.ts's injectContentScript does: import the content
+  // script module under a URL of its own, so it runs again in this tab.
+  await harness.worker.evaluate(async () => {
+    const resources = chrome.runtime.getManifest().web_accessible_resources as { resources: string[] }[];
+    const modulePath = resources.flatMap((entry) => entry.resources).find((file) => /content-script\.ts-[\w-]+\.js$/.test(file))!;
+    const [tab] = await chrome.tabs.query({ url: "https://www.linkedin.com/*" });
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id! },
+      func: (url: string) => {
+        import(url);
+      },
+      args: [`${chrome.runtime.getURL(modulePath)}?injected=${Date.now()}`],
+    });
+  });
+  await second;
+
+  await page.locator("[data-fixture='post-2'] button[aria-label='Comment']").click();
+  const res = await harness.sendToLinkedInTab<{ ok: boolean }>({ type: INSERT, mode: "comment", text: "Only once please" });
+  expect(res.ok).toBe(true);
+  const box = page.locator("[data-fixture='post-2-comment-box']");
+  await expect(box).toContainText("Only once please");
+  expect((await box.innerText()).match(/Only once please/g)).toHaveLength(1);
+});
 
 test("side panel shows Sign in when there is no token", async ({ harness }) => {
   const page = await harness.context.newPage();

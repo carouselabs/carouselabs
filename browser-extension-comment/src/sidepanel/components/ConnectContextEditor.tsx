@@ -16,6 +16,7 @@ import {
   saveSyncedConnectContext,
   saveSyncedSelfProfile,
 } from "@/lib/syncedSettings";
+import { sendToTab } from "@/lib/tabs";
 
 const OPTIONS: { choice: ConnectContextChoice; title: string; hint: string }[] = [
   { choice: "profile", title: "Use my LinkedIn profile", hint: "Your name, headline and role, read from your own profile page." },
@@ -67,9 +68,9 @@ export function ConnectContextEditor({ onSaved }: { onSaved?: (setting: ConnectC
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id === undefined) throw new Error("no active tab");
-      const res = (await chrome.tabs.sendMessage(tab.id, { type: READ_SELF_PROFILE_MESSAGE_TYPE })) as
-        | { ok: boolean; profile?: LinkedInProfileInfo; error?: string }
-        | undefined;
+      const res = await sendToTab<{ ok: boolean; profile?: LinkedInProfileInfo; error?: string } | undefined>(tab, {
+        type: READ_SELF_PROFILE_MESSAGE_TYPE,
+      });
       if (!res?.ok) setMessage(res?.error ?? "Couldn't read your profile.");
       else if (res.profile) {
         setSelf(res.profile);

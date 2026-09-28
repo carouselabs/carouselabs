@@ -38,6 +38,7 @@ import {
 import { insertIntoComposeBox, readConversation } from "@/content/messageThread";
 import { insertTextAtEnd } from "@/content/editor";
 import { READ_CONVERSATION_MESSAGE_TYPE } from "@/lib/messageThread";
+import { PING_MESSAGE_TYPE } from "@/lib/tabs";
 
 // Captured posts, threads and profiles are other people's content; they go to
 // the page console only in development builds.
@@ -910,7 +911,18 @@ async function handleInsert(message: InsertRequest): Promise<{ ok: boolean; erro
   return insertIntoCommentBox(message.text, message.mode === "reply" ? "reply" : "comment");
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+function onRuntimeMessage(
+  message: { type?: string; text?: unknown } | undefined,
+  _sender: chrome.runtime.MessageSender,
+  sendResponse: (response?: unknown) => void,
+): boolean | undefined {
+  // The side panel checks that this tab has a working copy before relying on
+  // it (src/lib/tabs.ts).
+  if (message?.type === PING_MESSAGE_TYPE) {
+    sendResponse({ ok: true });
+    return;
+  }
+
   if (message?.type === READ_SELF_PROFILE_MESSAGE_TYPE) {
     readSelfProfile()
       .then(sendResponse)
@@ -933,7 +945,54 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     .then(sendResponse)
     .catch((err) => sendResponse({ ok: false, error: String(err) }));
   return true; // keep the channel open for the async sendResponse above
-});
+}
+
+// ── One live copy per tab ──
+// The extension injects this script into LinkedIn tabs that were already open
+// when it was installed or updated (src/lib/tabs.ts), so a tab can briefly
+// hold two copies: the fresh one, and the previous version's, whose
+// connection to the extension is gone (every chrome.* call then fails with
+// "Extension context invalidated"). Each copy registers its teardown on the
+// page's window, and a new copy runs the previous one's before starting; a
+// copy that finds its connection gone also tears itself down on its next
+// click. So exactly one copy ever handles a click, a read or an Insert —
+// never two Inserts of the same comment.
+const INSTANCE_KEY = "__carouselabsCommentContentScript";
+type Instance = { teardown: () => void };
+const instances = window as unknown as Record<string, Instance | undefined>;
+
+function extensionConnected(): boolean {
+  try {
+    return Boolean(chrome.runtime?.id);
+  } catch {
+    return false;
+  }
+}
+
+function onDocumentClick(event: MouseEvent) {
+  if (!extensionConnected()) {
+    instance.teardown();
+    return;
+  }
+  handleClick(event).catch((err) => console.warn("[content-script] handleClick failed:", err));
+}
+
+const instance: Instance = {
+  teardown() {
+    document.removeEventListener("click", onDocumentClick, true);
+    try {
+      chrome.runtime.onMessage.removeListener(onRuntimeMessage);
+    } catch {
+      // The connection is already gone, and the listener with it.
+    }
+    if (instances[INSTANCE_KEY] === instance) delete instances[INSTANCE_KEY];
+  },
+};
+
+instances[INSTANCE_KEY]?.teardown();
+instances[INSTANCE_KEY] = instance;
+
+chrome.runtime.onMessage.addListener(onRuntimeMessage);
 
 // One delegated listener rather than one per Comment button — LinkedIn's
 // feed is virtualized/infinite-scroll, so buttons are constantly added and
@@ -943,10 +1002,4 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // runs top-down before the target's own handlers, and LinkedIn's own
 // comment-box handler calls stopPropagation(), so a bubble-phase listener
 // never sees the click at all.
-document.addEventListener(
-  "click",
-  (event) => {
-    handleClick(event).catch((err) => console.warn("[content-script] handleClick failed:", err));
-  },
-  true,
-);
+document.addEventListener("click", onDocumentClick, true);

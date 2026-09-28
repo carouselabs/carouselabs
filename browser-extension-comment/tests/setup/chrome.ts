@@ -85,6 +85,22 @@ export function createChromeMock() {
     onMessage,
     onInstalled: createEvent(),
     getURL: (path: string) => `chrome-extension://test-extension-id/${path.replace(/^\//, "")}`,
+    // The parts of the built manifest src/lib/tabs.ts reads, shaped like
+    // @crxjs/vite-plugin's output: the LinkedIn entry is a loader, and the
+    // module it imports is web-accessible to LinkedIn.
+    getManifest: vi.fn(() => ({
+      content_scripts: [
+        { matches: ["https://carouselabs.com/extension-connect*"], js: ["assets/authRelay.js"] },
+        { matches: ["https://www.linkedin.com/*"], js: ["assets/content-script.ts-loader.js"] },
+      ],
+      web_accessible_resources: [
+        { matches: ["https://carouselabs.com/*"], resources: ["assets/authRelay.js"] },
+        {
+          matches: ["https://www.linkedin.com/*"],
+          resources: ["assets/messageThread-abc.js", "assets/content-script.ts-abc123.js"],
+        },
+      ],
+    })),
     sendMessage: vi.fn((message: unknown, callback?: AnyFn) => {
       sentMessages.push(message);
       if (callback) queueMicrotask(() => callback(undefined));
@@ -107,12 +123,15 @@ export function createChromeMock() {
 
   const sidePanel = { setPanelBehavior: vi.fn(async () => undefined) };
 
+  const scripting = { executeScript: vi.fn(async () => [] as unknown[]) };
+
   return {
     storage: { local, onChanged },
     runtime,
     tabs,
     commands,
     sidePanel,
+    scripting,
     // Test-only handles, never present on the real chrome object.
     __store: store,
     __sentMessages: sentMessages,

@@ -1,7 +1,10 @@
-// Service worker. Registers the side panel's open-on-click behavior, and
+// Service worker. Registers the side panel's open-on-click behavior, repairs
+// LinkedIn tabs left without a working content script (see
+// healOpenLinkedInTabs), and
 // receives the extension token relayed by src/content/authRelay.ts (see
 // that file's comment for the full hand-off chain) — stores it in
 // chrome.storage.local and closes the connect tab it came from.
+import { ensureContentScript } from "@/lib/tabs";
 
 // Must match MESSAGE_TYPE in both app/extension-connect and
 // src/content/authRelay.ts exactly — no shared package between this repo
@@ -42,8 +45,34 @@ chrome.runtime.onInstalled.addListener((details) => {
     chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
   }
 
+  if (details.reason === "install" || details.reason === "update") healOpenLinkedInTabs();
+
   console.log("[CarouseLabs Comment] service worker installed.");
 });
+
+// LinkedIn tabs open before an install, an update, or the extension being
+// turned back on have no working content script (Chrome only injects into
+// pages loaded afterwards), so every Comment click in them would be lost until
+// the user reloads. So each LinkedIn tab whose script doesn't answer gets a
+// fresh one: whenever this worker starts (which covers all three, including a
+// re-enable, which fires no onInstalled) and again on install/update. A tab
+// that answers is left alone, so a healthy tab costs one message. Discarded
+// tabs are skipped: they reload, and get the script, when they're next opened.
+let healing: Promise<void> | null = null;
+
+function healOpenLinkedInTabs(): Promise<void> {
+  healing ??= chrome.tabs
+    .query({ url: "https://www.linkedin.com/*" })
+    .then((tabs) => Promise.all(tabs.map((tab) => ensureContentScript(tab))))
+    .then(() => undefined)
+    .catch((err) => console.log("[background] repairing open LinkedIn tabs failed (non-fatal):", err))
+    .finally(() => {
+      healing = null;
+    });
+  return healing;
+}
+
+healOpenLinkedInTabs();
 
 // Only the sign-in hand-off page may hand the extension a token. Every
 // content script (including the one on linkedin.com) can reach this

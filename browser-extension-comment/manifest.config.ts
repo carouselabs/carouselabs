@@ -25,7 +25,11 @@ export default defineManifest(({ mode }) => {
     48: "icons/icon48.png",
     128: "icons/icon128.png",
   },
-  permissions: ["sidePanel", "storage", "clipboardWrite"],
+  // "scripting": to put the content script into LinkedIn tabs that were
+  // already open when the extension was installed or updated (src/lib/tabs.ts).
+  // It shows no install warning, and only reaches sites already in
+  // host_permissions.
+  permissions: ["sidePanel", "storage", "clipboardWrite", "scripting"],
   host_permissions: [
     "https://www.linkedin.com/*",
     "https://carouselabs.com/*",

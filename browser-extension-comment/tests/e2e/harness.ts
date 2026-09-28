@@ -9,7 +9,9 @@ import { fileURLToPath } from "node:url";
 import { chromium, test as base, type BrowserContext, type Page, type Worker } from "@playwright/test";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const DIST = path.join(ROOT, "dist");
+// EXT_DIST=dist-store runs the same suite against the Chrome Web Store build
+// (`npx vite build --outDir dist-store`), the exact files that get uploaded.
+const DIST = path.resolve(ROOT, process.env.EXT_DIST ?? "dist");
 const FIXTURES = path.join(ROOT, "tests/fixtures/linkedin");
 
 export const SERVER_CONFIG = {
@@ -67,8 +69,11 @@ export const test = base.extend<{ harness: Harness }>({
     await context.route("**/*", async (route) => {
       const url = new URL(route.request().url());
       // The extension's own bundle (panel JS, the content script's lazily
-      // imported module) is local, not web traffic — let it load.
-      if (url.protocol === "chrome-extension:" || url.protocol === "data:") return route.continue();
+      // imported module) and Chrome's own pages (chrome://extensions) are
+      // local, not web traffic — let them load.
+      if (url.protocol === "chrome-extension:" || url.protocol === "data:" || url.protocol === "chrome:") {
+        return route.continue();
+      }
       if (url.hostname === "www.linkedin.com") {
         const fixture = pages.get(url.pathname);
         if (!fixture) return route.fulfill({ status: 404, body: "" });

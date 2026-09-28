@@ -21,8 +21,11 @@ describe("production manifest", () => {
     expect(prod.description!.length).toBeLessThanOrEqual(132); // Chrome Web Store limit
   });
 
+  // "scripting" puts the content script into LinkedIn tabs that were open
+  // before an install/update (src/lib/tabs.ts). It shows no install warning
+  // and reaches only the hosts below.
   it("requests exactly the permissions the code uses", () => {
-    expect([...(prod.permissions ?? [])].sort()).toEqual(["clipboardWrite", "sidePanel", "storage"]);
+    expect([...(prod.permissions ?? [])].sort()).toEqual(["clipboardWrite", "scripting", "sidePanel", "storage"]);
   });
 
   it("has only the two production hosts — no localhost, no wildcards", () => {

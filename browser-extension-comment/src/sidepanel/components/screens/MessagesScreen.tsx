@@ -9,7 +9,7 @@ import {
   setExtensionAccess,
   useExtensionAccess,
 } from "@/lib/extensionAccess";
-import { noContentScriptMessage } from "@/lib/tabs";
+import { noContentScriptMessage, sendToTab } from "@/lib/tabs";
 import { markHistoryAction } from "@/lib/history";
 // Kept on the account, so the website's Extension section edits the same values.
 import { loadShowInsert, loadSyncedMessageContext, saveSyncedMessageContext } from "@/lib/syncedSettings";
@@ -159,9 +159,10 @@ export function MessagesScreen({ onCreateProfile }: Props) {
     try {
       [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id === undefined) throw new Error("no active tab");
-      const res = (await chrome.tabs.sendMessage(tab.id, { type: READ_CONVERSATION_MESSAGE_TYPE })) as
-        | { ok: boolean; conversation?: CapturedConversation; error?: string }
-        | undefined;
+      const res = await sendToTab<{ ok: boolean; conversation?: CapturedConversation; error?: string } | undefined>(
+        tab,
+        { type: READ_CONVERSATION_MESSAGE_TYPE },
+      );
 
       if (!res?.ok || !res.conversation) {
         setReadError(res?.error ?? "Couldn't read this conversation.");
@@ -292,14 +293,14 @@ export function MessagesScreen({ onCreateProfile }: Props) {
       [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id === undefined) throw new Error("no active tab");
       if (!conversation) throw new Error("nothing read");
-      const res = (await chrome.tabs.sendMessage(tab.id, {
+      const res = await sendToTab<{ ok: boolean; error?: string } | undefined>(tab, {
         type: INSERT_MESSAGE_TYPE,
         text,
         mode: "message",
         // The content script refuses unless this conversation is still the
         // one open, so text written for one person can't land in another's box.
         expect: { threadPath: conversation.threadPath, contactName: conversation.contact.name },
-      })) as { ok: boolean; error?: string } | undefined;
+      });
 
       if (!res?.ok) {
         setInsertError(res?.error ?? "Couldn't insert into LinkedIn. Try Copy instead.");

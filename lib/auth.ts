@@ -12,10 +12,18 @@ export async function getCurrentUser() {
     include: { profile: true, subscription: true },
   })
   if (existing) {
+    if (existing.deletedAt || existing.suspendedAt) {
+      console.log("[getCurrentUser] DIAGNOSTIC: existing row is deleted/suspended", {
+        clerkId: userId,
+        deletedAt: existing.deletedAt,
+        suspendedAt: existing.suspendedAt,
+      })
+      return null
+    }
     // Backfill: users created via the old bootstrap path (before this fix)
     // may have no Subscription row. Create one with schema defaults on access.
     if (!existing.subscription) {
-      await db.subscription.create({ data: { userId: existing.id } })
+      await db.subscription.upsert({ where: { userId: existing.id }, create: { userId: existing.id }, update: {} })
       return db.user.findUnique({
         where: { clerkId: userId },
         include: { profile: true, subscription: true },
@@ -26,27 +34,38 @@ export async function getCurrentUser() {
 
   // No DB row yet — webhook hasn't fired (common in local dev).
   // Bootstrap the user record from Clerk's session data.
+  console.log("[getCurrentUser] DIAGNOSTIC: no existing row for clerkId, bootstrapping", { clerkId: userId })
   const clerkUser = await currentUser()
-  if (!clerkUser) return null
+  if (!clerkUser || clerkUser.id !== userId) {
+    console.log("[getCurrentUser] DIAGNOSTIC: currentUser() mismatch/null", {
+      clerkId: userId,
+      clerkUserId: clerkUser?.id ?? null,
+    })
+    return null
+  }
 
-  const email =
-    clerkUser.primaryEmailAddress?.emailAddress ??
-    clerkUser.emailAddresses[0]?.emailAddress ??
-    ""
+  const primary = clerkUser.primaryEmailAddress
+  if (!primary || primary.verification?.status !== "verified") {
+    console.log("[getCurrentUser] DIAGNOSTIC: primary email missing/unverified", {
+      clerkId: userId,
+      hasPrimary: !!primary,
+      verificationStatus: primary?.verification?.status ?? null,
+    })
+    return null
+  }
+  const email = primary.emailAddress
 
-  // The email may already belong to a User row under a different clerkId
-  // (Clerk account deleted and re-created, or a new sign-in method). Creating
-  // would violate the unique email constraint (P2002) — re-link that row to
-  // the new clerkId instead, then re-run so the normal path (including the
-  // subscription backfill) picks it up.
+  // Email ownership is not permission to assume an existing application's
+  // identity. Account recovery must explicitly verify the original account.
   if (email) {
     const existingByEmail = await db.user.findUnique({ where: { email } })
     if (existingByEmail && existingByEmail.clerkId !== userId) {
-      await db.user.update({
-        where: { id: existingByEmail.id },
-        data: { clerkId: userId },
+      console.log("[getCurrentUser] DIAGNOSTIC: email belongs to a different clerkId", {
+        thisClerkId: userId,
+        email,
+        existingRowClerkId: existingByEmail.clerkId,
       })
-      return getCurrentUser()
+      return null
     }
   }
 
@@ -62,7 +81,7 @@ export async function getCurrentUser() {
   })
 
   // Reaching here means no User row existed for this clerkId (nor for this
-  // email, handled above) before this call — a genuinely new signup. Apply
+  // email, checked above) before this call — a genuinely new signup. Apply
   // any admin pre-filled profile (see /admin/prefill-user) instead of
   // sending them through onboarding. Best-effort — worst case they just see
   // the normal onboarding flow.

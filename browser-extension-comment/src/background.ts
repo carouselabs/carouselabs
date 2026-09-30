@@ -35,7 +35,7 @@ console.log("[background] service worker script evaluated, registering listeners
 chrome.runtime.onInstalled.addListener((details) => {
   chrome.sidePanel
     .setPanelBehavior({ openPanelOnActionClick: true })
-    .catch((error) => console.error("[CarouseLabs Comment] setPanelBehavior failed:", error));
+    .catch((error) => console.error("[CarouseLabs Engage] setPanelBehavior failed:", error));
 
   // Only on a genuine first install: an update or a browser restart also fires
   // this listener, and reopening the welcome tab then would be noise.
@@ -47,7 +47,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 
   if (details.reason === "install" || details.reason === "update") healOpenLinkedInTabs();
 
-  console.log("[CarouseLabs Comment] service worker installed.");
+  console.log("[CarouseLabs Engage] service worker installed.");
 });
 
 // LinkedIn tabs open before an install, an update, or the extension being

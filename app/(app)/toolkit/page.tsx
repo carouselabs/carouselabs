@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 // Chrome Web Store listing URLs. null renders a disabled button rather than a
 // link, so a listing that is not live yet can never ship as a broken href.
-// The Comment extension's lives in lib/plans.ts with the rest of its product
+// The Engage extension's lives in lib/plans.ts with the rest of its product
 // data, since the billing page links to it too.
 const IDEAS_BOARD_STORE_URL: string | null =
   "https://chromewebstore.google.com/detail/carouselabs-ideas-board/jiambimimcofcfnefffcpcciocfpajma"
@@ -54,7 +54,7 @@ const TOOLS: ToolCard[] = [
   },
   {
     kind: "extension",
-    name: "CarouseLabs Comment",
+    name: "CarouseLabs Engage",
     description:
       "Unlimited LinkedIn comments, replies, connection notes and conversations in your own voice — $15/month, sold separately.",
     icon: MessageSquare,

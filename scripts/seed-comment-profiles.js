@@ -1,6 +1,6 @@
 /* eslint-disable */
 // scripts/seed-comment-profiles.js — one-time (but idempotent) seed for the
-// CarouseLabs Comment extension's 11 built-in system CommentProfile rows — the
+// CarouseLabs Engage extension's 11 built-in system CommentProfile rows — the
 // original 7 plus 4 CarouseLabs recommended presets (isSystem: true,
 // userId: null — shared by every user, never owned by one).
 // Plain JS, no ts-node/tsx dependency, same reasoning as prisma/seed.js.

@@ -1,4 +1,4 @@
-"""Generate toolbar icons for the CarouseLabs Comment extension.
+"""Generate toolbar icons for the CarouseLabs Engage extension.
 
 Same approach as browser-extension-ideas/ (a solid CarouseLabs-purple square
 with a simple white glyph, Pillow-rendered at each required size), but the

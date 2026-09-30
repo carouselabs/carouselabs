@@ -16,10 +16,10 @@ export default defineManifest(({ mode }) => {
 
   return {
   manifest_version: 3,
-  name: "CarouseLabs Comment",
+  name: "CarouseLabs Engage",
   version: pkg.version,
   description:
-    "Generate LinkedIn comments in your own voice. You review and post every one yourself.",
+    "Write LinkedIn comments, replies, connection notes and messages in your own voice. You review and post every one yourself.",
   icons: {
     16: "icons/icon16.png",
     48: "icons/icon48.png",
@@ -72,7 +72,7 @@ export default defineManifest(({ mode }) => {
     },
   },
   action: {
-    default_title: "CarouseLabs Comment",
+    default_title: "CarouseLabs Engage",
     default_icon: {
       16: "icons/icon16.png",
       48: "icons/icon48.png",

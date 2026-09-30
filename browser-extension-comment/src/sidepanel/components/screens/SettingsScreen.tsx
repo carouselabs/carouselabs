@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Check, ExternalLink } from "lucide-react";
 import {
   apiFetch,
   ApiError,
@@ -7,20 +8,73 @@ import {
   type CommentProfile,
   type SettingsResponse,
 } from "@/lib/api";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { ConnectContextEditor } from "../ConnectContextEditor";
+import { ScreenHeader } from "../ScreenHeader";
 import { loadShowInsert, saveShowInsert } from "@/lib/syncedSettings";
 
+// "No default" / "Not set" in a dropdown, whose options can't be "".
+const NONE = "__none__";
 
-const fieldClass =
-  "w-full rounded-md border border-input bg-background p-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50";
-
-function Row({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="space-y-1.5 rounded-md border border-input p-3">
-      <p className="text-xs font-medium">{title}</p>
+    <section className="space-y-1.5" aria-label={title}>
+      <h3 className="text-xs font-medium text-muted-foreground">{title}</h3>
+      <div className="divide-y rounded-lg border bg-card">{children}</div>
+    </section>
+  );
+}
+
+function SwitchRow({
+  id,
+  title,
+  hint,
+  checked,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  title: string;
+  hint: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 p-3">
+      <div className="min-w-0 space-y-0.5">
+        <p id={`${id}-label`} className="text-sm font-medium">
+          {title}
+        </p>
+        <p id={`${id}-hint`} className="text-xs leading-relaxed text-muted-foreground">
+          {hint}
+        </p>
+      </div>
+      <Switch
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onChange}
+        labelledBy={`${id}-label`}
+        describedBy={`${id}-hint`}
+      />
+    </div>
+  );
+}
+
+function SelectRow({ id, title, hint, children }: { id: string; title: string; hint: string; children: ReactNode }) {
+  return (
+    <div className="space-y-2 p-3">
+      <div className="space-y-0.5">
+        <p id={`${id}-label`} className="text-sm font-medium">
+          {title}
+        </p>
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      </div>
       {children}
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -34,6 +88,16 @@ export function SettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // A brief "Saved" beside the title after any change lands: settings apply
+  // on their own, with no Save button, so this is the only confirmation.
+  const [saved, setSaved] = useState(false);
+  const savedTimer = useRef<number | null>(null);
+
+  function flashSaved() {
+    setSaved(true);
+    if (savedTimer.current !== null) window.clearTimeout(savedTimer.current);
+    savedTimer.current = window.setTimeout(() => setSaved(false), 2000);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -72,6 +136,7 @@ export function SettingsScreen() {
 
     return () => {
       cancelled = true;
+      if (savedTimer.current !== null) window.clearTimeout(savedTimer.current);
     };
   }, []);
 
@@ -87,6 +152,7 @@ export function SettingsScreen() {
         body: JSON.stringify(partial),
       });
       setSettings(updated);
+      flashSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't save that setting");
     } finally {
@@ -96,114 +162,147 @@ export function SettingsScreen() {
 
   function handleShowInsert(next: boolean) {
     setShowInsert(next);
-    void saveShowInsert(next);
-  }
-
-  if (loading) {
-    return <div className="p-4 text-sm text-muted-foreground">Loading settings…</div>;
+    void saveShowInsert(next).then(flashSaved);
   }
 
   return (
-    <div className="flex flex-col gap-3 p-4">
-      <h2 className="text-sm font-semibold">Settings</h2>
-
-      {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
-          {error}
-        </div>
-      )}
-
-      <Row
-        title="Show Insert button"
-        hint={
-          insertEnabled === false
-            ? "Insert is currently turned off for everyone, so this setting has no effect."
-            : "Insert types the comment into LinkedIn's comment box for you. Copy and paste is the safer option."
+    <div className="flex flex-col gap-4 p-4">
+      <ScreenHeader
+        title="Settings"
+        description="Saved to your account, so carouselabs.com shows the same."
+        action={
+          saved && (
+            <span role="status" className="inline-flex shrink-0 animate-fade-in items-center gap-1 text-xs font-medium text-success">
+              <Check aria-hidden className="h-3.5 w-3.5" />
+              Saved
+            </span>
+          )
         }
-      >
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={showInsert}
-            disabled={insertEnabled === false}
-            onChange={(e) => handleShowInsert(e.target.checked)}
-          />
-          Show the button on the Home screen
-        </label>
-      </Row>
+      />
 
-      <Row
-        title="Insert warning"
-        hint="Turning this back on will show the risk warning again the next time you use Insert."
-      >
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={!settings?.insertWarningHidden}
-            disabled={saving}
-            onChange={(e) => patch({ insertWarningHidden: !e.target.checked })}
-          />
-          Warn me before inserting
-        </label>
-      </Row>
+      {error && <Alert>{error}</Alert>}
 
-      <Row title="Default comment profile" hint="Preselected on the Home screen.">
-        <select
-          className={fieldClass}
-          value={settings?.defaultCommentProfileId ?? ""}
-          disabled={saving}
-          onChange={(e) => patch({ defaultCommentProfileId: e.target.value || null })}
-        >
-          <option value="">No default</option>
-          {profiles.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-              {p.isSystem ? " (built-in)" : ""}
-            </option>
+      {loading ? (
+        <div role="status" aria-label="Loading settings" className="space-y-3 rounded-lg border bg-card p-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="space-y-2 py-1">
+              <Skeleton className="h-3.5 w-1/2" />
+              <Skeleton className="w-4/5" />
+            </div>
           ))}
-        </select>
-      </Row>
-
-      <Row title="Default language" hint="Used as the starting language for new profiles.">
-        <select
-          className={fieldClass}
-          value={settings?.defaultLanguage ?? ""}
-          disabled={saving}
-          onChange={(e) => patch({ defaultLanguage: e.target.value || null })}
-        >
-          <option value="">Not set</option>
-          {LANGUAGES.map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-        </select>
-      </Row>
-
-      <Row
-        title="Connection notes: your context"
-        hint="What connection notes say about you. Saved in this browser and used for every note until you change it."
-      >
-        <ConnectContextEditor />
-      </Row>
-
-      <Row
-        title="Keyboard shortcut"
-        hint="Chrome doesn't let an extension change its own shortcut, so rebinding happens on Chrome's shortcuts page. The shortcut only fires while the side panel is open."
-      >
-        <div className="flex items-center justify-between gap-2">
-          <code className="rounded bg-muted px-2 py-1 text-xs">
-            {shortcut ?? "Not set"}
-          </code>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => chrome.tabs.create({ url: "chrome://extensions/shortcuts" })}
-          >
-            Change
-          </Button>
         </div>
-      </Row>
+      ) : (
+        <>
+          <Group title="Insert">
+            <SwitchRow
+              id="setting-show-insert"
+              title="Show the Insert button"
+              hint={
+                insertEnabled === false
+                  ? "Insert is currently turned off for everyone, so this setting has no effect."
+                  : "Insert types the text into LinkedIn for you. Copy and paste is the safer option."
+              }
+              checked={showInsert}
+              disabled={insertEnabled === false}
+              onChange={handleShowInsert}
+            />
+            <SwitchRow
+              id="setting-insert-warning"
+              title="Warn me before inserting"
+              hint="Shows the account-risk warning before each Insert."
+              checked={!settings?.insertWarningHidden}
+              disabled={saving}
+              onChange={(on) => patch({ insertWarningHidden: !on })}
+            />
+          </Group>
+
+          <Group title="Defaults">
+            <SelectRow id="setting-default-profile" title="Comment profile" hint="Preselected on the Home screen.">
+              <Select
+                value={settings?.defaultCommentProfileId ?? NONE}
+                disabled={saving}
+                onValueChange={(value) => patch({ defaultCommentProfileId: value === NONE ? null : value })}
+              >
+                <SelectTrigger aria-labelledby="setting-default-profile-label">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>No default</SelectItem>
+                  {profiles.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                      {p.isSystem ? " (built-in)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </SelectRow>
+            <SelectRow id="setting-language" title="Language" hint="The starting language for new profiles.">
+              <Select
+                value={settings?.defaultLanguage ?? NONE}
+                disabled={saving}
+                onValueChange={(value) => patch({ defaultLanguage: value === NONE ? null : value })}
+              >
+                <SelectTrigger aria-labelledby="setting-language-label">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Not set</SelectItem>
+                  {LANGUAGES.map((l) => (
+                    <SelectItem key={l} value={l}>
+                      {l}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </SelectRow>
+          </Group>
+
+          <Group title="Connection notes">
+            <div className="space-y-2.5 p-3">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium">What your notes say about you</p>
+                <p className="text-xs text-muted-foreground">Used for every note until you change it.</p>
+              </div>
+              <ConnectContextEditor onSaved={flashSaved} />
+            </div>
+          </Group>
+
+          <Group title="Keyboard shortcut">
+            <div className="space-y-2.5 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium">Generate</p>
+                {shortcut ? (
+                  <span className="flex shrink-0 items-center gap-1" aria-label={shortcut}>
+                    {shortcut.split("+").map((key, i) => (
+                      <kbd
+                        key={i}
+                        className="rounded border border-b-2 bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground"
+                      >
+                        {key}
+                      </kbd>
+                    ))}
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Not set</span>
+                )}
+              </div>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Works while the side panel is open. Chrome doesn&apos;t let an extension change its own shortcut, so
+                it&apos;s changed on Chrome&apos;s shortcuts page.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => chrome.tabs.create({ url: "chrome://extensions/shortcuts" })}
+              >
+                Change in Chrome
+                <ExternalLink aria-hidden />
+              </Button>
+            </div>
+          </Group>
+        </>
+      )}
     </div>
   );
 }

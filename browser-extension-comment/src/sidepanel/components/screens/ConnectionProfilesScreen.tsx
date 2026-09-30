@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { apiFetch, ApiError, type ConnectionProfile, type MeResponse } from "@/lib/api";
-import { Button } from "@/components/ui/button";
 import { ConnectionProfileForm, connectionDraftFromProfile } from "../ConnectionProfileForm";
-import { RecommendedBadge } from "../RecommendedBadge";
+import { ProfileList } from "../ProfileList";
 
 // Connection Note profiles, the counterpart to ProfilesScreen for comments.
 // Same structure deliberately: presets are duplicated rather than edited (they
@@ -18,12 +17,14 @@ type View =
 type LoadState = "loading" | "ready" | "error";
 
 interface Props {
+  // The Profiles screen's title and kind switch, shown above the list.
+  header?: ReactNode;
   // Set when the panel's "+ Create custom profile" brought the user here.
   startInBuilder?: boolean;
   onBuilderOpened?: () => void;
 }
 
-export function ConnectionProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) {
+export function ConnectionProfilesScreen({ header, startInBuilder, onBuilderOpened }: Props = {}) {
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [state, setState] = useState<LoadState>("loading");
@@ -56,10 +57,6 @@ export function ConnectionProfilesScreen({ startInBuilder, onBuilderOpened }: Pr
     setView({ mode: "create" });
     onBuilderOpened?.();
   }, [startInBuilder, onBuilderOpened]);
-
-  const customProfiles = profiles.filter((p) => !p.isSystem);
-  const recommendedProfiles = profiles.filter((p) => p.isRecommended);
-  const systemProfiles = profiles.filter((p) => p.isSystem && !p.isRecommended);
 
   async function handleDelete(profile: ConnectionProfile) {
     setPendingId(profile.id);
@@ -121,104 +118,22 @@ export function ConnectionProfilesScreen({ startInBuilder, onBuilderOpened }: Pr
     );
   }
 
-  function renderSystemCard(profile: ConnectionProfile, recommended: boolean) {
-    return (
-      <div key={profile.id} className="space-y-2 rounded-md border border-input p-3">
-        <div className="flex flex-wrap items-center gap-y-1">
-          <span className="text-sm font-medium">{profile.name}</span>
-          {recommended && <RecommendedBadge />}
-        </div>
-        <p className="line-clamp-2 text-xs text-muted-foreground">{profile.angle}</p>
-        <p className="text-[11px] text-muted-foreground">
-          {profile.goal} · {profile.length}
-        </p>
-        <Button size="sm" variant="outline" onClick={() => setView({ mode: "duplicate", profile })}>
-          Duplicate
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Connection note profiles</h2>
-        {me && (
-          <span className="text-xs text-muted-foreground">
-            {customProfiles.length} custom
-          </span>
-        )}
-      </div>
-
-      {state === "loading" && <p className="text-sm text-muted-foreground">Loading profiles…</p>}
-
-      {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
-          {error}
-        </div>
-      )}
-
-      {state === "ready" && (
-        <>
-          <div className="space-y-1.5">
-            <Button onClick={() => setView({ mode: "create" })}>
-              + New connection profile
-            </Button>
-          </div>
-
-          {recommendedProfiles.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Recommended by CarouseLabs</p>
-              {recommendedProfiles.map((profile) => renderSystemCard(profile, true))}
-            </div>
-          )}
-
-          {systemProfiles.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Built-in profiles</p>
-              {systemProfiles.map((profile) => renderSystemCard(profile, false))}
-            </div>
-          )}
-
-          {customProfiles.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Your profiles</p>
-              {customProfiles.map((profile) => (
-                <div key={profile.id} className="space-y-2 rounded-md border border-input p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium">{profile.name}</span>
-                    {me?.defaultConnectionProfileId === profile.id && (
-                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                        default
-                      </span>
-                    )}
-                  </div>
-                  <p className="line-clamp-2 text-xs text-muted-foreground">{profile.angle}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    <Button size="sm" variant="outline" disabled={pendingId === profile.id} onClick={() => setView({ mode: "edit", profile })}>
-                      Edit
-                    </Button>
-                    <Button size="sm" variant="outline" disabled={pendingId === profile.id} onClick={() => setView({ mode: "duplicate", profile })}>
-                      Duplicate
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={pendingId === profile.id || me?.defaultConnectionProfileId === profile.id}
-                      onClick={() => handleSetDefault(profile)}
-                    >
-                      Set default
-                    </Button>
-                    <Button size="sm" variant="ghost" disabled={pendingId === profile.id} onClick={() => handleDelete(profile)}>
-                      {pendingId === profile.id ? "…" : "Delete"}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-    </div>
+    <ProfileList
+      header={header}
+      title="Connection note profiles"
+      loading={state === "loading"}
+      error={error}
+      profiles={profiles}
+      summary={(profile) => profile.angle}
+      meta={(profile) => `${profile.goal} · ${profile.length}`}
+      defaultId={me?.defaultConnectionProfileId}
+      pendingId={pendingId}
+      onNew={() => setView({ mode: "create" })}
+      onEdit={(profile) => setView({ mode: "edit", profile })}
+      onDuplicate={(profile) => setView({ mode: "duplicate", profile })}
+      onSetDefault={handleSetDefault}
+      onDelete={handleDelete}
+    />
   );
 }

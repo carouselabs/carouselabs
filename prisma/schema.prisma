@@ -109,7 +109,7 @@ model User {
   hashtagGroups  HashtagGroup[]
   shortLinks     ShortLink[]
 
-  // ── CarouseLabs Comment extension ──
+  // ── CarouseLabs Engage extension ──
   defaultCommentProfileId    String?
   defaultConnectionProfileId String?
   defaultMessageProfileId    String?
@@ -419,7 +419,7 @@ model ExtensionApiKey {
   @@index([userId])
 }
 
-// ── CarouseLabs Comment extension ──────────────────────────────────
+// ── CarouseLabs Engage extension ───────────────────────────────────
 // A reusable "voice" for AI-generated LinkedIn comments (who the commenter
 // is, their goal, tone, length, etc.). userId is nullable because isSystem
 // profiles are built-in presets shared by everyone (not owned by any one

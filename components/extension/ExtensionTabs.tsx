@@ -27,7 +27,7 @@ export function ExtensionTabs() {
           <h1 className="text-[22px] font-bold text-[#0A0A0A] tracking-[-0.3px]">LinkedIn Extension</h1>
         </div>
         <p className="text-[13px] text-[#6B7280] leading-[1.6] max-w-2xl">
-          Everything the CarouseLabs Comment extension uses, in one place. Changes you make here show up in
+          Everything the CarouseLabs Engage extension uses, in one place. Changes you make here show up in
           the extension, and changes made in the extension show up here.
         </p>
       </div>

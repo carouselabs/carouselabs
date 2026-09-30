@@ -2,8 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Design tokens. Components use these names only (bg-card, text-muted-foreground,
+ * border-border…), never raw colours, so light and dark are one switch here.
+ * Dark follows the operating system (LinkedIn users run both).
+ *
+ * Type scale (Tailwind): screen title text-base semibold · section title
+ * text-sm semibold · body text-sm · label/helper/meta text-xs · badge 11px.
+ * Nothing smaller.
+ * Radius: rounded-md controls · rounded-lg containers · rounded-xl dialogs.
+ * Motion: duration-fast (120ms) feedback · duration-normal (180ms) transitions
+ * · duration-slow (260ms) larger state changes; ease-out entering.
+ */
 @layer base {
   :root {
+    color-scheme: light;
+
     --background: 0 0% 100%;
     --foreground: 240 10% 12%;
 
@@ -15,24 +29,82 @@
 
     --primary: 262 83% 58%; /* CarouseLabs purple #7C3AED */
     --primary-foreground: 0 0% 100%;
+    /* Purple for text and links on the page (text-primary-text), not on a
+       purple fill: the brand purple itself is too dark to read on the dark
+       theme's surfaces. */
+    --primary-text: 262 75% 52%;
 
-    --secondary: 240 5% 96%;
+    --secondary: 240 5% 95%;
     --secondary-foreground: 240 10% 12%;
 
     --muted: 240 5% 96%;
-    --muted-foreground: 240 4% 46%;
+    --muted-foreground: 240 4% 44%;
 
     --accent: 262 83% 96%;
-    --accent-foreground: 262 83% 30%;
+    --accent-foreground: 262 70% 42%;
 
     --border: 240 6% 90%;
-    --input: 240 6% 90%;
+    --input: 240 6% 87%;
     --ring: 262 83% 58%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
+    --destructive-soft: 0 86% 97%;
+
+    --success: 142 72% 29%;
+    --success-soft: 142 70% 95%;
+
+    --warning: 30 95% 31%;
+    --warning-soft: 40 95% 94%;
 
     --radius: 0.5rem;
+
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+
+      --background: 240 6% 9%;
+      --foreground: 240 5% 93%;
+
+      --card: 240 5% 12%;
+      --card-foreground: 240 5% 93%;
+
+      --popover: 240 5% 13%;
+      --popover-foreground: 240 5% 93%;
+
+      /* Same brand purple: white on it stays above 5:1. */
+      --primary: 262 83% 58%;
+      --primary-foreground: 0 0% 100%;
+      --primary-text: 262 90% 78%;
+
+      --secondary: 240 4% 17%;
+      --secondary-foreground: 240 5% 93%;
+
+      --muted: 240 4% 15%;
+      --muted-foreground: 240 5% 66%;
+
+      --accent: 262 45% 20%;
+      --accent-foreground: 262 90% 84%;
+
+      --border: 240 4% 20%;
+      --input: 240 4% 25%;
+      --ring: 262 83% 68%;
+
+      --destructive: 0 75% 62%;
+      /* Dark text on the lighter dark-theme red; white on it fails contrast. */
+      --destructive-foreground: 0 0% 9%;
+      --destructive-soft: 0 45% 15%;
+
+      --success: 142 60% 55%;
+      --success-soft: 142 40% 13%;
+
+      --warning: 38 92% 60%;
+      --warning-soft: 38 50% 14%;
+    }
   }
 }
 
@@ -48,13 +120,46 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
     margin: 0;
     font-family:
       "Inter",
       ui-sans-serif,
       system-ui,
       -apple-system,
+      "Segoe UI",
       sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.22);
+  }
+
+  /* One visible focus style everywhere, for keyboard users only. */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* The panel is narrow: thin, quiet scrollbars instead of the chunky default. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+}
+
+/* Motion is decoration plus feedback. With reduced motion on, the movement
+   goes and the state change stays: colours, labels and icons still switch,
+   just instantly. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
   }
 }

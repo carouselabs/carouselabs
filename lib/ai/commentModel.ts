@@ -5,7 +5,6 @@
 // differently from a fresh generate would be a quiet inconsistency.
 import Anthropic from "@anthropic-ai/sdk"
 import OpenAI from "openai"
-import { BANNED_PHRASES } from "@/lib/ai/prompts/commentPrompt"
 
 // The SDK defaults (10-minute timeout, 2 retries each) let one Generate —
 // two attempts, each primary then fallback — run for many minutes while the
@@ -22,6 +21,28 @@ export const PRIMARY_MODEL = "gpt-6-luna"
 // Only called if Luna errors or refuses — same cost/latency tier as
 // PRIMARY_MODEL, not a bigger fallback model.
 export const FALLBACK_MODEL = "claude-haiku-4-5-20251001"
+
+// A comment is a few dozen words; this is a runaway guard, not a target.
+const MAX_OUTPUT_TOKENS = 1024
+
+function lunaRequest(systemMessage: string, userMessage: string) {
+  return {
+    model: PRIMARY_MODEL,
+    // Luna rejects `max_tokens` outright (400 "Unsupported parameter ... Use
+    // 'max_completion_tokens' instead"). With `max_tokens` here, every call
+    // failed and silently fell back to Haiku, a full round trip later.
+    max_completion_tokens: MAX_OUTPUT_TOKENS,
+    // Luna is a reasoning model (default effort "medium"); reasoning tokens
+    // would eat into the output budget and add latency for no benefit on a
+    // task this short, so it's turned off — same "latency over headroom" call
+    // FALLBACK_MODEL (Haiku) already makes for its own tier.
+    reasoning_effort: "none" as const,
+    messages: [
+      { role: "system" as const, content: systemMessage },
+      { role: "user" as const, content: userMessage },
+    ],
+  }
+}
 
 // Same check as app/api/generate/image-prompt: a real generation is JSON
 // starting with "{", so refusal prose only ever appears at the very start.
@@ -80,30 +101,8 @@ export function parseComment(raw: string): string | null {
   return extractStringValue(raw, "comment")
 }
 
-// Removes what the prompt already forbids, for the cases where the model
-// ignores it. Reports how much was removed so the caller can tell a cosmetic
-// tidy-up from a comment that was mostly banned filler.
-export function sanitizeComment(raw: string): { comment: string; removedChars: number } {
-  const before = raw.trim()
-  let comment = before
-
-  // Hashtags, including the trailing runs models like to append.
-  comment = comment.replace(/(^|\s)#[\p{L}\p{N}_]+/gu, "$1")
-
-  for (const phrase of BANNED_PHRASES) {
-    // Phrase plus any punctuation and spacing that trails it, so removing
-    // "Great post" doesn't leave a stranded "! ".
-    comment = comment.replace(new RegExp(`${phrase}[\\s!.,—-]*`, "gi"), "")
-  }
-
-  comment = comment
-    .replace(/—/g, "-")
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
-
-  return { comment, removedChars: before.length - comment.length }
-}
+// Lives in a dependency-free module so it can also clean text mid-stream.
+export { sanitizeComment } from "@/lib/ai/commentText"
 
 // Luna primary, Claude Haiku 4.5 on refusal or error. `label` only tags the
 // log lines so the two routes stay distinguishable in output.
@@ -113,22 +112,7 @@ export async function callCommentModel(
   label: string,
 ): Promise<string> {
   try {
-    const response = await openai.chat.completions.create({
-      model: PRIMARY_MODEL,
-      // Luna rejects `max_tokens` outright (400 "Unsupported parameter ... Use
-      // 'max_completion_tokens' instead"). With `max_tokens` here, every call
-      // failed and silently fell back to Haiku, a full round trip later.
-      max_completion_tokens: 1024,
-      // Luna is a reasoning model (default effort "medium"); reasoning
-      // tokens would eat into the output budget and add latency for no benefit on a
-      // task this short, so it's turned off — same "latency over headroom"
-      // call FALLBACK_MODEL (Haiku) already makes for its own tier.
-      reasoning_effort: "none",
-      messages: [
-        { role: "system", content: systemMessage },
-        { role: "user", content: userMessage },
-      ],
-    })
+    const response = await openai.chat.completions.create(lunaRequest(systemMessage, userMessage))
 
     const raw = response.choices[0]?.message?.content ?? ""
     if (!isRefusal(raw) && raw.trim()) return raw
@@ -140,7 +124,7 @@ export async function callCommentModel(
 
   const response = await anthropic.messages.create({
     model: FALLBACK_MODEL,
-    max_tokens: 1024,
+    max_tokens: MAX_OUTPUT_TOKENS,
     system: systemMessage,
     messages: [{ role: "user", content: userMessage }],
   })
@@ -149,4 +133,82 @@ export async function callCommentModel(
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map((b) => b.text)
     .join("")
+}
+
+export interface ModelStreamResult {
+  raw: string
+  // The model that actually produced `raw`.
+  model: string
+  // From the start of the call to the first token of the model that answered,
+  // including any time spent on a failed Luna attempt: what the user waited.
+  ttftMs: number | null
+  totalMs: number
+}
+
+export interface ModelStreamOptions {
+  // The whole response so far, each time more of it arrives.
+  onRaw?: (raw: string) => void
+  // Luna failed after sending some text and Haiku is starting over, so
+  // anything shown from Luna's partial response must be forgotten.
+  onReset?: () => void
+  // Aborting stops generation mid-response; the call then rejects.
+  signal?: AbortSignal
+}
+
+// callCommentModel, streamed: same models, same fallback rule (Luna, then
+// Haiku on error, refusal or empty output), but the text is handed over as it
+// arrives instead of when the model is done.
+export async function streamCommentModel(
+  systemMessage: string,
+  userMessage: string,
+  label: string,
+  { onRaw, onReset, signal }: ModelStreamOptions = {},
+): Promise<ModelStreamResult> {
+  const start = performance.now()
+  let raw = ""
+  let ttftMs: number | null = null
+
+  try {
+    const stream = await openai.chat.completions.create(
+      { ...lunaRequest(systemMessage, userMessage), stream: true },
+      { signal },
+    )
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content
+      if (!delta) continue
+      ttftMs ??= performance.now() - start
+      raw += delta
+      onRaw?.(raw)
+    }
+    if (!isRefusal(raw) && raw.trim()) {
+      return { raw, model: PRIMARY_MODEL, ttftMs, totalMs: performance.now() - start }
+    }
+    console.warn(`[${label}] Luna refused or returned empty, falling back to Claude Haiku`)
+  } catch (err) {
+    if (signal?.aborted) throw err
+    const e = err as { message?: string }
+    console.warn(`[${label}] Luna error, falling back to ${FALLBACK_MODEL}:`, e?.message ?? err)
+  }
+
+  if (raw) onReset?.()
+  raw = ""
+  ttftMs = null
+
+  const stream = await anthropic.messages.create(
+    {
+      model: FALLBACK_MODEL,
+      max_tokens: MAX_OUTPUT_TOKENS,
+      system: systemMessage,
+      messages: [{ role: "user", content: userMessage }],
+      stream: true,
+    },
+    { signal },
+  )
+  for await (const event of stream) {
+    if (event.type !== "content_block_delta" || event.delta.type !== "text_delta") continue
+    ttftMs ??= performance.now() - start
+    raw += event.delta.text
+    onRaw?.(raw)
+  }
+  return { raw, model: FALLBACK_MODEL, ttftMs, totalMs: performance.now() - start }
 }

@@ -91,7 +91,7 @@ export const GROWTH_PLAN: PlanDef = {
 
 export const PLANS: PlanDef[] = [FREE_PLAN, PRO_PLAN, GROWTH_PLAN]
 
-// ── The Chrome extension (CarouseLabs Comment) ────────────────────────────
+// ── The Chrome extension (CarouseLabs Engage) ─────────────────────────────
 // A separate $15/month product, NOT a fourth web plan: buying it unlocks the
 // extension only (no caption/image/carousel credits), and no web plan
 // includes it. Billing lives apart from the web Subscription — see
@@ -117,7 +117,7 @@ export const EXTENSION_PLAN = {
   note: "Extension only — no caption, image or carousel credits included.",
 } as const
 
-// Chrome Web Store listing for the extension (CarouseLabs Comment). Set to
+// Chrome Web Store listing for the extension (CarouseLabs Engage). Set to
 // null to hide every Install button rather than show a broken link.
 export const EXTENSION_STORE_URL: string | null =
   "https://chromewebstore.google.com/detail/carouselabs-comment/jgbmpekpdlckkeeffbamcbcnfodamnia"

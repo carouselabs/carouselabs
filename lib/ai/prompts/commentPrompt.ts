@@ -1,5 +1,5 @@
 // lib/ai/prompts/commentPrompt.ts
-// Prompt construction for the CarouseLabs Comment extension's Generate flow
+// Prompt construction for the CarouseLabs Engage extension's Generate flow
 // (app/api/ext/generate). Turns a CommentProfile + a scraped LinkedIn post
 // into the system/user pair sent to the model.
 //

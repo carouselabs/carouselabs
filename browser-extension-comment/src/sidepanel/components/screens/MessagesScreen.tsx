@@ -1,6 +1,26 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { MessagesSquare, RefreshCw, RotateCcw, ScanText, Sparkles } from "lucide-react";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { LoadingField } from "@/components/ui/loading-field";
+import { Segmented } from "@/components/ui/segmented";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Tooltip } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import { Initials } from "../Initials";
 import { InsertWarningModal } from "../InsertWarningModal";
+import { ResultCard } from "../ResultCard";
+import { ScreenHeader } from "../ScreenHeader";
 import { FreeGenerationsNote, UnlockCard } from "../UnlockCard";
 import {
   isPaywalled,
@@ -41,6 +61,12 @@ import {
 // Must match INSERT_MESSAGE_TYPE in src/content-script.ts exactly.
 const INSERT_MESSAGE_TYPE = "carouselabs:insert-comment";
 
+// Sentinel options in the dropdowns: the first hands off to the builder
+// (like the Home screen's), the second stands for "no tone override" (""),
+// which a dropdown option can't use as its value.
+const CREATE_CUSTOM_VALUE = "__create_custom__";
+const PROFILE_TONE_VALUE = "__profile_tone__";
+
 function userFacingError(err: unknown): string {
   if (err instanceof ApiError && err.status >= 400 && err.status < 500) return err.message;
   return "Something went wrong, try again";
@@ -53,6 +79,7 @@ interface Props {
 
 export function MessagesScreen({ onCreateProfile }: Props) {
   const [profiles, setProfiles] = useState<MessageProfile[]>([]);
+  const [profilesLoaded, setProfilesLoaded] = useState(false);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -70,6 +97,9 @@ export function MessagesScreen({ onCreateProfile }: Props) {
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  // Whether the result card shows: from the first successful message for
+  // this conversation on, even if the box is then cleared by hand.
+  const [hasResult, setHasResult] = useState(false);
   // The message's History row (see markHistoryAction).
   const [historyId, setHistoryId] = useState<string | null>(null);
   const access = useExtensionAccess();
@@ -77,7 +107,8 @@ export function MessagesScreen({ onCreateProfile }: Props) {
   // The output can land below the fold once a purpose/tone/thread preview
   // has pushed the page tall — scrolled into view automatically so a fresh
   // result is never hidden behind a scroll the user has to find themselves.
-  const outputRef = useRef<HTMLDivElement>(null);
+  const outputRef = useRef<HTMLElement>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
 
   const [insertEnabled, setInsertEnabled] = useState(false);
   const [showInsertPref, setShowInsertPref] = useState(true);
@@ -102,6 +133,9 @@ export function MessagesScreen({ onCreateProfile }: Props) {
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err instanceof ApiError ? err.message : "Failed to load");
+      })
+      .finally(() => {
+        if (!cancelled) setProfilesLoaded(true);
       });
 
     fetchExtConfig()
@@ -171,6 +205,7 @@ export function MessagesScreen({ onCreateProfile }: Props) {
 
       setConversation(res.conversation);
       setMessage("");
+      setHasResult(false);
       setHistoryId(null);
       setCopied(false);
       setInsertError(null);
@@ -224,9 +259,20 @@ export function MessagesScreen({ onCreateProfile }: Props) {
     Boolean(conversation?.contact.name) &&
     (choice === "profile" ? Boolean(profileId) : choice === "custom" ? Boolean(purpose.trim()) : true);
 
+  const hasMessage = message.trim().length > 0;
+  const showResult = generating || hasResult;
+
+  // The card appears on the click (with a skeleton, or the previous message
+  // until the new one lands); bring it into view then, not on every edit.
   useEffect(() => {
-    if (message) outputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [message]);
+    if (generating) outputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [generating]);
+
+  // A read conversation opens at its latest messages.
+  useLayoutEffect(() => {
+    const el = threadRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [conversation]);
 
   async function handleGenerate() {
     if (!conversation || !canGenerate) return;
@@ -251,6 +297,7 @@ export function MessagesScreen({ onCreateProfile }: Props) {
         }),
       });
       setMessage(res.message);
+      setHasResult(true);
       setHistoryId(res.historyId ?? null);
       noteFreeRemaining(res.freeRemaining);
       setCopied(false);
@@ -353,200 +400,285 @@ export function MessagesScreen({ onCreateProfile }: Props) {
     />
   );
 
+  // Why Generate is off, in words, rather than a button that just won't press.
+  const generateBlocker = !conversation?.contact.name
+    ? "Couldn't tell who this conversation is with. Read it again."
+    : choice === "profile" && !profileId
+      ? "Pick a saved reason first."
+      : choice === "custom" && !purpose.trim()
+        ? "Write your reason first."
+        : null;
+
   return (
     <div className="flex flex-col gap-4 p-4">
       {insertWarningModal}
 
-      <h2 className="text-sm font-semibold">Conversation Assistant</h2>
+      <ScreenHeader title="Messages" description="Write the next message in a LinkedIn conversation." />
 
-      {loadError && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
-          {loadError}
-        </div>
-      )}
+      {loadError && <Alert>{loadError}</Alert>}
 
-      <div className="space-y-1.5">
-        <Button disabled={reading} onClick={readConversation}>
-          {reading ? "Reading…" : conversation ? "Re-read this conversation" : "Read this conversation"}
-        </Button>
-        <p className="text-[11px] text-muted-foreground">
-          Open the conversation on LinkedIn first, then click this every time you come back to reply.
-        </p>
-        {readError && <p className="text-xs text-destructive">{readError}</p>}
-      </div>
-
-      {conversation && (
-        <>
-          <div className="space-y-1 rounded-md border border-input p-3 text-sm">
-            <p className="font-medium">{conversation.contact.name || "Unknown contact"}</p>
-            {conversation.contact.headline && (
-              <p className="text-xs text-muted-foreground">{conversation.contact.headline}</p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              {conversation.thread.length === 0
-                ? "No messages yet — the next message will be an opener."
-                : `${conversation.thread.length} message${conversation.thread.length === 1 ? "" : "s"} read`}
+      {!conversation ? (
+        <div className="flex animate-fade-in flex-col items-center gap-3 rounded-lg border border-dashed border-input px-4 py-6 text-center">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground">
+            <MessagesSquare aria-hidden className="h-5 w-5" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold">Open a conversation on LinkedIn</p>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Then read it here. Read it again each time you come back to reply, so the next message knows what was
+              said.
             </p>
           </div>
+          <Button loading={reading} onClick={readConversation}>
+            {!reading && <ScanText aria-hidden />}
+            {reading ? "Reading…" : "Read this conversation"}
+          </Button>
+          {readError && <Alert className="w-full text-left">{readError}</Alert>}
+        </div>
+      ) : (
+        <>
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Conversation with</p>
+            <div className="animate-fade-in space-y-3 rounded-lg border bg-card p-3 shadow-sm">
+              <div className="flex items-center gap-2.5">
+                <Initials name={conversation.contact.name} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{conversation.contact.name || "Unknown contact"}</p>
+                  {conversation.contact.headline && (
+                    <p className="truncate text-xs text-muted-foreground" title={conversation.contact.headline}>
+                      {conversation.contact.headline}
+                    </p>
+                  )}
+                </div>
+                <Tooltip label="Read it again" side="top-end">
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Re-read this conversation"
+                    loading={reading}
+                    onClick={readConversation}
+                  >
+                    {!reading && <RefreshCw aria-hidden />}
+                  </Button>
+                </Tooltip>
+              </div>
 
-          {conversation.thread.length > 0 && (
-            <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-md border border-dashed border-input p-2">
-              {conversation.thread.map((entry, i) => (
-                <p key={i} className="text-xs">
-                  <span className="font-medium text-muted-foreground">
-                    {entry.sender === "me" ? "You: " : entry.sender === "them" ? "Them: " : "? "}
-                  </span>
-                  {entry.text}
+              {conversation.thread.length === 0 ? (
+                <p className="rounded-md bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+                  No messages yet, so this will be an opener.
                 </p>
-              ))}
+              ) : (
+                <>
+                  {/* Opens scrolled to the latest messages, the ones being answered.
+                      Focusable, so the keyboard can scroll it too. */}
+                  <div
+                    ref={threadRef}
+                    role="region"
+                    tabIndex={0}
+                    aria-label="Conversation so far"
+                    className="max-h-48 space-y-1.5 overflow-y-auto rounded-md bg-muted/50 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {conversation.thread.map((entry, i) => (
+                      <div key={i} className={cn("flex", entry.sender === "me" ? "justify-end" : "justify-start")}>
+                        <p
+                          className={cn(
+                            "max-w-[85%] whitespace-pre-wrap break-words rounded-lg px-2.5 py-1.5 text-xs leading-relaxed",
+                            entry.sender === "me"
+                              ? "rounded-br-sm bg-accent text-accent-foreground"
+                              : "rounded-bl-sm border bg-card text-foreground",
+                          )}
+                        >
+                          <span className="sr-only">
+                            {entry.sender === "me" ? "You: " : entry.sender === "them" ? "Them: " : "Unknown sender: "}
+                          </span>
+                          {entry.text}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {conversation.thread.length} message{conversation.thread.length === 1 ? "" : "s"} read
+                  </p>
+                </>
+              )}
             </div>
-          )}
+            {readError && <Alert>{readError}</Alert>}
+          </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">
-              What&apos;s the reason for this conversation?
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant={choice === "profile" ? "default" : "outline"} onClick={() => handleChoiceChange("profile")}>
-                Saved reason
-              </Button>
-              <Button size="sm" variant={choice === "custom" ? "default" : "outline"} onClick={() => handleChoiceChange("custom")}>
-                Write my own
-              </Button>
-              <Button size="sm" variant={choice === "flow" ? "default" : "outline"} onClick={() => handleChoiceChange("flow")}>
-                Just continue
-              </Button>
-            </div>
+            <p className="text-xs font-medium text-muted-foreground">Reason for this conversation</p>
+            <Segmented
+              label="Reason for this conversation"
+              options={[
+                { value: "profile", label: "Saved reason" },
+                { value: "custom", label: "Write my own" },
+                { value: "flow", label: "Just continue" },
+              ]}
+              value={choice}
+              onChange={handleChoiceChange}
+            />
+
             {choice === "flow" && (
-              <p className="text-[11px] text-muted-foreground">
-                No reason needed — reads the conversation so far and continues it naturally.
+              <p className="text-xs text-muted-foreground">
+                No reason needed: it reads the conversation so far and continues it naturally.
               </p>
             )}
 
-            {choice === "profile" && (
-              <div className="space-y-1.5">
-                <select
-                  className="w-full rounded-md border border-input bg-background p-2 text-sm"
+            {choice === "profile" &&
+              (!profilesLoaded ? (
+                <LoadingField>Loading reasons…</LoadingField>
+              ) : (
+                <Select
                   value={profileId}
-                  onChange={(e) => handleProfileChange(e.target.value)}
+                  onValueChange={(value) => {
+                    if (value === CREATE_CUSTOM_VALUE) {
+                      onCreateProfile();
+                      return;
+                    }
+                    handleProfileChange(value);
+                  }}
                 >
-                  {recommendedProfiles.length > 0 && (
-                    <optgroup label="Recommended by CarouseLabs">
-                      {recommendedProfiles.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {systemProfiles.length > 0 && (
-                    <optgroup label="Built-in">
-                      {systemProfiles.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {customProfiles.length > 0 && (
-                    <optgroup label="Your profiles">
-                      {customProfiles.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </select>
-                <Button size="sm" variant="outline" onClick={onCreateProfile}>
-                  + Create custom profile
-                </Button>
-              </div>
-            )}
+                  <SelectTrigger aria-label="Saved reason">
+                    <SelectValue placeholder="Pick a saved reason" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {recommendedProfiles.length > 0 && (
+                      <SelectGroup>
+                        <SelectLabel>Recommended by CarouseLabs</SelectLabel>
+                        {recommendedProfiles.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
+                    {systemProfiles.length > 0 && (
+                      <SelectGroup>
+                        <SelectLabel>Built-in</SelectLabel>
+                        {systemProfiles.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
+                    {customProfiles.length > 0 && (
+                      <SelectGroup>
+                        <SelectLabel>Your profiles</SelectLabel>
+                        {customProfiles.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
+                    <SelectSeparator />
+                    <SelectItem value={CREATE_CUSTOM_VALUE} className="font-medium text-primary-text">
+                      + Create custom profile
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              ))}
 
             {choice === "custom" && (
-              <div className="space-y-1.5">
-                <textarea
-                  className="w-full resize-none rounded-md border border-input bg-background p-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  rows={3}
+              <div className="animate-fade-in space-y-1">
+                <Textarea
+                  autoGrow
+                  aria-label="Your reason for this conversation"
                   value={purpose}
                   onChange={(e) => setPurpose(e.target.value.slice(0, MAX_MESSAGE_PURPOSE_CHARS))}
                   onBlur={handlePurposeBlur}
-                  placeholder="e.g. A potential client — understand their situation before proposing anything"
+                  placeholder="e.g. A potential client: understand their situation before proposing anything"
+                  className="max-h-40 min-h-[4.5rem]"
                 />
-                <span className="text-[11px] text-muted-foreground">
+                <p className="text-right text-xs tabular-nums text-muted-foreground">
                   {purpose.length}/{MAX_MESSAGE_PURPOSE_CHARS}
-                </span>
+                </p>
               </div>
             )}
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
-                Tone{choice === "profile" ? " (optional override)" : ""}
-              </label>
-              <select
-                className="w-full rounded-md border border-input bg-background p-2 text-sm"
-                value={tone}
-                onChange={(e) => handleToneChange(e.target.value)}
-              >
-                {choice === "profile" && <option value="">Use the profile&apos;s own tone</option>}
-                {tone && !(MESSAGE_TONES as readonly string[]).includes(tone) && (
-                  <option value={tone}>{tone}</option>
-                )}
-                {MESSAGE_TONES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Anything specific for this message?</label>
-            <textarea
-              className="w-full resize-none rounded-md border border-input bg-background p-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              rows={2}
+            <label id="message-tone-label" className="text-xs font-medium text-muted-foreground">
+              Tone {choice === "profile" && <span className="font-normal">(optional)</span>}
+            </label>
+            <Select
+              value={tone || PROFILE_TONE_VALUE}
+              onValueChange={(value) => handleToneChange(value === PROFILE_TONE_VALUE ? "" : value)}
+            >
+              <SelectTrigger aria-labelledby="message-tone-label">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {choice === "profile" && <SelectItem value={PROFILE_TONE_VALUE}>Use the profile&apos;s own tone</SelectItem>}
+                {tone && !(MESSAGE_TONES as readonly string[]).includes(tone) && <SelectItem value={tone}>{tone}</SelectItem>}
+                {MESSAGE_TONES.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="message-extra-instruction" className="text-xs font-medium text-muted-foreground">
+              Extra instruction <span className="font-normal">(optional)</span>
+            </label>
+            <Textarea
+              id="message-extra-instruction"
+              autoGrow
               value={extraInstruction}
               onChange={(e) => setExtraInstruction(e.target.value.slice(0, 500))}
-              placeholder="Optional — e.g. mention I saw their post about hiring"
+              readOnly={generating}
+              rows={1}
+              placeholder="e.g. mention I saw their post about hiring"
+              className="max-h-40 min-h-[2.625rem]"
             />
           </div>
 
-          {paywalled ? (
+          {showResult ? (
+            <>
+              <ResultCard
+                sectionRef={outputRef}
+                noun="message"
+                value={message}
+                onChange={(value) => {
+                  setMessage(value);
+                  setCopied(false);
+                }}
+                generating={generating}
+                busy={generating || inserting}
+                stale={generating && hasMessage}
+                copied={copied}
+                copyDisabled={!hasMessage || generating || inserting}
+                onCopy={handleCopy}
+                insert={
+                  showInsert
+                    ? { disabled: !hasMessage || generating || inserting, inserting, onClick: handleInsertClick }
+                    : null
+                }
+                onRegenerate={handleGenerate}
+                regenerateDisabled={!canGenerate || generating || inserting || paywalled}
+              />
+              {(generateError || insertError) && <Alert>{generateError || insertError}</Alert>}
+              {paywalled && <UnlockCard />}
+            </>
+          ) : paywalled ? (
             <UnlockCard />
           ) : (
-            <>
-              <Button disabled={!canGenerate || generating} onClick={handleGenerate}>
-                {generating ? "Generating…" : isOpener ? "Generate opener" : "Generate reply"}
+            <div className="space-y-2">
+              {generateError && <Alert>{generateError}</Alert>}
+              <Button className="w-full" disabled={!canGenerate || generating} onClick={handleGenerate}>
+                {generateError ? <RotateCcw aria-hidden /> : <Sparkles aria-hidden />}
+                {generateError ? "Try again" : isOpener ? "Generate opener" : "Generate reply"}
               </Button>
-              <FreeGenerationsNote />
-            </>
-          )}
-
-          {generateError && <p className="text-xs text-destructive">{generateError}</p>}
-
-          {message && (
-            <div ref={outputRef} className="space-y-2">
-              <textarea
-                className="w-full resize-none rounded-md border border-input bg-background p-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                rows={5}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-              />
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={handleCopy}>
-                  {copied ? "Copied" : "Copy"}
-                </Button>
-                {showInsert && (
-                  <Button size="sm" variant="outline" disabled={inserting} onClick={handleInsertClick}>
-                    {inserting ? "Inserting…" : "Insert"}
-                  </Button>
-                )}
-              </div>
-              {insertError && <p className="text-xs text-destructive">{insertError}</p>}
             </div>
           )}
+
+          {generateBlocker && <p className="text-xs text-muted-foreground">{generateBlocker}</p>}
+
+          {!paywalled && <FreeGenerationsNote />}
         </>
       )}
     </div>

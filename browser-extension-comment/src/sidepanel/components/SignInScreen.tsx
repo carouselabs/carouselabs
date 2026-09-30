@@ -1,4 +1,5 @@
-import { MessageCircle } from "lucide-react";
+import { useState } from "react";
+import { ExternalLink, Loader2, LogIn, MessageCircle } from "lucide-react";
 import { getApiBaseUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
@@ -10,6 +11,10 @@ import { Button } from "@/components/ui/button";
 // chain. App.tsx is watching chrome.storage.onChanged, so this screen just
 // disappears on its own once the token lands; no manual reload needed.
 export function SignInScreen() {
+  // Set once the sign-in tab has been opened: the panel then says it is
+  // waiting, rather than looking like the click did nothing.
+  const [opened, setOpened] = useState(false);
+
   async function handleSignIn() {
     const baseUrl = await getApiBaseUrl();
     const url = `${baseUrl}/extension-connect`;
@@ -18,22 +23,48 @@ export function SignInScreen() {
     // apiBaseUrl but it still opens production" is almost always storage
     // not actually containing what you expect in *this* context, not a
     // logic bug here — this line makes that instantly checkable.
-    console.log("[CarouseLabs Comment] Sign In opening:", url);
+    console.log("[CarouseLabs Engage] Sign In opening:", url);
     chrome.tabs.create({ url });
+    setOpened(true);
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center">
-      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
-        <MessageCircle className="h-5 w-5" />
+    <main className="flex h-screen w-screen flex-col items-center justify-center bg-background px-6">
+      <div className="flex w-full max-w-xs animate-fade-in-up flex-col items-center gap-5 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md">
+          <MessageCircle aria-hidden className="h-6 w-6" />
+        </div>
+        <div className="space-y-1.5">
+          <h1 className="text-base font-semibold tracking-tight">Sign in to CarouseLabs</h1>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Write LinkedIn comments, replies, notes and messages in your own voice.
+          </p>
+        </div>
+
+        {opened ? (
+          <div role="status" className="w-full animate-fade-in space-y-3 rounded-lg border bg-card p-4">
+            <div className="flex items-center justify-center gap-2 text-sm font-medium">
+              <Loader2 aria-hidden className="h-4 w-4 animate-spin text-primary-text" />
+              Waiting for sign-in
+            </div>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Finish signing in on the tab that just opened. This panel updates by itself.
+            </p>
+            <Button size="sm" variant="ghost" onClick={handleSignIn}>
+              Open sign-in again
+              <ExternalLink aria-hidden />
+            </Button>
+          </div>
+        ) : (
+          <div className="w-full space-y-2">
+            <Button className="w-full" onClick={handleSignIn}>
+              <LogIn aria-hidden />
+              Sign in
+            </Button>
+            <p className="text-xs text-muted-foreground">Opens carouselabs.com in a new tab.</p>
+          </div>
+        )}
       </div>
-      <div className="space-y-1">
-        <p className="text-sm font-semibold">Sign in to CarouseLabs</p>
-        <p className="text-xs text-muted-foreground">
-          Connect your account to generate AI comments from LinkedIn.
-        </p>
-      </div>
-      <Button onClick={handleSignIn}>Sign In</Button>
-    </div>
+    </main>
   );
 }

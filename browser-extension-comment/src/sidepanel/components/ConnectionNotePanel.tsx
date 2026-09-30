@@ -1,5 +1,19 @@
 import { useEffect, useRef, useState } from "react";
+import { RotateCcw, Sparkles } from "lucide-react";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LoadingField } from "@/components/ui/loading-field";
+import { Segmented } from "@/components/ui/segmented";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   apiFetch,
   ApiError,
@@ -29,6 +43,8 @@ import {
 } from "@/lib/connectionNote";
 import { CharRangePicker } from "./CharRangePicker";
 import { ConnectContextEditor } from "./ConnectContextEditor";
+import { Initials } from "./Initials";
+import { ResultCard } from "./ResultCard";
 
 const CONTEXT_LABELS: Record<ConnectContextSetting["choice"], string> = {
   profile: "Your LinkedIn profile",
@@ -92,16 +108,18 @@ export function ConnectionNotePanel({
   const [length, setLength] = useState<ConnectLengthSetting | null>(null);
   const [extraInstruction, setExtraInstruction] = useState("");
   const [note, setNote] = useState("");
+  // Whether the result card shows: from the first successful note on, even if
+  // the box is then cleared by hand (see HomeScreen's hasResult).
+  const [hasResult, setHasResult] = useState(false);
   // The note's History row (see markHistoryAction).
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [fallbackCopied, setFallbackCopied] = useState(false);
   // The output can land below the fold once the context/length pickers have
   // pushed the page tall — scrolled into view automatically so a fresh
   // result is never hidden behind a scroll the user has to find themselves.
-  const outputRef = useRef<HTMLDivElement>(null);
+  const outputRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -181,6 +199,7 @@ export function ConnectionNotePanel({
   const generateDisabled = !context || !length || !!contextProblem || paywalled || busy;
   const hasNote = note.trim().length > 0;
   const overLimit = note.length > CONNECT_NOTE_HARD_MAX;
+  const showResult = generating || hasResult;
 
   async function handleGenerate() {
     if (!context || !length) return;
@@ -217,6 +236,7 @@ export function ConnectionNotePanel({
         }),
       });
       setNote(res.note);
+      setHasResult(true);
       setHistoryId(res.historyId ?? null);
       noteFreeRemaining(res.freeRemaining);
       outputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -244,69 +264,88 @@ export function ConnectionNotePanel({
   return (
     <div className="flex flex-col gap-4">
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-muted-foreground">Connection note for</label>
-        <div className="space-y-1 rounded-md border border-primary/40 bg-background p-3 text-sm">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-medium">{target.name || "Unknown person"}</span>
-            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] uppercase text-primary">Connect</span>
+        <p className="text-xs font-medium text-muted-foreground">Connection note for</p>
+        <div className="animate-fade-in space-y-2 rounded-lg border border-primary/25 bg-card p-3 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <Initials name={target.name} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="truncate text-sm font-semibold">{target.name || "Unknown person"}</span>
+                <Badge variant="accent">Connect</Badge>
+              </div>
+              {target.headline && (
+                <p className="line-clamp-2 text-xs text-muted-foreground" title={target.headline}>
+                  {target.headline}
+                </p>
+              )}
+            </div>
           </div>
-          {target.headline && <div className="text-xs text-muted-foreground">{target.headline}</div>}
           {target.currentRole && target.currentRole !== target.headline && (
-            <div className="text-xs text-foreground/80">{target.currentRole}</div>
+            <p className="text-xs text-foreground/80">{target.currentRole}</p>
           )}
         </div>
       </div>
 
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-muted-foreground">Note profile</label>
+        <label id="note-profile-label" className="text-xs font-medium text-muted-foreground">
+          Note profile
+        </label>
         {profilesError ? (
-          <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
-            {profilesError}
-          </div>
+          <Alert>{profilesError}</Alert>
         ) : profilesLoading ? (
-          <p className="text-xs text-muted-foreground">Loading profiles…</p>
+          <LoadingField>Loading profiles…</LoadingField>
         ) : profiles.length === 0 ? (
           // Generating still works without one: the note then follows the
           // built-in rules and the length picker below.
-          <p className="text-xs text-muted-foreground">
-            No connection profiles found. Notes will use the built-in rules. (Run
-            scripts/seed-connection-profiles.js to add the CarouseLabs presets.)
-          </p>
+          <p className="text-xs text-muted-foreground">No note profiles yet, so notes follow the built-in rules.</p>
         ) : (
-          <select
+          <Select
             value={profileId}
-            onChange={(e) => {
-              if (e.target.value === CREATE_CUSTOM_VALUE) {
+            onValueChange={(value) => {
+              if (value === CREATE_CUSTOM_VALUE) {
                 onCreateProfile();
                 return;
               }
-              setProfileId(e.target.value);
+              setProfileId(value);
             }}
             disabled={busy}
-            className="w-full rounded-md border border-input bg-background p-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
           >
-            {profiles.map((profile) => (
-              <option key={profile.id} value={profile.id}>
-                {profile.name}
-                {profile.isRecommended ? " (recommended)" : ""}
-              </option>
-            ))}
-            <option value={CREATE_CUSTOM_VALUE}>+ Create custom profile</option>
-          </select>
+            <SelectTrigger aria-labelledby="note-profile-label">
+              <SelectValue placeholder="Select a profile" />
+            </SelectTrigger>
+            <SelectContent>
+              {profiles.map((profile) => (
+                <SelectItem key={profile.id} value={profile.id}>
+                  {profile.name}
+                  {profile.isRecommended && <RecommendedBadge />}
+                </SelectItem>
+              ))}
+              <SelectSeparator />
+              <SelectItem value={CREATE_CUSTOM_VALUE} className="font-medium text-primary-text">
+                + Create custom profile
+              </SelectItem>
+            </SelectContent>
+          </Select>
         )}
+        {/* A profile carries its own length range, and the server uses it, so
+            the length picker below only shows when no profile is selected. */}
         {selectedProfile && (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {selectedProfile.goal} · {selectedProfile.length}
-            {selectedProfile.isRecommended && <RecommendedBadge />}
           </p>
         )}
       </div>
 
       {context === null || editingContext ? (
-        <div className="space-y-2 rounded-md border border-input p-3">
-          <p className="text-xs font-medium">
-            {context === null ? "Before your first note: what should it say about you?" : "Your context"}
-          </p>
+        <div className="animate-fade-in space-y-3 rounded-lg border bg-card p-3">
+          <div className="space-y-0.5">
+            <p className="text-sm font-semibold">
+              {context === null ? "What should your notes say about you?" : "What your notes say about you"}
+            </p>
+            {context === null && (
+              <p className="text-xs text-muted-foreground">Asked once. You can change it here or in Settings.</p>
+            )}
+          </div>
           <ConnectContextEditor
             onSaved={(next) => {
               setContext(next);
@@ -323,40 +362,32 @@ export function ConnectionNotePanel({
         </div>
       ) : (
         context && (
-          <div className="flex items-center justify-between gap-2 text-xs">
-            <span className="text-muted-foreground">
-              Your context: <span className="text-foreground">{CONTEXT_LABELS[context.choice]}</span>
-            </span>
-            <button className="font-medium text-primary hover:underline" onClick={() => setEditingContext(true)}>
+          <div className="flex items-center justify-between gap-2 rounded-lg border bg-card py-1.5 pl-3 pr-1.5">
+            <p className="min-w-0 text-xs">
+              <span className="text-muted-foreground">Based on: </span>
+              <span className="font-medium">{CONTEXT_LABELS[context.choice]}</span>
+            </p>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-primary-text hover:text-primary-text"
+              onClick={() => setEditingContext(true)}
+            >
               Change
-            </button>
+            </Button>
           </div>
         )
       )}
 
-      {/* A profile carries its own length range, and the server uses it, so
-          showing the picker alongside would offer a setting that has no
-          effect. */}
-      {selectedProfile ? (
-        <p className="text-[11px] text-muted-foreground">
-          Length comes from this profile: {selectedProfile.length}.
-        </p>
-      ) : (
-        length && (
+      {!selectedProfile && length && (
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Length</label>
-          <div className="flex gap-2">
-            {LENGTH_OPTIONS.map((option) => (
-              <Button
-                key={option.preset}
-                size="sm"
-                variant={length.preset === option.preset ? "default" : "outline"}
-                onClick={() => pickPreset(option.preset)}
-              >
-                {option.label}
-              </Button>
-            ))}
-          </div>
+          <p className="text-xs font-medium text-muted-foreground">Length</p>
+          <Segmented
+            label="Length"
+            options={LENGTH_OPTIONS.map((option) => ({ value: option.preset, label: option.label }))}
+            value={length.preset}
+            onChange={pickPreset}
+          />
           {length.preset === "custom" ? (
             <CharRangePicker
               min={length.min}
@@ -366,116 +397,99 @@ export function ConnectionNotePanel({
               caption={`${length.min}-${length.max} characters (LinkedIn allows 300; capped at ${CONNECT_NOTE_HARD_MAX})`}
             />
           ) : (
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {length.min}-{length.max} characters
             </p>
           )}
         </div>
-        )
       )}
 
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-muted-foreground">
+        <label htmlFor="note-extra-instruction" className="text-xs font-medium text-muted-foreground">
           Extra instruction <span className="font-normal">(optional)</span>
         </label>
-        <textarea
+        <Textarea
+          id="note-extra-instruction"
+          autoGrow
           value={extraInstruction}
           onChange={(e) => setExtraInstruction(e.target.value)}
-          disabled={generating}
-          rows={2}
+          readOnly={generating}
+          rows={1}
           placeholder="e.g. mention I'm also hiring for this role"
-          className="w-full resize-none rounded-md border border-input bg-background p-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+          className="max-h-40 min-h-[2.625rem]"
         />
       </div>
 
-      {paywalled ? (
+      {showResult ? (
+        <>
+          <ResultCard
+            sectionRef={outputRef}
+            noun="note"
+            value={note}
+            onChange={(value) => {
+              setNote(value);
+              setCopied(false);
+            }}
+            generating={generating}
+            busy={busy}
+            stale={generating && hasNote}
+            // Counted against LinkedIn's limit rather than as a plain length.
+            meta={
+              generating ? (
+                "Writing…"
+              ) : (
+                <span className={overLimit ? "font-medium text-destructive" : undefined}>
+                  {note.length}/{CONNECT_NOTE_HARD_MAX}
+                </span>
+              )
+            }
+            copied={copied}
+            copyDisabled={!hasNote || busy}
+            onCopy={handleCopy}
+            insert={showInsert ? { disabled: !hasNote || busy, inserting, onClick: () => onInsert(note, historyId) } : null}
+            onRegenerate={handleGenerate}
+            regenerateDisabled={generateDisabled}
+            notice={
+              overLimit && (
+                <p className="text-xs text-destructive">
+                  Over {CONNECT_NOTE_HARD_MAX} characters. LinkedIn may reject it; trim it before sending.
+                </p>
+              )
+            }
+          />
+          {(error || insertError) && (
+            // Insert can fail for reasons outside our control (LinkedIn caps
+            // custom notes on free accounts, and then no note box opens). The
+            // note is already written and sits right above, ready to copy.
+            <Alert>
+              {error || insertError}
+              {!error && hasNote && (
+                <span className="mt-1 block text-foreground/80">
+                  Your note is ready above: copy it and paste it into LinkedIn yourself.
+                </span>
+              )}
+            </Alert>
+          )}
+          {paywalled && <UnlockCard />}
+        </>
+      ) : paywalled ? (
         <UnlockCard />
       ) : (
-        <>
-          <Button disabled={generateDisabled} onClick={handleGenerate}>
-            {generating ? "Generating…" : hasNote ? "Regenerate" : "Generate note"}
-          </Button>
-          <FreeGenerationsNote />
-        </>
-      )}
-
-      {contextProblem && <p className="text-xs text-muted-foreground">{contextProblem}</p>}
-
-      {(error || insertError) && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
-          {error || insertError}
-        </div>
-      )}
-
-      {/* Insert can fail for reasons outside our control — LinkedIn caps free
-          accounts' custom notes, and then no note box ever opens. The note is
-          already written, so it is shown here ready to copy rather than left
-          stranded behind a failed Insert. */}
-      {insertError && hasNote && (
-        <div className="space-y-2 rounded-md border-2 border-primary bg-primary/5 p-3">
-          <p className="text-xs font-medium text-primary">
-            Couldn&apos;t reach LinkedIn&apos;s note box. Your note is ready — copy it from here.
-          </p>
-          <textarea
-            readOnly
-            value={note}
-            rows={5}
-            onFocus={(e) => e.currentTarget.select()}
-            className="w-full resize-y rounded-md border border-input bg-background p-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          />
-          <Button
-            size="sm"
-            onClick={() => {
-              navigator.clipboard
-                .writeText(note)
-                .then(() => {
-                  markHistoryAction(historyId, "COPIED", note);
-                  setFallbackCopied(true);
-                  setTimeout(() => setFallbackCopied(false), 2000);
-                })
-                .catch(() => setError("Couldn't copy to clipboard"));
-            }}
-          >
-            {fallbackCopied ? "Copied to clipboard" : "Copy to clipboard"}
+        <div className="space-y-2">
+          {error && <Alert>{error}</Alert>}
+          <Button className="w-full" disabled={generateDisabled} onClick={handleGenerate}>
+            {error ? <RotateCcw aria-hidden /> : <Sparkles aria-hidden />}
+            {error ? "Try again" : "Generate note"}
           </Button>
         </div>
       )}
 
-      <div ref={outputRef} className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-medium text-muted-foreground">Note</label>
-          <span className={`text-[11px] tabular-nums ${overLimit ? "text-destructive" : "text-muted-foreground"}`}>
-            {note.length}/{CONNECT_NOTE_HARD_MAX}
-          </span>
-        </div>
-        <textarea
-          value={note}
-          onChange={(e) => {
-            setNote(e.target.value);
-            setCopied(false);
-          }}
-          disabled={!hasNote || busy}
-          rows={5}
-          placeholder="Your generated note appears here, and can be edited before copying."
-          className="w-full resize-y rounded-md border border-input bg-background p-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-        />
-        {overLimit && (
-          <p className="text-xs text-destructive">
-            Over {CONNECT_NOTE_HARD_MAX} characters. LinkedIn may reject it; trim it before sending.
-          </p>
-        )}
-      </div>
+      {/* Why Generate is off, when the reason is the context. */}
+      {(contextProblem || context === null) && (
+        <p className="text-xs text-muted-foreground">{contextProblem ?? "Pick one of the options above first."}</p>
+      )}
 
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="secondary" disabled={!hasNote || busy} onClick={handleCopy}>
-          {copied ? "Copied" : "Copy"}
-        </Button>
-        {showInsert && (
-          <Button size="sm" variant="outline" disabled={!hasNote || busy} onClick={() => onInsert(note, historyId)}>
-            {inserting ? "Inserting…" : "Insert"}
-          </Button>
-        )}
-      </div>
+      {!paywalled && <FreeGenerationsNote />}
     </div>
   );
 }

@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  apiFetch,
-  ApiError,
- 
-  openWebsite,
-  type CommentProfile,
-  type MeResponse,
-} from "@/lib/api";
-import { Button } from "@/components/ui/button";
+import { apiFetch, ApiError, openWebsite, type CommentProfile, type MeResponse } from "@/lib/api";
+import { Segmented } from "@/components/ui/segmented";
 import { ProfileForm, draftFromProfile } from "../ProfileForm";
-import { RecommendedBadge } from "../RecommendedBadge";
+import { ProfileList } from "../ProfileList";
+import { ScreenHeader } from "../ScreenHeader";
 import { ConnectionProfilesScreen } from "./ConnectionProfilesScreen";
 import { MessageProfilesScreen } from "./MessageProfilesScreen";
 
@@ -72,29 +66,6 @@ export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) 
     onBuilderOpened?.();
   }, [startInBuilder, onBuilderOpened]);
 
-  const customProfiles = profiles.filter((p) => !p.isSystem);
-  const recommendedProfiles = profiles.filter((p) => p.isRecommended);
-  const systemProfiles = profiles.filter((p) => p.isSystem && !p.isRecommended);
-
-  // One renderer for both system sections, so recommended and built-in cards
-  // differ only in the badge. System profiles are shared across every user, so
-  // they offer Duplicate only — editing or deleting one would change it for
-  // everyone. Duplicating is how a preset becomes an editable custom profile.
-  function renderSystemCard(profile: CommentProfile, recommended: boolean) {
-    return (
-      <div key={profile.id} className="space-y-2 rounded-md border border-input p-3">
-        <div className="flex flex-wrap items-center gap-y-1">
-          <span className="text-sm font-medium">{profile.name}</span>
-          {recommended && <RecommendedBadge />}
-        </div>
-        <p className="line-clamp-2 text-xs text-muted-foreground">{profile.whoIAm}</p>
-        <Button size="sm" variant="outline" onClick={() => setView({ mode: "duplicate", profile })}>
-          Duplicate
-        </Button>
-      </div>
-    );
-  }
-
   async function handleDelete(profile: CommentProfile) {
     setPendingId(profile.id);
     setError(null);
@@ -155,130 +126,61 @@ export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) 
     );
   }
 
-  const TAB_LABELS: Record<ProfileKind, string> = {
-    comment: "Comments",
-    connection: "Connection notes",
-    message: "Conversations",
-  };
-
-  const tabs = (
-    <div className="flex flex-wrap gap-2">
-      {(["comment", "connection", "message"] as ProfileKind[]).map((kind) => (
-        <Button
-          key={kind}
-          size="sm"
-          variant={tab === kind ? "default" : "outline"}
-          onClick={() => setTab(kind)}
-        >
-          {TAB_LABELS[kind]}
-        </Button>
-      ))}
-    </div>
+  // The kind switch, shown above every kind's list (but not over a builder).
+  const header = (
+    <>
+      <ScreenHeader title="Profiles" description="How your comments, notes and messages sound." />
+      <Segmented
+        label="Kind of profile"
+        options={[
+          { value: "comment", label: "Comments" },
+          { value: "connection", label: "Notes" },
+          { value: "message", label: "Messages" },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+    </>
   );
 
   if (tab === "connection") {
     return (
-      <div className="flex flex-col gap-4 p-4">
-        {tabs}
-        <ConnectionProfilesScreen
-          startInBuilder={startInBuilder === "connection"}
-          onBuilderOpened={onBuilderOpened}
-        />
-      </div>
+      <ConnectionProfilesScreen
+        header={header}
+        startInBuilder={startInBuilder === "connection"}
+        onBuilderOpened={onBuilderOpened}
+      />
     );
   }
 
   if (tab === "message") {
     return (
-      <div className="flex flex-col gap-4 p-4">
-        {tabs}
-        <MessageProfilesScreen startInBuilder={startInBuilder === "message"} onBuilderOpened={onBuilderOpened} />
-      </div>
+      <MessageProfilesScreen header={header} startInBuilder={startInBuilder === "message"} onBuilderOpened={onBuilderOpened} />
     );
   }
 
+  // System profiles are shared across every user, so they offer Duplicate
+  // only — editing or deleting one would change it for everyone. Duplicating
+  // is how a preset becomes an editable custom profile.
   return (
-    <div className="flex flex-col gap-4 p-4">
-      {tabs}
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Comment profiles</h2>
-        {me && (
-          <span className="text-xs text-muted-foreground">
-            {customProfiles.length} custom
-          </span>
-        )}
-      </div>
-
-      <button
-        type="button"
-        onClick={() => void openWebsite("/extension/profiles")}
-        className="w-fit text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-      >
-        Easier on a big screen? Edit profiles on carouselabs.com
-      </button>
-
-      {state === "loading" && <p className="text-sm text-muted-foreground">Loading profiles…</p>}
-
-      {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
-          {error}
-        </div>
-      )}
-
-      {state === "ready" && (
-        <>
-          <div className="space-y-1.5">
-            <Button onClick={() => setView({ mode: "create" })}>
-              + New custom profile
-            </Button>
-          </div>
-
-          {recommendedProfiles.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Recommended by CarouseLabs</p>
-              {recommendedProfiles.map((profile) => renderSystemCard(profile, true))}
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">Built-in profiles</p>
-            {systemProfiles.map((profile) => renderSystemCard(profile, false))}
-          </div>
-
-          {customProfiles.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Your profiles</p>
-              {customProfiles.map((profile) => (
-                <div key={profile.id} className="space-y-2 rounded-md border border-input p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium">{profile.name}</span>
-                    {me?.defaultCommentProfileId === profile.id && (
-                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                        default
-                      </span>
-                    )}
-                  </div>
-                  <p className="line-clamp-2 text-xs text-muted-foreground">{profile.whoIAm}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    <Button size="sm" variant="outline" disabled={pendingId === profile.id} onClick={() => setView({ mode: "edit", profile })}>
-                      Edit
-                    </Button>
-                    <Button size="sm" variant="outline" disabled={pendingId === profile.id} onClick={() => setView({ mode: "duplicate", profile })}>
-                      Duplicate
-                    </Button>
-                    <Button size="sm" variant="outline" disabled={pendingId === profile.id || me?.defaultCommentProfileId === profile.id} onClick={() => handleSetDefault(profile)}>
-                      Set default
-                    </Button>
-                    <Button size="sm" variant="ghost" disabled={pendingId === profile.id} onClick={() => handleDelete(profile)}>
-                      {pendingId === profile.id ? "…" : "Delete"}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-    </div>
+    <ProfileList
+      header={header}
+      title="Comment profiles"
+      loading={state === "loading"}
+      error={error}
+      profiles={profiles}
+      summary={(profile) => profile.whoIAm}
+      defaultId={me?.defaultCommentProfileId}
+      pendingId={pendingId}
+      onNew={() => setView({ mode: "create" })}
+      onEdit={(profile) => setView({ mode: "edit", profile })}
+      onDuplicate={(profile) => setView({ mode: "duplicate", profile })}
+      onSetDefault={handleSetDefault}
+      onDelete={handleDelete}
+      websiteLink={{
+        label: "Easier on a big screen? Edit profiles on carouselabs.com",
+        onClick: () => void openWebsite("/extension/profiles"),
+      }}
+    />
   );
 }

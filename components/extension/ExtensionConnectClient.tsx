@@ -63,7 +63,7 @@ export function ExtensionConnectClient() {
   }, [])
 
   if (status === "connecting") {
-    return <p className="text-sm text-white/70">Connecting your CarouseLabs Comment extension…</p>
+    return <p className="text-sm text-white/70">Connecting your CarouseLabs Engage extension…</p>
   }
 
   if (status === "error") {

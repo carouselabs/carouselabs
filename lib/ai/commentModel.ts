@@ -115,9 +115,12 @@ export async function callCommentModel(
   try {
     const response = await openai.chat.completions.create({
       model: PRIMARY_MODEL,
-      max_tokens: 1024,
+      // Luna rejects `max_tokens` outright (400 "Unsupported parameter ... Use
+      // 'max_completion_tokens' instead"). With `max_tokens` here, every call
+      // failed and silently fell back to Haiku, a full round trip later.
+      max_completion_tokens: 1024,
       // Luna is a reasoning model (default effort "medium"); reasoning
-      // tokens would eat into max_tokens and add latency for no benefit on a
+      // tokens would eat into the output budget and add latency for no benefit on a
       // task this short, so it's turned off — same "latency over headroom"
       // call FALLBACK_MODEL (Haiku) already makes for its own tier.
       reasoning_effort: "none",

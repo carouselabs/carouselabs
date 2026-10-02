@@ -68,7 +68,7 @@ interface Props {
   // Free generations used up, no subscription: the unlock card replaces
   // Generate. Owned by HomeScreen, which reads the shared access store.
   paywalled: boolean;
-  // Insert gating and the warning modal live in HomeScreen, shared with the
+  // Insert gating and the insert itself live in HomeScreen, shared with the
   // comment flow; this panel only asks for an insert.
   showInsert: boolean;
   inserting: boolean;

@@ -147,7 +147,7 @@ for (const width of WIDTHS) {
       await shot(panel, width, "03-home-no-post");
     });
 
-    test("generate: post, generating, result, insert warning", async ({ harness }) => {
+    test("generate: post, generating, result", async ({ harness }) => {
       await setup(harness, { post: POST });
       let release: () => void = () => {};
       const held = new Promise<void>((r) => (release = r));
@@ -169,11 +169,6 @@ for (const width of WIDTHS) {
       release();
       await expect(panel.getByRole("textbox", { name: "Your comment" })).toHaveValue(COMMENT);
       await shot(panel, width, "06-home-result");
-      const insert = panel.getByRole("button", { name: "Insert", exact: true });
-      if (await insert.isVisible()) {
-        await insert.click();
-        await shot(panel, width, "07-insert-warning");
-      }
     });
 
     test("generate: error and paywall", async ({ harness }) => {

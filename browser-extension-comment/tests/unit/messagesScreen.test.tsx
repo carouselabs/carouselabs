@@ -87,6 +87,23 @@ describe("Messages screen", () => {
     expect(screen.getByRole("button", { name: "Insert" })).toBeTruthy();
   });
 
+  it("puts the reply straight into LinkedIn on Insert, with no warning first", async () => {
+    // The /api/ext/me stand-in still says insertWarningHidden: false, as a
+    // server from before 1.3.0 would; it no longer matters.
+    server();
+    linkedInTab();
+    await readAndGenerate();
+
+    fireEvent.click(screen.getByRole("button", { name: "Insert" }));
+    await waitFor(() =>
+      expect(chromeMock().tabs.sendMessage).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({ type: "carouselabs:insert-comment", text: MESSAGE, mode: "message" }),
+      ),
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("keeps the previous message when a regenerate fails", async () => {
     server([{ status: 200, body: { message: MESSAGE, freeRemaining: null, historyId: "h1" } }, { status: 502, body: { error: "x" } }]);
     linkedInTab();

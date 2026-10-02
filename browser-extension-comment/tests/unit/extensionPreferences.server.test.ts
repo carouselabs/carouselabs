@@ -16,10 +16,13 @@ const db = vi.hoisted(() => ({
   commentProfile: { findFirst: vi.fn() },
   connectionProfile: { findFirst: vi.fn() },
   messageProfile: { findFirst: vi.fn() },
+  subscription: { findUnique: vi.fn(async () => null) },
+  commentHistory: { count: vi.fn(async () => 0) },
 }));
 
 vi.mock("../../../lib/db", () => ({ db }));
 vi.mock("../../../lib/auth", () => ({ getCurrentUser: vi.fn(async () => state.sessionUser) }));
+vi.mock("../../../lib/extAccess", () => ({ extAccessSummary: vi.fn(async () => null) }));
 
 import {
   isContactUrl,
@@ -29,6 +32,7 @@ import {
   parseLinkedinProfile,
 } from "../../../lib/extensionPreferences";
 import { GET as settingsGET, PATCH as settingsPATCH } from "../../../app/api/ext/settings/route";
+import { GET as meGET } from "../../../app/api/ext/me/route";
 import { GET as contactsGET, PUT as contactsPUT } from "../../../app/api/ext/contacts/route";
 import { DELETE as contactDELETE } from "../../../app/api/ext/contacts/[id]/route";
 
@@ -133,6 +137,19 @@ describe("settings route", () => {
   it("returns the moved settings alongside the old ones", async () => {
     const body = (await (await settingsGET(req("/api/ext/settings"))).json()) as Record<string, unknown>;
     expect(body).toMatchObject({ connectNoteContext: { choice: "custom", purpose: "I help founders" }, insertButtonHidden: null });
+  });
+
+  it("tells extensions before 1.3.0 the Insert warning is off, whatever was stored", async () => {
+    // The stored value is false (never dismissed); there is no warning any more.
+    const body = (await (await settingsGET(req("/api/ext/settings"))).json()) as Record<string, unknown>;
+    expect(body.insertWarningHidden).toBe(true);
+    const saved = await settingsPATCH(
+      req("/api/ext/settings", { method: "PATCH", body: JSON.stringify({ insertWarningHidden: false }) }),
+    );
+    expect(((await saved.json()) as Record<string, unknown>).insertWarningHidden).toBe(true);
+    // The account call is what an older panel checks before each Insert.
+    const me = (await (await meGET(req("/api/ext/me"))).json()) as Record<string, unknown>;
+    expect(me.insertWarningHidden).toBe(true);
   });
 
   it("stores valid values, a database NULL when cleared, and rejects bad ones", async () => {

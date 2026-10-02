@@ -170,7 +170,7 @@ describe("Messages screen reports", () => {
       if (url.endsWith("/api/ext/errors")) return new Response(null, { status: 204 });
       if (url.endsWith("/api/ext/message")) return json(200, { message: "Sounds good — Tuesday?", freeRemaining: null, historyId: "h1" });
       if (url.endsWith("/api/ext/message-profiles")) return json(200, { profiles: [PROFILE] });
-      if (url.endsWith("/api/ext/me")) return json(200, { defaultMessageProfileId: "mp1", insertWarningHidden: true, extension: null });
+      if (url.endsWith("/api/ext/me")) return json(200, { defaultMessageProfileId: "mp1", extension: null });
       if (url.endsWith("/api/ext/config")) return json(200, { insertEnabled: true });
       if (url.includes("/api/ext/contacts")) return json(200, { contact: null, contacts: [] });
       return json(200, {});
@@ -181,7 +181,6 @@ describe("Messages screen reports", () => {
 
   beforeEach(() => {
     chromeMock().__store.settingsUploadedToAccount = true;
-    chromeMock().__store.insertWarningHidden = true;
   });
 
   it("reports a failed read as a code", async () => {
@@ -238,8 +237,6 @@ describe("Messages screen reports", () => {
     await waitFor(() => expect((generate as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(generate);
     fireEvent.click(await screen.findByRole("button", { name: "Insert" }));
-    const anyway = await screen.findByRole("button", { name: "Insert anyway" }).catch(() => null);
-    if (anyway) fireEvent.click(anyway);
 
     expect(await screen.findByText(refusal)).toBeTruthy();
     await waitFor(() => expect(errorReports(fetchMock).map((r) => r.code)).toEqual(["insert.wrong_target"]));

@@ -164,7 +164,6 @@ export interface MeResponse {
   defaultConnectionProfileId?: string | null;
   defaultMessageProfileId?: string | null;
   defaultLanguage: string | null;
-  insertWarningHidden: boolean;
 }
 
 export type HistoryKind = "comment" | "reply" | "connection_note" | "message";
@@ -198,7 +197,6 @@ export interface SettingsResponse {
   defaultConnectionProfileId: string | null;
   defaultMessageProfileId: string | null;
   defaultLanguage: string | null;
-  insertWarningHidden: boolean;
   // Settings that used to live only in this browser (src/lib/syncedSettings.ts).
   // null = never set on the account. Optional for an older server.
   connectNoteContext?: ConnectContextSetting | null;

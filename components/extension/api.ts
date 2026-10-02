@@ -78,7 +78,6 @@ export interface ExtSettings {
   defaultConnectionProfileId: string | null
   defaultMessageProfileId: string | null
   defaultLanguage: string | null
-  insertWarningHidden: boolean
   // Settings that used to live only in the extension's browser storage
   // (lib/extensionPreferences.ts). null = never set.
   connectNoteContext: { choice: "profile" | "custom" | "none"; purpose: string } | null
@@ -114,7 +113,6 @@ export interface ExtMe
     | "defaultConnectionProfileId"
     | "defaultMessageProfileId"
     | "defaultLanguage"
-    | "insertWarningHidden"
   > {
   email: string
   plan: string

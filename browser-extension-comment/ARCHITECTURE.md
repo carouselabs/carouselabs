@@ -105,7 +105,7 @@ Shortcut
 | `messageContext:<profileUrl>` | panel | Cache of one `ContactContext` row (per-contact reason/profile/tone). |
 | `settingsUploadedToAccount` | panel | Set once this browser's old local settings were uploaded to the account. |
 
-Account-level state (profiles, history, settings, paywall state, `insertWarningHidden`) lives server-side —
+Account-level state (profiles, history, settings, paywall state) lives server-side —
 and since the website's Extension section, so does everything the panel lets you edit (see
 `src/lib/syncedSettings.ts`). The cached keys above are read only when the server can't be
 reached. The first time a browser signs in after this change, its old local values are uploaded
@@ -254,7 +254,7 @@ extension uses:
 | Overview | plan, this month's counts by kind, signed-in browsers (remote Sign out) | `/api/ext/devices` |
 | Custom tones | custom profiles for comments, connection notes, conversations (create / edit / delete / default); every-note settings (your context, your LinkedIn profile, note length); each conversation's reason and tone | `/api/ext/{profiles,connection-profiles,message-profiles,settings,contacts}` |
 | History | every generation, filter by kind, copy, open on LinkedIn, delete (kept 90 days) | `/api/ext/history` |
-| Settings | default language, default voice per kind, Insert button, Insert warning | `/api/ext/settings` |
+| Settings | default language, default voice per kind, Insert button | `/api/ext/settings` |
 | Plan & payments | the $15 plan card, payments read live from Lemon Squeezy | `/api/ext/payments` |
 
 **One set of routes.** The website calls the same `app/api/ext/*` routes as

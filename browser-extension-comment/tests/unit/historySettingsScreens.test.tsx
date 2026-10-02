@@ -72,18 +72,31 @@ describe("History screen", () => {
 describe("Settings screen", () => {
   it("applies a switch at once and confirms it", async () => {
     const calls = server({
-      "/api/ext/settings": { defaultCommentProfileId: null, defaultLanguage: null, insertWarningHidden: false },
+      "/api/ext/settings": { defaultCommentProfileId: null, defaultLanguage: null },
       "/api/ext/profiles": { profiles: [] },
       "/api/ext/config": { insertEnabled: true },
     });
     render(<SettingsScreen />);
 
-    const warn = await screen.findByRole("switch", { name: "Warn me before inserting" });
-    expect(warn.getAttribute("aria-checked")).toBe("true");
-    fireEvent.click(warn);
+    const show = await screen.findByRole("switch", { name: "Show the Insert button" });
+    await waitFor(() => expect((show as HTMLButtonElement).disabled).toBe(false));
+    expect(show.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(show);
 
-    await waitFor(() => expect(calls.some((c) => c.method === "PATCH" && c.body?.includes('"insertWarningHidden":true'))).toBe(true));
+    await waitFor(() => expect(calls.some((c) => c.method === "PATCH" && c.body?.includes('"insertButtonHidden":true'))).toBe(true));
     expect(await screen.findByText("Saved")).toBeTruthy();
-    await waitFor(() => expect(warn.getAttribute("aria-checked")).toBe("false"));
+    await waitFor(() => expect(show.getAttribute("aria-checked")).toBe("false"));
+  });
+
+  it("has no Insert warning to switch on or off", async () => {
+    server({
+      "/api/ext/settings": { defaultCommentProfileId: null, defaultLanguage: null },
+      "/api/ext/profiles": { profiles: [] },
+      "/api/ext/config": { insertEnabled: true },
+    });
+    render(<SettingsScreen />);
+    await screen.findByRole("switch", { name: "Show the Insert button" });
+    expect(screen.getAllByRole("switch")).toHaveLength(1);
+    expect(screen.queryByText(/warn|risk|safer/i)).toBeNull();
   });
 });

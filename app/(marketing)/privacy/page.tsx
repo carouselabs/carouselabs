@@ -216,8 +216,9 @@ export default function PrivacyPage() {
           <li>
             <span className="text-[#0A0A0A] font-medium">It never posts for you</span> — the
             extension never submits anything to LinkedIn. Copy places the comment on your clipboard.
-            Insert, which is optional and off by default behind a warning, only places text into
-            LinkedIn&rsquo;s comment box; you still review it and press Post yourself.
+            Insert, which is optional and can be hidden in the extension&rsquo;s Settings, only
+            places text into LinkedIn&rsquo;s comment box; you still review it and press Post
+            yourself.
           </li>
           <li>
             <span className="text-[#0A0A0A] font-medium">No third-party sharing</span> — post content

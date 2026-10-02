@@ -18,7 +18,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { Initials } from "../Initials";
-import { InsertWarningModal } from "../InsertWarningModal";
 import { ResultCard } from "../ResultCard";
 import { ScreenHeader } from "../ScreenHeader";
 import { FreeGenerationsNote, UnlockCard } from "../UnlockCard";
@@ -113,11 +112,8 @@ export function MessagesScreen({ onCreateProfile }: Props) {
 
   const [insertEnabled, setInsertEnabled] = useState(false);
   const [showInsertPref, setShowInsertPref] = useState(true);
-  const [insertWarningHidden, setInsertWarningHidden] = useState(false);
-  const [showInsertWarning, setShowInsertWarning] = useState(false);
   const [inserting, setInserting] = useState(false);
   const [insertError, setInsertError] = useState<string | null>(null);
-  const [pendingInsertText, setPendingInsertText] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,7 +126,6 @@ export function MessagesScreen({ onCreateProfile }: Props) {
         setProfiles(fetched);
         setMe(meRes);
         setExtensionAccess(meRes.extension);
-        setInsertWarningHidden(meRes.insertWarningHidden);
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err instanceof ApiError ? err.message : "Failed to load");
@@ -328,12 +323,7 @@ export function MessagesScreen({ onCreateProfile }: Props) {
 
   function handleInsertClick() {
     if (!message.trim()) return;
-    if (insertWarningHidden) {
-      void performInsert(message);
-      return;
-    }
-    setPendingInsertText(message);
-    setShowInsertWarning(true);
+    void performInsert(message);
   }
 
   async function performInsert(text: string) {
@@ -367,44 +357,11 @@ export function MessagesScreen({ onCreateProfile }: Props) {
     }
   }
 
-  async function handleConfirmInsert(dontShowAgain: boolean) {
-    setShowInsertWarning(false);
-    const pending = pendingInsertText;
-    setPendingInsertText(null);
-    if (!pending) return;
-
-    if (dontShowAgain) {
-      setInsertWarningHidden(true);
-      apiFetch("/api/ext/me", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ insertWarningHidden: true }),
-      }).catch(() => {});
-    }
-
-    await performInsert(pending);
-  }
-
   const recommendedProfiles = profiles.filter((p) => p.isRecommended);
   const systemProfiles = profiles.filter((p) => p.isSystem && !p.isRecommended);
   const customProfiles = profiles.filter((p) => !p.isSystem);
   const paywalled = isPaywalled(access);
   const showInsert = insertEnabled && showInsertPref;
-
-  const insertWarningModal = showInsertWarning && (
-    <InsertWarningModal
-      onCopyInstead={() => {
-        setShowInsertWarning(false);
-        setPendingInsertText(null);
-        void handleCopy();
-      }}
-      onInsertAnyway={handleConfirmInsert}
-      onDismiss={() => {
-        setShowInsertWarning(false);
-        setPendingInsertText(null);
-      }}
-    />
-  );
 
   // Why Generate is off, in words, rather than a button that just won't press.
   const generateBlocker = !conversation?.contact.name
@@ -417,8 +374,6 @@ export function MessagesScreen({ onCreateProfile }: Props) {
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      {insertWarningModal}
-
       <ScreenHeader title="Messages" description="Write the next message in a LinkedIn conversation." />
 
       {loadError && <Alert>{loadError}</Alert>}

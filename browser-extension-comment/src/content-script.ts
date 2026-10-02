@@ -58,7 +58,7 @@ const MESSAGE_TYPE = "carouselabs:post-selected";
 const LAST_POST_STORAGE_KEY = "lastSelectedPost";
 
 // Must match INSERT_MESSAGE_TYPE in HomeScreen.tsx. Sent by the side panel
-// after the user has confirmed the Insert risk warning.
+// when the user clicks Insert.
 const INSERT_MESSAGE_TYPE = "carouselabs:insert-comment";
 
 type PostType = "text" | "image" | "article" | "poll" | "repost";

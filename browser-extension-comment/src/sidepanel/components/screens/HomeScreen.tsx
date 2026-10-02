@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ExternalLink, Minus, MousePointerClick, Plus, RotateCcw, Sparkles, Timer, X } from "lucide-react";
-import { InsertWarningModal } from "../InsertWarningModal";
 import { ensureContentScript, isLinkedInTab, noContentScriptMessage, sendToTab } from "@/lib/tabs";
 import { insertFailureCode, reportClientError, type ReportFeature } from "@/lib/errorReport";
 import { markHistoryAction } from "@/lib/history";
@@ -182,22 +181,11 @@ export function HomeScreen({ onCreateProfile }: Props) {
   const [copied, setCopied] = useState(false);
   const access = useExtensionAccess();
 
-  // Insert gating: the server kill switch, the per-install preference, and the
-  // per-account "warning already acknowledged" flag are three separate things.
+  // Insert gating: the server kill switch and the per-install preference are
+  // separate things.
   const [insertEnabled, setInsertEnabled] = useState(false);
   const [showInsertPref, setShowInsertPref] = useState(true);
-  const [insertWarningHidden, setInsertWarningHidden] = useState(false);
-  const [showInsertWarning, setShowInsertWarning] = useState(false);
   const [inserting, setInserting] = useState(false);
-  // What the Insert warning is about to insert, so the same modal serves the
-  // comment flow and Connection Note mode.
-  // historyId is only set for a connection note, whose row the note panel
-  // owns; comments and replies use this screen's own historyId.
-  const [pendingInsert, setPendingInsert] = useState<{
-    text: string;
-    mode: InsertMode;
-    historyId?: string | null;
-  } | null>(null);
   // Insert failures in Connection Note mode, shown inside that panel.
   const [connectInsertError, setConnectInsertError] = useState<string | null>(null);
 
@@ -322,7 +310,6 @@ export function HomeScreen({ onCreateProfile }: Props) {
         );
         setExtensionAccess(me.extension);
         setCommentsToday(me.commentsToday);
-        setInsertWarningHidden(me.insertWarningHidden);
         setState("ready");
         void saveCachedCommentProfiles({ profiles: fetchedProfiles, defaultProfileId: me.defaultCommentProfileId });
       } catch (err) {
@@ -598,22 +585,15 @@ export function HomeScreen({ onCreateProfile }: Props) {
     markHistoryAction(historyId, action, comment);
   }
 
-  // Entry point for the Insert button. The warning is shown unless this user
-  // has already acknowledged it; it is never skipped silently on first use.
+  // The Insert button: straight into LinkedIn's box, which the person still
+  // reviews and posts themselves.
   function handleInsertClick() {
     if (!comment.trim()) return;
-    requestInsert(comment, reply ? "reply" : "comment");
+    void performInsert(comment, reply ? "reply" : "comment");
   }
 
-  function requestInsert(text: string, mode: InsertMode, noteHistoryId?: string | null) {
-    if (insertWarningHidden) {
-      void performInsert(text, mode, noteHistoryId);
-      return;
-    }
-    setPendingInsert({ text, mode, historyId: noteHistoryId });
-    setShowInsertWarning(true);
-  }
-
+  // noteHistoryId is only set for a connection note, whose row the note panel
+  // owns; comments and replies use this screen's own historyId.
   async function performInsert(text: string, mode: InsertMode, noteHistoryId?: string | null) {
     const setError = mode === "connect" ? setConnectInsertError : setGenerateError;
     setInserting(true);
@@ -662,27 +642,6 @@ export function HomeScreen({ onCreateProfile }: Props) {
     }
   }
 
-  async function handleConfirmInsert(dontShowAgain: boolean) {
-    setShowInsertWarning(false);
-    const pending = pendingInsert;
-    setPendingInsert(null);
-    if (!pending) return;
-
-    if (dontShowAgain) {
-      setInsertWarningHidden(true);
-      // Persisted per account, not per install: the risk being acknowledged
-      // is to their LinkedIn account. Best effort, so a failed write only
-      // means they see the warning again.
-      apiFetch("/api/ext/me", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ insertWarningHidden: true }),
-      }).catch(() => {});
-    }
-
-    await performInsert(pending.text, pending.mode, pending.historyId);
-  }
-
   async function handleCopy() {
     if (!comment.trim()) return;
 
@@ -702,31 +661,12 @@ export function HomeScreen({ onCreateProfile }: Props) {
     markHistory("COPIED");
   }
 
-  const insertWarningModal = showInsertWarning && (
-    <InsertWarningModal
-      onCopyInstead={() => {
-        setShowInsertWarning(false);
-        const pending = pendingInsert;
-        setPendingInsert(null);
-        // A connection note isn't in the comment box, so copy its own text.
-        if (pending?.mode === "connect") void navigator.clipboard.writeText(pending.text).catch(() => {});
-        else void handleCopy();
-      }}
-      onInsertAnyway={handleConfirmInsert}
-      onDismiss={() => {
-        setShowInsertWarning(false);
-        setPendingInsert(null);
-      }}
-    />
-  );
-
   // Connection Note mode replaces the whole comment flow: comment profiles,
   // post preview and Shorter/Longer don't apply to an invitation note.
   const connectTarget = selectedPost?.mode === "connect" ? (selectedPost.connect?.target ?? null) : null;
   if (connectTarget && selectedPost) {
     return (
       <div className="flex flex-col gap-4 p-4">
-        {insertWarningModal}
         <ConnectionNotePanel
           key={selectedPost.capturedAt}
           target={connectTarget}
@@ -734,7 +674,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
           showInsert={insertEnabled && showInsertPref}
           inserting={inserting}
           insertError={connectInsertError}
-          onInsert={(text, noteHistoryId) => requestInsert(text, "connect", noteHistoryId)}
+          onInsert={(text, noteHistoryId) => void performInsert(text, "connect", noteHistoryId)}
           onCreateProfile={() => onCreateProfile("connection")}
         />
       </div>
@@ -801,8 +741,6 @@ export function HomeScreen({ onCreateProfile }: Props) {
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      {insertWarningModal}
-
       <div className="space-y-1.5">
         <label id="home-profile-label" className="text-xs font-medium text-muted-foreground">
           Comment profile

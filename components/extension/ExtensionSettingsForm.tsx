@@ -206,22 +206,6 @@ export function ExtensionSettingsForm() {
           </label>
         </Row>
 
-        <Row
-          label="Insert warning"
-          hint="A reminder, before the first Insert, that you're responsible for what gets posted from your account."
-        >
-          <label className="flex items-center gap-3 text-[13px] text-[#374151]">
-            <input
-              type="checkbox"
-              className="h-4 w-4 accent-[#7C3AED]"
-              checked={!settings.insertWarningHidden}
-              disabled={busy}
-              onChange={(e) => save("insertWarningHidden", !e.target.checked)}
-            />
-            Show the warning before inserting
-            {status("insertWarningHidden")}
-          </label>
-        </Row>
       </div>
 
       <p className="text-[12px] text-[#9CA3AF]">

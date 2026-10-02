@@ -190,14 +190,13 @@ describe("website — settings", () => {
     await waitFor(() => expect(calls.some((c) => c.method === "PATCH")).toBe(true));
     expect(calls.find((c) => c.method === "PATCH")!.body).toEqual({ defaultLanguage: "Hindi" });
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /show the warning before inserting/i }));
-    await waitFor(() => expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(2));
-    expect(calls.filter((c) => c.method === "PATCH")[1].body).toEqual({ insertWarningHidden: true });
+    // There is no Insert warning to switch any more.
+    expect(screen.queryByRole("checkbox", { name: /warning/i })).toBeNull();
 
     // Used to be set per browser only; now the website sets it for the account.
     fireEvent.click(screen.getByRole("checkbox", { name: /show the insert button/i }));
-    await waitFor(() => expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(3));
-    expect(calls.filter((c) => c.method === "PATCH")[2].body).toEqual({ insertButtonHidden: true });
+    await waitFor(() => expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(2));
+    expect(calls.filter((c) => c.method === "PATCH")[1].body).toEqual({ insertButtonHidden: true });
   });
 });
 

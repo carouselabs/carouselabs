@@ -59,16 +59,16 @@ export async function GET(req: Request) {
     defaultConnectionProfileId: user.defaultConnectionProfileId,
     defaultMessageProfileId: user.defaultMessageProfileId,
     defaultLanguage: user.defaultLanguage,
-    // Whether the user has dismissed the Insert risk warning. Server-side
-    // rather than per-install, since the risk being acknowledged is to their
-    // LinkedIn account, not to one browser.
-    insertWarningHidden: user.insertWarningHidden,
+    // There is no Insert warning any more. Extensions before 1.3.0 still show
+    // one unless this says it was dismissed, so it always does.
+    insertWarningHidden: true,
   })
 }
 
-// PATCH /api/ext/me — currently only the Insert warning dismissal. Kept to a
-// named allowlist rather than spreading the body, so a future field cannot be
-// written from the extension by accident.
+// PATCH /api/ext/me — the Insert warning dismissal, still sent by extensions
+// before 1.3.0 (the warning is gone; see GET). Kept to a named allowlist
+// rather than spreading the body, so a future field cannot be written from the
+// extension by accident.
 export async function PATCH(req: Request) {
   const user = await getExtensionUser(req)
   if (!user) {

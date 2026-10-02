@@ -200,19 +200,11 @@ export function SettingsScreen() {
               hint={
                 insertEnabled === false
                   ? "Insert is currently turned off for everyone, so this setting has no effect."
-                  : "Insert types the text into LinkedIn for you. Copy and paste is the safer option."
+                  : "Insert puts the text into LinkedIn's box for you. You still review it and press Post."
               }
               checked={showInsert}
               disabled={insertEnabled === false}
               onChange={handleShowInsert}
-            />
-            <SwitchRow
-              id="setting-insert-warning"
-              title="Warn me before inserting"
-              hint="Shows the account-risk warning before each Insert."
-              checked={!settings?.insertWarningHidden}
-              disabled={saving}
-              onChange={(on) => patch({ insertWarningHidden: !on })}
             />
           </Group>
 

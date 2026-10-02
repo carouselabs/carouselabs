@@ -31,7 +31,8 @@ export async function GET(req: Request) {
     defaultConnectionProfileId: user.defaultConnectionProfileId,
     defaultMessageProfileId: user.defaultMessageProfileId,
     defaultLanguage: user.defaultLanguage,
-    insertWarningHidden: user.insertWarningHidden,
+    // No Insert warning any more; extensions before 1.3.0 still read this.
+    insertWarningHidden: true,
     connectNoteContext: user.connectNoteContext,
     connectNoteLength: user.connectNoteLength,
     linkedinProfile: user.linkedinProfile,
@@ -183,5 +184,5 @@ export async function PATCH(req: Request) {
     },
   })
 
-  return NextResponse.json(updated)
+  return NextResponse.json({ ...updated, insertWarningHidden: true })
 }

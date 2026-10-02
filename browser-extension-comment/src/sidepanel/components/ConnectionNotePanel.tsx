@@ -46,6 +46,7 @@ import { CharRangePicker } from "./CharRangePicker";
 import { ConnectContextEditor } from "./ConnectContextEditor";
 import { Initials } from "./Initials";
 import { ResultCard } from "./ResultCard";
+import { RewriteButton } from "./RewriteButton";
 
 const CONTEXT_LABELS: Record<ConnectContextSetting["choice"], string> = {
   profile: "Your LinkedIn profile",
@@ -112,6 +113,9 @@ export function ConnectionNotePanel({
   // Whether the result card shows: from the first successful note on, even if
   // the box is then cleared by hand (see HomeScreen's hasResult).
   const [hasResult, setHasResult] = useState(false);
+  // The profile that wrote the note in the card ("" for none), so picking
+  // another one can offer to rewrite it with that one.
+  const [resultProfileId, setResultProfileId] = useState<string | null>(null);
   // The note's History row (see markHistoryAction).
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -205,6 +209,9 @@ export function ConnectionNotePanel({
   const hasNote = note.trim().length > 0;
   const overLimit = note.length > CONNECT_NOTE_HARD_MAX;
   const showResult = generating || hasResult;
+  // A note is showing and another profile is now picked.
+  const rewriteProfile =
+    hasResult && !generateDisabled && resultProfileId !== null && profileId !== resultProfileId ? selectedProfile : null;
 
   async function handleGenerate() {
     if (!context || !length) return;
@@ -212,6 +219,7 @@ export function ConnectionNotePanel({
     const controller = new AbortController();
     generationRef.current = controller;
     const current = () => generationRef.current === controller;
+    const usedProfileId = profileId;
     setGenerating(true);
     setError(null);
     setCopied(false);
@@ -248,6 +256,7 @@ export function ConnectionNotePanel({
       if (!current()) return;
       setNote(res.note);
       setHasResult(true);
+      setResultProfileId(usedProfileId);
       setHistoryId(res.historyId ?? null);
       noteFreeRemaining(res.freeRemaining);
       outputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -356,6 +365,13 @@ export function ConnectionNotePanel({
           <p className="text-xs text-muted-foreground">
             {selectedProfile.goal} · {selectedProfile.length}
           </p>
+        )}
+        {rewriteProfile && (
+          <RewriteButton
+            label={`Rewrite with ${rewriteProfile.name}`}
+            current={`Current note: ${profiles.find((p) => p.id === resultProfileId)?.name ?? "the built-in rules"}`}
+            onClick={() => void handleGenerate()}
+          />
         )}
       </div>
 

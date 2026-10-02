@@ -21,7 +21,6 @@ const SYSTEM_PROFILES = [
     goal: "adds one useful insight",
     tone: "professional",
     length: "Medium (2-3 lines)",
-    isDefault: true,
   },
   {
     id: "sys-supportive-peer",
@@ -123,6 +122,8 @@ const SYSTEM_PROFILES = [
       "This makes sense. Simple but true.",
     ],
     isRecommended: true,
+    // The profile everyone starts on, until they choose their own default.
+    isDefault: true,
   },
   {
     id: "sys-carouselabs-top-relevance",

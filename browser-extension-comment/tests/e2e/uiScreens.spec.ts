@@ -169,6 +169,12 @@ for (const width of WIDTHS) {
       release();
       await expect(panel.getByRole("textbox", { name: "Your comment" })).toHaveValue(COMMENT);
       await shot(panel, width, "06-home-result");
+
+      // Another profile picked after the comment was written.
+      await panel.getByRole("combobox", { name: "Comment profile" }).click();
+      await panel.getByRole("option", { name: "Supportive Peer" }).click();
+      await expect(panel.getByRole("button", { name: "Rewrite with Supportive Peer" })).toBeVisible();
+      await shot(panel, width, "06b-home-rewrite-offer");
     });
 
     test("generate: error and paywall", async ({ harness }) => {

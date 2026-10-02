@@ -7,6 +7,7 @@ import { loadCachedCommentProfiles, saveCachedCommentProfiles } from "@/lib/prof
 import { loadShowInsert } from "@/lib/syncedSettings";
 import { ConnectionNotePanel } from "../ConnectionNotePanel";
 import { RecommendedBadge } from "../RecommendedBadge";
+import { RewriteButton } from "../RewriteButton";
 import { FreeGenerationsNote, UnlockCard } from "../UnlockCard";
 import {
   isPaywalled,
@@ -183,6 +184,9 @@ export function HomeScreen({ onCreateProfile }: Props) {
   // Row created by the last successful generate, so Copy can mark it COPIED.
   // Cleared on a new post: copying then would tag the wrong row.
   const [historyId, setHistoryId] = useState<string | null>(null);
+  // The profile that wrote the comment in the card, so picking another one
+  // can offer to rewrite it with that one.
+  const [resultProfileId, setResultProfileId] = useState<string | null>(null);
   const [rewriting, setRewriting] = useState<"shorter" | "longer" | null>(null);
   const [copied, setCopied] = useState(false);
   const access = useExtensionAccess();
@@ -503,6 +507,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
     generationRef.current = controller;
     beforeGenerateRef.current = hasResult ? { comment, historyId } : null;
     const current = () => generationRef.current === controller;
+    const usedProfileId = selectedId;
     setGenerating(true);
     setGenerateError(null);
     setComment("");
@@ -557,6 +562,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
       cancelQueuedText();
       setComment(res.comment);
       setHasResult(true);
+      setResultProfileId(usedProfileId);
       perf.mark("final");
       setHistoryId(res.historyId);
       noteFreeRemaining(res.freeRemaining);
@@ -727,6 +733,12 @@ export function HomeScreen({ onCreateProfile }: Props) {
   }
 
   const noun = reply ? "reply" : "comment";
+  // A comment is showing and another profile is now picked: offer to rewrite
+  // it with that one (Generate and Regenerate are the same call).
+  const rewriteProfile =
+    hasResult && !generateDisabled && resultProfileId !== null && selectedId !== resultProfileId
+      ? (profiles.find((p) => p.id === selectedId) ?? null)
+      : null;
   // The result card replaces the Generate button from the click on, so the
   // wait, the streaming text and the finished comment all happen in one place.
   const showResult = generating || hasResult;
@@ -805,6 +817,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
               {recommendedProfiles.map((profile) => (
                 <SelectItem key={profile.id} value={profile.id}>
                   {profile.name}
+                  {profile.isDefault ? " (default)" : ""}
                   <RecommendedBadge />
                 </SelectItem>
               ))}
@@ -835,6 +848,14 @@ export function HomeScreen({ onCreateProfile }: Props) {
               </SelectItem>
             </SelectContent>
           </Select>
+        )}
+
+        {rewriteProfile && (
+          <RewriteButton
+            label={`Rewrite with ${rewriteProfile.name}`}
+            current={`Current ${noun}: ${profiles.find((p) => p.id === resultProfileId)?.name ?? "another profile"}`}
+            onClick={() => void handleGenerate()}
+          />
         )}
       </div>
 

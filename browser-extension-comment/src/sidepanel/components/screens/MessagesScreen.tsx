@@ -19,6 +19,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { Initials } from "../Initials";
 import { ResultCard } from "../ResultCard";
+import { RewriteButton } from "../RewriteButton";
 import { ScreenHeader } from "../ScreenHeader";
 import { FreeGenerationsNote, UnlockCard } from "../UnlockCard";
 import {
@@ -101,6 +102,9 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
   const [extraInstruction, setExtraInstruction] = useState("");
 
   const [generating, setGenerating] = useState(false);
+  // The reason that wrote the message in the card, so picking another one can
+  // offer to rewrite it.
+  const [resultReason, setResultReason] = useState<string | null>(null);
   // The generation in flight, so Stop, reading another conversation or
   // leaving the screen can cancel it. Null once it ends or is cancelled.
   const generationRef = useRef<AbortController | null>(null);
@@ -290,6 +294,17 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
   const hasMessage = message.trim().length > 0;
   const showResult = generating || hasResult;
 
+  // Which reason is picked, and how it reads, for "Rewrite with …".
+  const reasonKey = choice === "profile" ? `profile:${profileId}` : choice === "custom" ? `custom:${purpose.trim()}` : "flow";
+  function reasonName(key: string): string {
+    if (key === "flow") return "Just continue";
+    if (key.startsWith("custom:")) return "your own reason";
+    return profiles.find((p) => `profile:${p.id}` === key)?.name ?? "another reason";
+  }
+  // A message is showing and the reason has changed since it was written.
+  const rewriteReason =
+    hasResult && canGenerate && !generating && !inserting && resultReason !== null && reasonKey !== resultReason;
+
   // The card appears on the click (with a skeleton, or the previous message
   // until the new one lands); bring it into view then, not on every edit.
   useEffect(() => {
@@ -308,6 +323,7 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
     const controller = new AbortController();
     generationRef.current = controller;
     const current = () => generationRef.current === controller;
+    const usedReason = reasonKey;
     setGenerating(true);
     setGenerateError(null);
     try {
@@ -331,6 +347,7 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
       });
       if (!current()) return;
       setMessage(res.message);
+      setResultReason(usedReason);
       setHasResult(true);
       setHistoryId(res.historyId ?? null);
       noteFreeRemaining(res.freeRemaining);
@@ -620,6 +637,14 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
                   {purpose.length}/{MAX_MESSAGE_PURPOSE_CHARS}
                 </p>
               </div>
+            )}
+
+            {rewriteReason && (
+              <RewriteButton
+                label={choice === "flow" ? "Rewrite: just continue the chat" : `Rewrite with ${reasonName(reasonKey)}`}
+                current={`Current message: ${reasonName(resultReason!)}`}
+                onClick={() => void handleGenerate()}
+              />
             )}
           </div>
 

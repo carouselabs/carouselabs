@@ -80,9 +80,43 @@ function importFresh(url: string) {
   import(/* @vite-ignore */ url).catch((err) => console.error("[content-script] injection failed:", err));
 }
 
+// How long the panel waits for a LinkedIn tab to answer. Reading a
+// conversation or inserting takes well under a second (Insert also checks the
+// server's switch, which gives up after 8s); a tab that hasn't answered by
+// then never will, and the panel says so instead of spinning.
+export const TAB_ANSWER_TIMEOUT_MS = 12_000;
+const PING_TIMEOUT_MS = 1_000;
+
+// The tab took too long to answer. Not retried: the message may still be
+// carried out late, and a second Insert would type the text twice.
+export class TabTimeout extends Error {
+  constructor() {
+    super("The LinkedIn tab didn't answer in time");
+    this.name = "TabTimeout";
+  }
+}
+
+function answerWithin<T>(answer: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new TabTimeout()), ms);
+    answer.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 async function answersPing(tabId: number): Promise<boolean> {
   try {
-    const res = (await chrome.tabs.sendMessage(tabId, { type: PING_MESSAGE_TYPE })) as { ok?: boolean } | undefined;
+    const res = (await answerWithin(chrome.tabs.sendMessage(tabId, { type: PING_MESSAGE_TYPE }), PING_TIMEOUT_MS)) as
+      | { ok?: boolean }
+      | undefined;
     return res?.ok === true;
   } catch {
     return false;
@@ -114,7 +148,10 @@ export async function injectContentScript(tabId: number, waitMs = 3000): Promise
   } catch {
     return false;
   }
-  for (let waited = 0; waited <= waitMs; waited += 100) {
+  // At most waitMs by the clock (a ping can itself take up to
+  // PING_TIMEOUT_MS), and never more tries than one per 100ms of it.
+  const until = Date.now() + waitMs;
+  for (let tries = 0; tries <= waitMs / 100 && Date.now() <= until; tries += 1) {
     if (await answersPing(tabId)) return true;
     await sleep(100);
   }
@@ -135,10 +172,10 @@ export async function ensureContentScript(tab: chrome.tabs.Tab | undefined): Pro
 export async function sendToTab<T>(tab: chrome.tabs.Tab, message: unknown): Promise<T> {
   if (tab.id === undefined) throw new Error("No tab to send to");
   try {
-    return (await chrome.tabs.sendMessage(tab.id, message)) as T;
+    return (await answerWithin(chrome.tabs.sendMessage(tab.id, message), TAB_ANSWER_TIMEOUT_MS)) as T;
   } catch (err) {
-    if (!isLinkedInTab(tab) || !(await injectContentScript(tab.id))) throw err;
-    return (await chrome.tabs.sendMessage(tab.id, message)) as T;
+    if (err instanceof TabTimeout || !isLinkedInTab(tab) || !(await injectContentScript(tab.id))) throw err;
+    return (await answerWithin(chrome.tabs.sendMessage(tab.id, message), TAB_ANSWER_TIMEOUT_MS)) as T;
   }
 }
 

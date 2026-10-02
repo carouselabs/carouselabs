@@ -128,6 +128,29 @@ describe("Connection note panel", () => {
     expect(screen.getByText("Their profile only")).toBeTruthy();
   });
 
+  it("Stop ends a note that is taking too long, keeping the one that was there", async () => {
+    server();
+    renderPanel();
+    await generate();
+    // The regenerate never answers, until it is given up on.
+    const signals: AbortSignal[] = [];
+    const answered = (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).getMockImplementation()!;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string, init?: RequestInit) => {
+        if (!url.endsWith("/api/ext/connection-note")) return answered(url, init);
+        signals.push(init!.signal!);
+        return new Promise(() => {});
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Stop" }));
+    expect(signals[0].aborted).toBe(true);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Stop" })).toBeNull());
+    expect(noteBox().value).toBe(NOTE);
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("keeps the previous note when a regenerate fails", async () => {
     server({ notes: [{ status: 200, body: { note: NOTE, freeRemaining: null, historyId: "h1" } }, { status: 502, body: { error: "x" } }] });
     renderPanel();

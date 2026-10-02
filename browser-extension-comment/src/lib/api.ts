@@ -277,11 +277,59 @@ async function getExtensionToken(): Promise<string | null> {
   return typeof extensionToken === "string" && extensionToken ? extensionToken : null;
 }
 
-// Longer than a slow generation (two model attempts, each with a fallback),
-// short enough that a hung server doesn't leave a spinner running forever.
-const REQUEST_TIMEOUT_MS = 120_000;
+// Longer than any generation (the server gives one 40s in all, see
+// lib/ai/commentModel.ts), short enough that a hung connection doesn't leave a
+// spinner running for long.
+const REQUEST_TIMEOUT_MS = 60_000;
+// A streamed answer that sends nothing at all for this long has lost its
+// connection: while the model is quiet the server sends a keep-alive every 8s.
+const STREAM_IDLE_MS = 25_000;
 
 const TIMEOUT_MESSAGE = "The server took too long to respond. Try again.";
+const STALLED_MESSAGE = "The connection to CarouseLabs dropped. Try again.";
+
+// The caller cancelled the request through init.signal (Stop, or a new post
+// replacing the one being written for). Not an error to show anyone.
+export class RequestCancelled extends Error {
+  constructor() {
+    super("Request cancelled");
+    this.name = "RequestCancelled";
+  }
+}
+
+export function isCancelled(err: unknown): err is RequestCancelled {
+  return err instanceof RequestCancelled;
+}
+
+// One request's abort controller. It fires when the caller's own signal does,
+// when the overall time limit passes, or when the stream is found stalled;
+// failure() turns whichever it was into the error to throw.
+function requestControl(outer: AbortSignal | null | undefined) {
+  const controller = new AbortController();
+  let reason: "cancelled" | "timeout" | "stalled" | null = null;
+  const abort = (why: "cancelled" | "timeout" | "stalled") => {
+    reason ??= why;
+    controller.abort();
+  };
+  const timer = setTimeout(() => abort("timeout"), REQUEST_TIMEOUT_MS);
+  const onCancel = () => abort("cancelled");
+  if (outer?.aborted) onCancel();
+  else outer?.addEventListener("abort", onCancel, { once: true });
+  return {
+    signal: controller.signal,
+    abort,
+    failure(): Error | null {
+      if (reason === "cancelled") return new RequestCancelled();
+      if (reason === "timeout") return new ApiError(408, TIMEOUT_MESSAGE);
+      if (reason === "stalled") return new ApiError(408, STALLED_MESSAGE);
+      return null;
+    },
+    done() {
+      clearTimeout(timer);
+      outer?.removeEventListener("abort", onCancel);
+    },
+  };
+}
 
 // Every request says which version of the extension sent it, so the admin can
 // see who runs what (and the server could treat old versions differently).
@@ -305,31 +353,31 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   const [baseUrl, token] = await Promise.all([getApiBaseUrl(), getExtensionToken()]);
   if (!token) throw new ApiError(401, "Not signed in — no extension token stored yet");
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  let res: Response;
+  // The time limit covers reading the answer too, not just its first byte.
+  const control = requestControl(init.signal);
   try {
-    res = await fetch(`${baseUrl}${path}`, {
+    // Cancelled while the token was being read: don't send it at all.
+    if (control.signal.aborted) throw new RequestCancelled();
+    const res = await fetch(`${baseUrl}${path}`, {
       ...init,
-      signal: controller.signal,
+      signal: control.signal,
       headers: {
         ...init.headers,
         ...versionHeader(),
         Authorization: `Bearer ${token}`,
       },
     });
+
+    if (!res.ok) throw await errorFrom(res);
+    // 204: done, nothing to read (e.g. an error report).
+    if (res.status === 204) return undefined as T;
+
+    return (await res.json()) as T;
   } catch (err) {
-    if (controller.signal.aborted) throw new ApiError(408, TIMEOUT_MESSAGE);
-    throw err;
+    throw control.failure() ?? err;
   } finally {
-    clearTimeout(timer);
+    control.done();
   }
-
-  if (!res.ok) throw await errorFrom(res);
-  // 204: done, nothing to read (e.g. an error report).
-  if (res.status === 204) return undefined as T;
-
-  return (await res.json()) as T;
 }
 
 export interface StreamHandlers {
@@ -370,13 +418,20 @@ export async function apiStream<T>(path: string, init: RequestInit, handlers: St
   const [baseUrl, token] = await Promise.all([getApiBaseUrl(), getExtensionToken()]);
   if (!token) throw new ApiError(401, "Not signed in — no extension token stored yet");
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const control = requestControl(init.signal);
+  // Armed once the stream starts: a stream that goes completely quiet (not
+  // even the server's keep-alive) has lost its connection.
+  let idle: ReturnType<typeof setTimeout> | undefined;
+  const alive = () => {
+    clearTimeout(idle);
+    idle = setTimeout(() => control.abort("stalled"), STREAM_IDLE_MS);
+  };
   try {
+    if (control.signal.aborted) throw new RequestCancelled();
     handlers.onRequest?.();
     const res = await fetch(`${baseUrl}${path}`, {
       ...init,
-      signal: controller.signal,
+      signal: control.signal,
       headers: {
         ...init.headers,
         ...versionHeader(),
@@ -393,9 +448,11 @@ export async function apiStream<T>(path: string, init: RequestInit, handlers: St
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    alive();
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
+      alive();
       buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
 
       let end: number;
@@ -430,9 +487,9 @@ export async function apiStream<T>(path: string, init: RequestInit, handlers: St
     // The connection ended without a result: the server died mid-generation.
     throw new ApiError(502, "Something went wrong, try again");
   } catch (err) {
-    if (controller.signal.aborted) throw new ApiError(408, TIMEOUT_MESSAGE);
-    throw err;
+    throw control.failure() ?? err;
   } finally {
-    clearTimeout(timer);
+    clearTimeout(idle);
+    control.done();
   }
 }

@@ -6,10 +6,19 @@
 // before the model keeps its JSON status code. Prisma, the token lookup, the
 // daily limit and the free-use gate are stood in for in memory; see
 // extensionPaywall.server.test.ts for how the backend's "@/…" imports resolve.
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextResponse } from "next/server";
 
-type Step = { chunks?: string[]; error?: { status: number; message: string }; failAfter?: number };
+// stallAfter: after that many chunks the stream goes quiet until aborted, as
+// a stalled connection does. dripMs: a stream that never finishes, sending a
+// space every dripMs (alive, but getting nowhere).
+type Step = {
+  chunks?: string[];
+  error?: { status: number; message: string };
+  failAfter?: number;
+  stallAfter?: number;
+  dripMs?: number;
+};
 
 const script = vi.hoisted(() => ({
   luna: [] as Step[],
@@ -30,14 +39,43 @@ function play(
   if (step.error && step.failAfter === undefined) {
     throw Object.assign(new Error(step.error.message), { status: step.error.status });
   }
+  const abortError = () => Object.assign(new Error("Request was aborted."), { name: "AbortError" });
+  const stall = () =>
+    new Promise<never>((_, reject) => {
+      if (signal?.aborted) reject(abortError());
+      signal?.addEventListener("abort", () => reject(abortError()), { once: true });
+    });
+  if (step.dripMs !== undefined) {
+    const every = step.dripMs;
+    return (async function* () {
+      for (;;) {
+        if (signal?.aborted) throw abortError();
+        yield wrap(" ");
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(resolve, every);
+          signal?.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(timer);
+              reject(abortError());
+            },
+            { once: true },
+          );
+        });
+      }
+    })();
+  }
   return (async function* () {
-    for (const [i, text] of (step.chunks ?? []).entries()) {
-      if (signal?.aborted) throw Object.assign(new Error("Request was aborted."), { name: "AbortError" });
+    const chunks = step.chunks ?? [];
+    for (const [i, text] of chunks.entries()) {
+      if (step.stallAfter === i) await stall();
+      if (signal?.aborted) throw abortError();
       if (step.failAfter !== undefined && i === step.failAfter) throw new Error("connection reset");
       record.consumed = i + 1;
       yield wrap(text);
       await Promise.resolve();
     }
+    if (step.stallAfter !== undefined && step.stallAfter >= chunks.length) await stall();
   })();
 }
 
@@ -143,9 +181,14 @@ function request(stream: boolean) {
 
 async function events(res: Response) {
   const text = await res.text();
+  return parseEvents(text);
+}
+
+// The stream's events, without its keep-alive comment lines.
+function parseEvents(text: string) {
   return text
     .split("\n\n")
-    .filter(Boolean)
+    .filter((frame) => frame && !frame.startsWith(":"))
     .map((frame) => ({
       event: /^event: (.*)$/m.exec(frame)![1],
       data: JSON.parse(/^data: (.*)$/m.exec(frame)![1]) as Record<string, unknown>,
@@ -168,6 +211,61 @@ beforeEach(() => {
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
+});
+
+describe("streaming Generate when a model stalls", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // Reads the whole response while fake time moves on in 1s steps.
+  async function readStalled(res: Response) {
+    let text: string | null = null;
+    const start = Date.now();
+    void res.text().then((t) => (text = t));
+    while (text === null && Date.now() - start < 120_000) await vi.advanceTimersByTimeAsync(1_000);
+    return { text: text ?? "", ms: Date.now() - start };
+  }
+
+  it("drops a Luna stream that goes quiet and finishes with Haiku", async () => {
+    vi.useFakeTimers();
+    script.luna = [{ chunks: tokens(GOOD), stallAfter: 6 }];
+    script.haiku = [{ chunks: tokens(GOOD) }];
+    const { text, ms } = await readStalled(await POST(request(true)));
+    const list = parseEvents(text);
+    expect(list.at(-1)).toMatchObject({ event: "final", data: { comment: GOOD } });
+    expect(list.at(-1)!.data.timing).toMatchObject({ model: "claude-haiku-4-5-20251001" });
+    // What Luna showed was cleared before Haiku's text.
+    expect(texts(list)).toContain("");
+    expect(ms).toBeLessThanOrEqual(12_000);
+  });
+
+  it("keeps the connection alive while the models are quiet, then ends with an error, not silence", async () => {
+    vi.useFakeTimers();
+    script.luna = [{ stallAfter: 0 }, { stallAfter: 0 }];
+    script.haiku = [{ stallAfter: 0 }, { stallAfter: 0 }];
+    const { text, ms } = await readStalled(await POST(request(true)));
+
+    // A keep-alive at least every 8s, so the panel knows the server is there.
+    const keepAlives = text.split("\n\n").filter((frame) => frame.startsWith(":")).length;
+    expect(keepAlives).toBeGreaterThanOrEqual(Math.floor(ms / 8_000) - 1);
+    const list = parseEvents(text);
+    expect(list.at(-1)).toMatchObject({ event: "error", data: { status: 502 } });
+    // Within the 40s budget (plus the last call's own limit), never minutes.
+    expect(ms).toBeLessThanOrEqual(42_000);
+    expect(state.history).toHaveLength(0);
+    expect(state.release).toHaveBeenCalled();
+  });
+
+  it("stops models that keep trickling without finishing once the 40s budget is spent", async () => {
+    vi.useFakeTimers();
+    script.luna = [{ dripMs: 5_000 }, { dripMs: 5_000 }];
+    script.haiku = [{ dripMs: 5_000 }, { dripMs: 5_000 }];
+    const { text, ms } = await readStalled(await POST(request(true)));
+    expect(parseEvents(text).at(-1)).toMatchObject({ event: "error", data: { status: 502 } });
+    // Each call alone is allowed 15-20s; together they must stop at the budget.
+    expect(ms).toBeLessThanOrEqual(42_000);
+  });
 });
 
 describe("streaming Generate", () => {

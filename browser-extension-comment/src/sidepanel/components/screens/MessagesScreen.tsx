@@ -29,7 +29,7 @@ import {
   useExtensionAccess,
 } from "@/lib/extensionAccess";
 import { isLinkedInTab, noContentScriptMessage, sameConversation, sendToTab } from "@/lib/tabs";
-import { insertFailureCode, readFailureCode, reportClientError } from "@/lib/errorReport";
+import { insertFailureCode, readFailureCode, reportClientError, tabFailureCode } from "@/lib/errorReport";
 import { markHistoryAction } from "@/lib/history";
 // Kept on the account, so the website's Extension section edits the same values.
 import { loadShowInsert, loadSyncedMessageContext, saveSyncedMessageContext } from "@/lib/syncedSettings";
@@ -37,6 +37,7 @@ import {
   apiFetch,
   ApiError,
   fetchExtConfig,
+  isCancelled,
   type MeResponse,
   type MessageGenerateResponse,
   type MessageProfile,
@@ -100,6 +101,9 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
   const [extraInstruction, setExtraInstruction] = useState("");
 
   const [generating, setGenerating] = useState(false);
+  // The generation in flight, so Stop, reading another conversation or
+  // leaving the screen can cancel it. Null once it ends or is cancelled.
+  const generationRef = useRef<AbortController | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   // Whether the result card shows: from the first successful message for
@@ -160,6 +164,7 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
 
     return () => {
       cancelled = true;
+      generationRef.current?.abort();
     };
     // Mount only: readOnOpen is how the screen was opened, and
     // readConversation reads the profiles through refs.
@@ -219,6 +224,12 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
         return;
       }
 
+      // A reply still being written was for the conversation read before.
+      if (generationRef.current) {
+        generationRef.current.abort();
+        generationRef.current = null;
+        setGenerating(false);
+      }
       setConversation(res.conversation);
       setMessage("");
       setHasResult(false);
@@ -234,8 +245,8 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
         setPurpose("");
         setTone("");
       }
-    } catch {
-      if (isLinkedInTab(tab)) reportClientError("messages", "tab_unreachable");
+    } catch (err) {
+      if (isLinkedInTab(tab)) reportClientError("messages", tabFailureCode(err));
       setReadError(noContentScriptMessage(tab, "Open a LinkedIn conversation in the active tab first."));
     } finally {
       setReading(false);
@@ -293,10 +304,15 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
 
   async function handleGenerate() {
     if (!conversation || !canGenerate) return;
+    generationRef.current?.abort();
+    const controller = new AbortController();
+    generationRef.current = controller;
+    const current = () => generationRef.current === controller;
     setGenerating(true);
     setGenerateError(null);
     try {
       const res = await apiFetch<MessageGenerateResponse>("/api/ext/message", {
+        signal: controller.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -313,17 +329,30 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
           extraInstruction: extraInstruction.trim() || undefined,
         }),
       });
+      if (!current()) return;
       setMessage(res.message);
       setHasResult(true);
       setHistoryId(res.historyId ?? null);
       noteFreeRemaining(res.freeRemaining);
       setCopied(false);
     } catch (err) {
+      if (isCancelled(err) || !current()) return;
       // The paywall's 402 swaps in the unlock card, which says it better.
       if (!notePaywallError(err)) setGenerateError(userFacingError(err));
     } finally {
-      setGenerating(false);
+      // Cleared here unless a newer generation has already started.
+      if (current() || generationRef.current === null) {
+        generationRef.current = null;
+        setGenerating(false);
+      }
     }
+  }
+
+  // Stop: ends the wait; the message that was there stays.
+  function handleStop() {
+    generationRef.current?.abort();
+    generationRef.current = null;
+    setGenerating(false);
   }
 
   async function handleCopy() {
@@ -367,8 +396,8 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
         return;
       }
       markHistoryAction(historyId, "INSERTED", text);
-    } catch {
-      if (isLinkedInTab(tab)) reportClientError("messages", "tab_unreachable");
+    } catch (err) {
+      if (isLinkedInTab(tab)) reportClientError("messages", tabFailureCode(err));
       setInsertError(noContentScriptMessage(tab, "Open the LinkedIn conversation in the active tab, then try again."));
     } finally {
       setInserting(false);
@@ -644,6 +673,7 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
                   setCopied(false);
                 }}
                 generating={generating}
+                onStop={handleStop}
                 busy={generating || inserting}
                 stale={generating && hasMessage}
                 copied={copied}

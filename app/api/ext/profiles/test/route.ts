@@ -18,7 +18,17 @@ import {
   buildCommentSystemMessage,
   buildCommentUserMessage,
 } from "@/lib/ai/prompts/commentPrompt"
-import { callCommentModel, parseComment, sanitizeComment } from "@/lib/ai/commentModel"
+import {
+  callCommentModel,
+  generationDeadline,
+  GenerationTimeout,
+  parseComment,
+  sanitizeComment,
+} from "@/lib/ai/commentModel"
+
+// Generation stops itself after GENERATION_BUDGET_MS (lib/ai/commentModel.ts);
+// this is the platform's backstop, well above it.
+export const maxDuration = 60
 
 const MAX_POST_CHARS = 6000
 
@@ -82,15 +92,17 @@ export async function POST(req: Request) {
   if (!gate.ok) return gate.response
 
   let comment = ""
+  const deadline = generationDeadline()
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      const modelRaw = await callCommentModel(systemMessage, userMessage, "ext/profiles/test")
+      const modelRaw = await callCommentModel(systemMessage, userMessage, "ext/profiles/test", { deadline })
       const candidate = parseComment(modelRaw)
       if (!candidate?.trim()) continue
       comment = sanitizeComment(candidate).comment
       if (comment) break
     } catch (err) {
       console.error(`[ext/profiles/test] attempt ${attempt} failed:`, err)
+      if (err instanceof GenerationTimeout) break
     }
   }
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { byFixture, click, importContentScript, loadFixture, sendToContentScript, SERVER_CONFIG, storedPost } from "./helpers";
 
 const INSERT = "carouselabs:insert-comment";
@@ -86,6 +86,32 @@ describe("Insert into a comment box", () => {
     byFixture("post-2-comment-box").remove();
     await sendToContentScript({ type: INSERT, text: "Congrats!", mode: "comment" });
     expect(byFixture("overlay-compose").textContent).toBe("");
+  });
+
+  it("says it couldn't reach CarouseLabs, instead of hanging, when the switch can't be checked", async () => {
+    await feed();
+    await click(commentButton("post-2"));
+    // The connection stalls: no answer until the request is given up on.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise((_, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+          }),
+      ),
+    );
+    vi.useFakeTimers();
+    try {
+      const pending = sendToContentScript({ type: INSERT, text: "Congrats!", mode: "comment" });
+      await vi.advanceTimersByTimeAsync(8_000);
+      const res = (await pending) as { ok: boolean; error: string };
+      expect(res.ok).toBe(false);
+      expect(res.error).toMatch(/Couldn't reach CarouseLabs/);
+      expect(byFixture("post-2-comment-box").textContent).toBe("");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("honours the server kill switch at the moment of Insert", async () => {

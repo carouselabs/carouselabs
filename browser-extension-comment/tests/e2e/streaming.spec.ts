@@ -77,6 +77,32 @@ test("Generate streams: asks for server-sent events and ends on the final commen
   console.log(`[e2e] ${perf[0]}`);
 });
 
+test("a Generate that never answers can be stopped, and a new post stops it too", async ({ harness }) => {
+  // The server takes the request and then says nothing, as a stalled
+  // connection does.
+  let requests = 0;
+  await harness.context.route("**/api/ext/generate", () => {
+    requests += 1;
+  });
+
+  const { panel, generate } = await openPanelWithPost(harness);
+  await generate.click();
+  await expect(panel.getByRole("status", { name: "Generating comment" })).toBeVisible();
+  await panel.getByRole("button", { name: "Stop" }).click();
+  await expect(panel.getByRole("status", { name: "Generating comment" })).toHaveCount(0);
+  await expect(panel.getByRole("alert")).toHaveCount(0);
+  await expect(generate).toBeEnabled();
+
+  // Generating again, then picking another post, ends that one as well.
+  await generate.click();
+  await expect(panel.getByRole("button", { name: "Stop" })).toBeVisible();
+  const page = harness.context.pages().find((p) => p.url().includes("/feed/"))!;
+  await page.locator("[data-fixture='post-2'] button[aria-label='Comment']").click();
+  await expect(panel.getByRole("button", { name: "Stop" })).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "Generate", exact: true })).toBeEnabled();
+  expect(requests).toBe(2);
+});
+
 test("Generate still works against a server from before streaming (plain JSON)", async ({ harness }) => {
   harness.apiResponses.set("/api/ext/generate", {
     status: 200,

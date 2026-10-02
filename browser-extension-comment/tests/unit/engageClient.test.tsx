@@ -96,6 +96,7 @@ describe("failure codes", () => {
     ["This note is for a different profile than the one open. Open their profile, click Connect, then Insert.", "insert.wrong_target"],
     ["This note is 320 characters, but LinkedIn's note box allows 300 on your account. Shorten it (or Copy and edit), then Insert.", "insert.too_long"],
     ["Insert is turned off right now. Use Copy instead.", "insert.off"],
+    ["Couldn't reach CarouseLabs to insert. Check your connection, then try again, or use Copy.", "insert.no_connection"],
     ["Click Comment on the post again, then try Insert.", "insert.recapture"],
     ['Click "Re-read this conversation", then Insert.', "insert.recapture"],
     ["Something new", "insert.failed"],

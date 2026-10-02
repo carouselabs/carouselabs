@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ExternalLink, Minus, MousePointerClick, Plus, RotateCcw, Sparkles, Timer, X } from "lucide-react";
 import { ensureContentScript, isLinkedInTab, noContentScriptMessage, sendToTab } from "@/lib/tabs";
-import { insertFailureCode, reportClientError, type ReportFeature } from "@/lib/errorReport";
+import { insertFailureCode, reportClientError, tabFailureCode, type ReportFeature } from "@/lib/errorReport";
 import { markHistoryAction } from "@/lib/history";
 import { loadCachedCommentProfiles, saveCachedCommentProfiles } from "@/lib/profileCache";
 import { loadShowInsert } from "@/lib/syncedSettings";
@@ -19,6 +19,7 @@ import { generationPerf } from "@/lib/generationPerf";
 import {
   apiFetch,
   apiStream,
+  isCancelled,
   ApiError,
   fetchExtConfig,
   LINKEDIN_FEED_URL,
@@ -170,6 +171,11 @@ export function HomeScreen({ onCreateProfile }: Props) {
   const pendingTextRef = useRef<string | null>(null);
   const textFrameRef = useRef<number | null>(null);
   const perfRef = useRef<ReturnType<typeof generationPerf> | null>(null);
+  // The generation in flight, so Stop, a new post or leaving the screen can
+  // cancel it. Null once it ends or is cancelled.
+  const generationRef = useRef<AbortController | null>(null);
+  // What the card showed before this generation, for Stop to put back.
+  const beforeGenerateRef = useRef<{ comment: string; historyId: string | null } | null>(null);
   // The output can land below the fold once profile pickers/instructions have
   // pushed the page tall — scrolled into view automatically so a fresh
   // result is never hidden behind a scroll the user has to find themselves.
@@ -411,6 +417,16 @@ export function HomeScreen({ onCreateProfile }: Props) {
     };
   }, []);
 
+  // A generation belongs to the post it was started for: picking another post
+  // (or leaving the screen) cancels it, so its text can't land on the new one.
+  const postKey = selectedPost?.capturedAt;
+  useEffect(() => {
+    return () => {
+      generationRef.current?.abort();
+      generationRef.current = null;
+    };
+  }, [postKey]);
+
   // When streamed text first reaches the DOM — "first visible text" in the
   // [perf] line (src/lib/generationPerf.ts).
   useLayoutEffect(() => {
@@ -482,6 +498,11 @@ export function HomeScreen({ onCreateProfile }: Props) {
     perfRef.current = perf;
     revealCancelRef.current?.();
     cancelQueuedText();
+    generationRef.current?.abort();
+    const controller = new AbortController();
+    generationRef.current = controller;
+    beforeGenerateRef.current = hasResult ? { comment, historyId } : null;
+    const current = () => generationRef.current === controller;
     setGenerating(true);
     setGenerateError(null);
     setComment("");
@@ -497,6 +518,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
       onRequest: () => perf.mark("request"),
       onStart: () => perf.mark("start"),
       onText: (text: string) => {
+        if (!current()) return;
         if (text) perf.mark("firstText");
         queueStreamedText(text);
         if (text && !scrolled) {
@@ -505,7 +527,9 @@ export function HomeScreen({ onCreateProfile }: Props) {
         }
       },
       // A discarded draft: back to the thinking dots until the next one.
-      onRetry: () => queueStreamedText(""),
+      onRetry: () => {
+        if (current()) queueStreamedText("");
+      },
     };
 
     try {
@@ -526,8 +550,10 @@ export function HomeScreen({ onCreateProfile }: Props) {
           // route to the reply prompt.
           reply: reply ? { thread: reply.thread, isOwnPost: reply.isOwnPost } : undefined,
         }),
+        signal: controller.signal,
       }, handlers);
 
+      if (!current()) return;
       cancelQueuedText();
       setComment(res.comment);
       setHasResult(true);
@@ -537,14 +563,33 @@ export function HomeScreen({ onCreateProfile }: Props) {
       if (!scrolled) outputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       perf.report(res.timing);
     } catch (err) {
+      // Stopped, or replaced by a new post: whoever cancelled it has already
+      // set the card.
+      if (isCancelled(err) || !current()) return;
       cancelQueuedText();
       setComment("");
       setHasResult(false);
       // The paywall's 402 swaps in the unlock card, which says it better.
       if (!notePaywallError(err)) setGenerateError(userFacingError(err));
     } finally {
-      setGenerating(false);
+      // Cleared here unless a newer generation has already started.
+      if (current() || generationRef.current === null) {
+        generationRef.current = null;
+        setGenerating(false);
+      }
     }
+  }
+
+  // Stop: ends the wait and puts back what the card showed before.
+  function handleStop() {
+    generationRef.current?.abort();
+    generationRef.current = null;
+    cancelQueuedText();
+    setGenerating(false);
+    const before = beforeGenerateRef.current;
+    setComment(before?.comment ?? "");
+    setHistoryId(before?.historyId ?? null);
+    setHasResult(before !== null);
   }
 
   // Kept current every render so the keyboard shortcut always invokes the
@@ -625,10 +670,10 @@ export function HomeScreen({ onCreateProfile }: Props) {
 
       if (mode === "connect") markHistoryAction(noteHistoryId, "INSERTED", text);
       else markHistory("INSERTED");
-    } catch {
-      // The active tab has no content script: not LinkedIn, or a LinkedIn
-      // tab opened before the extension was updated.
-      if (isLinkedInTab(tab)) reportClientError(INSERT_FEATURE[mode], "tab_unreachable");
+    } catch (err) {
+      // The active tab has no content script (not LinkedIn, or a LinkedIn
+      // tab opened before the extension was updated), or it didn't answer.
+      if (isLinkedInTab(tab)) reportClientError(INSERT_FEATURE[mode], tabFailureCode(err));
       setError(
         noContentScriptMessage(
           tab,
@@ -700,6 +745,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
         setCopied(false);
       }}
       generating={generating}
+      onStop={handleStop}
       busy={busy}
       meta={rewriting === "shorter" ? "Shortening…" : rewriting === "longer" ? "Lengthening…" : undefined}
       copied={copied}

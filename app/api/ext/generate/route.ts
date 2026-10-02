@@ -30,9 +30,22 @@ import {
   type CommentReplyInput,
   type ReplyThreadEntryInput,
 } from "@/lib/ai/prompts/commentPrompt"
-import { parseComment, sanitizeComment, streamCommentModel } from "@/lib/ai/commentModel"
+import {
+  generationDeadline,
+  GenerationTimeout,
+  parseComment,
+  sanitizeComment,
+  streamCommentModel,
+} from "@/lib/ai/commentModel"
+
+// Generation stops itself after GENERATION_BUDGET_MS (lib/ai/commentModel.ts);
+// this is the platform's backstop, well above it.
+export const maxDuration = 60
 import { extractPartialComment, visibleCommentText } from "@/lib/ai/commentText"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
+
+// How often a quiet stream says it is still alive (see the stream below).
+const KEEP_ALIVE_MS = 8_000
 
 // Caps on a reply payload, which arrives from a scraped page: enough for any
 // real thread, small enough that one request can't carry a huge prompt.
@@ -135,7 +148,8 @@ async function generateComment(input: GenerationInput, hooks: GenerationHooks = 
 
   // Two attempts: the first failure (unparseable, empty, mostly-banned filler,
   // invented figures, or wildly off the profile's length) is retried once
-  // before giving up.
+  // before giving up. Both share one time budget.
+  const deadline = generationDeadline()
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     attempts = attempt
     if (attempt > 1) hooks.onRetry?.(attempt)
@@ -165,6 +179,7 @@ async function generateComment(input: GenerationInput, hooks: GenerationHooks = 
     try {
       const result = await streamCommentModel(input.systemMessage, message, "ext/generate", {
         signal: controller.signal,
+        deadline,
         onReset: () => show(""),
         onRaw: (sofar) => {
           const partial = extractPartialComment(sofar)
@@ -183,6 +198,10 @@ async function generateComment(input: GenerationInput, hooks: GenerationHooks = 
       model = result.model
       if (attempt === 1 && result.ttftMs !== null) ttftMs = result.ttftMs
     } catch (err) {
+      if (err instanceof GenerationTimeout) {
+        console.error(`[ext/generate] attempt ${attempt}: out of time, giving up`)
+        break
+      }
       if (invented.length > 0) {
         console.warn(
           `[ext/generate] attempt ${attempt}: unsourced figures (${invented.join(", ")}) not in post or instruction, stopped mid-stream`,
@@ -466,6 +485,19 @@ export async function POST(req: Request) {
       // starts forwarding the stream straight away.
       send("start", { beforeModel: beforeModelMs })
 
+      // While the model is quiet (thinking, or failing over to Haiku), a
+      // comment line every few seconds tells the panel the server is still
+      // working. The panel gives up on a stream that sends nothing at all for
+      // 25s (src/lib/api.ts), which then means the connection is dead.
+      const keepAlive = setInterval(() => {
+        if (gone) return
+        try {
+          controller.enqueue(encoder.encode(": keep-alive\n\n"))
+        } catch {
+          gone = true
+        }
+      }, KEEP_ALIVE_MS)
+
       try {
         const result = await generateComment(input, {
           onText: (text) => send("text", { text }),
@@ -497,6 +529,7 @@ export async function POST(req: Request) {
         console.error("[ext/generate] stream failed:", err)
         send("error", { error: GENERIC_FAILURE, status: 500 })
       } finally {
+        clearInterval(keepAlive)
         gone = true
         try {
           controller.close()

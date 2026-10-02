@@ -16,7 +16,17 @@ import {
   countSentences,
   WEAK_COMMENT_PATTERNS,
 } from "@/lib/ai/prompts/commentPrompt"
-import { callCommentModel, parseComment, sanitizeComment } from "@/lib/ai/commentModel"
+import {
+  callCommentModel,
+  generationDeadline,
+  GenerationTimeout,
+  parseComment,
+  sanitizeComment,
+} from "@/lib/ai/commentModel"
+
+// Generation stops itself after GENERATION_BUDGET_MS (lib/ai/commentModel.ts);
+// this is the platform's backstop, well above it.
+export const maxDuration = 60
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
 
 const MAX_COMMENT_CHARS = 4000
@@ -75,11 +85,16 @@ export async function POST(req: Request) {
   // Two attempts. The bar: it parsed, survived sanitising, invented no new
   // figures, carries no generic-AI tells, and actually moved in the requested
   // direction — a "Shorter" that returns the same length is a dead button.
+  const deadline = generationDeadline()
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     let raw: string
     try {
-      raw = await callCommentModel(systemMessage, userMessage, "ext/rewrite")
+      raw = await callCommentModel(systemMessage, userMessage, "ext/rewrite", { deadline })
     } catch (err) {
+      if (err instanceof GenerationTimeout) {
+        console.error(`[ext/rewrite] attempt ${attempt}: out of time, giving up`)
+        break
+      }
       console.error(`[ext/rewrite] attempt ${attempt}: both models failed:`, err)
       continue
     }

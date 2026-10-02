@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   apiFetch,
   ApiError,
+  isCancelled,
   type ConnectionNoteResponse,
   type ConnectionProfile,
   type MeResponse,
@@ -114,6 +115,10 @@ export function ConnectionNotePanel({
   // The note's History row (see markHistoryAction).
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  // The note being written, so Stop or leaving (a new profile remounts this
+  // panel) can cancel it. Null once it ends or is cancelled.
+  const generationRef = useRef<AbortController | null>(null);
+  useEffect(() => () => generationRef.current?.abort(), []);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   // The output can land below the fold once the context/length pickers have
@@ -203,6 +208,10 @@ export function ConnectionNotePanel({
 
   async function handleGenerate() {
     if (!context || !length) return;
+    generationRef.current?.abort();
+    const controller = new AbortController();
+    generationRef.current = controller;
+    const current = () => generationRef.current === controller;
     setGenerating(true);
     setError(null);
     setCopied(false);
@@ -216,6 +225,7 @@ export function ConnectionNotePanel({
 
     try {
       const res = await apiFetch<ConnectionNoteResponse>("/api/ext/connection-note", {
+        signal: controller.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -235,6 +245,7 @@ export function ConnectionNotePanel({
           extraInstruction: extraInstruction.trim() || undefined,
         }),
       });
+      if (!current()) return;
       setNote(res.note);
       setHasResult(true);
       setHistoryId(res.historyId ?? null);
@@ -244,10 +255,22 @@ export function ConnectionNotePanel({
       // the panel → Inspect), the counterpart to the content script's lines.
       console.log(`[sidepanel] connection note generated — ${res.note.length} chars: "${res.note}"`);
     } catch (err) {
+      if (isCancelled(err) || !current()) return;
       if (!notePaywallError(err)) setError(userFacingError(err));
     } finally {
-      setGenerating(false);
+      // Cleared here unless a newer generation has already started.
+      if (current() || generationRef.current === null) {
+        generationRef.current = null;
+        setGenerating(false);
+      }
     }
+  }
+
+  // Stop: ends the wait; the note that was there stays.
+  function handleStop() {
+    generationRef.current?.abort();
+    generationRef.current = null;
+    setGenerating(false);
   }
 
   async function handleCopy() {
@@ -431,6 +454,7 @@ export function ConnectionNotePanel({
               setCopied(false);
             }}
             generating={generating}
+            onStop={handleStop}
             busy={busy}
             stale={generating && hasNote}
             // Counted against LinkedIn's limit rather than as a plain length.

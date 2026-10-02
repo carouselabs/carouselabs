@@ -1,5 +1,5 @@
 import type { ReactNode, Ref } from "react";
-import { ArrowDownToLine, Check, Copy, RefreshCw } from "lucide-react";
+import { ArrowDownToLine, Check, Copy, RefreshCw, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,6 +32,9 @@ interface Props {
   tools?: ReactNode;
   onRegenerate?: () => void;
   regenerateDisabled?: boolean;
+  /** While generating: a Stop button in the header, so a long wait can be
+   *  ended instead of sat through. */
+  onStop?: () => void;
   /** Inside the card under the text, e.g. a length warning. */
   notice?: ReactNode;
   sectionRef?: Ref<HTMLElement>;
@@ -56,6 +59,7 @@ export function ResultCard({
   tools,
   onRegenerate,
   regenerateDisabled,
+  onStop,
   notice,
   sectionRef,
 }: Props) {
@@ -77,7 +81,15 @@ export function ResultCard({
     >
       <div className="flex items-center justify-between gap-2 px-3 pt-2.5">
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        <span className="text-xs tabular-nums text-muted-foreground">{meta ?? defaultMeta}</span>
+        <span className="flex items-center gap-2 text-xs tabular-nums text-muted-foreground">
+          {meta ?? defaultMeta}
+          {generating && onStop && (
+            <Button size="sm" variant="ghost" className="-my-1.5 h-7 px-2" onClick={onStop}>
+              <Square aria-hidden className="!size-3 fill-current" />
+              Stop
+            </Button>
+          )}
+        </span>
       </div>
 
       {generating && !value ? (

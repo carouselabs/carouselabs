@@ -9,6 +9,7 @@
 // classified here and never sent. The same failure isn't reported twice
 // within a minute.
 import { apiFetch } from "@/lib/api";
+import { TabTimeout } from "@/lib/tabs";
 
 export type ReportFeature = "comments" | "replies" | "connection_notes" | "messages";
 
@@ -17,12 +18,14 @@ const DESCRIPTIONS = {
   "insert.wrong_target": "Insert stopped: a different profile or conversation was open.",
   "insert.too_long": "Insert stopped: the text is longer than LinkedIn's box allows.",
   "insert.off": "Insert is switched off in the remote config.",
+  "insert.no_connection": "Insert couldn't reach the server to check it is switched on.",
   "insert.recapture": "Insert stopped: the post or conversation needed capturing again.",
   "insert.failed": "Insert failed on the LinkedIn page.",
   "read.no_conversation": "Couldn't find an open conversation on the Messaging page.",
   "read.hidden_thread": "The conversation was hidden (narrow LinkedIn window).",
   "read.failed": "Couldn't read the conversation on the page.",
   tab_unreachable: "Couldn't reach the LinkedIn tab (opened before an update, or still loading).",
+  tab_timeout: "The LinkedIn tab didn't answer within 12s.",
 } as const;
 
 export type ReportCode = keyof typeof DESCRIPTIONS;
@@ -34,6 +37,7 @@ export function insertFailureCode(error: string | undefined): ReportCode {
   if (/written for|different profile/i.test(error)) return "insert.wrong_target";
   if (/characters/i.test(error)) return "insert.too_long";
   if (/turned off/i.test(error)) return "insert.off";
+  if (/couldn't reach carouselabs/i.test(error)) return "insert.no_connection";
   if (/again|re-read/i.test(error)) return "insert.recapture";
   return "insert.failed";
 }
@@ -47,6 +51,12 @@ export function readFailureCode(error: string | undefined): ReportCode | null {
   if (/chat list/i.test(error)) return "read.hidden_thread";
   if (/no conversation is open/i.test(error)) return "read.no_conversation";
   return "read.failed";
+}
+
+// A message to the LinkedIn tab that failed: no answer in time, or no
+// content script there to answer.
+export function tabFailureCode(err: unknown): ReportCode {
+  return err instanceof TabTimeout ? "tab_timeout" : "tab_unreachable";
 }
 
 const REPEAT_WINDOW_MS = 60_000;

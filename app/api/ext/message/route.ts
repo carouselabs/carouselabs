@@ -19,7 +19,18 @@ import {
   type MessageProfileInput,
   type MessageThreadEntryInput,
 } from "@/lib/ai/prompts/messagePrompt"
-import { callCommentModel, parseComment, sanitizeComment, PRIMARY_MODEL } from "@/lib/ai/commentModel"
+import {
+  callCommentModel,
+  generationDeadline,
+  GenerationTimeout,
+  parseComment,
+  sanitizeComment,
+  PRIMARY_MODEL,
+} from "@/lib/ai/commentModel"
+
+// Generation stops itself after GENERATION_BUDGET_MS (lib/ai/commentModel.ts);
+// this is the platform's backstop, well above it.
+export const maxDuration = 60
 import { HISTORY_SNIPPET_CHARS, linkedInUrl } from "@/lib/extensionHistory"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
 
@@ -159,13 +170,18 @@ export async function POST(req: Request) {
   let fallback = ""
   let remindAboutFabrication = false
 
+  const deadline = generationDeadline()
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const userContent = remindAboutFabrication ? `${userMessage}\n\n${ANTI_FABRICATION_REMINDER}` : userMessage
 
     let raw: string
     try {
-      raw = await callCommentModel(systemMessage, userContent, "ext/message")
+      raw = await callCommentModel(systemMessage, userContent, "ext/message", { deadline })
     } catch (err) {
+      if (err instanceof GenerationTimeout) {
+        console.error(`[ext/message] attempt ${attempt}: out of time, giving up`)
+        break
+      }
       console.error(`[ext/message] attempt ${attempt}: both models failed:`, err)
       continue
     }

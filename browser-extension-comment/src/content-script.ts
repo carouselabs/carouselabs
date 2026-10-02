@@ -158,11 +158,21 @@ console.log("[content-script] loaded on", window.location.href);
 // calls for "cache in memory for the session", not persisted anywhere.
 let configPromise: Promise<ExtensionConfig> | null = null;
 
+// A stalled connection must not hold up a Comment click (which falls back to
+// the built-in selectors) or an Insert (which says it couldn't check).
+const CONFIG_TIMEOUT_MS = 8_000;
+
 async function loadConfig(): Promise<ExtensionConfig> {
   const baseUrl = await getApiBaseUrl();
-  const res = await fetch(`${baseUrl}/api/ext/config`);
-  if (!res.ok) throw new Error(`/api/ext/config responded ${res.status}`);
-  return (await res.json()) as ExtensionConfig;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CONFIG_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${baseUrl}/api/ext/config`, { signal: controller.signal });
+    if (!res.ok) throw new Error(`/api/ext/config responded ${res.status}`);
+    return (await res.json()) as ExtensionConfig;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function getConfig(): Promise<ExtensionConfig> {
@@ -864,12 +874,13 @@ async function insertIntoCommentBox(
 
 // The server kill switch, checked fresh at the moment of Insert rather than
 // trusting the copy fetched at page load or the panel's copy. Fails closed:
-// the feature's own warning says it carries account risk.
-async function insertAllowed(): Promise<boolean> {
+// when the switch can't be read, nothing is inserted, and the person is told
+// it was the connection rather than that Insert is off.
+async function insertSwitch(): Promise<"on" | "off" | "unknown"> {
   try {
-    return (await loadConfig()).insertEnabled !== false;
+    return (await loadConfig()).insertEnabled !== false ? "on" : "off";
   } catch {
-    return false;
+    return "unknown";
   }
 }
 
@@ -880,8 +891,12 @@ type InsertRequest = {
 };
 
 async function handleInsert(message: InsertRequest): Promise<{ ok: boolean; error?: string }> {
-  if (!(await insertAllowed())) {
+  const insert = await insertSwitch();
+  if (insert === "off") {
     return { ok: false, error: "Insert is turned off right now. Use Copy instead." };
+  }
+  if (insert === "unknown") {
+    return { ok: false, error: "Couldn't reach CarouseLabs to insert. Check your connection, then try again, or use Copy." };
   }
 
   // A connection note goes into the invitation dialog, and only for the

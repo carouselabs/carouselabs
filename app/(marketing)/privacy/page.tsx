@@ -10,7 +10,7 @@ export default function PrivacyPage() {
   return (
     <LegalShell
       title="Privacy Policy"
-      updated="September 19, 2026"
+      updated="October 2, 2026"
       intro="This Privacy Policy explains what information CarouseLabs (“we,” “us,” “our”) collects, how we use and share it, and the choices and rights you have. We aim to collect only what we need to operate the Service and to keep your data secure. By using CarouseLabs, you agree to the practices described here."
     >
       <LegalSection heading="1. Information we collect">
@@ -199,19 +199,43 @@ export default function PrivacyPage() {
             This happens only for posts you explicitly select.
           </li>
           <li>
-            <span className="text-[#0A0A0A] font-medium">Generated comments</span> — the comment
-            produced for you, and whether you copied or inserted it, are stored against your account
-            so they appear in your History.
+            <span className="text-[#0A0A0A] font-medium">Profiles and conversations you select</span>{" "}
+            — when you write a connection note, the name, headline, current role, About text and link
+            of the profile you are connecting with are sent to CarouseLabs to write that note. When
+            you click Read this conversation in Messages, the messages visible in that conversation
+            and the other person&rsquo;s name, headline and profile link are read. The profile link
+            is used to look up the reason you saved for that person; the messages, name and headline
+            are sent to CarouseLabs when you generate a reply. This happens only for profiles and
+            conversations you explicitly select.
           </li>
           <li>
-            <span className="text-[#0A0A0A] font-medium">90-day retention</span> — comment history is
-            deleted automatically 90 days after it is created, by a scheduled job. Nothing is kept
-            beyond that window.
+            <span className="text-[#0A0A0A] font-medium">Generated text</span> — each comment, reply,
+            connection note or message produced for you is stored against your account with who it
+            was for, a link, a short excerpt for context (part of the post or message it answers, or
+            the person&rsquo;s headline for a note), and whether you copied or inserted it, so it
+            appears in your History. The reason and tone you choose for a conversation are saved
+            with that person&rsquo;s name and profile link, so they are ready next time; you can
+            delete them from the Extension section of your account.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">90-day retention</span> — History is deleted
+            automatically 90 days after it is created, by a scheduled job.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">Diagnostics</span> — each request from the
+            extension includes its version number. When something fails inside the extension (for
+            example, Insert cannot find LinkedIn&rsquo;s text box), it sends a short error code and a
+            fixed description of it. These are stored against your account so we can find and fix
+            problems. They never include post text, messages, names or any other page content.
           </li>
           <li>
             <span className="text-[#0A0A0A] font-medium">No automatic browsing tracking</span> — the
-            extension reads a post only when you click its Comment button. It does not monitor your
-            general browsing, your feed, your messages, or any page content you have not selected.
+            extension reads a post only when you click its Comment button, a profile only when you
+            write a note for it, and a conversation only when you click Read. To offer help when you
+            open a LinkedIn conversation, it checks whether the LinkedIn page&rsquo;s address is a
+            conversation; that check happens in your browser and nothing about it is sent. It does
+            not monitor your general browsing, your feed, your messages, or any page content you
+            have not selected.
           </li>
           <li>
             <span className="text-[#0A0A0A] font-medium">It never posts for you</span> — the
@@ -221,10 +245,10 @@ export default function PrivacyPage() {
             yourself.
           </li>
           <li>
-            <span className="text-[#0A0A0A] font-medium">No third-party sharing</span> — post content
-            and generated comments are used solely to provide the feature to you and are never sold
-            or shared with third parties. Generating a comment involves sending the post text to our
-            AI model providers purely to produce that comment.
+            <span className="text-[#0A0A0A] font-medium">No third-party sharing</span> — the content
+            you select and the text generated for you are used solely to provide the feature to you
+            and are never sold or shared with third parties. Generating text involves sending the
+            selected content to our AI model providers purely to produce that text.
           </li>
           <li>
             <span className="text-[#0A0A0A] font-medium">Your control</span> — you can sign out from

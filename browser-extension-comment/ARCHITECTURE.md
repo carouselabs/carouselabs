@@ -300,6 +300,15 @@ next. Errors use `Alert`, sit next to the action that failed, and a failed
 generation turns the button into "Try again". Destructive actions ask first.
 Settings apply at once and confirm with "Saved".
 
+**Finding Messages.** Most people never open Messages on their own, so while
+the tab beside the panel shows a LinkedIn conversation (`conversationPath`
+in `src/lib/tabs.ts`, the address only, never the page): a card at the top
+of every other screen ("Write a reply with AI" opens Messages and reads the
+conversation; "Not now" hides it for that conversation), a dot on the
+Messages icon, and "AI" on the toolbar icon even with the panel closed
+(`src/background.ts`). If the tab moves to another conversation after one
+was read, Messages offers "Read this one". Nothing is read without a click.
+
 **Checks.** `tests/e2e/theme.spec.ts` (dark mode, reduce motion, hover
 labels) and `tests/e2e/qa.spec.ts` (no sideways scroll at 320px, every Tab
 stop shows focus) run with the rest of the e2e suite. For design review,

@@ -1,10 +1,11 @@
 // Service worker. Registers the side panel's open-on-click behavior, repairs
 // LinkedIn tabs left without a working content script (see
-// healOpenLinkedInTabs), and
+// healOpenLinkedInTabs), marks the toolbar icon on LinkedIn conversations (see
+// markConversationTab), and
 // receives the extension token relayed by src/content/authRelay.ts (see
 // that file's comment for the full hand-off chain) — stores it in
 // chrome.storage.local and closes the connect tab it came from.
-import { ensureContentScript } from "@/lib/tabs";
+import { conversationPath, ensureContentScript } from "@/lib/tabs";
 
 // Must match MESSAGE_TYPE in both app/extension-connect and
 // src/content/authRelay.ts exactly — no shared package between this repo
@@ -73,6 +74,36 @@ function healOpenLinkedInTabs(): Promise<void> {
 }
 
 healOpenLinkedInTabs();
+
+// The toolbar icon shows "AI" while a LinkedIn conversation is open in a tab,
+// so the Messages help gets noticed even with the panel closed (clicking the
+// icon opens the panel, which offers it). Only the tab's address is checked,
+// which the linkedin.com host permission allows; the page isn't read. Other
+// sites' addresses aren't visible to the extension at all, so leaving
+// LinkedIn arrives as a load with no address, and that clears the badge.
+const CONVERSATION_BADGE = "AI";
+const CONVERSATION_TITLE = "Get AI help replying to this conversation";
+const DEFAULT_TITLE = chrome.runtime.getManifest().action?.default_title ?? "CarouseLabs Engage";
+
+function markConversationTab(tabId: number, url: string | undefined) {
+  const open = conversationPath(url) !== null;
+  chrome.action.setBadgeText({ tabId, text: open ? CONVERSATION_BADGE : "" }).catch(() => {});
+  chrome.action.setTitle({ tabId, title: open ? CONVERSATION_TITLE : DEFAULT_TITLE }).catch(() => {});
+}
+
+chrome.action.setBadgeBackgroundColor({ color: "#7C3AED" }).catch(() => {});
+chrome.action.setBadgeTextColor?.({ color: "#FFFFFF" })?.catch(() => {});
+
+chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
+  if (change.url !== undefined || change.status === "loading") markConversationTab(tabId, tab.url);
+});
+
+// Conversations already open when this worker starts (after an install,
+// update or browser restart), which won't navigate again on their own.
+chrome.tabs
+  .query({ url: "https://www.linkedin.com/messaging/thread/*" })
+  .then((tabs) => tabs.forEach((tab) => tab.id !== undefined && markConversationTab(tab.id, tab.url)))
+  .catch(() => {});
 
 // Only the sign-in hand-off page may hand the extension a token. Every
 // content script (including the one on linkedin.com) can reach this

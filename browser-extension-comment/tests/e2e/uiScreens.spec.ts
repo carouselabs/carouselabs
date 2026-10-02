@@ -252,6 +252,19 @@ for (const width of WIDTHS) {
       await shot(panel, width, "12c-messages-result");
     });
 
+    test("conversation hint: card, read, different conversation", async ({ harness }) => {
+      await setup(harness);
+      const page = await harness.open("/messaging/thread/2-bharti/", "messaging-thread.html");
+      const panel = await openPanel(harness, width, { linkedInTabActive: true });
+      await expect(panel.getByRole("button", { name: "Write a reply with AI" })).toBeVisible();
+      await shot(panel, width, "12d-conversation-hint");
+      await panel.getByRole("button", { name: "Write a reply with AI" }).click();
+      await expect(panel.getByRole("button", { name: /^Generate (reply|opener)$/ })).toBeEnabled();
+      await page.evaluate(() => history.pushState(null, "", "/messaging/thread/2-emma/"));
+      await expect(panel.getByText("You opened a different conversation.")).toBeVisible();
+      await shot(panel, width, "12e-different-conversation");
+    });
+
     test("profiles: delete check, builder, notes", async ({ harness }) => {
       await setup(harness);
       const panel = await openPanel(harness, width);

@@ -11,6 +11,8 @@ import { SettingsScreen } from "./components/screens/SettingsScreen";
 import { AccountScreen } from "./components/screens/AccountScreen";
 import { Onboarding, ONBOARDING_DONE_STORAGE_KEY } from "./components/Onboarding";
 import { CaptureToast } from "./components/CaptureToast";
+import { ConversationHint } from "./components/ConversationHint";
+import { useOpenConversation } from "./useOpenConversation";
 import type { Screen } from "./types";
 import type { ProfileKind } from "./components/screens/ProfilesScreen";
 
@@ -19,12 +21,19 @@ function renderScreen(
   openProfileBuilder: ProfileKind | null,
   onBuilderOpened: () => void,
   onCreateProfile: (kind: ProfileKind) => void,
+  messages: { readOnOpen: boolean; openConversation: string | null },
 ) {
   switch (screen) {
     case "home":
       return <HomeScreen onCreateProfile={onCreateProfile} />;
     case "messages":
-      return <MessagesScreen onCreateProfile={() => onCreateProfile("message")} />;
+      return (
+        <MessagesScreen
+          onCreateProfile={() => onCreateProfile("message")}
+          readOnOpen={messages.readOnOpen}
+          openConversation={messages.openConversation}
+        />
+      );
     case "profiles":
       return <ProfilesScreen startInBuilder={openProfileBuilder} onBuilderOpened={onBuilderOpened} />;
     case "history":
@@ -49,6 +58,13 @@ export default function App() {
   // Set when onboarding ends on "Create my profile now", so the Profiles
   // screen opens straight into the builder instead of its list.
   const [openProfileBuilder, setOpenProfileBuilder] = useState<ProfileKind | null>(null);
+  // A LinkedIn conversation open in the tab beside the panel (its thread
+  // path), so the panel can point people to Messages, which many never find.
+  const openConversation = useOpenConversation();
+  // Conversations whose hint got "Not now", until the panel is closed.
+  const [dismissedHints, setDismissedHints] = useState<string[]>([]);
+  // Set by the hint's button: Messages reads the conversation as it opens.
+  const [readOnOpen, setReadOnOpen] = useState(false);
 
   useEffect(() => {
     chrome.storage.local.get("extensionToken").then(({ extensionToken }) => {
@@ -77,7 +93,17 @@ export default function App() {
   // "Create my profile now" and the Home dropdown's "+ Create custom profile".
   function goToProfileBuilder(kind: ProfileKind = "comment") {
     setOpenProfileBuilder(kind);
-    setActiveScreen("profiles");
+    selectScreen("profiles");
+  }
+
+  function selectScreen(screen: Screen) {
+    setReadOnOpen(false);
+    setActiveScreen(screen);
+  }
+
+  function writeReplyWithAI() {
+    setReadOnOpen(true);
+    setActiveScreen("messages");
   }
 
   // Usually gone within a frame (two storage reads), so just the brand mark,
@@ -115,6 +141,9 @@ export default function App() {
     );
   }
 
+  const showHint =
+    openConversation !== null && activeScreen !== "messages" && !dismissedHints.includes(openConversation);
+
   return (
     <div className="relative flex h-screen w-screen flex-col bg-background">
       <CaptureToast />
@@ -123,14 +152,31 @@ export default function App() {
         {/* Keyed by screen: a switch starts the new screen at the top with a
             short fade, instead of at the old screen's scroll position. */}
         <main key={activeScreen} className="min-w-0 flex-1 animate-fade-in overflow-y-auto">
+          {showHint && (
+            <div className="px-4 pt-4">
+              <ConversationHint
+                onWrite={writeReplyWithAI}
+                onDismiss={() => {
+                  if (openConversation) setDismissedHints((paths) => [...paths, openConversation]);
+                }}
+              />
+            </div>
+          )}
           {renderScreen(
             activeScreen,
             openProfileBuilder,
             () => setOpenProfileBuilder(null),
             goToProfileBuilder,
+            { readOnOpen, openConversation },
           )}
         </main>
-        <IconBar activeScreen={activeScreen} onSelect={setActiveScreen} />
+        <IconBar
+          activeScreen={activeScreen}
+          onSelect={selectScreen}
+          attention={
+            openConversation ? { screen: "messages", description: "A LinkedIn conversation is open: get AI help replying." } : null
+          }
+        />
       </div>
     </div>
   );

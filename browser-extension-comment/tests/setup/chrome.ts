@@ -114,6 +114,23 @@ export function createChromeMock() {
     create: vi.fn(async (props: chrome.tabs.CreateProperties) => ({ id: 99, ...props }) as chrome.tabs.Tab),
     remove: vi.fn(async () => undefined),
     update: vi.fn(async () => undefined),
+    onActivated: createEvent<(info: chrome.tabs.TabActiveInfo) => void>(),
+    onUpdated: createEvent<(tabId: number, change: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => void>(),
+  };
+
+  // The toolbar icon. Tab-specific badge text and title are kept per tab id,
+  // like Chrome does, so tests can read what a tab shows.
+  const badges = new Map<number, string>();
+  const titles = new Map<number, string>();
+  const action = {
+    setBadgeText: vi.fn(async ({ tabId, text }: { tabId?: number; text: string }) => {
+      if (tabId !== undefined) badges.set(tabId, text);
+    }),
+    setTitle: vi.fn(async ({ tabId, title }: { tabId?: number; title: string }) => {
+      if (tabId !== undefined) titles.set(tabId, title);
+    }),
+    setBadgeBackgroundColor: vi.fn(async () => undefined),
+    setBadgeTextColor: vi.fn(async () => undefined),
   };
 
   const commands = {
@@ -132,9 +149,12 @@ export function createChromeMock() {
     commands,
     sidePanel,
     scripting,
+    action,
     // Test-only handles, never present on the real chrome object.
     __store: store,
     __sentMessages: sentMessages,
+    __badges: badges,
+    __titles: titles,
   };
 }
 

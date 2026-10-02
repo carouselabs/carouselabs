@@ -20,6 +20,32 @@ export function isLinkedInTab(tab: chrome.tabs.Tab | undefined): boolean {
   return !!tab?.url?.startsWith(LINKEDIN_ORIGIN);
 }
 
+// The LinkedIn conversation a tab's address shows, as its path
+// ("/messaging/thread/2-abc/", the form the content script records as a
+// conversation's threadPath), or null for any other page, including the inbox
+// with none open and a new, empty message. Only the address is looked at:
+// the panel and the toolbar icon can offer help with a conversation without
+// reading anything until the person asks.
+export function conversationPath(url: string | undefined | null): string | null {
+  if (!url?.startsWith(LINKEDIN_ORIGIN)) return null;
+  let pathname: string;
+  try {
+    pathname = new URL(url).pathname;
+  } catch {
+    return null;
+  }
+  const match = /^\/messaging\/thread\/([^/]+)\/?/.exec(pathname);
+  if (!match || match[1] === "new") return null;
+  return `/messaging/thread/${match[1]}/`;
+}
+
+// Whether two thread paths are the same conversation (with or without the
+// trailing slash LinkedIn usually adds).
+export function sameConversation(a: string, b: string): boolean {
+  const trim = (path: string) => path.replace(/\/+$/, "");
+  return trim(a) === trim(b);
+}
+
 // The LinkedIn content script's built files, as the manifest lists them. The
 // names carry build hashes, so they can only be read at runtime.
 export function linkedInContentScriptFiles(): string[] {

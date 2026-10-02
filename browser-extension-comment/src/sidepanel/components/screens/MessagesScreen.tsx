@@ -28,7 +28,7 @@ import {
   setExtensionAccess,
   useExtensionAccess,
 } from "@/lib/extensionAccess";
-import { isLinkedInTab, noContentScriptMessage, sendToTab } from "@/lib/tabs";
+import { isLinkedInTab, noContentScriptMessage, sameConversation, sendToTab } from "@/lib/tabs";
 import { insertFailureCode, readFailureCode, reportClientError } from "@/lib/errorReport";
 import { markHistoryAction } from "@/lib/history";
 // Kept on the account, so the website's Extension section edits the same values.
@@ -56,7 +56,7 @@ import {
 // opener if the thread is empty, a reply aware of the whole thread otherwise.
 // Structurally this mirrors ConnectionNotePanel, but it is its own top-level
 // screen rather than a mode of HomeScreen, so it owns its own Insert flow
-// (config, preference, warning modal) instead of receiving one as props.
+// (config, preference) instead of receiving one as props.
 
 // Must match INSERT_MESSAGE_TYPE in src/content-script.ts exactly.
 const INSERT_MESSAGE_TYPE = "carouselabs:insert-comment";
@@ -75,12 +75,17 @@ function userFacingError(err: unknown): string {
 interface Props {
   // Opens the message-profile builder; owned by App, like the other panels.
   onCreateProfile: () => void;
+  // Read the open conversation as soon as the screen is ready: the person got
+  // here from the conversation hint's "Write a reply with AI".
+  readOnOpen?: boolean;
+  // The conversation open in the LinkedIn tab (thread path), if any, so a
+  // switch to someone else's is noticed.
+  openConversation?: string | null;
 }
 
-export function MessagesScreen({ onCreateProfile }: Props) {
+export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConversation = null }: Props) {
   const [profiles, setProfiles] = useState<MessageProfile[]>([]);
   const [profilesLoaded, setProfilesLoaded] = useState(false);
-  const [me, setMe] = useState<MeResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [conversation, setConversation] = useState<CapturedConversation | null>(null);
@@ -115,6 +120,11 @@ export function MessagesScreen({ onCreateProfile }: Props) {
   const [inserting, setInserting] = useState(false);
   const [insertError, setInsertError] = useState<string | null>(null);
 
+  // What defaultProfileId() picks from. Refs, because a read started on open
+  // runs from the first render, before these arrive.
+  const profilesRef = useRef<MessageProfile[]>([]);
+  const meRef = useRef<MeResponse | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     Promise.all([
@@ -123,15 +133,19 @@ export function MessagesScreen({ onCreateProfile }: Props) {
     ])
       .then(([{ profiles: fetched }, meRes]) => {
         if (cancelled) return;
+        profilesRef.current = fetched;
+        meRef.current = meRes;
         setProfiles(fetched);
-        setMe(meRes);
         setExtensionAccess(meRes.extension);
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err instanceof ApiError ? err.message : "Failed to load");
       })
       .finally(() => {
-        if (!cancelled) setProfilesLoaded(true);
+        if (cancelled) return;
+        setProfilesLoaded(true);
+        // After the profiles, so the conversation gets its default reason.
+        if (readOnOpen) void readConversation();
       });
 
     fetchExtConfig()
@@ -147,6 +161,9 @@ export function MessagesScreen({ onCreateProfile }: Props) {
     return () => {
       cancelled = true;
     };
+    // Mount only: readOnOpen is how the screen was opened, and
+    // readConversation reads the profiles through refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Picks a sensible default for a contact whose purpose has never been set:
@@ -154,11 +171,12 @@ export function MessagesScreen({ onCreateProfile }: Props) {
   // default, otherwise the first profile — same fallback chain HomeScreen
   // uses for comment profiles.
   function defaultProfileId(): string {
-    const systemDefault = profiles.find((p) => p.isSystem && p.isDefault);
+    const loaded = profilesRef.current;
+    const systemDefault = loaded.find((p) => p.isSystem && p.isDefault);
     return (
-      profiles.find((p) => p.id === me?.defaultMessageProfileId)?.id ??
+      loaded.find((p) => p.id === meRef.current?.defaultMessageProfileId)?.id ??
       systemDefault?.id ??
-      profiles[0]?.id ??
+      loaded[0]?.id ??
       ""
     );
   }
@@ -372,11 +390,28 @@ export function MessagesScreen({ onCreateProfile }: Props) {
         ? "Write your reason first."
         : null;
 
+  // The tab moved on to someone else's conversation after this one was read.
+  const otherConversationOpen =
+    conversation !== null && openConversation !== null && !sameConversation(conversation.threadPath, openConversation);
+
   return (
     <div className="flex flex-col gap-4 p-4">
       <ScreenHeader title="Messages" description="Write the next message in a LinkedIn conversation." />
 
       {loadError && <Alert>{loadError}</Alert>}
+
+      {otherConversationOpen && (
+        <div
+          role="status"
+          className="flex animate-fade-in items-center justify-between gap-3 rounded-lg border border-primary/50 bg-card px-3 py-2.5 shadow-sm"
+        >
+          <p className="text-xs font-medium">You opened a different conversation.</p>
+          <Button size="sm" loading={reading} onClick={readConversation}>
+            {!reading && <ScanText aria-hidden />}
+            Read this one
+          </Button>
+        </div>
+      )}
 
       {!conversation ? (
         <div className="flex animate-fade-in flex-col items-center gap-3 rounded-lg border border-dashed border-input px-4 py-6 text-center">
@@ -390,9 +425,9 @@ export function MessagesScreen({ onCreateProfile }: Props) {
               said.
             </p>
           </div>
-          <Button loading={reading} onClick={readConversation}>
-            {!reading && <ScanText aria-hidden />}
-            {reading ? "Reading…" : "Read this conversation"}
+          <Button loading={reading || (readOnOpen && !profilesLoaded)} onClick={readConversation}>
+            {!reading && !(readOnOpen && !profilesLoaded) && <ScanText aria-hidden />}
+            {reading || (readOnOpen && !profilesLoaded) ? "Reading…" : "Read this conversation"}
           </Button>
           {readError && <Alert className="w-full text-left">{readError}</Alert>}
         </div>

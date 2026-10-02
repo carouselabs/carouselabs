@@ -10,10 +10,9 @@
 // it goes through the access gate (lib/extAccess.ts: a free user's Test uses
 // one of their free generations) and the shared daily generation limit.
 import { NextResponse } from "next/server"
-import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
-import { reserveExtGeneration } from "@/lib/extAccess"
+import { engagePreflight, reserveEngageGeneration } from "@/lib/engage/gate"
 import { parseProfileInput, TEST_LIMIT } from "@/lib/commentProfiles"
 import {
   buildCommentSystemMessage,
@@ -29,8 +28,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   }
 
-  const limited = await extDailyLimitResponse(user.id)
-  if (limited) return limited
+  const preflight = await engagePreflight(user.id, "tests")
+  if (preflight.response) return preflight.response
 
   const body = await req.json().catch(() => null)
   const raw = body as { profileDraft?: unknown; pastedPost?: unknown; profileId?: unknown } | null
@@ -79,7 +78,7 @@ export async function POST(req: Request) {
     url: "",
   })
 
-  const gate = await reserveExtGeneration(user.id)
+  const gate = await reserveEngageGeneration(user.id, "tests", preflight)
   if (!gate.ok) return gate.response
 
   let comment = ""

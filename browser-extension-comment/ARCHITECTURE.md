@@ -206,6 +206,42 @@ backed by the 450/day cap above, which applies to subscribers too.
   as for web plans: `subscription_payment_success` → `createCommissionForPayment`,
   keyed by the invoice id so a redelivery can't pay twice.
 
+## Admin control (admin → CarouseLabs Engage)
+
+The admin's **CarouseLabs Engage** group (Overview, Engage users, Free access,
+Engage audit log) runs on top of the one $15 plan; there is no plan builder.
+Per user, an admin can grant free unlimited access (with an end date or for
+life, revocable), switch features off, set limits, change the free-generation
+count, reset usage, pause Engage, sign browsers out, and keep notes and tags.
+
+Access is worked out in one place, `lib/engage/accessRules.ts` (pure), in this
+order: plan defaults → active subscription → the user's overrides → an active
+grant → a pause. Every generation route calls `engagePreflight` and then
+`reserveEngageGeneration` (`lib/engage/gate.ts`), so a switched-off feature, a
+limit or a pause is refused on the server whatever the panel shows.
+
+| Piece | Where |
+|---|---|
+| Features, limit keys, plan defaults (450/day, 10 free) | `lib/engage/features.ts` |
+| Per-user switches and limits, free count, pause | `EngageUserControl` |
+| Free access, incl. for emails that haven't signed up yet | `EngageAccessGrant` (`lib/engage/grantActions.ts`) |
+| Per-feature day/month counts (race-safe) | `EngageUsageCounter` (`lib/engage/usage.ts`) |
+| Extension version per signed-in browser | `EngageClientInfo` ← `X-Engage-Version` on every request |
+| Failures only the panel sees (Insert, Read, unreachable tab) | `EngageClientError` ← `POST /api/ext/errors` (`src/lib/errorReport.ts`) |
+| Who changed what, before → after, why | `AuditLog` with `product = "engage"` |
+| Admin roles (only the owner today) | `lib/engage/adminAccess.ts` |
+
+- The panel reports codes and fixed descriptions only. The content script's
+  own wording can name the person whose page is open, so it never leaves the
+  browser.
+- **Deploy order:** run `scripts/engage-admin-schema.sql` in Supabase first
+  (additive, safe to re-run; `scripts/engage-admin-schema-rollback.sql`
+  undoes it). Until it has run, generation falls back to the plan rules
+  alone, so deploying early can't lock anyone out.
+- A paused account can't generate (its token still signs in, so its history
+  stays readable). A deleted or suspended website account's token is refused
+  outright.
+
 ## On the website (`/extension`)
 
 The website has an **Extension** section (left menu): Overview, Voice

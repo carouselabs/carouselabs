@@ -91,9 +91,11 @@ vi.mock("../../../lib/db", () => ({
 vi.mock("../../../lib/extensionCommentAuth", () => ({
   getUserFromCommentExtensionToken: vi.fn(async () => state.user),
 }));
-vi.mock("../../../lib/extDailyLimit", () => ({ extDailyLimitResponse: vi.fn(async () => null) }));
-vi.mock("../../../lib/extAccess", () => ({
-  reserveExtGeneration: vi.fn(async () =>
+// The access gate (lib/engage/gate.ts) has its own tests; here it either lets
+// the request through or answers with the paywall's 402.
+vi.mock("../../../lib/engage/gate", () => ({
+  engagePreflight: vi.fn(async () => ({ response: null, loaded: null })),
+  reserveEngageGeneration: vi.fn(async () =>
     state.gate === "ok"
       ? { ok: true, freeRemaining: 7, release: state.release }
       : { ok: false, response: NextResponse.json({ error: "Used up", requiresSubscription: true }, { status: 402 }) },

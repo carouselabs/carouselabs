@@ -29,7 +29,8 @@ import {
   setExtensionAccess,
   useExtensionAccess,
 } from "@/lib/extensionAccess";
-import { noContentScriptMessage, sendToTab } from "@/lib/tabs";
+import { isLinkedInTab, noContentScriptMessage, sendToTab } from "@/lib/tabs";
+import { insertFailureCode, readFailureCode, reportClientError } from "@/lib/errorReport";
 import { markHistoryAction } from "@/lib/history";
 // Kept on the account, so the website's Extension section edits the same values.
 import { loadShowInsert, loadSyncedMessageContext, saveSyncedMessageContext } from "@/lib/syncedSettings";
@@ -200,6 +201,8 @@ export function MessagesScreen({ onCreateProfile }: Props) {
 
       if (!res?.ok || !res.conversation) {
         setReadError(res?.error ?? "Couldn't read this conversation.");
+        const code = readFailureCode(res?.error);
+        if (code) reportClientError("messages", code);
         return;
       }
 
@@ -219,6 +222,7 @@ export function MessagesScreen({ onCreateProfile }: Props) {
         setTone("");
       }
     } catch {
+      if (isLinkedInTab(tab)) reportClientError("messages", "tab_unreachable");
       setReadError(noContentScriptMessage(tab, "Open a LinkedIn conversation in the active tab first."));
     } finally {
       setReading(false);
@@ -351,10 +355,12 @@ export function MessagesScreen({ onCreateProfile }: Props) {
 
       if (!res?.ok) {
         setInsertError(res?.error ?? "Couldn't insert into LinkedIn. Try Copy instead.");
+        reportClientError("messages", insertFailureCode(res?.error));
         return;
       }
       markHistoryAction(historyId, "INSERTED", text);
     } catch {
+      if (isLinkedInTab(tab)) reportClientError("messages", "tab_unreachable");
       setInsertError(noContentScriptMessage(tab, "Open the LinkedIn conversation in the active tab, then try again."));
     } finally {
       setInserting(false);

@@ -35,7 +35,9 @@ export async function getUserFromCommentExtensionToken(req: Request): Promise<Us
     where: { tokenHash: hashCommentExtensionToken(token), revokedAt: null },
     include: { user: true },
   })
-  if (!record) return null
+  // A suspended or deleted account is signed out of the extension everywhere,
+  // whatever tokens it still holds.
+  if (!record || record.user.deletedAt || record.user.suspendedAt) return null
 
   db.extensionToken
     .update({ where: { id: record.id }, data: { lastUsedAt: new Date() } })
@@ -43,7 +45,38 @@ export async function getUserFromCommentExtensionToken(req: Request): Promise<Us
       // best-effort — a failed timestamp bump must never fail the real request
     })
 
+  recordExtensionVersion(record.id, record.userId, req.headers.get(VERSION_HEADER))
+
   return record.user
+}
+
+// The side panel sends its version on every request (1.3.0 and later), so the
+// admin can see who runs what. Stored per signed-in browser, at most every
+// few minutes per browser per server instance, and never in a way that can
+// slow or fail the request it rides on.
+export const VERSION_HEADER = "x-engage-version"
+const VERSION_PATTERN = /^\d{1,4}(\.\d{1,4}){1,3}$/
+const VERSION_WRITE_INTERVAL_MS = 10 * 60 * 1000
+const lastVersionWrite = new Map<string, { version: string; at: number }>()
+
+function recordExtensionVersion(tokenId: string, userId: string, header: string | null) {
+  const version = header?.trim() ?? ""
+  if (!VERSION_PATTERN.test(version)) return
+  const last = lastVersionWrite.get(tokenId)
+  const now = Date.now()
+  if (last && last.version === version && now - last.at < VERSION_WRITE_INTERVAL_MS) return
+  lastVersionWrite.set(tokenId, { version, at: now })
+  if (lastVersionWrite.size > 5000) lastVersionWrite.clear()
+
+  db.engageClientInfo
+    .upsert({
+      where: { tokenId },
+      create: { tokenId, userId, extensionVersion: version, lastSeenAt: new Date(now) },
+      update: { extensionVersion: version, lastSeenAt: new Date(now) },
+    })
+    .catch(() => {
+      // best-effort, like lastUsedAt (and harmless before the table exists)
+    })
 }
 
 // The routes the website's Extension section shares with the side panel

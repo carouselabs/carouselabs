@@ -6,10 +6,9 @@
 // Each message is saved to history (kind "message"), so it shows in the
 // History screens in the panel and on the website.
 import { NextResponse } from "next/server"
-import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
-import { reserveExtGeneration } from "@/lib/extAccess"
+import { engagePreflight, reserveEngageGeneration } from "@/lib/engage/gate"
 import { ANTI_FABRICATION_REMINDER, WEAK_COMMENT_PATTERNS } from "@/lib/ai/prompts/commentPrompt"
 import {
   buildMessageSystemMessage,
@@ -67,8 +66,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   }
 
-  const limited = await extDailyLimitResponse(user.id)
-  if (limited) return limited
+  const preflight = await engagePreflight(user.id, "messages")
+  if (preflight.response) return preflight.response
 
   // Used only when the caller asked for "flow" mode (no saved profile, no
   // typed reason) — read the thread and continue it naturally instead of
@@ -140,7 +139,7 @@ export async function POST(req: Request) {
     : { goal: goal ?? FLOW_DEFAULT_GOAL, tone: tone || "Natural" }
 
   // Last check before the model call, so a blocked account never burns one.
-  const gate = await reserveExtGeneration(user.id)
+  const gate = await reserveEngageGeneration(user.id, "messages", preflight)
   if (!gate.ok) return gate.response
 
   const isOpener = thread.length === 0

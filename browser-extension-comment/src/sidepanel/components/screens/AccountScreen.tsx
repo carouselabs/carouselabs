@@ -19,8 +19,19 @@ import { ScreenHeader } from "../ScreenHeader";
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
+const FEATURE_NAMES = {
+  comments: "Comments",
+  replies: "Replies",
+  connection_notes: "Connection notes",
+  messages: "Messages",
+} as const;
+
 function planLabel(access: ExtensionAccess): string {
   if (access.access === "testing") return "Testing (paywall off)";
+  // Free access from the CarouseLabs team (set in the admin).
+  if (access.source === "grant") {
+    return access.grantEndsAt ? `Unlimited until ${formatDate(access.grantEndsAt)}` : "Unlimited for life";
+  }
   if (access.access === "unlimited") {
     if (access.status === "cancelled" && access.endsAt) return `Unlimited until ${formatDate(access.endsAt)}`;
     if (access.status === "past_due") return "Unlimited (payment failed)";
@@ -104,6 +115,13 @@ export function AccountScreen() {
     }
   }
 
+  // Features an admin switched off for this account (older servers send none).
+  const turnedOff = access?.features
+    ? (Object.keys(FEATURE_NAMES) as (keyof typeof FEATURE_NAMES)[])
+        .filter((f) => access.features?.[f] === false)
+        .map((f) => FEATURE_NAMES[f])
+    : [];
+
   // Free generations used, as a bar: what's left is easier to see than read.
   const freeUsedShare =
     access?.access === "free" && access.freeLimit > 0
@@ -147,12 +165,27 @@ export function AccountScreen() {
                   <div className="space-y-2.5 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-semibold">{planLabel(access)}</p>
-                      {access.access === "unlimited" && access.status === "past_due" ? (
+                      {access.suspended ? (
+                        <Badge variant="warning">Paused</Badge>
+                      ) : access.source === "grant" ? (
+                        <Badge variant="success">Active</Badge>
+                      ) : access.access === "unlimited" && access.status === "past_due" ? (
                         <Badge variant="warning">Action needed</Badge>
                       ) : access.access === "unlimited" ? (
                         <Badge variant="success">Active</Badge>
                       ) : null}
                     </div>
+                    {access.source === "grant" && !access.suspended && (
+                      <p className="text-xs text-muted-foreground">Free access from the CarouseLabs team. Nothing to pay.</p>
+                    )}
+                    {access.suspended && (
+                      <p className="text-xs text-muted-foreground">
+                        Engage is paused on this account. Questions? Email support@carouselabs.com.
+                      </p>
+                    )}
+                    {!access.suspended && turnedOff.length > 0 && (
+                      <p className="text-xs text-muted-foreground">Turned off for this account: {turnedOff.join(", ")}.</p>
+                    )}
                     {freeUsedShare !== null && (
                       <div
                         role="progressbar"
@@ -177,7 +210,7 @@ export function AccountScreen() {
                         {openingCheckout ? "Opening checkout…" : `Get unlimited — ${EXTENSION_PRICE_LABEL}`}
                       </Button>
                     )}
-                    {access.access === "unlimited" && access.manageUrl && (
+                    {access.access === "unlimited" && access.source !== "grant" && access.manageUrl && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -190,7 +223,10 @@ export function AccountScreen() {
                   </div>
                 )}
                 <dl className="divide-y border-t">
-                  {access?.access === "unlimited" && access.status !== "cancelled" && access.renewsAt && (
+                  {access?.access === "unlimited" &&
+                    access.source !== "grant" &&
+                    access.status !== "cancelled" &&
+                    access.renewsAt && (
                     <Row label="Renews">{formatDate(access.renewsAt)}</Row>
                   )}
                   <Row label="Comments this month">

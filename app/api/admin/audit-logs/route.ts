@@ -41,6 +41,18 @@ export async function GET(req: Request) {
     db.auditLog.count({ where }),
     db.auditLog.findMany({
       where,
+      // The original columns only, so this page keeps working before
+      // scripts/engage-admin-schema.sql has added the Engage ones.
+      select: {
+        id: true,
+        adminEmail: true,
+        action: true,
+        targetUserId: true,
+        targetEmail: true,
+        details: true,
+        ipAddress: true,
+        createdAt: true,
+      },
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,

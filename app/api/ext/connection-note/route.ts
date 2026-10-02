@@ -7,10 +7,9 @@
 // Each note is saved to history (kind "connection_note"), so it shows in the
 // History screens in the panel and on the website.
 import { NextResponse } from "next/server"
-import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
-import { reserveExtGeneration } from "@/lib/extAccess"
+import { engagePreflight, reserveEngageGeneration } from "@/lib/engage/gate"
 import { ANTI_FABRICATION_REMINDER, WEAK_COMMENT_PATTERNS } from "@/lib/ai/prompts/commentPrompt"
 import {
   buildConnectionNoteSystemMessage,
@@ -86,8 +85,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   }
 
-  const limited = await extDailyLimitResponse(user.id)
-  if (limited) return limited
+  const preflight = await engagePreflight(user.id, "connection_notes")
+  if (preflight.response) return preflight.response
 
   let target: ConnectionTargetInput
   // The person's profile link, for History only; never sent to the model.
@@ -132,7 +131,7 @@ export async function POST(req: Request) {
   if (profile) range = parseRange(rangeFromLength(profile.length))
 
   // Last check before the model call, so a blocked account never burns one.
-  const gate = await reserveExtGeneration(user.id)
+  const gate = await reserveEngageGeneration(user.id, "connection_notes", preflight)
   if (!gate.ok) return gate.response
 
   const systemMessage = buildConnectionNoteSystemMessage(range, context.kind, profile as ConnectionProfileInput | null)

@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ExternalLink, Minus, MousePointerClick, Plus, RotateCcw, Sparkles, Timer, X } from "lucide-react";
 import { InsertWarningModal } from "../InsertWarningModal";
-import { ensureContentScript, noContentScriptMessage, sendToTab } from "@/lib/tabs";
+import { ensureContentScript, isLinkedInTab, noContentScriptMessage, sendToTab } from "@/lib/tabs";
+import { insertFailureCode, reportClientError, type ReportFeature } from "@/lib/errorReport";
 import { markHistoryAction } from "@/lib/history";
 import { loadCachedCommentProfiles, saveCachedCommentProfiles } from "@/lib/profileCache";
 import { loadShowInsert } from "@/lib/syncedSettings";
@@ -101,6 +102,12 @@ interface SelectedPost {
 }
 
 type InsertMode = "comment" | "reply" | "connect";
+
+const INSERT_FEATURE: Record<InsertMode, ReportFeature> = {
+  comment: "comments",
+  reply: "replies",
+  connect: "connection_notes",
+};
 
 // Plain text posts are the norm, so only the other kinds get a label.
 const POST_TYPE_LABEL: Record<SelectedPost["type"], string | null> = {
@@ -632,6 +639,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
 
       if (!res?.ok) {
         setError(res?.error ?? "Couldn't insert into LinkedIn. Try Copy instead.");
+        reportClientError(INSERT_FEATURE[mode], insertFailureCode(res?.error));
         return;
       }
 
@@ -640,6 +648,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
     } catch {
       // The active tab has no content script: not LinkedIn, or a LinkedIn
       // tab opened before the extension was updated.
+      if (isLinkedInTab(tab)) reportClientError(INSERT_FEATURE[mode], "tab_unreachable");
       setError(
         noContentScriptMessage(
           tab,

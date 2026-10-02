@@ -141,6 +141,15 @@ model User {
   insertButtonHidden         Boolean?
   contactContexts            ContactContext[]
 
+  // ── Engage admin (admin.carouselabs.com → Engage) ──
+  engageControl EngageUserControl?
+  engageGrants  EngageAccessGrant[]
+  engageUsage   EngageUsageCounter[]
+  engageClients EngageClientInfo[]
+  engageErrors  EngageClientError[]
+  adminNotes    AdminNote[]
+  adminTags     AdminUserTag[]
+
   // ── Referral program ──
   referralCode       String?              @unique
   referralsMade      Referral[]           @relation("ReferralsMade")
@@ -824,10 +833,140 @@ model AuditLog {
   details      String   @db.Text
   ipAddress    String?
   createdAt    DateTime @default(now())
+  // Structured detail, set by newer actions (Engage admin). Older rows have
+  // only `details`. product: "engage" | null (the web app).
+  product      String?
+  oldValue     Json?
+  newValue     Json?
+  reason       String?  @db.Text
 
   @@index([action])
   @@index([targetEmail])
   @@index([createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([product, createdAt])
+}
+
+// ── Engage admin ─────────────────────────────────────────────────────
+// What an admin has set for one user's Engage access, on top of the plan
+// (10 free generations for life, then the $15/month subscription). One row
+// per user, created on the first admin change; no row means "all plan
+// defaults". lib/engage/access.ts turns this into effective access.
+//   features { comments?, replies?, connection_notes?, messages? }: "on" | "off"
+//            (absent = plan default, which is on)
+//   limits   { dailyCap?: number | "unlimited",
+//              "<feature>.day"? / "<feature>.month"?: number | "unlimited" }
+//            (absent = plan default)
+model EngageUserControl {
+  userId          String    @id
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  features        Json      @default("{}")
+  limits          Json      @default("{}")
+  // Overrides the 10 free generations for this user when set.
+  freeGenerations Int?
+  // Engage-only suspension: blocks every Engage generation, leaves the rest
+  // of the account (website, billing) alone. User.suspendedAt still blocks
+  // everything.
+  suspendedAt     DateTime?
+  suspendedBy     String?
+  suspendReason   String?   @db.Text
+  updatedAt       DateTime  @updatedAt
+  updatedBy       String?
+}
+
+// Unlimited Engage access given by an admin, outside Lemon Squeezy. endsAt
+// null = lifetime. A grant can name someone who hasn't signed up yet: email
+// is always set, userId once the account exists (matched by email until then).
+model EngageAccessGrant {
+  id           String    @id @default(cuid())
+  userId       String?
+  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email        String
+  startsAt     DateTime  @default(now())
+  endsAt       DateTime?
+  reason       String    @db.Text
+  grantedBy    String
+  createdAt    DateTime  @default(now())
+  revokedAt    DateTime?
+  revokedBy    String?
+  revokeReason String?   @db.Text
+
+  @@index([userId])
+  @@index([email])
+  @@index([createdAt])
+}
+
+// Generations per user, feature and calendar period (UTC), counted at the
+// moment a generation is allowed. Drives per-user limits and the admin's
+// usage figures. feature: "comments" | "replies" | "connection_notes" |
+// "messages" | "rewrites" | "tests"; period: "day" | "month".
+model EngageUsageCounter {
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feature     String
+  period      String
+  periodStart DateTime @db.Date
+  count       Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@id([userId, feature, period, periodStart])
+  @@index([period, periodStart])
+}
+
+// The extension version each signed-in browser last reported (one row per
+// ExtensionToken). Kept out of ExtensionToken itself so token checks never
+// depend on this table.
+model EngageClientInfo {
+  tokenId          String   @id
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  extensionVersion String
+  lastSeenAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([extensionVersion])
+}
+
+// Errors the side panel reports (an Insert that couldn't find LinkedIn's
+// box, a conversation that couldn't be read). Metadata only: never the
+// post, comment or message text.
+model EngageClientError {
+  id               String   @id @default(cuid())
+  userId           String?
+  user             User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feature          String
+  code             String
+  message          String
+  extensionVersion String?
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([feature, createdAt])
+  @@index([code])
+}
+
+// Internal notes on a user. Never shown to the user.
+model AdminNote {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  authorEmail String
+  body        String   @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// Internal labels on a user ("VIP", "Beta tester"). Never shown to the user.
+model AdminUserTag {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tag       String
+  createdBy String
+  createdAt DateTime @default(now())
+
+  @@id([userId, tag])
+  @@index([tag])
 }
 
 // Tracks webhook deliveries we've already handled so a provider redelivery

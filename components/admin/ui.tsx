@@ -119,11 +119,14 @@ export function Modal({
   onClose,
   title,
   children,
+  wide = false,
 }: {
   open: boolean
   onClose: () => void
   title: string
   children: ReactNode
+  // For forms with a label column and controls side by side.
+  wide?: boolean
 }) {
   useEffect(() => {
     if (!open) return
@@ -139,7 +142,7 @@ export function Modal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-2xl"
+        className={`w-full ${wide ? "max-w-2xl" : "max-w-md"} rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3.5">

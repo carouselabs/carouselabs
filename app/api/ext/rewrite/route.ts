@@ -6,10 +6,9 @@
 // same extension access gate (lib/extAccess.ts) and shared daily limit as
 // generate/route.ts.
 import { NextResponse } from "next/server"
-import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
-import { reserveExtGeneration } from "@/lib/extAccess"
+import { engagePreflight, reserveEngageGeneration } from "@/lib/engage/gate"
 import {
   buildRewriteSystemMessage,
   buildRewriteUserMessage,
@@ -28,8 +27,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   }
 
-  const limited = await extDailyLimitResponse(user.id)
-  if (limited) return limited
+  const preflight = await engagePreflight(user.id, "rewrites")
+  if (preflight.response) return preflight.response
 
   let currentComment: string
   let direction: "shorter" | "longer"
@@ -62,7 +61,7 @@ export async function POST(req: Request) {
   const userMessage = buildRewriteUserMessage(currentComment)
   const { limit } = rewriteBounds(currentComment.length, direction)
 
-  const gate = await reserveExtGeneration(user.id)
+  const gate = await reserveEngageGeneration(user.id, "rewrites", preflight)
   if (!gate.ok) return gate.response
 
   // Held in case the retry errors outright: a weakly-resized comment still

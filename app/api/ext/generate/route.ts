@@ -15,10 +15,9 @@
 // profile, paywall — runs before either response starts, so failures keep
 // their JSON bodies and status codes in both modes.
 import { NextResponse } from "next/server"
-import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
-import { reserveExtGeneration } from "@/lib/extAccess"
+import { engagePreflight, reserveEngageGeneration } from "@/lib/engage/gate"
 import {
   buildCommentSystemMessage,
   buildCommentUserMessage,
@@ -275,9 +274,9 @@ export async function POST(req: Request) {
 
   // Shared daily cap across every extension generation route. Generate and
   // Regenerate both count, since both call this route.
-  const limited = await extDailyLimitResponse(user.id)
+  const preflight = await engagePreflight(user.id, null)
   timer.mark("limit")
-  if (limited) return limited
+  if (preflight.response) return preflight.response
 
   let profileId: string
   let post: CommentPostInput
@@ -331,7 +330,7 @@ export async function POST(req: Request) {
   }
 
   // Last check before the model call, so a blocked account never burns one.
-  const gate = await reserveExtGeneration(user.id)
+  const gate = await reserveEngageGeneration(user.id, reply ? "replies" : "comments", preflight)
   timer.mark("reserve")
   if (!gate.ok) return gate.response
 

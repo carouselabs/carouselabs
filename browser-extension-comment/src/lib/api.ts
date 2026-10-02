@@ -142,6 +142,14 @@ export interface ExtensionAccess {
   endsAt: string | null;
   // Lemon Squeezy customer portal: cancel, change card, invoices.
   manageUrl: string | null;
+  // Set by servers with the Engage admin (absent on older ones). "grant": an
+  // admin gave unlimited access, until grantEndsAt (null = for life).
+  source?: "subscription" | "grant" | "free" | "testing";
+  grantEndsAt?: string | null;
+  // An admin paused this account's Engage access.
+  suspended?: boolean;
+  // false for a feature an admin switched off for this account.
+  features?: Partial<Record<"comments" | "replies" | "connection_notes" | "messages", boolean>>;
 }
 
 export interface MeResponse {
@@ -277,6 +285,17 @@ const REQUEST_TIMEOUT_MS = 120_000;
 
 const TIMEOUT_MESSAGE = "The server took too long to respond. Try again.";
 
+// Every request says which version of the extension sent it, so the admin can
+// see who runs what (and the server could treat old versions differently).
+function versionHeader(): Record<string, string> {
+  try {
+    const version = chrome.runtime.getManifest?.().version;
+    return version ? { "X-Engage-Version": version } : {};
+  } catch {
+    return {};
+  }
+}
+
 async function errorFrom(res: Response): Promise<ApiError> {
   const parsed: unknown = await res.json().catch(() => ({}));
   const body = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
@@ -297,6 +316,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
       signal: controller.signal,
       headers: {
         ...init.headers,
+        ...versionHeader(),
         Authorization: `Bearer ${token}`,
       },
     });
@@ -308,6 +328,8 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   }
 
   if (!res.ok) throw await errorFrom(res);
+  // 204: done, nothing to read (e.g. an error report).
+  if (res.status === 204) return undefined as T;
 
   return (await res.json()) as T;
 }
@@ -359,6 +381,7 @@ export async function apiStream<T>(path: string, init: RequestInit, handlers: St
       signal: controller.signal,
       headers: {
         ...init.headers,
+        ...versionHeader(),
         Accept: "text/event-stream",
         Authorization: `Bearer ${token}`,
       },

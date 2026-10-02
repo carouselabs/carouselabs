@@ -30,7 +30,6 @@ vi.mock("../../../lib/db", () => ({
 vi.mock("../../../lib/extensionCommentAuth", () => ({
   getUserFromCommentExtensionToken: vi.fn(async () => ({ id: "bench-user", email: "bench@example.com" })),
 }));
-vi.mock("../../../lib/extDailyLimit", () => ({ extDailyLimitResponse: vi.fn(async () => null) }));
 vi.mock("openai", async (importOriginal) => {
   const real = await importOriginal<{ default: unknown }>();
   if (process.env.BENCH_MODEL !== "haiku") return real;
@@ -47,8 +46,9 @@ vi.mock("openai", async (importOriginal) => {
     },
   };
 });
-vi.mock("../../../lib/extAccess", () => ({
-  reserveExtGeneration: vi.fn(async () => ({ ok: true, freeRemaining: null, release: async () => {} })),
+vi.mock("../../../lib/engage/gate", () => ({
+  engagePreflight: vi.fn(async () => ({ response: null, loaded: null })),
+  reserveEngageGeneration: vi.fn(async () => ({ ok: true, freeRemaining: null, release: async () => {} })),
 }));
 // Counts model calls per request, so retries (a second full generation) show
 // up in the numbers rather than hiding inside them.

@@ -11,7 +11,7 @@
 import { apiFetch } from "@/lib/api";
 import { TabTimeout } from "@/lib/tabs";
 
-export type ReportFeature = "comments" | "replies" | "connection_notes" | "messages";
+export type ReportFeature = "comments" | "replies" | "connection_notes" | "messages" | "x_replies" | "x_messages";
 
 const DESCRIPTIONS = {
   "insert.box_not_found": "Insert couldn't find LinkedIn's text box.",
@@ -47,7 +47,7 @@ export function insertFailureCode(error: string | undefined): ReportCode {
 // failure.
 export function readFailureCode(error: string | undefined): ReportCode | null {
   if (!error) return "read.failed";
-  if (/messaging page/i.test(error)) return null;
+  if (/messaging page|open a chat on x/i.test(error)) return null;
   if (/chat list/i.test(error)) return "read.hidden_thread";
   if (/no conversation is open/i.test(error)) return "read.no_conversation";
   return "read.failed";

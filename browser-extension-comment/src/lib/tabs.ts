@@ -11,13 +11,18 @@
 // ensureContentScript). A fresh copy replaces any older one in the tab (see
 // the takeover at the bottom of src/content-script.ts).
 
-// Must match the ping handler in src/content-script.ts.
+import { PLATFORM, SITE_ORIGIN } from "@/lib/platform";
+
+// Must match the ping handler in src/content-script.ts (and src/x/content-script.ts).
 export const PING_MESSAGE_TYPE = "carouselabs:ping";
 
 const LINKEDIN_ORIGIN = "https://www.linkedin.com/";
 
-export function isLinkedInTab(tab: chrome.tabs.Tab | undefined): boolean {
-  return !!tab?.url?.startsWith(LINKEDIN_ORIGIN);
+// A tab on the site this extension works on: LinkedIn, or X in the X
+// extension (src/lib/platform.ts). Chrome shows a tab's address only for
+// sites the extension has permission for, so this needs no "tabs" permission.
+export function isSiteTab(tab: chrome.tabs.Tab | undefined): boolean {
+  return !!tab?.url?.startsWith(SITE_ORIGIN);
 }
 
 // The LinkedIn conversation a tab's address shows, as its path
@@ -26,7 +31,9 @@ export function isLinkedInTab(tab: chrome.tabs.Tab | undefined): boolean {
 // with none open and a new, empty message. Only the address is looked at:
 // the panel and the toolbar icon can offer help with a conversation without
 // reading anything until the person asks.
+// In the X extension, an X chat: "/i/chat/<id>" (src/x/content/xChat.ts).
 export function conversationPath(url: string | undefined | null): string | null {
+  if (PLATFORM === "x") return xChatPath(url);
   if (!url?.startsWith(LINKEDIN_ORIGIN)) return null;
   let pathname: string;
   try {
@@ -39,6 +46,16 @@ export function conversationPath(url: string | undefined | null): string | null 
   return `/messaging/thread/${match[1]}/`;
 }
 
+function xChatPath(url: string | undefined | null): string | null {
+  if (!url?.startsWith("https://x.com/")) return null;
+  try {
+    const match = /^\/i\/chat\/([^/]+)\/?$/.exec(new URL(url).pathname);
+    return match ? `/i/chat/${match[1]}` : null;
+  } catch {
+    return null;
+  }
+}
+
 // Whether two thread paths are the same conversation (with or without the
 // trailing slash LinkedIn usually adds).
 export function sameConversation(a: string, b: string): boolean {
@@ -46,27 +63,27 @@ export function sameConversation(a: string, b: string): boolean {
   return trim(a) === trim(b);
 }
 
-// The LinkedIn content script's built files, as the manifest lists them. The
+// The site's content script's built files, as the manifest lists them. The
 // names carry build hashes, so they can only be read at runtime.
-export function linkedInContentScriptFiles(): string[] {
+export function siteContentScriptFiles(): string[] {
   const entry = chrome.runtime
     .getManifest()
-    .content_scripts?.find((script) => script.matches?.some((match) => match.startsWith(LINKEDIN_ORIGIN)));
+    .content_scripts?.find((script) => script.matches?.some((match) => match.startsWith(SITE_ORIGIN)));
   return entry?.js ?? [];
 }
 
-// The manifest's LinkedIn file is only a loader (@crxjs/vite-plugin's): it
+// The manifest's site file (LinkedIn's or X's) is only a loader (@crxjs/vite-plugin's): it
 // import()s the real script, an ES module the manifest exposes to LinkedIn as
 // a web-accessible resource. A tab loads a given module URL once and then
 // reuses it, so injecting the loader again runs nothing, and after an update
 // could even hand back the old copy that can no longer reach the extension.
 // Injecting means importing the module under a URL of its own instead.
-export function linkedInContentScriptModule(): string | null {
+export function siteContentScriptModule(): string | null {
   const resources = chrome.runtime.getManifest().web_accessible_resources as
     | { matches?: string[]; resources?: string[] }[]
     | undefined;
   for (const entry of resources ?? []) {
-    if (!entry.matches?.some((match) => match.startsWith(LINKEDIN_ORIGIN))) continue;
+    if (!entry.matches?.some((match) => match.startsWith(SITE_ORIGIN))) continue;
     const modulePath = entry.resources?.find((file) => /(^|\/)content-script\.ts-[\w-]+\.js$/.test(file));
     if (modulePath) return modulePath;
   }
@@ -131,8 +148,8 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // when it can't be done: a discarded tab, a page still being replaced, or no
 // permission for it.
 export async function injectContentScript(tabId: number, waitMs = 3000): Promise<boolean> {
-  const modulePath = linkedInContentScriptModule();
-  const files = linkedInContentScriptFiles();
+  const modulePath = siteContentScriptModule();
+  const files = siteContentScriptFiles();
   try {
     if (modulePath) {
       // A fresh URL, so the tab runs the script anew rather than reusing a
@@ -161,7 +178,7 @@ export async function injectContentScript(tabId: number, waitMs = 3000): Promise
 // Makes sure a LinkedIn tab has a working content script, so a Comment click
 // in it reaches the panel. Nothing happens for other tabs.
 export async function ensureContentScript(tab: chrome.tabs.Tab | undefined): Promise<boolean> {
-  if (tab?.id === undefined || !isLinkedInTab(tab) || tab.discarded) return false;
+  if (tab?.id === undefined || !isSiteTab(tab) || tab.discarded) return false;
   if (await answersPing(tab.id)) return true;
   return injectContentScript(tab.id);
 }
@@ -174,7 +191,7 @@ export async function sendToTab<T>(tab: chrome.tabs.Tab, message: unknown): Prom
   try {
     return (await answerWithin(chrome.tabs.sendMessage(tab.id, message), TAB_ANSWER_TIMEOUT_MS)) as T;
   } catch (err) {
-    if (err instanceof TabTimeout || !isLinkedInTab(tab) || !(await injectContentScript(tab.id))) throw err;
+    if (err instanceof TabTimeout || !isSiteTab(tab) || !(await injectContentScript(tab.id))) throw err;
     return (await answerWithin(chrome.tabs.sendMessage(tab.id, message), TAB_ANSWER_TIMEOUT_MS)) as T;
   }
 }
@@ -183,7 +200,7 @@ export async function sendToTab<T>(tab: chrome.tabs.Tab, message: unknown): Prom
 // now means even injecting failed, which a reload fixes; anywhere else they
 // need to be on LinkedIn first.
 export function noContentScriptMessage(tab: chrome.tabs.Tab | undefined, notOnLinkedIn: string): string {
-  return isLinkedInTab(tab)
+  return isSiteTab(tab)
     ? "Couldn't reach this LinkedIn tab. Reload the page, then try again."
     : notOnLinkedIn;
 }

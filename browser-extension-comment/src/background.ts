@@ -5,12 +5,9 @@
 // receives the extension token relayed by src/content/authRelay.ts (see
 // that file's comment for the full hand-off chain) — stores it in
 // chrome.storage.local and closes the connect tab it came from.
-import { conversationPath, ensureContentScript } from "@/lib/tabs";
-
-// Must match MESSAGE_TYPE in both app/extension-connect and
-// src/content/authRelay.ts exactly — no shared package between this repo
-// and the web app's, so it's a literal by necessity.
-const MESSAGE_TYPE = "carouselabs:extension-token";
+import { ensureContentScript } from "@/lib/tabs";
+import { markConversationTabs } from "@/lib/conversationBadge";
+import { listenForSignIn } from "@/lib/signInReceiver";
 
 // Must match GENERATE_SHORTCUT_MESSAGE_TYPE in HomeScreen.tsx. The keyboard
 // shortcut is registered in manifest.config.ts and fires here, in the service
@@ -75,80 +72,6 @@ function healOpenLinkedInTabs(): Promise<void> {
 
 healOpenLinkedInTabs();
 
-// The toolbar icon shows "AI" while a LinkedIn conversation is open in a tab,
-// so the Messages help gets noticed even with the panel closed (clicking the
-// icon opens the panel, which offers it). Only the tab's address is checked,
-// which the linkedin.com host permission allows; the page isn't read. Other
-// sites' addresses aren't visible to the extension at all, so leaving
-// LinkedIn arrives as a load with no address, and that clears the badge.
-const CONVERSATION_BADGE = "AI";
-const CONVERSATION_TITLE = "Get AI help replying to this conversation";
-const DEFAULT_TITLE = chrome.runtime.getManifest().action?.default_title ?? "CarouseLabs Engage";
+markConversationTabs("https://www.linkedin.com/messaging/thread/*");
 
-function markConversationTab(tabId: number, url: string | undefined) {
-  const open = conversationPath(url) !== null;
-  chrome.action.setBadgeText({ tabId, text: open ? CONVERSATION_BADGE : "" }).catch(() => {});
-  chrome.action.setTitle({ tabId, title: open ? CONVERSATION_TITLE : DEFAULT_TITLE }).catch(() => {});
-}
-
-chrome.action.setBadgeBackgroundColor({ color: "#7C3AED" }).catch(() => {});
-chrome.action.setBadgeTextColor?.({ color: "#FFFFFF" })?.catch(() => {});
-
-chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
-  if (change.url !== undefined || change.status === "loading") markConversationTab(tabId, tab.url);
-});
-
-// Conversations already open when this worker starts (after an install,
-// update or browser restart), which won't navigate again on their own.
-chrome.tabs
-  .query({ url: "https://www.linkedin.com/messaging/thread/*" })
-  .then((tabs) => tabs.forEach((tab) => tab.id !== undefined && markConversationTab(tab.id, tab.url)))
-  .catch(() => {});
-
-// Only the sign-in hand-off page may hand the extension a token. Every
-// content script (including the one on linkedin.com) can reach this
-// listener, so a token arriving from anywhere else is ignored.
-const TOKEN_ORIGINS = [
-  "https://carouselabs.com",
-  ...(import.meta.env.MODE !== "production" ? ["http://localhost:3000"] : []),
-];
-
-function isSignInPage(sender: chrome.runtime.MessageSender): boolean {
-  try {
-    const url = new URL(sender.url ?? sender.tab?.url ?? "");
-    return TOKEN_ORIGINS.includes(url.origin) && url.pathname.startsWith("/extension-connect");
-  } catch {
-    return false;
-  }
-}
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Never log the message itself: it can be the auth token, or a captured
-  // post / conversation broadcast to the side panel.
-  if (!message || message.type !== MESSAGE_TYPE || typeof message.token !== "string") {
-    return; // not our message — don't keep the channel open for it
-  }
-  if (!isSignInPage(sender)) {
-    console.warn("[background] ignored a sign-in token from outside the sign-in page");
-    return;
-  }
-
-  chrome.storage.local
-    .set({ extensionToken: message.token })
-    .then(() => {
-      console.log("[background] signed in.");
-      sendResponse({ ok: true });
-
-      if (sender.tab?.id !== undefined) {
-        chrome.tabs.remove(sender.tab.id).catch((err) => {
-          console.log("[background] chrome.tabs.remove failed (non-fatal):", err);
-        });
-      }
-    })
-    .catch((err) => {
-      console.log("[background] chrome.storage.local.set FAILED:", err);
-      sendResponse({ ok: false, error: String(err) });
-    });
-
-  return true; // keep the message channel open for the async sendResponse above
-});
+listenForSignIn();

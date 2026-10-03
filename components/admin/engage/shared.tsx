@@ -8,14 +8,17 @@ import { AlertTriangle, Loader2, RotateCw } from "lucide-react"
 import { AdminButton, fmtDate } from "@/components/admin/ui"
 import type { EngageFeature } from "@/lib/engage/features"
 
-// Series colours for the four Engage features, validated as a set on the
+// Series colours for the four LinkedIn features, validated as a set on the
 // admin card surface (#1A1A1A): the admin's own violet, teal, amber, plus a
-// magenta. Fixed by feature, never by rank.
+// magenta. Fixed by feature, never by rank. X's two features are only ever
+// charted on their own, so they reuse the set's first two slots.
 export const FEATURE_COLORS: Record<EngageFeature, string> = {
   comments: "#8B5CF6",
   replies: "#0D9488",
   connection_notes: "#D97706",
   messages: "#d55181",
+  x_replies: "#8B5CF6",
+  x_messages: "#0D9488",
 }
 
 // ── Data loading ────────────────────────────────────────────────────────

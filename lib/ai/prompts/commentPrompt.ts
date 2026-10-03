@@ -231,8 +231,12 @@ export function buildRewriteSystemMessage(
   direction: "shorter" | "longer",
   currentLength: number,
   sentenceCount = 0,
+  // CarouseLabs Engage for X: a reply on X, which must stay within xMax
+  // characters as X counts them (lib/xText.ts).
+  x?: { maxLength: number },
 ): string {
-  const { target, limit } = rewriteBounds(currentLength, direction)
+  const { target: rawTarget, limit } = rewriteBounds(currentLength, direction)
+  const target = x ? Math.min(rawTarget, x.maxLength) : rawTarget
 
   const sizing =
     direction === "shorter"
@@ -253,10 +257,16 @@ Add substance, not padding: extend the existing point with a concrete
 consequence, or a second beat of the same thought. Do not pad with filler
 phrases or restate what is already there.`
 
-  return `You rewrite an existing LinkedIn comment to a different length. You do
+  const what = x ? "reply on X (formerly Twitter)" : "LinkedIn comment"
+  const xCeiling = x
+    ? `\n\nWhatever the direction, the rewrite must be at most ${x.maxLength} characters as X
+counts them: every link counts 23 and every emoji counts 2.`
+    : ""
+
+  return `You rewrite an existing ${what} to a different length. You do
 not write a new comment.
 
-${sizing}
+${sizing}${xCeiling}
 
 Rules you must not break:
 - Keep the same voice, rhythm and level of formality as the original.

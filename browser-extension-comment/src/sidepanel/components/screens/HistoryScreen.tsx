@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PLATFORM } from "@/lib/platform";
 import { ScreenHeader } from "../ScreenHeader";
 
 // History holds every kind of generation. Rows from before that carry no
@@ -21,6 +22,8 @@ const KIND_LABELS: Record<HistoryKind, string> = {
   reply: "Reply",
   connection_note: "Connection note",
   message: "Message",
+  x_reply: "Reply",
+  x_message: "Message",
 };
 
 const LINK_LABELS: Record<HistoryKind, string> = {
@@ -28,7 +31,35 @@ const LINK_LABELS: Record<HistoryKind, string> = {
   reply: "View post",
   connection_note: "View profile",
   message: "Open chat",
+  x_reply: "View post",
+  x_message: "Open chat",
 };
+
+// The LinkedIn extension's History and the X extension's each show their own
+// rows; the server keeps them apart (app/api/ext/history ?platform=x).
+const HISTORY_SITE =
+  PLATFORM === "x"
+    ? {
+        query: "?platform=x",
+        origin: "https://x.com/",
+        defaultKind: "x_reply" as HistoryKind,
+        empty: "Replies and messages you write for X show up here, and on carouselabs.com under Extension.",
+      }
+    : {
+        query: "",
+        origin: "https://www.linkedin.com/",
+        defaultKind: "comment" as HistoryKind,
+        empty:
+          "Comments, replies, connection notes and messages you generate show up here, and on carouselabs.com under Extension.",
+      };
+
+// The next page's URL, keeping the platform filter.
+function historyUrl(cursor?: string): string {
+  const params = new URLSearchParams(HISTORY_SITE.query);
+  if (cursor) params.set("cursor", cursor);
+  const query = params.toString();
+  return `/api/ext/history${query ? `?${query}` : ""}`;
+}
 
 // What the user did with it, in words ("NONE" says nothing).
 const ACTION_LABELS: Record<string, string> = {
@@ -65,7 +96,7 @@ export function HistoryScreen() {
   useEffect(() => {
     let cancelled = false;
 
-    apiFetch<HistoryResponse>("/api/ext/history")
+    apiFetch<HistoryResponse>(historyUrl())
       .then((res) => {
         if (cancelled) return;
         setEntries(res.entries);
@@ -85,7 +116,7 @@ export function HistoryScreen() {
     if (!nextCursor) return;
     setLoadingMore(true);
     try {
-      const res = await apiFetch<HistoryResponse>(`/api/ext/history?cursor=${nextCursor}`);
+      const res = await apiFetch<HistoryResponse>(historyUrl(nextCursor));
       setEntries((prev) => [...prev, ...res.entries]);
       setNextCursor(res.nextCursor);
     } catch (err) {
@@ -146,10 +177,7 @@ export function HistoryScreen() {
             </div>
             <div className="space-y-1">
               <p className="text-sm font-semibold">Nothing yet</p>
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                Comments, replies, connection notes and messages you generate show up here, and on carouselabs.com
-                under Extension.
-              </p>
+              <p className="text-xs leading-relaxed text-muted-foreground">{HISTORY_SITE.empty}</p>
             </div>
           </div>
         )
@@ -186,12 +214,12 @@ export function HistoryScreen() {
 
           <ul className="space-y-2">
             {filtered.map((entry) => {
-              const kind = entry.kind ?? "comment";
+              const kind = entry.kind ?? HISTORY_SITE.defaultKind;
               const action = ACTION_LABELS[entry.action];
               return (
                 <li key={entry.id} className="animate-fade-in space-y-2 rounded-lg border bg-card p-3">
                   <div className="flex items-center gap-2">
-                    <Badge variant="accent">{KIND_LABELS[kind]}</Badge>
+                    <Badge variant="accent">{KIND_LABELS[kind] ?? KIND_LABELS[HISTORY_SITE.defaultKind]}</Badge>
                     <span className="min-w-0 flex-1 truncate text-sm font-medium">
                       {entry.postAuthor || "Unknown author"}
                     </span>
@@ -226,7 +254,7 @@ export function HistoryScreen() {
                       )}
                       {copiedId === entry.id ? "Copied" : "Copy again"}
                     </Button>
-                    {entry.postUrl.startsWith("https://www.linkedin.com/") && (
+                    {entry.postUrl.startsWith(HISTORY_SITE.origin) && (
                       <Button
                         size="sm"
                         variant="ghost"
@@ -234,7 +262,7 @@ export function HistoryScreen() {
                         onClick={() => chrome.tabs.create({ url: entry.postUrl })}
                       >
                         <ExternalLink aria-hidden className="!size-3.5" />
-                        {LINK_LABELS[kind]}
+                        {LINK_LABELS[kind] ?? "Open"}
                       </Button>
                     )}
                   </div>

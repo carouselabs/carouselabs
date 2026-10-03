@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ExternalLink, Loader2, LogIn, MessageCircle } from "lucide-react";
 import { getApiBaseUrl } from "@/lib/api";
+import { CONNECT_PATH, SITE_NAME } from "@/lib/platform";
 import { Button } from "@/components/ui/button";
 
 // Shown by App.tsx whenever chrome.storage.local has no extensionToken yet.
@@ -17,7 +18,7 @@ export function SignInScreen() {
 
   async function handleSignIn() {
     const baseUrl = await getApiBaseUrl();
-    const url = `${baseUrl}/extension-connect`;
+    const url = `${baseUrl}${CONNECT_PATH}`;
     // Left in deliberately: chrome.storage.local is scoped per Chrome
     // profile/incognito-mode AND per extension install path, so "I set
     // apiBaseUrl but it still opens production" is almost always storage
@@ -37,7 +38,9 @@ export function SignInScreen() {
         <div className="space-y-1.5">
           <h1 className="text-base font-semibold tracking-tight">Sign in to CarouseLabs</h1>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Write LinkedIn comments, replies, notes and messages in your own voice.
+            {SITE_NAME === "X"
+              ? "Write X replies and messages in your own voice."
+              : "Write LinkedIn comments, replies, notes and messages in your own voice."}
           </p>
         </div>
 

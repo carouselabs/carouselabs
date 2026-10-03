@@ -9,10 +9,9 @@
 // picks up and stores). Nothing here touches cookies/localStorage, and the
 // token is never read from a URL.
 
-// Must match MESSAGE_TYPE in both app/extension-connect and
-// src/background.ts exactly — no shared package between this repo and the
-// web app's, so it's a literal by necessity.
-const MESSAGE_TYPE = "carouselabs:extension-token";
+// Must match what components/extension/ExtensionConnectClient.tsx posts for
+// this extension (see TOKEN_MESSAGE_TYPE in src/lib/platform.ts).
+import { TOKEN_MESSAGE_TYPE as MESSAGE_TYPE } from "@/lib/platform";
 
 // Runs unconditionally the moment this content script is injected — if this
 // never appears in the PAGE's console (not the extension's service worker

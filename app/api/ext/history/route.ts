@@ -1,7 +1,9 @@
 // app/api/ext/history/route.ts — History, for the side panel and the
 // website's Extension section (either caller: see getExtensionUser). Returns
 // this user's generations newest first — comments, replies, connection notes
-// and messages — optionally filtered by ?kind=.
+// and messages — optionally filtered by ?kind=. The X extension asks with
+// ?platform=x and gets only its own (x_reply, x_message); every other caller,
+// including LinkedIn copies already installed, gets only LinkedIn's.
 //
 // CommentHistory.profileId is a plain string, not a relation (see the model
 // comment in prisma/schema.prisma: a history row deliberately survives the
@@ -12,7 +14,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getExtensionUser } from "@/lib/extensionCommentAuth"
-import { isHistoryKind } from "@/lib/extensionHistory"
+import { kindsFor, type HistoryPlatform } from "@/lib/extensionHistory"
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 100
@@ -29,8 +31,10 @@ export async function GET(req: Request) {
     Math.max(1, Number.parseInt(params.get("limit") ?? "", 10) || DEFAULT_LIMIT),
   )
   const cursor = params.get("cursor")
+  const platform: HistoryPlatform = params.get("platform") === "x" ? "x" : "linkedin"
+  const kinds = kindsFor(platform)
   const kind = params.get("kind")
-  if (kind !== null && !isHistoryKind(kind)) {
+  if (kind !== null && !kinds.includes(kind)) {
     return NextResponse.json({ error: "Unknown history kind" }, { status: 400 })
   }
 
@@ -38,7 +42,7 @@ export async function GET(req: Request) {
   // way offset pagination is not, since a new comment generated mid-scroll
   // would otherwise shift every later page by one.
   const rows = await db.commentHistory.findMany({
-    where: { userId: user.id, ...(kind ? { kind } : {}) },
+    where: { userId: user.id, kind: kind ?? { in: [...kinds] } },
     orderBy: { createdAt: "desc" },
     take: limit + 1, // one extra to detect whether another page exists
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),

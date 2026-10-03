@@ -103,12 +103,12 @@ function ContactRow({
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-[13.5px] font-semibold text-[#0A0A0A]">{contact.contactName || contact.contactUrl}</p>
         <a
-          href={`https://www.linkedin.com${contact.contactUrl}`}
+          href={profileLink(contact.contactUrl)}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-[11.5px] font-medium text-[#7C3AED] hover:underline"
         >
-          Profile <ExternalLink size={11} />
+          {contact.contactUrl.startsWith("/x/") ? "X profile" : "Profile"} <ExternalLink size={11} />
         </a>
         <span className="text-[11.5px] text-[#9CA3AF]">· updated {shortDate(contact.updatedAt)}</span>
         <div className="ml-auto">
@@ -224,6 +224,12 @@ function ContactRow({
       )}
     </div>
   )
+}
+
+// A saved person's page: LinkedIn ("/in/<slug>"), or X ("/x/<handle>", from
+// CarouseLabs Engage for X's chats).
+function profileLink(contactUrl: string): string {
+  return contactUrl.startsWith("/x/") ? `https://x.com/${contactUrl.slice(3)}` : `https://www.linkedin.com${contactUrl}`
 }
 
 export function ConversationSettingsCard({ profiles }: { profiles: { id: string; name: string }[] }) {

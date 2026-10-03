@@ -149,6 +149,9 @@ model User {
   engageErrors  EngageClientError[]
   adminNotes    AdminNote[]
   adminTags     AdminUserTag[]
+  // CarouseLabs Engage for X (scripts/x-extension-schema.sql)
+  xProfiles     XProfile[]
+  xSettings     XUserSettings?
 
   // ── Referral program ──
   referralCode       String?              @unique
@@ -537,6 +540,49 @@ model CommentProfile {
   updatedAt     DateTime @updatedAt
 
   @@index([userId])
+}
+
+// CarouseLabs Engage for X: voice profiles for X replies, kept apart from the
+// LinkedIn extension's CommentProfile (the user chose separate lists) but with
+// the same fields, so the same builder, validation and prompt parts serve
+// both. userId null + isSystem = a CarouseLabs preset everyone sees.
+// New table only (scripts/x-extension-schema.sql): nothing LinkedIn reads
+// changes.
+model XProfile {
+  id            String   @id @default(cuid())
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  whoIAm        String
+  goal          String
+  tone          String
+  length        String
+  emoji         String   @default("None")
+  language      String   @default("English")
+  alwaysDo      String?
+  neverDo       String?
+  samples       String[]
+  isDefault     Boolean  @default(false)
+  isSystem      Boolean  @default(false)
+  isRecommended Boolean  @default(false)
+  testsUsed     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// The X extension's per-account settings, in their own table so the X
+// extension adds no column to User. No row = the defaults.
+model XUserSettings {
+  userId             String   @id
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // null = the shared default preset (XProfile.isDefault).
+  defaultProfileId   String?
+  // X Premium accounts can post longer than 280; replies are written to fit.
+  maxReplyLength     Int      @default(280)
+  insertButtonHidden Boolean  @default(false)
+  updatedAt          DateTime @default(now()) @updatedAt
 }
 
 // One row per AI generation in the LinkedIn extension — comments, replies,

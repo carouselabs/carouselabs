@@ -94,8 +94,10 @@ export function parseLinkedinProfile(v: unknown): Parsed<LinkedinProfile | null>
 }
 
 // The contact key the extension reads off LinkedIn: a lowercase "/in/…" path.
+// A person's key: their LinkedIn profile path ("/in/<slug>"), or, for CarouseLabs
+// Engage for X's chats (which share these saved reasons), "/x/<handle>".
 export function isContactUrl(v: unknown): v is string {
-  return typeof v === "string" && v.length <= 200 && /^\/in\/[a-z0-9\-_%.]+$/.test(v)
+  return typeof v === "string" && v.length <= 200 && (/^\/in\/[a-z0-9\-_%.]+$/.test(v) || /^\/x\/[a-z0-9_]{1,15}$/.test(v))
 }
 
 export interface ContactContextInput {

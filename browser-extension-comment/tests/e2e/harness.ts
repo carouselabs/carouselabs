@@ -6,13 +6,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium, test as base, type BrowserContext, type Page, type Worker } from "@playwright/test";
+import { chromium, expect, test as base, type BrowserContext, type Page, type Worker } from "@playwright/test";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // EXT_DIST=dist-store runs the same suite against the Chrome Web Store build
 // (`npx vite build --outDir dist-store`), the exact files that get uploaded.
 const DIST = path.resolve(ROOT, process.env.EXT_DIST ?? "dist");
 const FIXTURES = path.join(ROOT, "tests/fixtures/linkedin");
+// Cleaned copies of real x.com pages, for the X extension (EXT_DIST=dist-x).
+const X_FIXTURES = path.join(ROOT, "tests/fixtures/x");
 
 export const SERVER_CONFIG = {
   commentButtonSelector: "button[aria-label^='Comment'], button.comment-button",
@@ -43,6 +45,9 @@ export interface Harness {
   apiResponses: Map<string, { status: number; body: unknown }>;
   blocked: string[];
   open(pathname: string, fixture: string): Promise<Page>;
+  // The same for x.com: path on x.com → a page in tests/fixtures/x.
+  xPages: Map<string, string>;
+  openX(pathname: string, fixture: string): Promise<Page>;
   sendToLinkedInTab<T = unknown>(message: unknown): Promise<T>;
   storage(): Promise<Record<string, any>>;
 }
@@ -61,6 +66,7 @@ export const test = base.extend<{ harness: Harness }>({
     });
 
     const pages = new Map<string, string>();
+    const xPages = new Map<string, string>();
     const apiResponses = new Map<string, { status: number; body: unknown }>([
       ["/api/ext/config", { status: 200, body: SERVER_CONFIG }],
     ]);
@@ -81,6 +87,15 @@ export const test = base.extend<{ harness: Harness }>({
           status: 200,
           contentType: "text/html; charset=utf-8",
           body: fs.readFileSync(path.join(FIXTURES, fixture), "utf8"),
+        });
+      }
+      if (url.hostname === "x.com") {
+        const fixture = xPages.get(url.pathname);
+        if (!fixture) return route.fulfill({ status: 404, body: "" });
+        return route.fulfill({
+          status: 200,
+          contentType: "text/html; charset=utf-8",
+          body: fs.readFileSync(path.join(X_FIXTURES, fixture), "utf8"),
         });
       }
       if (url.hostname === "carouselabs.com" || url.hostname === "localhost") {
@@ -121,6 +136,29 @@ export const test = base.extend<{ harness: Harness }>({
         });
         await page.goto(`https://www.linkedin.com${pathname}`);
         await loaded;
+        return page;
+      },
+      xPages,
+      async openX(pathname, fixture) {
+        xPages.set(pathname, fixture);
+        const page = await context.newPage();
+        await page.goto(`https://x.com${pathname}`);
+        // Ready once the content script answers a ping. (It logs nothing to
+        // the page in store builds, so there is no console line to wait for.)
+        await expect
+          .poll(
+            () =>
+              worker.evaluate(async () => {
+                const [tab] = await chrome.tabs.query({ url: "https://x.com/*" });
+                try {
+                  return ((await chrome.tabs.sendMessage(tab.id!, { type: "carouselabs:ping" })) as { ok?: boolean })?.ok === true;
+                } catch {
+                  return false;
+                }
+              }),
+            { timeout: 15_000 },
+          )
+          .toBe(true);
         return page;
       },
       async sendToLinkedInTab(message) {

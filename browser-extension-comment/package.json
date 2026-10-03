@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:dev": "tsc -b && vite build --mode development",
+    "build:x": "tsc -b && vite build --config vite.x.config.ts",
+    "build:x:dev": "tsc -b && vite build --config vite.x.config.ts --mode development",
     "preview": "vite preview",
     "icons": "python scripts/generate_icons.py",
     "test": "npm run test:unit && npm run test:e2e",

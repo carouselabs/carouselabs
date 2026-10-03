@@ -2,24 +2,41 @@
 
 // Extension → History: every generation the extension made — comments,
 // replies, connection notes, messages — from the same route the side panel's
-// History screen reads (app/api/ext/history).
+// History screen reads (app/api/ext/history). With platform="x" (Extension →
+// X), CarouseLabs Engage for X's replies and messages instead.
 import { useCallback, useEffect, useState } from "react"
 import { Check, Copy, ExternalLink, Loader2, Trash2 } from "lucide-react"
 import { dateTime, errorMessage, extApi, type HistoryEntry, type HistoryKind } from "./api"
 
-const FILTERS: { kind: HistoryKind | null; label: string }[] = [
-  { kind: null, label: "All" },
-  { kind: "comment", label: "Comments" },
-  { kind: "reply", label: "Replies" },
-  { kind: "connection_note", label: "Connection notes" },
-  { kind: "message", label: "Messages" },
-]
+type Platform = "linkedin" | "x"
+
+const FILTERS: Record<Platform, { kind: HistoryKind | null; label: string }[]> = {
+  linkedin: [
+    { kind: null, label: "All" },
+    { kind: "comment", label: "Comments" },
+    { kind: "reply", label: "Replies" },
+    { kind: "connection_note", label: "Connection notes" },
+    { kind: "message", label: "Messages" },
+  ],
+  x: [
+    { kind: null, label: "All" },
+    { kind: "x_reply", label: "Replies" },
+    { kind: "x_message", label: "Messages" },
+  ],
+}
+
+const EMPTY: Record<Platform, string> = {
+  linkedin: "Nothing here yet. Everything the extension writes for you on LinkedIn shows up here.",
+  x: "Nothing here yet. Every reply and message CarouseLabs Engage for X writes for you shows up here.",
+}
 
 const KIND_LABELS: Record<HistoryKind, string> = {
   comment: "Comment",
   reply: "Reply",
   connection_note: "Connection note",
   message: "Message",
+  x_reply: "Reply",
+  x_message: "Message",
 }
 
 // Who the text was for, in each kind's own words.
@@ -28,9 +45,12 @@ function audience(entry: HistoryEntry): string {
   switch (entry.kind) {
     case "reply":
       return `Reply on ${name}'s post`
+    case "x_reply":
+      return `Reply to ${name}`
     case "connection_note":
       return `Note to ${name}`
     case "message":
+    case "x_message":
       return `Message to ${name}`
     default:
       return `Comment on ${name}'s post`
@@ -42,13 +62,17 @@ const LINK_LABELS: Record<HistoryKind, string> = {
   reply: "View post",
   connection_note: "View profile",
   message: "Open chat",
+  x_reply: "View post",
+  x_message: "Open chat",
 }
 
-// Only real LinkedIn pages are linked; anything else in postUrl is ignored.
-function linkedInHref(url: string): string | null {
+// Only real LinkedIn and X pages are linked; anything else in postUrl is
+// ignored.
+const LINKED_HOSTS = new Set(["www.linkedin.com", "x.com"])
+function siteHref(url: string): string | null {
   try {
     const parsed = new URL(url)
-    return parsed.protocol === "https:" && parsed.hostname === "www.linkedin.com" ? parsed.toString() : null
+    return parsed.protocol === "https:" && LINKED_HOSTS.has(parsed.hostname) ? parsed.toString() : null
   } catch {
     return null
   }
@@ -65,7 +89,7 @@ function HistoryRow({ entry, onDeleted }: { entry: HistoryEntry; onDeleted: (id:
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const href = linkedInHref(entry.postUrl)
+  const href = siteHref(entry.postUrl)
   const action = ACTION_LABELS[entry.action] ?? ACTION_LABELS.NONE
 
   async function copy() {
@@ -169,7 +193,7 @@ function HistoryRow({ entry, onDeleted }: { entry: HistoryEntry; onDeleted: (id:
   )
 }
 
-export function HistoryList() {
+export function HistoryList({ platform = "linkedin" }: { platform?: Platform } = {}) {
   const [kind, setKind] = useState<HistoryKind | null>(null)
   const [entries, setEntries] = useState<HistoryEntry[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
@@ -179,10 +203,11 @@ export function HistoryList() {
 
   const load = useCallback(async (filter: HistoryKind | null, cursor: string | null) => {
     const params = new URLSearchParams({ limit: "30" })
+    if (platform === "x") params.set("platform", "x")
     if (filter) params.set("kind", filter)
     if (cursor) params.set("cursor", cursor)
     return extApi<{ entries: HistoryEntry[]; nextCursor: string | null }>(`/api/ext/history?${params}`)
-  }, [])
+  }, [platform])
 
   // Loading/error are reset by the filter click (chooseFilter) rather than
   // here, so the effect only fetches.
@@ -225,7 +250,7 @@ export function HistoryList() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        {FILTERS.map((f) => (
+        {FILTERS[platform].map((f) => (
           <button
             key={f.label}
             type="button"
@@ -249,7 +274,7 @@ export function HistoryList() {
         <p className="text-[13px] text-[#9CA3AF]">Loading history…</p>
       ) : entries.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-[#E5E3DE] p-8 text-center text-[13px] text-[#6B7280]">
-          Nothing here yet. Everything the extension writes for you on LinkedIn shows up here.
+          {EMPTY[platform]}
         </div>
       ) : (
         <div className="flex flex-col gap-3">

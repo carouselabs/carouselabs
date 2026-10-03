@@ -166,7 +166,9 @@ export interface MeResponse {
   defaultLanguage: string | null;
 }
 
-export type HistoryKind = "comment" | "reply" | "connection_note" | "message";
+// x_reply / x_message come from CarouseLabs Engage for X, whose History asks
+// for them with ?platform=x.
+export type HistoryKind = "comment" | "reply" | "connection_note" | "message" | "x_reply" | "x_message";
 
 export interface HistoryEntry {
   id: string;

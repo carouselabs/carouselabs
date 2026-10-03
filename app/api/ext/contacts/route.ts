@@ -40,7 +40,7 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url).searchParams.get("url")
   if (url !== null) {
-    if (!isContactUrl(url)) return NextResponse.json({ error: "url must be a LinkedIn profile path (/in/…)" }, { status: 400 })
+    if (!isContactUrl(url)) return NextResponse.json({ error: "url must be a LinkedIn profile path (/in/…) or an X handle (/x/…)" }, { status: 400 })
     const row = await db.contactContext.findUnique({ where: { userId_contactUrl: { userId: user.id, contactUrl: url } } })
     return NextResponse.json({ contact: row ? shape(row) : null })
   }

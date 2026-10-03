@@ -8,4 +8,6 @@ coverage
 test-results
 playwright-report
 dist-store
+dist-x
+dist-x-store
 ui-screens

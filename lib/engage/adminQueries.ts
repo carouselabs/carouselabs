@@ -6,7 +6,7 @@
 // fixed list.
 import { Prisma } from "@prisma/client"
 import { db } from "@/lib/db"
-import { HISTORY_KIND_TO_FEATURE, PLAN_FREE_GENERATIONS, type EngageFeature } from "@/lib/engage/features"
+import { ENGAGE_FEATURES, HISTORY_KIND_TO_FEATURE, PLAN_FREE_GENERATIONS, type EngageFeature } from "@/lib/engage/features"
 import { grantState } from "@/lib/engage/grants"
 
 // ── Shared SQL fragments ────────────────────────────────────────────────
@@ -247,6 +247,8 @@ export interface OverviewSeriesPoint {
   replies: number
   connection_notes: number
   messages: number
+  x_replies: number
+  x_messages: number
   activeUsers: number
   newUsers: number
 }
@@ -306,7 +308,7 @@ export async function engageOverview(from: Date, to: Date, now: Date = new Date(
   const points = new Map<string, OverviewSeriesPoint>()
   for (let t = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()); t < to.getTime(); t += 86_400_000) {
     const date = new Date(t).toISOString().slice(0, 10)
-    points.set(date, { date, comments: 0, replies: 0, connection_notes: 0, messages: 0, activeUsers: 0, newUsers: 0 })
+    points.set(date, { date, comments: 0, replies: 0, connection_notes: 0, messages: 0, x_replies: 0, x_messages: 0, activeUsers: 0, newUsers: 0 })
   }
   for (const row of series) {
     const feature = HISTORY_KIND_TO_FEATURE[row.kind]
@@ -322,7 +324,7 @@ export async function engageOverview(from: Date, to: Date, now: Date = new Date(
     if (point) point.newUsers = Number(row.count)
   }
 
-  const generations: Record<EngageFeature, number> = { comments: 0, replies: 0, connection_notes: 0, messages: 0 }
+  const generations = Object.fromEntries(ENGAGE_FEATURES.map((f) => [f, 0])) as Record<EngageFeature, number>
   for (const row of byKind) {
     const feature = HISTORY_KIND_TO_FEATURE[row.kind]
     if (feature) generations[feature] += row._count._all

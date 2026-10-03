@@ -11,28 +11,40 @@
 // message; it relays it into the extension via chrome.runtime.sendMessage.
 import { useEffect, useState } from "react"
 
-// Must match MESSAGE_TYPE in both
-// browser-extension-comment/src/content/authRelay.ts and
-// browser-extension-comment/src/background.ts exactly — no shared package
-// between this repo and the extension's, so it's a literal in all three
-// places by necessity.
-const MESSAGE_TYPE = "carouselabs:extension-token"
+// Must match TOKEN_MESSAGE_TYPE in browser-extension-comment/src/lib/platform.ts
+// for each extension. The X extension opens this page with ?for=x and listens
+// only for its own name, so with both installed neither picks up the other's
+// token. The LinkedIn name is what every installed copy already listens for.
+const MESSAGE_TYPES = {
+  linkedin: "carouselabs:extension-token",
+  x: "carouselabs:x-extension-token",
+} as const
+const PRODUCT_NAMES = { linkedin: "CarouseLabs Engage", x: "CarouseLabs Engage for X" } as const
+
+type Client = keyof typeof MESSAGE_TYPES
+
+function clientFromUrl(): Client {
+  return new URLSearchParams(window.location.search).get("for") === "x" ? "x" : "linkedin"
+}
 
 type Status = "connecting" | "connected" | "error"
 
 export function ExtensionConnectClient() {
   const [status, setStatus] = useState<Status>("connecting")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [client, setClient] = useState<Client>("linkedin")
 
   useEffect(() => {
     let cancelled = false
 
     async function exchange() {
+      const asking = clientFromUrl()
+      setClient(asking)
       try {
         const res = await fetch("/api/ext/auth/exchange", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ device: navigator.userAgent.slice(0, 200) }),
+          body: JSON.stringify({ device: navigator.userAgent.slice(0, 200), client: asking }),
         })
         if (!res.ok) {
           const body = await res.json().catch(() => ({}) as { error?: string })
@@ -47,7 +59,7 @@ export function ExtensionConnectClient() {
           "token starts with:",
           token.slice(0, 8) + "…",
         )
-        window.postMessage({ type: MESSAGE_TYPE, token }, window.location.origin)
+        window.postMessage({ type: MESSAGE_TYPES[asking], token }, window.location.origin)
         setStatus("connected")
       } catch (err) {
         if (cancelled) return
@@ -63,7 +75,7 @@ export function ExtensionConnectClient() {
   }, [])
 
   if (status === "connecting") {
-    return <p className="text-sm text-white/70">Connecting your CarouseLabs Engage extension…</p>
+    return <p className="text-sm text-white/70">Connecting your {PRODUCT_NAMES[client]} extension…</p>
   }
 
   if (status === "error") {

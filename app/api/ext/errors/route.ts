@@ -21,7 +21,7 @@ const limiter = new Ratelimit({
 })
 
 const body = z.object({
-  feature: z.enum(["comments", "replies", "connection_notes", "messages", "insert", "read", "auth", "other"]),
+  feature: z.enum(["comments", "replies", "connection_notes", "messages", "x_replies", "x_messages", "insert", "read", "auth", "other"]),
   code: z.string().regex(/^[a-z0-9_.-]{1,48}$/),
   message: z.string().trim().min(1).max(300),
 })

@@ -29,8 +29,9 @@ import {
   setExtensionAccess,
   useExtensionAccess,
 } from "@/lib/extensionAccess";
-import { isLinkedInTab, noContentScriptMessage, sameConversation, sendToTab } from "@/lib/tabs";
+import { isSiteTab, noContentScriptMessage, sameConversation, sendToTab } from "@/lib/tabs";
 import { insertFailureCode, readFailureCode, reportClientError, tabFailureCode } from "@/lib/errorReport";
+import { MESSAGES_SITE as SITE } from "@/sidepanel/messagesSite";
 import { markHistoryAction } from "@/lib/history";
 // Kept on the account, so the website's Extension section edits the same values.
 import { loadShowInsert, loadSyncedMessageContext, saveSyncedMessageContext } from "@/lib/syncedSettings";
@@ -44,7 +45,6 @@ import {
   type MessageProfile,
 } from "@/lib/api";
 import {
-  READ_CONVERSATION_MESSAGE_TYPE,
   MAX_MESSAGE_PURPOSE_CHARS,
   MESSAGE_TONES,
   type CapturedConversation,
@@ -60,8 +60,8 @@ import {
 // screen rather than a mode of HomeScreen, so it owns its own Insert flow
 // (config, preference) instead of receiving one as props.
 
-// Must match INSERT_MESSAGE_TYPE in src/content-script.ts exactly.
-const INSERT_MESSAGE_TYPE = "carouselabs:insert-comment";
+// The same screen serves CarouseLabs Engage for X's chats: what differs per
+// site (what to read, where to insert, which route) is in messagesSite.ts.
 
 // Sentinel options in the dropdowns: the first hands off to the builder
 // (like the Home screen's), the second stands for "no tone override" (""),
@@ -216,15 +216,13 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
     try {
       [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id === undefined) throw new Error("no active tab");
-      const res = await sendToTab<{ ok: boolean; conversation?: CapturedConversation; error?: string } | undefined>(
-        tab,
-        { type: READ_CONVERSATION_MESSAGE_TYPE },
-      );
+      const res = await sendToTab<{ ok: boolean; conversation?: unknown; error?: string } | undefined>(tab, SITE.readMessage);
+      const read = res?.ok ? SITE.toConversation(res.conversation) : null;
 
-      if (!res?.ok || !res.conversation) {
+      if (!read) {
         setReadError(res?.error ?? "Couldn't read this conversation.");
         const code = readFailureCode(res?.error);
-        if (code) reportClientError("messages", code);
+        if (code) reportClientError(SITE.reportFeature, code);
         return;
       }
 
@@ -234,15 +232,15 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
         generationRef.current = null;
         setGenerating(false);
       }
-      setConversation(res.conversation);
+      setConversation(read);
       setMessage("");
       setHasResult(false);
       setHistoryId(null);
       setCopied(false);
       setInsertError(null);
 
-      if (res.conversation.contact.profileUrl) {
-        await applyContextForContact(res.conversation.contact.profileUrl);
+      if (read.contact.profileUrl) {
+        await applyContextForContact(read.contact.profileUrl);
       } else {
         setChoice("profile");
         setProfileId(defaultProfileId());
@@ -250,8 +248,8 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
         setTone("");
       }
     } catch (err) {
-      if (isLinkedInTab(tab)) reportClientError("messages", tabFailureCode(err));
-      setReadError(noContentScriptMessage(tab, "Open a LinkedIn conversation in the active tab first."));
+      if (isSiteTab(tab)) reportClientError(SITE.reportFeature, tabFailureCode(err));
+      setReadError(noContentScriptMessage(tab, SITE.words.openInTab));
     } finally {
       setReading(false);
     }
@@ -327,12 +325,12 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
     setGenerating(true);
     setGenerateError(null);
     try {
-      const res = await apiFetch<MessageGenerateResponse>("/api/ext/message", {
+      const res = await apiFetch<MessageGenerateResponse>(SITE.endpoint, {
         signal: controller.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contact: { name: conversation.contact.name, headline: conversation.contact.headline },
+          contact: SITE.contactBody(conversation),
           // For History's "Open chat" link only; never sent to the model.
           threadPath: conversation.threadPath,
           thread: conversation.thread,
@@ -398,24 +396,19 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
       [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id === undefined) throw new Error("no active tab");
       if (!conversation) throw new Error("nothing read");
-      const res = await sendToTab<{ ok: boolean; error?: string } | undefined>(tab, {
-        type: INSERT_MESSAGE_TYPE,
-        text,
-        mode: "message",
-        // The content script refuses unless this conversation is still the
-        // one open, so text written for one person can't land in another's box.
-        expect: { threadPath: conversation.threadPath, contactName: conversation.contact.name },
-      });
+      // The page refuses unless this conversation is still the one open, so
+      // text written for one person can't land in another's box.
+      const res = await sendToTab<{ ok: boolean; error?: string } | undefined>(tab, SITE.insertMessage(text, conversation));
 
       if (!res?.ok) {
-        setInsertError(res?.error ?? "Couldn't insert into LinkedIn. Try Copy instead.");
-        reportClientError("messages", insertFailureCode(res?.error));
+        setInsertError(res?.error ?? SITE.words.insertFailed);
+        reportClientError(SITE.reportFeature, insertFailureCode(res?.error));
         return;
       }
       markHistoryAction(historyId, "INSERTED", text);
     } catch (err) {
-      if (isLinkedInTab(tab)) reportClientError("messages", tabFailureCode(err));
-      setInsertError(noContentScriptMessage(tab, "Open the LinkedIn conversation in the active tab, then try again."));
+      if (isSiteTab(tab)) reportClientError(SITE.reportFeature, tabFailureCode(err));
+      setInsertError(noContentScriptMessage(tab, SITE.words.openToInsert));
     } finally {
       setInserting(false);
     }
@@ -442,7 +435,7 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      <ScreenHeader title="Messages" description="Write the next message in a LinkedIn conversation." />
+      <ScreenHeader title="Messages" description={SITE.words.description} />
 
       {loadError && <Alert>{loadError}</Alert>}
 
@@ -465,7 +458,7 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
             <MessagesSquare aria-hidden className="h-5 w-5" />
           </div>
           <div className="space-y-1">
-            <p className="text-sm font-semibold">Open a conversation on LinkedIn</p>
+            <p className="text-sm font-semibold">{SITE.words.openFirst}</p>
             <p className="text-xs leading-relaxed text-muted-foreground">
               Then read it here. Read it again each time you come back to reply, so the next message knows what was
               said.

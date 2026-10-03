@@ -8,7 +8,7 @@ import Link from "next/link"
 import { AdminLineChart } from "@/components/admin/charts"
 import { AdminButton, AdminInput } from "@/components/admin/ui"
 import { RANGE_KEYS, RANGE_LABELS, type RangeKey } from "@/lib/engage/ranges"
-import { ENGAGE_FEATURES, FEATURE_LABELS, type EngageFeature } from "@/lib/engage/features"
+import { ENGAGE_FEATURES, LINKEDIN_FEATURES, FEATURE_LABELS, type EngageFeature } from "@/lib/engage/features"
 import {
   ErrorState,
   EmptyState,
@@ -161,7 +161,7 @@ export function EngageOverview() {
                   data={data.series}
                   xKey="date"
                   height={260}
-                  series={ENGAGE_FEATURES.map((f) => ({ key: f, label: FEATURE_LABELS[f], color: FEATURE_COLORS[f] }))}
+                  series={LINKEDIN_FEATURES.map((f) => ({ key: f, label: FEATURE_LABELS[f], color: FEATURE_COLORS[f] }))}
                 />
               </section>
               <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-4" aria-labelledby="engage-users-trend">

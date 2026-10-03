@@ -9,7 +9,7 @@ import { ArrowLeft, Copy, Gift, LogOut, PauseCircle, PlayCircle, RotateCcw, Slid
 import { AdminLineChart } from "@/components/admin/charts"
 import { AdminButton, AdminInput, AdminSelect, Modal, fmtDate, fmtDateTime } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
-import { ENGAGE_FEATURES, FEATURE_LABELS, USAGE_KINDS, USAGE_KIND_LABELS, formatLimit } from "@/lib/engage/features"
+import { ENGAGE_FEATURES, LINKEDIN_FEATURES, FEATURE_LABELS, USAGE_KINDS, USAGE_KIND_LABELS, formatLimit } from "@/lib/engage/features"
 import { GRANT_DURATIONS, GRANT_DURATION_LABELS, type GrantDuration } from "@/lib/engage/grants"
 import type { EngageUserDetail as Detail } from "@/lib/engage/userDetail"
 import { AccessEditor } from "./AccessEditor"
@@ -369,7 +369,7 @@ export function EngageUserDetail({ userId }: { userId: string }) {
               data={data.usage.series as Record<string, unknown>[]}
               xKey="date"
               height={220}
-              series={ENGAGE_FEATURES.map((f) => ({ key: f, label: FEATURE_LABELS[f], color: FEATURE_COLORS[f] }))}
+              series={LINKEDIN_FEATURES.map((f) => ({ key: f, label: FEATURE_LABELS[f], color: FEATURE_COLORS[f] }))}
             />
           </section>
           <section className="overflow-x-auto rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]">

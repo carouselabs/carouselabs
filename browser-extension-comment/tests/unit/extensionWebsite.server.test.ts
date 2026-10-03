@@ -50,6 +50,8 @@ beforeEach(() => {
     { id: "h1", userId: "u1", kind: "comment", profileId: "p1", profileName: null, postAuthor: "Jane", postUrl: "", postSnippet: "", comment: "c", action: "NONE", createdAt: new Date("2026-09-01") },
     { id: "h2", userId: "u1", kind: "message", profileId: null, profileName: "Just continue", postAuthor: "Sam", postUrl: "", postSnippet: "", comment: "m", action: "COPIED", createdAt: new Date("2026-09-02") },
     { id: "h3", userId: "u2", kind: "comment", profileId: "p9", profileName: "Theirs", postAuthor: "X", postUrl: "", postSnippet: "", comment: "x", action: "NONE", createdAt: new Date("2026-09-03") },
+    // Written by CarouseLabs Engage for X.
+    { id: "h4", userId: "u1", kind: "x_reply", profileId: null, profileName: "X Quick Reply", postAuthor: "Sam", postUrl: "", postSnippet: "", comment: "r", action: "NONE", createdAt: new Date("2026-09-04") },
   ];
 
   db.extensionToken.findFirst.mockImplementation(async ({ where }: { where: { tokenHash: string } }) => {
@@ -63,9 +65,15 @@ beforeEach(() => {
     t.revokedAt = data.revokedAt;
     return { count: 1 };
   });
-  db.commentHistory.findMany.mockImplementation(async ({ where }: { where: { userId: string; kind?: string } }) =>
+  // Prisma semantics for kind: a value, or { in: [...] }.
+  db.commentHistory.findMany.mockImplementation(async ({ where }: { where: { userId: string; kind?: string | { in: string[] } } }) =>
     state.history
-      .filter((h) => h.userId === where.userId && (!where.kind || h.kind === where.kind))
+      .filter(
+        (h) =>
+          h.userId === where.userId &&
+          (where.kind === undefined ||
+            (typeof where.kind === "string" ? h.kind === where.kind : where.kind.in.includes(h.kind as string))),
+      )
       .sort((a, b) => (b.createdAt as Date).getTime() - (a.createdAt as Date).getTime()),
   );
   db.commentHistory.deleteMany.mockImplementation(async ({ where }: { where: { id: string; userId: string } }) => {
@@ -137,6 +145,16 @@ describe("history across every kind", () => {
     ]);
   });
 
+  it("keeps LinkedIn and X history apart: X rows only for ?platform=x", async () => {
+    const linkedin = (await (await historyGET(req("/api/ext/history"))).json()) as { entries: { id: string }[] };
+    expect(linkedin.entries.map((e) => e.id)).not.toContain("h4");
+    const x = (await (await historyGET(req("/api/ext/history?platform=x"))).json()) as { entries: { id: string; kind: string }[] };
+    expect(x.entries.map((e) => [e.id, e.kind])).toEqual([["h4", "x_reply"]]);
+    // Each side's kinds only.
+    expect((await historyGET(req("/api/ext/history?kind=x_reply"))).status).toBe(400);
+    expect((await historyGET(req("/api/ext/history?platform=x&kind=comment"))).status).toBe(400);
+  });
+
   it("filters by kind, and rejects a kind that doesn't exist", async () => {
     const res = await historyGET(req("/api/ext/history?kind=message"));
     expect(((await res.json()) as { entries: unknown[] }).entries).toHaveLength(1);
@@ -148,7 +166,7 @@ describe("history across every kind", () => {
     expect(own.status).toBe(200);
     const theirs = await historyDELETE(req("/api/ext/history/h3", { method: "DELETE", headers: { origin: BASE } }), params("h3"));
     expect(theirs.status).toBe(404);
-    expect(state.history.map((h) => h.id)).toEqual(["h2", "h3"]);
+    expect(state.history.map((h) => h.id)).toEqual(["h2", "h3", "h4"]);
   });
 
   it("is closed to a signed-out visitor", async () => {

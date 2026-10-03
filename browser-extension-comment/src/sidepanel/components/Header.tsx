@@ -1,5 +1,6 @@
 import { MessageCircle, X } from "lucide-react";
 import { Tooltip } from "@/components/ui/tooltip";
+import { PRODUCT_NAME } from "@/lib/platform";
 
 export function Header() {
   return (
@@ -8,7 +9,7 @@ export function Header() {
         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm">
           <MessageCircle className="h-3.5 w-3.5" />
         </div>
-        <h1 className="truncate text-sm font-semibold tracking-tight">CarouseLabs Engage</h1>
+        <h1 className="truncate text-sm font-semibold tracking-tight">{PRODUCT_NAME}</h1>
       </div>
 
       <Tooltip label="Close panel" side="bottom-end">

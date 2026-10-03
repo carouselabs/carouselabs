@@ -120,7 +120,8 @@ export interface ExtMe
   commentsToday: number
 }
 
-export type HistoryKind = "comment" | "reply" | "connection_note" | "message"
+// x_reply / x_message: CarouseLabs Engage for X, listed with ?platform=x.
+export type HistoryKind = "comment" | "reply" | "connection_note" | "message" | "x_reply" | "x_message"
 
 export interface HistoryEntry {
   id: string
@@ -132,6 +133,13 @@ export interface HistoryEntry {
   action: "NONE" | "COPIED" | "INSERTED"
   createdAt: string
   profileName: string
+}
+
+// CarouseLabs Engage for X's settings (app/api/ext/x/settings).
+export interface XSettings {
+  defaultProfileId: string | null
+  maxReplyLength: number
+  insertButtonHidden: boolean
 }
 
 export interface ExtDevice {

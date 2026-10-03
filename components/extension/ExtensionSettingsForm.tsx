@@ -17,10 +17,10 @@ import {
 
 type Option = { id: string; name: string }
 
-const selectClass =
+export const selectClass =
   "w-full rounded-xl border border-[#E5E3DE] bg-white px-3.5 py-2.5 text-[13px] text-[#0A0A0A] outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/15 disabled:opacity-60"
 
-function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+export function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-2 md:gap-6 py-4 border-b border-[#F0EEE8] last:border-0">
       <div className="flex flex-col gap-0.5">

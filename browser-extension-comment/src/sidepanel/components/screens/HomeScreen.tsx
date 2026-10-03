@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ExternalLink, Minus, MousePointerClick, Plus, RotateCcw, Sparkles, Timer, X } from "lucide-react";
-import { ensureContentScript, isLinkedInTab, noContentScriptMessage, sendToTab } from "@/lib/tabs";
+import { ensureContentScript, isSiteTab, noContentScriptMessage, sendToTab } from "@/lib/tabs";
 import { insertFailureCode, reportClientError, tabFailureCode, type ReportFeature } from "@/lib/errorReport";
 import { markHistoryAction } from "@/lib/history";
 import { loadCachedCommentProfiles, saveCachedCommentProfiles } from "@/lib/profileCache";
@@ -679,7 +679,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
     } catch (err) {
       // The active tab has no content script (not LinkedIn, or a LinkedIn
       // tab opened before the extension was updated), or it didn't answer.
-      if (isLinkedInTab(tab)) reportClientError(INSERT_FEATURE[mode], tabFailureCode(err));
+      if (isSiteTab(tab)) reportClientError(INSERT_FEATURE[mode], tabFailureCode(err));
       setError(
         noContentScriptMessage(
           tab,

@@ -30,11 +30,20 @@ type FieldDef =
   | { key: string; label: string; type: "select"; required?: boolean; options: string[]; hint?: string }
   | { key: string; label: string; type: "range"; required?: boolean; min: number; max: number; hint?: string }
 
+type LinkedinDefaultKey = keyof Pick<
+  ExtSettings,
+  "defaultCommentProfileId" | "defaultConnectionProfileId" | "defaultMessageProfileId"
+>
+
 interface KindDef {
-  id: "comment" | "connection" | "message"
+  id: "comment" | "connection" | "message" | "x"
   label: string
   endpoint: string
-  defaultKey: keyof Pick<ExtSettings, "defaultCommentProfileId" | "defaultConnectionProfileId" | "defaultMessageProfileId">
+  // Where the default is saved: a field of the LinkedIn extension's settings,
+  // or, for X reply profiles, X's own settings (settingsEndpoint), whose
+  // current value comes back with the profile list.
+  defaultKey: LinkedinDefaultKey | "defaultProfileId"
+  settingsEndpoint?: string
   intro: string
   fields: FieldDef[]
   samplesLabel: string
@@ -196,6 +205,41 @@ const KINDS: KindDef[] = [
     description: (p) => String(p.goal ?? ""),
   },
 ]
+
+// CarouseLabs Engage for X's reply profiles (app/api/ext/x/profiles): the
+// comment profile's fields, with a range that ends at the account's X limit
+// (280, or more with X Premium in Extension → X → Settings).
+export function xKind(maxLength: number): KindDef {
+  const comment = KINDS[0]
+  const max = Math.min(COMMENT_LENGTH.max, maxLength)
+  return {
+    ...comment,
+    id: "x",
+    label: "X replies",
+    endpoint: "/api/ext/x/profiles",
+    defaultKey: "defaultProfileId",
+    settingsEndpoint: "/api/ext/x/settings",
+    intro: "How you sound when CarouseLabs Engage for X writes a reply. Kept separate from your LinkedIn profiles.",
+    fields: comment.fields.map((f) =>
+      f.key === "goal"
+        ? { ...f, label: "Reply goal" }
+        : f.type === "range"
+          ? {
+              ...f,
+              min: COMMENT_LENGTH.min,
+              max,
+              hint:
+                maxLength > 280
+                  ? `X Premium is on, so replies can be up to ${max} characters.`
+                  : "X allows 280 characters. Turn on X Premium in Settings for longer replies.",
+            }
+          : f,
+    ),
+    samplesLabel: "Sample replies",
+    samplesHint: "3–5 replies you've really posted on X, so it can match your voice. Optional.",
+    empty: { ...comment.empty, length: `80-${Math.min(220, max)} characters` },
+  }
+}
 
 const MAX_SAMPLES = 5
 
@@ -579,36 +623,55 @@ function ProfileCard({
 
 type Editing = { initial: Draft; existingId: string | null } | null
 
-function KindPanel({ kind, me, onDefaultsChanged }: { kind: KindDef; me: ExtMe; onDefaultsChanged: () => void }) {
+type ProfileList = { profiles: Profile[]; defaultProfileId?: string | null }
+
+// `me` carries the LinkedIn defaults; X reply profiles (settingsEndpoint)
+// read theirs from the list instead and need no `me`.
+export function KindPanel({
+  kind,
+  me,
+  onDefaultsChanged,
+}: {
+  kind: KindDef
+  me: ExtMe | null
+  onDefaultsChanged: () => void
+}) {
   const [profiles, setProfiles] = useState<Profile[] | null>(null)
+  const [listDefault, setListDefault] = useState<string | null>(null)
   const [editing, setEditing] = useState<Editing>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const apply = useCallback((res: ProfileList) => {
+    setProfiles(res.profiles)
+    setListDefault(res.defaultProfileId ?? null)
+  }, [])
 
   // Refetch after a save or delete.
   const load = useCallback(async () => {
     try {
-      const res = await extApi<{ profiles: Profile[] }>(kind.endpoint)
-      setProfiles(res.profiles)
+      apply(await extApi<ProfileList>(kind.endpoint))
     } catch (err) {
       setError(errorMessage(err))
     }
-  }, [kind.endpoint])
+  }, [kind.endpoint, apply])
 
   useEffect(() => {
     let cancelled = false
-    extApi<{ profiles: Profile[] }>(kind.endpoint)
-      .then((res) => !cancelled && setProfiles(res.profiles))
+    extApi<ProfileList>(kind.endpoint)
+      .then((res) => !cancelled && apply(res))
       .catch((err) => !cancelled && setError(errorMessage(err)))
     return () => {
       cancelled = true
     }
-  }, [kind.endpoint])
+  }, [kind.endpoint, apply])
 
   const custom = profiles?.filter((p) => !p.isSystem) ?? []
   const builtIn = profiles?.filter((p) => p.isSystem) ?? []
 
   // The account's explicit default, else the shared built-in default.
-  const explicitDefault = me[kind.defaultKey]
+  const explicitDefault = kind.settingsEndpoint
+    ? listDefault
+    : (me?.[kind.defaultKey as LinkedinDefaultKey] ?? null)
   const defaultId =
     (explicitDefault && profiles?.some((p) => p.id === explicitDefault) ? explicitDefault : null) ??
     builtIn.find((p) => p.isDefault)?.id ??
@@ -617,7 +680,11 @@ function KindPanel({ kind, me, onDefaultsChanged }: { kind: KindDef; me: ExtMe; 
   async function makeDefault(id: string) {
     setError(null)
     try {
-      await extApi("/api/ext/settings", { method: "PATCH", body: JSON.stringify({ [kind.defaultKey]: id }) })
+      await extApi(kind.settingsEndpoint ?? "/api/ext/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ [kind.defaultKey]: id }),
+      })
+      if (kind.settingsEndpoint) await load()
       onDefaultsChanged()
     } catch (err) {
       setError(errorMessage(err))

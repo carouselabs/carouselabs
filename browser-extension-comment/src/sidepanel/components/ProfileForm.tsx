@@ -96,17 +96,27 @@ export function draftFromProfile(profile: CommentProfile): ProfileDraft {
 // range the server applies to it, and keeps its original string until the user
 // actually moves a control — opening and re-saving an old profile does not
 // silently change how it generates.
-function LengthRangePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function LengthRangePicker({
+  value,
+  onChange,
+  ceiling = CHAR_MAX,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  // The top of the slider: 900 for LinkedIn, X's limit for an X profile.
+  ceiling?: number;
+}) {
   const parsed = rangeFromLength(value);
-  const min = clamp(parsed.min);
-  const max = clamp(parsed.max);
+  const fit = (n: number) => Math.min(ceiling, clamp(n));
+  const min = fit(parsed.min);
+  const max = fit(parsed.max);
   const isExplicit = /(\d+)\s*-\s*(\d+)\s*char/i.test(value);
 
   return (
     <CharRangePicker
       min={min}
       max={max}
-      bounds={{ min: CHAR_MIN, max: CHAR_MAX }}
+      bounds={{ min: CHAR_MIN, max: ceiling }}
       onChange={(nextMin, nextMax) => onChange(lengthFromRange(nextMin, nextMax))}
       caption={
         isExplicit
@@ -117,7 +127,56 @@ function LengthRangePicker({ value, onChange }: { value: string; onChange: (v: s
   );
 }
 
+// What differs when the builder makes an X profile (CarouseLabs Engage for
+// X): its own routes, X's length limit, and the words.
+export interface ProfileFormSite {
+  base: string;
+  test: string;
+  noun: string;
+  goalLabel: string;
+  samplesLabel: string;
+  samplesHint: string;
+  testLabel: string;
+  testPlaceholder: string;
+  defaultLength: string;
+  // The longest range the slider offers.
+  maxLength: number;
+}
+
+const LINKEDIN_FORM: ProfileFormSite = {
+  base: "/api/ext/profiles",
+  test: "/api/ext/profiles/test",
+  noun: "comment profile",
+  goalLabel: "Comment goal",
+  samplesLabel: "Sample comments",
+  samplesHint: `Optional. ${MIN_SAMPLES}-${MAX_SAMPLES} of your own comments teach it your voice better than any setting.`,
+  testLabel: "LinkedIn post to test on",
+  testPlaceholder: "Paste a LinkedIn post here to preview what this profile writes.",
+  defaultLength: lengthFromRange(DEFAULT_RANGE.min, DEFAULT_RANGE.max),
+  maxLength: CHAR_MAX,
+};
+
+export function xProfileFormSite(maxLength: number): ProfileFormSite {
+  // X Premium allows 1000, but a profile's range is capped at CHAR_MAX like
+  // any other (LENGTH_RANGE_MAX in lib/commentProfiles).
+  const ceiling = Math.min(maxLength, CHAR_MAX);
+  return {
+    base: "/api/ext/x/profiles",
+    test: "/api/ext/x/profiles/test",
+    noun: "X profile",
+    goalLabel: "Reply goal",
+    samplesLabel: "Sample replies",
+    samplesHint: `Optional. ${MIN_SAMPLES}-${MAX_SAMPLES} of your own replies on X teach it your voice better than any setting.`,
+    testLabel: "X post to test on",
+    testPlaceholder: "Paste a post from X here to preview what this profile writes.",
+    defaultLength: lengthFromRange(80, Math.min(220, ceiling)),
+    maxLength: ceiling,
+  };
+}
+
 interface Props {
+  // LinkedIn unless given (xProfileFormSite for an X profile).
+  site?: ProfileFormSite;
   // Present when editing a saved profile; absent when creating a new one.
   // Its presence is what decides PUT vs POST.
   existing?: CommentProfile;
@@ -128,9 +187,9 @@ interface Props {
   onCancel: () => void;
 }
 
-export function ProfileForm({ existing, seed, onSaved, onCancel }: Props) {
+export function ProfileForm({ site = LINKEDIN_FORM, existing, seed, onSaved, onCancel }: Props) {
   const [draft, setDraft] = useState<ProfileDraft>(
-    existing ? draftFromProfile(existing) : (seed ?? EMPTY_DRAFT),
+    existing ? draftFromProfile(existing) : (seed ?? { ...EMPTY_DRAFT, length: site.defaultLength }),
   );
   const [setAsDefault, setSetAsDefault] = useState(false);
   const [pastedPost, setPastedPost] = useState("");
@@ -167,7 +226,7 @@ export function ProfileForm({ existing, seed, onSaved, onCancel }: Props) {
     setTestResult(null);
 
     try {
-      const res = await apiFetch<TestResponse>("/api/ext/profiles/test", {
+      const res = await apiFetch<TestResponse>(site.test, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -202,13 +261,13 @@ export function ProfileForm({ existing, seed, onSaved, onCancel }: Props) {
 
     try {
       if (existing) {
-        await apiFetch(`/api/ext/profiles/${existing.id}`, {
+        await apiFetch(`${site.base}/${existing.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
       } else {
-        await apiFetch("/api/ext/profiles", {
+        await apiFetch(site.base, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -227,7 +286,7 @@ export function ProfileForm({ existing, seed, onSaved, onCancel }: Props) {
 
   return (
     <FormLayout
-      title={existing ? "Edit comment profile" : "New comment profile"}
+      title={existing ? `Edit ${site.noun}` : `New ${site.noun}`}
       onCancel={onCancel}
       busy={busy}
       error={error}
@@ -255,7 +314,7 @@ export function ProfileForm({ existing, seed, onSaved, onCancel }: Props) {
         )}
       </FormField>
 
-      <FormField label="Comment goal" required>
+      <FormField label={site.goalLabel} required>
         {(id) => <OptionSelect id={id} value={draft.goal} onChange={(v) => set("goal", v)} options={GOALS} />}
       </FormField>
 
@@ -264,7 +323,7 @@ export function ProfileForm({ existing, seed, onSaved, onCancel }: Props) {
       </FormField>
 
       <FormField label="Length" required>
-        {() => <LengthRangePicker value={draft.length} onChange={(v) => set("length", v)} />}
+        {() => <LengthRangePicker value={draft.length} onChange={(v) => set("length", v)} ceiling={site.maxLength} />}
       </FormField>
 
       <div className="grid grid-cols-2 gap-3">
@@ -303,8 +362,8 @@ export function ProfileForm({ existing, seed, onSaved, onCancel }: Props) {
       </FormField>
 
       <SamplesField
-        label="Sample comments"
-        hint={`Optional. ${MIN_SAMPLES}-${MAX_SAMPLES} of your own comments teach it your voice better than any setting.`}
+        label={site.samplesLabel}
+        hint={site.samplesHint}
         noun="sample"
         samples={draft.samples}
         max={MAX_SAMPLES}
@@ -320,10 +379,10 @@ export function ProfileForm({ existing, seed, onSaved, onCancel }: Props) {
         </div>
         <Textarea
           autoGrow
-          aria-label="LinkedIn post to test on"
+          aria-label={site.testLabel}
           value={pastedPost}
           onChange={(e) => setPastedPost(e.target.value)}
-          placeholder="Paste a LinkedIn post here to preview what this profile writes."
+          placeholder={site.testPlaceholder}
           className="max-h-60 min-h-[5rem]"
         />
         <Button

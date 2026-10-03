@@ -194,6 +194,7 @@ export interface Blocked {
 export function featuresFor(kind: EngageUsageKind): EngageFeature[] {
   if (kind === "rewrites") return ["comments", "replies"]
   if (kind === "tests") return ["comments"]
+  if (kind === "x_rewrites" || kind === "x_tests") return ["x_replies"]
   return [kind]
 }
 
@@ -229,7 +230,9 @@ export function featureLimitsFor(
   access: EngageAccess,
   kind: EngageUsageKind,
 ): { day: Limit; month: Limit } {
-  if (kind === "rewrites" || kind === "tests") return { day: "unlimited", month: "unlimited" }
+  if (kind === "rewrites" || kind === "tests" || kind === "x_rewrites" || kind === "x_tests") {
+    return { day: "unlimited", month: "unlimited" }
+  }
   return {
     day: access.limits[`${kind}.day`].effective,
     month: access.limits[`${kind}.month`].effective,

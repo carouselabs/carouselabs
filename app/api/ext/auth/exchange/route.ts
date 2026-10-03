@@ -24,6 +24,9 @@ export async function POST(req: Request) {
     if (typeof body?.device === "string" && body.device.trim()) {
       device = body.device.trim().slice(0, 200)
     }
+    // The X extension (CarouseLabs Engage for X) says so, and its browsers
+    // are labelled that way in "Signed-in browsers".
+    if (body?.client === "x") device = `X extension · ${device ?? "Chrome"}`.slice(0, 200)
   } catch {
     // no/empty body is fine — device is optional
   }

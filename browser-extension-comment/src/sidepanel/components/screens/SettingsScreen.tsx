@@ -20,7 +20,7 @@ import { loadShowInsert, saveShowInsert } from "@/lib/syncedSettings";
 // "No default" / "Not set" in a dropdown, whose options can't be "".
 const NONE = "__none__";
 
-function Group({ title, children }: { title: string; children: ReactNode }) {
+export function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-1.5" aria-label={title}>
       <h3 className="text-xs font-medium text-muted-foreground">{title}</h3>
@@ -29,7 +29,7 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function SwitchRow({
+export function SwitchRow({
   id,
   title,
   hint,
@@ -65,7 +65,7 @@ function SwitchRow({
   );
 }
 
-function SelectRow({ id, title, hint, children }: { id: string; title: string; hint: string; children: ReactNode }) {
+export function SelectRow({ id, title, hint, children }: { id: string; title: string; hint: string; children: ReactNode }) {
   return (
     <div className="space-y-2 p-3">
       <div className="space-y-0.5">

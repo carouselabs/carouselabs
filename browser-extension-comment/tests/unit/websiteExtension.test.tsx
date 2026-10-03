@@ -7,6 +7,19 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { ProfilesManager } from "../../../components/extension/ProfilesManager";
 import { HistoryList } from "../../../components/extension/HistoryList";
 import { ExtensionSettingsForm } from "../../../components/extension/ExtensionSettingsForm";
+import { XExtensionManager } from "../../../components/extension/XExtensionManager";
+import { ExtensionTabs } from "../../../components/extension/ExtensionTabs";
+
+const nav = vi.hoisted(() => ({ pathname: "/extension" }));
+vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
+// Next's Link brings the website's own React; a plain link is all the tab row needs.
+vi.mock("next/link", () => ({
+  default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
+  ),
+}));
 
 afterEach(cleanup);
 
@@ -307,5 +320,122 @@ describe("website — conversations", () => {
     fireEvent.click(screen.getByRole("button", { name: "Forget" }));
     await waitFor(() => expect(screen.queryByText("Sam Lee")).toBeNull());
     expect(calls.some((c) => c.method === "DELETE" && c.url === "/api/ext/contacts/k1")).toBe(true);
+  });
+});
+
+describe("website — X extension", () => {
+  const X_PRESET = { ...SYSTEM_PROFILE, id: "sys-x-thoughtful-reply", name: "CarouseLabs — X Thoughtful Reply", length: "80-220 characters" };
+  // A preset that isn't the default, listed first: what a dropdown with no
+  // choice would show if Settings didn't pick the real default itself.
+  const X_QUICK = { ...X_PRESET, id: "sys-x-quick-reply", name: "CarouseLabs — X Quick Reply", isDefault: false }
+  const X_MINE = { ...X_PRESET, id: "xmine", userId: "u1", name: "Punchy founder", isSystem: false, isRecommended: false, isDefault: false };
+  const X_SETTINGS = { defaultProfileId: null, maxReplyLength: 280, insertButtonHidden: false };
+
+  function xServer(settings = X_SETTINGS, extra: Record<string, unknown | ((call: Call) => unknown)> = {}) {
+    let current = { ...settings };
+    return server({
+      "GET /api/ext/x/settings": () => current,
+      "PATCH /api/ext/x/settings": (call: Call) => (current = { ...current, ...(call.body as object) }),
+      "GET /api/ext/x/profiles": () => ({ profiles: [X_QUICK, X_PRESET, X_MINE], defaultProfileId: current.defaultProfileId }),
+      ...extra,
+    });
+  }
+
+  it("creates an X reply profile on X's route, within X's limit, apart from LinkedIn's", async () => {
+    const calls = xServer(X_SETTINGS, { "POST /api/ext/x/profiles": { profile: { id: "new" } } });
+    render(<XExtensionManager />);
+    expect(await screen.findByText("Punchy founder")).toBeTruthy();
+    fireEvent.click(await newProfileButton());
+    expect(screen.getByText(/New profile · X replies/)).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText("e.g. Founder voice"), { target: { value: "Short and sharp" } });
+    fireEvent.change(screen.getByPlaceholderText(/B2B SaaS founder/), { target: { value: "A founder" } });
+
+    fireEvent.change(screen.getByLabelText("Maximum characters"), { target: { value: "400" } });
+    expect(screen.getByText(/between 15 and 280 characters/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Maximum characters"), { target: { value: "200" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /create profile/i }));
+    await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+    const post = calls.find((c) => c.method === "POST")!;
+    expect(post.url).toBe("/api/ext/x/profiles");
+    expect(post.body).toMatchObject({ name: "Short and sharp", length: "80-200 characters" });
+    expect(calls.some((c) => c.url === "/api/ext/profiles" || c.url === "/api/ext/me")).toBe(false);
+  });
+
+  it("allows a longer range once X Premium is on", async () => {
+    xServer({ ...X_SETTINGS, maxReplyLength: 1000 });
+    render(<XExtensionManager />);
+    fireEvent.click(await newProfileButton());
+    fireEvent.change(screen.getByPlaceholderText("e.g. Founder voice"), { target: { value: "x" } });
+    fireEvent.change(screen.getByPlaceholderText(/B2B SaaS founder/), { target: { value: "y" } });
+    fireEvent.change(screen.getByLabelText("Maximum characters"), { target: { value: "600" } });
+    expect(screen.queryByText(/between 15 and/)).toBeNull();
+    expect(screen.getByText(/X Premium is on/)).toBeTruthy();
+  });
+
+  it("makes a profile the default through X's settings, and shows it", async () => {
+    const calls = xServer();
+    render(<XExtensionManager />);
+    const card = (await screen.findByText("Punchy founder")).closest("div.rounded-2xl") as HTMLElement;
+    expect(within(card).queryByText("Default")).toBeNull();
+    fireEvent.click(within(card).getByRole("button", { name: /make default/i }));
+    await waitFor(() => expect(within(card).getByText("Default")).toBeTruthy());
+    expect(calls.find((c) => c.method === "PATCH")).toMatchObject({ url: "/api/ext/x/settings", body: { defaultProfileId: "xmine" } });
+  });
+
+  it("lists only X's history, and links to x.com", async () => {
+    const calls = xServer(X_SETTINGS, {
+      "GET /api/ext/history?limit=30&platform=x": {
+        entries: [
+          { id: "h1", kind: "x_reply", postAuthor: "Priya", postUrl: "https://x.com/priya/status/1", postSnippet: "", comment: "Order beats count.", action: "INSERTED", createdAt: "2026-10-01T10:00:00Z", profileName: "Punchy founder" },
+        ],
+        nextCursor: null,
+      },
+    });
+    render(<XExtensionManager />);
+    fireEvent.click(await screen.findByRole("button", { name: "History" }));
+    expect(await screen.findByText("Order beats count.")).toBeTruthy();
+    expect(screen.getByText("Reply to Priya")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /View post/ }).getAttribute("href")).toBe("https://x.com/priya/status/1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Messages" }));
+    await waitFor(() => expect(calls.some((c) => c.url.includes("platform=x") && c.url.includes("kind=x_message"))).toBe(true));
+  });
+
+  it("saves X Premium, the default X profile and Insert to X's settings", async () => {
+    const calls = xServer();
+    render(<XExtensionManager />);
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: /I have X Premium/ }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1));
+
+    const row = (await screen.findByText("Default X profile")).closest("div.grid") as HTMLElement;
+    await waitFor(() => expect((within(row).getByRole("combobox") as HTMLSelectElement).value).toBe("sys-x-thoughtful-reply"));
+    fireEvent.change(within(row).getByRole("combobox"), { target: { value: "xmine" } });
+    await waitFor(() => expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(2));
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /show the insert button/i }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(3));
+
+    const patches = calls.filter((c) => c.method === "PATCH");
+    expect(patches.map((c) => c.url)).toEqual(["/api/ext/x/settings", "/api/ext/x/settings", "/api/ext/x/settings"]);
+    expect(patches.map((c) => c.body)).toEqual([
+      { maxReplyLength: 1000 },
+      { defaultProfileId: "xmine" },
+      { insertButtonHidden: true },
+    ]);
+  });
+});
+
+describe("website — Extension tabs", () => {
+  it("has an X tab, whose page is titled for X; the others stay LinkedIn's", () => {
+    nav.pathname = "/extension/x";
+    render(<ExtensionTabs />);
+    expect(screen.getByRole("heading", { name: "X Extension" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "X (Twitter)" }).getAttribute("href")).toBe("/extension/x");
+    cleanup();
+    nav.pathname = "/extension/history";
+    render(<ExtensionTabs />);
+    expect(screen.getByRole("heading", { name: "LinkedIn Extension" })).toBeTruthy();
   });
 });

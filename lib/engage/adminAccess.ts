@@ -15,6 +15,7 @@ export const ENGAGE_PERMISSIONS = [
   "engage.users.notes", // notes and tags
   "engage.audit.view", // the Engage audit trail
   "engage.export", // CSV exports
+  "engage.controls.manage", // settings for everyone: pause a feature, Insert, minimum version
 ] as const
 export type EngagePermission = (typeof ENGAGE_PERMISSIONS)[number]
 

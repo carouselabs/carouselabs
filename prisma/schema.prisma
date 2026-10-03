@@ -991,6 +991,18 @@ model EngageClientError {
   @@index([code])
 }
 
+// Engage settings that apply to everyone (admin → Engage → Controls), one
+// JSON value per key: "features" (a feature paused for all, with the message
+// people see), "insert" (Insert on or off per extension) and "minVersion"
+// (the oldest extension version still allowed to write, per extension). No
+// row means the default: everything on, no minimum. lib/engage/settings.ts.
+model EngageSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @default(now()) @updatedAt
+  updatedBy String?
+}
+
 // Internal notes on a user. Never shown to the user.
 model AdminNote {
   id          String   @id @default(cuid())

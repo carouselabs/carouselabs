@@ -96,7 +96,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   }
 
-  const preflight = await engagePreflight(user.id, "connection_notes")
+  const preflight = await engagePreflight(user.id, "connection_notes", req)
   if (preflight.response) return preflight.response
 
   let target: ConnectionTargetInput

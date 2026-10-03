@@ -81,7 +81,7 @@ export async function POST(req: Request) {
 
   // Shared daily cap across every extension generation route. Generate and
   // Regenerate both count, since both call this route.
-  const preflight = await engagePreflight(user.id, null)
+  const preflight = await engagePreflight(user.id, null, req)
   timer.mark("limit")
   if (preflight.response) return preflight.response
 

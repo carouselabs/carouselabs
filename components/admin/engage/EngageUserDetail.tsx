@@ -235,6 +235,8 @@ export function EngageUserDetail({ userId }: { userId: string }) {
               <span className="tabular-nums">
                 {fmtNumber(monthUse(f))} / {formatLimit(access.limits[`${f}.month`].effective)}
               </span>
+            ) : access.features[f].paused ? (
+              "Paused for everyone"
             ) : (
               "Off"
             )}
@@ -286,7 +288,7 @@ export function EngageUserDetail({ userId }: { userId: string }) {
                     <td className="px-4 py-2">{FEATURE_LABELS[f]}</td>
                     <td className="px-2 py-2 text-[#8A8A8A]">On</td>
                     <td className="px-2 py-2">{access.features[f].override ? <Pill tone="amber">{access.features[f].override === "on" ? "On" : "Off"}</Pill> : <span className="text-[#8A8A8A]">—</span>}</td>
-                    <td className="px-4 py-2 text-right font-medium">{access.features[f].enabled ? "On" : <span className="text-red-300">Off</span>}</td>
+                    <td className="px-4 py-2 text-right font-medium">{access.features[f].enabled ? "On" : <span className="text-red-300">{access.features[f].paused ? "Paused for everyone" : "Off"}</span>}</td>
                   </tr>
                 ))}
                 {(Object.keys(access.limits) as Array<keyof typeof access.limits>).map((k) => (

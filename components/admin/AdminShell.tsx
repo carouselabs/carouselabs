@@ -5,6 +5,7 @@ import { useState, type ReactNode } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
+  SlidersHorizontal,
   LayoutDashboard,
   Users,
   CreditCard,
@@ -66,6 +67,7 @@ const SECTIONS = [
       { href: "/admin/engage", label: "Overview", icon: Activity },
       { href: "/admin/engage/users", label: "Engage users", icon: UserCog },
       { href: "/admin/engage/access", label: "Free access", icon: KeyRound },
+      { href: "/admin/engage/controls", label: "Controls", icon: SlidersHorizontal },
       { href: "/admin/engage/audit", label: "Engage audit log", icon: History },
     ],
   },

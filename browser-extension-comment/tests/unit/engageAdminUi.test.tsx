@@ -33,6 +33,10 @@ vi.mock("../../../components/admin/Toast", () => ({ useToast: () => ({ toast: vi
 
 import { EngageOverview } from "../../../components/admin/engage/EngageOverview";
 import { EngageUsersTable } from "../../../components/admin/engage/EngageUsersTable";
+import { EngageControls } from "../../../components/admin/engage/EngageControls";
+import { EngageUserDetail } from "../../../components/admin/engage/EngageUserDetail";
+import { ENGAGE_FEATURES, LIMIT_KEYS, planLimit } from "../../../lib/engage/features";
+import { defaultGlobalSettings, type EngageGlobalSettings } from "../../../lib/engage/settingsRules";
 
 const FEATURES0 = { comments: 0, replies: 0, connection_notes: 0, messages: 0, x_replies: 0, x_messages: 0 };
 const overview = (platform: string) => ({
@@ -154,5 +158,149 @@ describe("Engage users: by extension", () => {
     // Back to any extension: the filter leaves the address.
     fireEvent.change(screen.getByRole("combobox", { name: "Extension" }), { target: { value: "any" } });
     expect(nav.replace).toHaveBeenLastCalledWith("?", { scroll: false });
+  });
+});
+
+describe("Engage controls", () => {
+  type Controls = { ready: boolean; settings: EngageGlobalSettings; saved: Record<string, unknown>; versions: unknown[] };
+  let controls: Controls;
+  let patches: Array<Record<string, unknown>>;
+  let refuse: string | null;
+
+  beforeEach(() => {
+    patches = [];
+    refuse = null;
+    controls = {
+      ready: true,
+      settings: defaultGlobalSettings(),
+      saved: {},
+      versions: [
+        { platform: "linkedin", version: "1.3.0", browsers: 8, people: 7, lastSeenAt: "2026-10-03T09:00:00Z" },
+        { platform: "linkedin", version: "1.2.0", browsers: 3, people: 3, lastSeenAt: "2026-10-01T09:00:00Z" },
+        { platform: "linkedin", version: null, browsers: 2, people: 2, lastSeenAt: "2026-09-20T09:00:00Z" },
+        { platform: "x", version: "1.0.0", browsers: 4, people: 4, lastSeenAt: "2026-10-03T09:00:00Z" },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (!url.startsWith("/api/admin/engage/controls")) return new Response("{}");
+        if (init?.method === "PATCH") {
+          const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+          patches.push(body);
+          if (refuse) return new Response(JSON.stringify({ error: refuse }), { status: 400 });
+          const f = body.feature as { key: keyof EngageGlobalSettings["features"]; enabled: boolean; message?: string | null } | undefined;
+          if (f) controls.settings.features[f.key] = { enabled: f.enabled, message: f.message ?? null };
+          const ins = body.insert as { platform: "linkedin" | "x"; enabled: boolean } | undefined;
+          if (ins) controls.settings.insert[ins.platform] = ins.enabled;
+          const mv = body.minVersion as { platform: "linkedin" | "x"; version: string | null } | undefined;
+          if (mv) controls.settings.minVersion[mv.platform] = mv.version;
+        }
+        return new Response(JSON.stringify(controls));
+      }),
+    );
+  });
+
+  const row = (label: string) => screen.getByText(label, { selector: "span" }).parentElement as HTMLElement;
+
+  it("pauses a feature for everyone with a message and a reason, and shows it paused", async () => {
+    render(<EngageControls />);
+    await screen.findByRole("region", { name: "Features for everyone" });
+    fireEvent.click(within(row("X replies")).getByRole("button", { name: "Pause" }));
+    expect(screen.getByRole("heading", { name: "Pause X replies for everyone?" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Message people see (optional)"), { target: { value: "Back in an hour" } });
+    fireEvent.change(screen.getByLabelText("Reason (for the audit log)"), { target: { value: "X changed its reply box" } });
+    fireEvent.click(screen.getByRole("button", { name: "Pause for everyone" }));
+
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect(patches[0]).toEqual({ feature: { key: "x_replies", enabled: false, message: "Back in an hour" }, reason: "X changed its reply box" });
+    await waitFor(() => expect(within(row("X replies")).getByText("Paused for everyone")).toBeTruthy());
+    expect(within(row("X replies")).getByText("“Back in an hour”")).toBeTruthy();
+    expect(within(row("X replies")).getByRole("button", { name: "Turn back on" })).toBeTruthy();
+    expect(within(row("AI comments")).getByText("On")).toBeTruthy();
+  });
+
+  it("switches Insert off for one extension", async () => {
+    render(<EngageControls />);
+    const insert = await screen.findByRole("region", { name: "Insert button" });
+    fireEvent.click(within(within(insert).getByText("X extension", { selector: "span" }).parentElement as HTMLElement).getByRole("button", { name: "Turn off" }));
+    const dialog = screen.getByRole("heading", { name: "Turn Insert off in the X extension?" }).closest("div.rounded-xl") as HTMLElement;
+    fireEvent.click(within(dialog).getByRole("button", { name: "Turn off" }));
+    await waitFor(() => expect(patches[0]).toEqual({ insert: { platform: "x", enabled: false } }));
+    await waitFor(() => expect(within(insert).getByText("Off for everyone")).toBeTruthy());
+  });
+
+  it("previews how many browsers a minimum version would stop, and won't send one nobody has", async () => {
+    render(<EngageControls />);
+    const linkedin = await screen.findByRole("group", { name: "LinkedIn versions" });
+    expect(within(linkedin).getByText("Before 1.3.0 (no version sent)")).toBeTruthy();
+    fireEvent.click(within(linkedin).getByRole("button", { name: "Set a minimum" }));
+
+    const input = screen.getByLabelText("Oldest version allowed") as HTMLInputElement;
+    expect(input.value).toBe("1.3.0");
+    // 1.2.0 (3) and the ones that send no version (2).
+    expect(screen.getByRole("status").textContent).toBe("5 browsers would be asked to update.");
+    fireEvent.change(input, { target: { value: "1.4.0" } });
+    expect(screen.getByRole("status").textContent).toContain("Nobody has 1.4.0 yet");
+    fireEvent.change(input, { target: { value: "one" } });
+    expect((screen.getByRole("button", { name: "Set minimum" }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(input, { target: { value: "1.3.0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Set minimum" }));
+    await waitFor(() => expect(patches[0]).toEqual({ minVersion: { platform: "linkedin", version: "1.3.0" } }));
+    await waitFor(() => expect(within(linkedin).getAllByText("Asked to update")).toHaveLength(2));
+    expect(within(linkedin).getByRole("button", { name: "Remove minimum" })).toBeTruthy();
+  });
+
+  it("shows the server's refusal in the dialog and keeps it open", async () => {
+    refuse = "Nobody has LinkedIn 1.3.0 or newer yet, so everyone would be asked to update.";
+    render(<EngageControls />);
+    const linkedin = await screen.findByRole("group", { name: "LinkedIn versions" });
+    fireEvent.click(within(linkedin).getByRole("button", { name: "Set a minimum" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set minimum" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(refuse);
+    expect(screen.getByLabelText("Oldest version allowed")).toBeTruthy();
+  });
+
+  it("says to run the SQL first, and can't save until then", async () => {
+    controls.ready = false;
+    render(<EngageControls />);
+    expect(await screen.findByText("Run the phase B SQL first")).toBeTruthy();
+    expect((within(row("X replies")).getByRole("button", { name: "Pause" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("Engage user page", () => {
+  const feature = (paused = false, override: "on" | "off" | null = null) => ({
+    override,
+    paused,
+    pauseMessage: paused ? "Back soon" : null,
+    enabled: !paused && override !== "off",
+  });
+  const detail = {
+    user: { id: "u1", email: "sam@example.com", name: "Sam Lee", headline: null, createdAt: "2026-09-01T00:00:00Z", accountSuspendedAt: null, deletedAt: null },
+    access: {
+      status: "active", suspendReason: null, access: "unlimited", source: "subscription", subscriptionActive: true, activeGrant: null,
+      freeGenerations: { plan: 10, override: null, effective: 10 }, freeUsed: 0, freeRemaining: null,
+      features: { ...Object.fromEntries(ENGAGE_FEATURES.map((f) => [f, feature()])), x_replies: feature(true), messages: feature(false, "off") },
+      limits: Object.fromEntries(LIMIT_KEYS.map((k) => [k, { plan: planLimit(k), override: null, effective: planLimit(k) }])),
+    },
+    control: null,
+    subscription: null,
+    usage: { counters: { day: {}, month: {} }, historyToday: {}, historyMonth: {}, series: [] },
+    grants: [],
+    sessions: [],
+    notes: [],
+    tags: [],
+    activity: { generations: [], admin: [] },
+    errors: [],
+  };
+
+  it("says a feature is paused for everyone, not just off for this person", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(detail))));
+    render(<EngageUserDetail userId="u1" />);
+    expect(await screen.findAllByText("Paused for everyone")).toHaveLength(2);
+    // Off for this person only still reads "Off".
+    expect(screen.getAllByText("Off").length).toBeGreaterThan(0);
   });
 });

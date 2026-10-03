@@ -1,10 +1,10 @@
 // lib/engage/access.ts — loads what's stored about a user and returns their
 // effective Engage access (lib/engage/accessRules.ts). Used by the generation
 // gate, /api/ext/me and the admin pages, so all three always agree.
-import { Prisma } from "@prisma/client"
 import { db } from "@/lib/db"
 import { COMMENT_CREDITS_ENFORCED } from "@/lib/commentCredits"
 import { computeEngageAccess, type EngageAccess } from "@/lib/engage/accessRules"
+import { loadGlobalSettings } from "@/lib/engage/settings"
 
 export async function loadEngageAccess(userId: string, now: Date = new Date()): Promise<EngageAccess | null> {
   const user = await db.user.findUnique({
@@ -21,11 +21,14 @@ export async function loadEngageAccess(userId: string, now: Date = new Date()): 
   if (!user) return null
 
   const email = user.email.trim().toLowerCase()
-  const grants = await db.engageAccessGrant.findMany({
-    where: { OR: [{ userId }, { userId: null, email }] },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  })
+  const [grants, global] = await Promise.all([
+    db.engageAccessGrant.findMany({
+      where: { OR: [{ userId }, { userId: null, email }] },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+    loadGlobalSettings(),
+  ])
 
   // A grant made before this person signed up is matched by email; link it
   // to the account now so it shows on their page and follows the account.
@@ -43,14 +46,11 @@ export async function loadEngageAccess(userId: string, now: Date = new Date()): 
     subscription: user.extensionSubscription,
     grants,
     freeUsed: user.extensionTrialUsed,
+    global,
   })
 }
 
 // True when the Engage admin tables don't exist yet: the code is deployed but
 // scripts/engage-admin-schema.sql hasn't been run. The gate then falls back to
 // the plan rules alone rather than taking the extension down for everyone.
-export function isEngageSchemaMissing(err: unknown): boolean {
-  return (
-    err instanceof Prisma.PrismaClientKnownRequestError && (err.code === "P2021" || err.code === "P2022")
-  )
-}
+export { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"

@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   const user = await getUserFromCommentExtensionToken(req)
   if (!user) return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
 
-  const preflight = await engagePreflight(user.id, "x_tests")
+  const preflight = await engagePreflight(user.id, "x_tests", req)
   if (preflight.response) return preflight.response
 
   const raw = (await req.json().catch(() => null)) as { profileDraft?: unknown; pastedPost?: unknown; profileId?: unknown } | null

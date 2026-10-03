@@ -61,6 +61,11 @@ export type AdminAuditAction =
   | "ENGAGE_DELETE_NOTE"
   | "ENGAGE_ADD_TAG"
   | "ENGAGE_REMOVE_TAG"
+  // Settings for everyone (admin → Engage → Controls)
+  | "ENGAGE_PAUSE_FEATURE"
+  | "ENGAGE_RESUME_FEATURE"
+  | "ENGAGE_SET_INSERT"
+  | "ENGAGE_SET_MIN_VERSION"
 
 // Rows are only ever created: there is no route that edits or deletes them.
 export async function logAdminAction({

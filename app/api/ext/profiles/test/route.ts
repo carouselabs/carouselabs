@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   }
 
-  const preflight = await engagePreflight(user.id, "tests")
+  const preflight = await engagePreflight(user.id, "tests", req)
   if (preflight.response) return preflight.response
 
   const body = await req.json().catch(() => null)

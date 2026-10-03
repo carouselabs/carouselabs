@@ -30,7 +30,10 @@ export interface ExtAccessSummary {
   grantEndsAt: string | null
   // Engage paused for this account by an admin (or the account suspended).
   suspended: boolean
-  // Features an admin has switched off for this user are false.
+  // Features an admin has switched off for this user are false. A feature
+  // paused for everyone (Controls) isn't: the panel's Account screen lists
+  // these as "turned off for this account", and a pause says so itself when
+  // someone tries to use it.
   features: Record<EngageFeature, boolean>
 }
 
@@ -57,7 +60,7 @@ export async function extAccessSummary(userId: string): Promise<ExtAccessSummary
         grantEndsAt: access.source === "grant" ? (access.activeGrant?.endsAt?.toISOString() ?? null) : null,
         suspended: access.status !== "active",
         features: Object.fromEntries(
-          ENGAGE_FEATURES.map((f) => [f, access.features[f].enabled]),
+          ENGAGE_FEATURES.map((f) => [f, access.features[f].override !== "off"]),
         ) as Record<EngageFeature, boolean>,
       }
     }

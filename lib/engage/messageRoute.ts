@@ -79,7 +79,7 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
     return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   }
 
-  const preflight = await engagePreflight(user.id, isX ? "x_messages" : "messages")
+  const preflight = await engagePreflight(user.id, isX ? "x_messages" : "messages", req)
   if (preflight.response) return preflight.response
 
   // Used only when the caller asked for "flow" mode (no saved profile, no

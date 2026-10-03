@@ -4,6 +4,8 @@
 //
 // The order, lowest to highest:
 //   plan defaults        10 free generations, 450/day, every feature on
+//   paused for everyone  a feature an admin paused for all users (Controls,
+//                        lib/engage/settingsRules.ts): off whatever else says
 //   subscription         $15/month (Lemon Squeezy) → unlimited
 //   user overrides       per-feature on/off, limits, free generations
 //   admin grant          unlimited until a date, or for life
@@ -24,6 +26,7 @@ import {
   type Limit,
   type LimitKey,
 } from "@/lib/engage/features"
+import { pausedMessage, type EngageGlobalSettings } from "@/lib/engage/settingsRules"
 
 // ── Stored overrides, validated ─────────────────────────────────────────
 
@@ -78,6 +81,8 @@ export interface EngageAccessInput {
   subscription: { status: string; endsAt: Date | null } | null
   grants: GrantInput[]
   freeUsed: number
+  // Settings for everyone (admin → Engage → Controls); absent means none.
+  global?: Pick<EngageGlobalSettings, "features">
 }
 
 export interface LimitValue {
@@ -87,8 +92,12 @@ export interface LimitValue {
 }
 
 export interface FeatureAccess {
-  // Every feature is on in the plan; only an override turns one off.
+  // Every feature is on in the plan; an override, or a pause for everyone,
+  // turns one off.
   override: "on" | "off" | null
+  // Paused for every user (Controls), with the message they see.
+  paused: boolean
+  pauseMessage: string | null
   enabled: boolean
 }
 
@@ -167,7 +176,16 @@ export function computeEngageAccess(input: EngageAccessInput): EngageAccess {
     features: Object.fromEntries(
       ENGAGE_FEATURES.map((f) => {
         const override = features[f] ?? null
-        return [f, { override, enabled: override !== "off" }]
+        const paused = input.global ? !input.global.features[f].enabled : false
+        return [
+          f,
+          {
+            override,
+            paused,
+            pauseMessage: paused && input.global ? pausedMessage(f, input.global) : null,
+            enabled: !paused && override !== "off",
+          },
+        ]
       }),
     ) as Record<EngageFeature, FeatureAccess>,
     limits: Object.fromEntries(
@@ -185,7 +203,7 @@ export function computeEngageAccess(input: EngageAccessInput): EngageAccess {
 export interface Blocked {
   status: 403
   error: string
-  code: "account_suspended" | "suspended" | "feature_disabled"
+  code: "account_suspended" | "suspended" | "feature_disabled" | "feature_paused"
 }
 
 // Which features a usage kind needs. Shorter/Longer works on comments and
@@ -214,6 +232,11 @@ export function blockedReason(access: EngageAccess, kind: EngageUsageKind | null
   if (kind) {
     const needed = featuresFor(kind)
     if (!needed.some((f) => access.features[f].enabled)) {
+      // Paused for everyone: the admin's message, not "not on your account".
+      const paused = needed.find((f) => access.features[f].paused)
+      if (paused && needed.every((f) => access.features[f].paused || access.features[f].override === "off")) {
+        return { status: 403, code: "feature_paused", error: access.features[paused].pauseMessage ?? "" }
+      }
       return {
         status: 403,
         code: "feature_disabled",

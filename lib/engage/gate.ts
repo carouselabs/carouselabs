@@ -1,8 +1,10 @@
 // lib/engage/gate.ts — the one check every model-backed extension route makes
 // (generate, rewrite, connection-note, message, profiles/test), in two steps:
 //
-//   engagePreflight     right after sign-in: suspension, the feature switch,
-//                       and the rolling daily cap (counts the request).
+//   engagePreflight     right after sign-in: the extension's version (when an
+//                       admin set a minimum), suspension, the feature switch
+//                       (paused for everyone, or off for this user), and the
+//                       rolling daily cap (counts the request).
 //   reserveEngageGeneration
 //                       immediately before the model call: the feature
 //                       switch again (the route may only now know which kind
@@ -19,6 +21,7 @@ import { isEngageSchemaMissing, loadEngageAccess } from "@/lib/engage/access"
 import { blockedReason, featureLimitsFor, type EngageAccess } from "@/lib/engage/accessRules"
 import { USAGE_KIND_NOUNS, type EngageUsageKind } from "@/lib/engage/features"
 import { reserveUsage } from "@/lib/engage/usage"
+import { outdatedExtensionResponse } from "@/lib/engage/settings"
 
 // null access: the Engage admin tables aren't there yet (the code was deployed
 // before scripts/engage-admin-schema.sql ran). Then only the plan rules apply,
@@ -44,8 +47,12 @@ export interface Preflight {
 
 // kind null: the route doesn't know yet which feature this is (generate,
 // before reading whether it's a comment or a reply); the switch is then
-// checked in reserveEngageGeneration.
-export async function engagePreflight(userId: string, kind: EngageUsageKind | null): Promise<Preflight> {
+// checked in reserveEngageGeneration. req: the extension's request, for its
+// version (admin → Engage → Controls → minimum version).
+export async function engagePreflight(userId: string, kind: EngageUsageKind | null, req: Request): Promise<Preflight> {
+  const outdated = await outdatedExtensionResponse(req)
+  if (outdated) return { response: outdated, loaded: null }
+
   const loaded = await load(userId)
   if (loaded instanceof NextResponse) return { response: loaded, loaded: null }
 

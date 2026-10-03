@@ -42,7 +42,7 @@ export async function handleRewriteRequest(req: Request, platform: RewritePlatfo
     return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   }
 
-  const preflight = await engagePreflight(user.id, usage)
+  const preflight = await engagePreflight(user.id, usage, req)
   if (preflight.response) return preflight.response
 
   let currentComment: string

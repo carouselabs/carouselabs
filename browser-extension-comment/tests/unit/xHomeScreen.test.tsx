@@ -63,7 +63,7 @@ function server() {
       if (url.endsWith("/api/ext/x/profiles")) return json({ profiles: [THOUGHTFUL, QUICK], defaultProfileId: null });
       if (url.endsWith("/api/ext/x/settings")) return json({ maxReplyLength: 280, insertButtonHidden: false, defaultProfileId: null });
       if (url.endsWith("/api/ext/me")) return json({ extension: null });
-      if (url.endsWith("/api/ext/config")) return json({ insertEnabled: true });
+      if (url.includes("/api/ext/config")) return json({ insertEnabled: true });
       return json({});
     }),
   );
@@ -143,6 +143,11 @@ describe("X Reply screen", () => {
     expect(screen.getByText("284/280")).toBeTruthy();
     expect(screen.getByText(/Too long for X/)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Insert" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("asks for the X extension's own Insert switch", async () => {
+    render(<XHomeScreen />);
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith("/api/ext/config?platform=x"))).toBe(true));
   });
 
   it("inserts into the reply box for that post only, and records it", async () => {

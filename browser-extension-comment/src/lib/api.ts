@@ -9,6 +9,7 @@
 //   chrome.storage.local.set({ apiBaseUrl: "http://localhost:3000" })
 
 import type { ConnectContextSetting, ConnectLengthSetting, LinkedInProfileInfo } from "@/lib/connectionNote";
+import { PLATFORM } from "@/lib/platform";
 
 // Chosen by build mode, the same switch manifest.config.ts uses for its
 // localhost host permissions: `npm run build` (production) talks to the live
@@ -220,7 +221,8 @@ export interface ExtConfigResponse {
 // Public route — no bearer token, so it bypasses apiFetch.
 export async function fetchExtConfig(): Promise<ExtConfigResponse> {
   const baseUrl = await getApiBaseUrl();
-  const res = await fetch(`${baseUrl}/api/ext/config`);
+  // Each extension has its own Insert switch (admin → Engage → Controls).
+  const res = await fetch(`${baseUrl}/api/ext/config${PLATFORM === "x" ? "?platform=x" : ""}`);
   if (!res.ok) throw new ApiError(res.status, "Failed to load config");
   return (await res.json()) as ExtConfigResponse;
 }

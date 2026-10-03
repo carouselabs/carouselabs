@@ -27,6 +27,17 @@
 // triggers there, but the plain CORS headers are still required in both.
 import { NextResponse } from "next/server"
 import { CONTENT_SCRIPT_ORIGINS } from "@/lib/contentScriptOrigins"
+import { loadGlobalSettings } from "@/lib/engage/settings"
+import type { EngagePlatform } from "@/lib/engage/features"
+
+// Which extension is asking, for its own Insert switch: the page a content
+// script runs on (x.com is the X extension's), or ?platform=x from the X
+// extension's panel. Anything else, including every LinkedIn extension
+// version, is LinkedIn's.
+function askingPlatform(req: Request): EngagePlatform {
+  if (req.headers.get("origin") === "https://x.com") return "x"
+  return new URL(req.url).searchParams.get("platform") === "x" ? "x" : "linkedin"
+}
 
 // The pages the content scripts run on (lib/contentScriptOrigins.ts): X's
 // content script also asks this route whether Insert is on before it inserts.
@@ -57,6 +68,7 @@ export async function OPTIONS(req: Request) {
 
 // GET /api/ext/config
 export async function GET(req: Request) {
+  const settings = await loadGlobalSettings()
   const res = NextResponse.json({
     // Matches the (icon-only) comment action button in a post's social
     // action bar. aria-label-based rather than class-based on purpose —
@@ -138,10 +150,11 @@ export async function GET(req: Request) {
     // aria-label wording is a best guess and may need correcting here.
     commentBoxSelector:
       "div[contenteditable='true'][role='textbox'], div.ql-editor[contenteditable='true'], div[contenteditable='true'][aria-label*='comment' i]",
-    // Remote kill switch for the Insert feature. When false the side panel
-    // hides the Insert button entirely, regardless of the user's own setting,
-    // so the feature can be withdrawn without an extension redeploy.
-    insertEnabled: true,
+    // Remote kill switch for the Insert feature, per extension (admin →
+    // Engage → Controls). When false the side panel hides the Insert button
+    // entirely, regardless of the user's own setting, and the content script
+    // refuses to insert, so the feature can be withdrawn without a redeploy.
+    insertEnabled: settings.insert[askingPlatform(req)],
   })
   return withCorsHeaders(req, res)
 }

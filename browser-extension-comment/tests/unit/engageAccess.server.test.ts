@@ -32,6 +32,8 @@ const db = vi.hoisted(() => ({
   extensionSubscription: { findUnique: vi.fn() },
   engageAccessGrant: { findMany: vi.fn(), updateMany: vi.fn(async () => ({ count: 0 })) },
   engageUsageCounter: { createMany: vi.fn(), updateMany: vi.fn() },
+  // Settings for everyone (phase B): none saved, so everything on.
+  engageSetting: { findMany: vi.fn(async () => []) },
 }));
 
 vi.mock("../../../lib/db", () => ({ db }));
@@ -50,6 +52,10 @@ vi.mock("../../../lib/extDailyLimit", () => ({
 
 import { computeEngageAccess, blockedReason, type EngageAccessInput } from "../../../lib/engage/accessRules";
 import { engagePreflight, reserveEngageGeneration } from "../../../lib/engage/gate";
+
+// A writing request from the extension (its version only matters once an
+// admin sets a minimum: tests/unit/engageControls.server.test.ts).
+const REQ = new Request("https://carouselabs.com/api/ext/generate", { method: "POST", headers: { "x-engage-version": "1.3.0" } });
 
 const NOW = new Date("2026-10-15T12:00:00.000Z");
 const days = (n: number) => new Date(NOW.getTime() + n * 86_400_000);
@@ -152,8 +158,8 @@ describe("effective access rules", () => {
       control: control({ features: { messages: "off" }, limits: { "comments.month": 500, dailyCap: "unlimited" }, freeGenerations: 25 }),
       freeUsed: 4,
     }));
-    expect(a.features.messages).toEqual({ override: "off", enabled: false });
-    expect(a.features.comments).toEqual({ override: null, enabled: true });
+    expect(a.features.messages).toEqual({ override: "off", paused: false, pauseMessage: null, enabled: false });
+    expect(a.features.comments).toEqual({ override: null, paused: false, pauseMessage: null, enabled: true });
     expect(a.limits["comments.month"]).toEqual({ plan: "unlimited", override: 500, effective: 500 });
     expect(a.limits.dailyCap).toEqual({ plan: 450, override: "unlimited", effective: "unlimited" });
     expect(a.freeGenerations).toEqual({ plan: 10, override: 25, effective: 25 });
@@ -277,19 +283,19 @@ describe("the generation gate", () => {
 
   it("preflight: suspension and a switched-off feature answer 403 before any work", async () => {
     state.user!.engageControl = control({ features: { connection_notes: "off" } });
-    const off = await engagePreflight("u1", "connection_notes");
+    const off = await engagePreflight("u1", "connection_notes", REQ);
     expect(off.response?.status).toBe(403);
     expect(await off.response?.json()).toMatchObject({ code: "feature_disabled" });
 
     state.user!.engageControl = control({ suspendedAt: days(-1) });
-    const paused = await engagePreflight("u1", null);
+    const paused = await engagePreflight("u1", null, REQ);
     expect(paused.response?.status).toBe(403);
     expect(state.dailyCaps).toEqual([]); // never counted against the daily cap
   });
 
   it("generate learns comment-or-reply late: the reply switch is checked at reservation", async () => {
     state.user!.engageControl = control({ features: { replies: "off" } });
-    const pre = await engagePreflight("u1", null);
+    const pre = await engagePreflight("u1", null, REQ);
     expect(pre.response).toBeNull();
     const gate = await reserveEngageGeneration("u1", "replies", pre);
     expect(gate.ok).toBe(false);
@@ -297,17 +303,17 @@ describe("the generation gate", () => {
   });
 
   it("the daily cap uses the user's own: plan 450, a custom number, or none", async () => {
-    await engagePreflight("u1", "comments");
+    await engagePreflight("u1", "comments", REQ);
     state.user!.engageControl = control({ limits: { dailyCap: 900 } });
-    await engagePreflight("u1", "comments");
+    await engagePreflight("u1", "comments", REQ);
     state.user!.engageControl = control({ limits: { dailyCap: "unlimited" } });
-    await engagePreflight("u1", "comments");
+    await engagePreflight("u1", "comments", REQ);
     expect(state.dailyCaps).toEqual([450, 900, "unlimited"]);
   });
 
   it("before the admin tables exist, falls back to the plan rules instead of failing", async () => {
     state.grantsThrow = new Prisma.PrismaClientKnownRequestError("The table `EngageAccessGrant` does not exist", { code: "P2021", clientVersion: "5.22.0" });
-    const pre = await engagePreflight("u1", "comments");
+    const pre = await engagePreflight("u1", "comments", REQ);
     expect(pre.response).toBeNull();
     expect(state.dailyCaps).toEqual([undefined]); // the default cap
     const gate = await reserveEngageGeneration("u1", "comments", pre);
@@ -317,6 +323,6 @@ describe("the generation gate", () => {
 
   it("any other database error is not swallowed", async () => {
     state.grantsThrow = new Error("connection refused");
-    await expect(engagePreflight("u1", "comments")).rejects.toThrow("connection refused");
+    await expect(engagePreflight("u1", "comments", REQ)).rejects.toThrow("connection refused");
   });
 });

@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   timer.mark("auth")
   if (!user) return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
 
-  const preflight = await engagePreflight(user.id, "x_replies")
+  const preflight = await engagePreflight(user.id, "x_replies", req)
   timer.mark("limit")
   if (preflight.response) return preflight.response
 

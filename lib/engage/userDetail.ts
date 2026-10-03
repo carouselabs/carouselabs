@@ -6,6 +6,8 @@ import { loadEngageAccess } from "@/lib/engage/access"
 import { ENGAGE_FEATURES, HISTORY_KIND_TO_FEATURE, type EngageFeature } from "@/lib/engage/features"
 import { grantState } from "@/lib/engage/grants"
 import { periodStart, readUsage } from "@/lib/engage/usage"
+import { userAiCost } from "@/lib/engage/aiQueries"
+import { loadGlobalSettings } from "@/lib/engage/settings"
 
 const DAY = 86_400_000
 
@@ -129,6 +131,8 @@ export async function engageUserDetail(userId: string, now: Date = new Date()) {
       admin: audit,
     },
     errors,
+    // This month's AI cost (admin → Engage → AI), null before it's recorded.
+    aiMonth: await userAiCost(userId, monthStart, (await loadGlobalSettings()).aiPrices),
   }
 }
 

@@ -5,6 +5,10 @@ import { useState, type ReactNode } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
+  AlertTriangle,
+  HeartPulse,
+  MonitorSmartphone,
+  Cpu,
   SlidersHorizontal,
   LayoutDashboard,
   Users,
@@ -68,6 +72,10 @@ const SECTIONS = [
       { href: "/admin/engage/users", label: "Engage users", icon: UserCog },
       { href: "/admin/engage/access", label: "Free access", icon: KeyRound },
       { href: "/admin/engage/controls", label: "Controls", icon: SlidersHorizontal },
+      { href: "/admin/engage/ai", label: "AI", icon: Cpu },
+      { href: "/admin/engage/errors", label: "Errors", icon: AlertTriangle },
+      { href: "/admin/engage/health", label: "Health", icon: HeartPulse },
+      { href: "/admin/engage/sessions", label: "Sessions", icon: MonitorSmartphone },
       { href: "/admin/engage/audit", label: "Engage audit log", icon: History },
     ],
   },

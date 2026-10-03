@@ -7,6 +7,8 @@
 import { NextResponse } from "next/server"
 import { requireEngagePermission } from "@/lib/engage/adminAccess"
 import { engageOverview, type OverviewPlatform } from "@/lib/engage/adminQueries"
+import { aiUsage } from "@/lib/engage/aiQueries"
+import { loadGlobalSettings } from "@/lib/engage/settings"
 import { resolveRange } from "@/lib/engage/ranges"
 
 export async function GET(req: Request) {
@@ -21,5 +23,16 @@ export async function GET(req: Request) {
   if (p !== "all" && p !== "linkedin" && p !== "x") return NextResponse.json({ error: "Invalid platform" }, { status: 400 })
   const platform: OverviewPlatform = p
 
-  return NextResponse.json({ ...(await engageOverview(range.from, range.to, new Date(), platform)), rangeKey: range.key })
+  const [overview, ai] = await Promise.all([
+    engageOverview(range.from, range.to, new Date(), platform),
+    loadGlobalSettings().then((s) => aiUsage(range.from, range.to, platform, s.aiPrices)),
+  ])
+  // AI cost and calls in the range (admin → Engage → AI has the detail).
+  const aiSummary = {
+    recording: ai.recording,
+    cost: ai.totals.cost,
+    calls: ai.totals.calls,
+    unpricedModels: ai.totals.unpricedModels,
+  }
+  return NextResponse.json({ ...overview, ai: aiSummary, rangeKey: range.key })
 }

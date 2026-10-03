@@ -2,12 +2,13 @@
 // user's Engage access. Engage only: their website account and billing are
 // untouched (the account-wide suspension lives on the main Users page).
 // body: { suspend: boolean, reason }
+// The same action as bulk pause / resume (lib/engage/userActions.ts).
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { db } from "@/lib/db"
 import { requireEngagePermission } from "@/lib/engage/adminAccess"
 import { findTargetUser, notFound, parseBody } from "@/lib/engage/adminApi"
-import { logAdminAction, getRequestIp } from "@/lib/auditLog"
+import { setEngageSuspended } from "@/lib/engage/userActions"
+import { getRequestIp } from "@/lib/auditLog"
 
 const body = z.object({ suspend: z.boolean(), reason: z.string().trim().min(3, "Say why").max(500) })
 
@@ -20,35 +21,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
   const parsed = await parseBody(req, body)
   if (!parsed.ok) return parsed.response
   const { suspend, reason } = parsed.data
-  if (suspend && userId === gate.admin.id) {
-    return NextResponse.json({ error: "You can't pause your own access" }, { status: 400 })
-  }
 
-  const current = await db.engageUserControl.findUnique({ where: { userId }, select: { suspendedAt: true } })
-  if (!!current?.suspendedAt === suspend) {
-    return NextResponse.json({ error: suspend ? "Already paused" : "Not paused" }, { status: 400 })
-  }
-
-  const data = suspend
-    ? { suspendedAt: new Date(), suspendedBy: gate.admin.email, suspendReason: reason }
-    : { suspendedAt: null, suspendedBy: null, suspendReason: null }
-  await db.engageUserControl.upsert({
-    where: { userId },
-    create: { userId, ...data, updatedBy: gate.admin.email },
-    update: { ...data, updatedBy: gate.admin.email },
-  })
-
-  await logAdminAction({
-    adminEmail: gate.admin.email,
-    action: suspend ? "ENGAGE_SUSPEND" : "ENGAGE_REACTIVATE",
-    product: "engage",
-    targetUserId: userId,
-    targetEmail: user.email,
-    details: suspend ? "Paused Engage access" : "Resumed Engage access",
-    oldValue: { suspended: !suspend },
-    newValue: { suspended: suspend },
-    reason,
-    ipAddress: getRequestIp(req),
-  })
+  const result = await setEngageSuspended({ admin: gate.admin, user, suspend, reason, ip: getRequestIp(req) })
+  if (!result.ok) return NextResponse.json({ error: result.why }, { status: 400 })
   return NextResponse.json({ ok: true, suspended: suspend })
 }

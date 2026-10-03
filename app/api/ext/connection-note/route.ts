@@ -23,7 +23,7 @@ import {
   type ConnectionTargetInput,
 } from "@/lib/ai/prompts/connectionNotePrompt"
 import {
-  callCommentModel,
+  callCommentModelWithInfo,
   generationDeadline,
   GenerationTimeout,
   parseComment,
@@ -159,6 +159,11 @@ export async function POST(req: Request) {
   ].join(" ")
 
   let note = ""
+  // The model that wrote the note kept (recorded in History), and the one
+  // that wrote the fallback.
+  let model: string = PRIMARY_MODEL
+  let fallbackModel: string = PRIMARY_MODEL
+  let answerModel: string = PRIMARY_MODEL
   // Clean but off-length, held in case the retry fails outright. Always within
   // the hard ceiling: an over-limit draft is trimmed before it is kept.
   let fallback = ""
@@ -170,7 +175,12 @@ export async function POST(req: Request) {
 
     let raw: string
     try {
-      raw = await callCommentModel(systemMessage, message, "ext/connection-note", { deadline })
+      const answer = await callCommentModelWithInfo(systemMessage, message, "ext/connection-note", {
+        deadline,
+        engage: { userId: user.id, kind: "connection_notes" },
+      })
+      raw = answer.raw
+      answerModel = answer.model
     } catch (err) {
       if (err instanceof GenerationTimeout) {
         console.error(`[ext/connection-note] attempt ${attempt}: out of time, giving up`)
@@ -205,21 +215,31 @@ export async function POST(req: Request) {
     )
     if (weak.length > 0 && attempt === 1) {
       console.warn(`[ext/connection-note] attempt ${attempt}: weak patterns (${weak.map((w) => w.label).join(", ")}), retrying`)
-      if (!fallback) fallback = trimToLimit(cleaned)
+      if (!fallback) {
+        fallback = trimToLimit(cleaned)
+        fallbackModel = answerModel
+      }
       continue
     }
 
     if (cleaned.length < range.min || cleaned.length > range.max) {
       console.warn(`[ext/connection-note] attempt ${attempt}: length ${cleaned.length} outside ${range.min}-${range.max}, retrying`)
-      if (!fallback) fallback = trimToLimit(cleaned)
+      if (!fallback) {
+        fallback = trimToLimit(cleaned)
+        fallbackModel = answerModel
+      }
       continue
     }
 
     note = cleaned
+    model = answerModel
     break
   }
 
-  if (!note) note = fallback
+  if (!note) {
+    note = fallback
+    model = fallbackModel
+  }
   // Belt and braces: whatever path got here, nothing over the ceiling leaves.
   note = trimToLimit(note)
 
@@ -245,7 +265,8 @@ export async function POST(req: Request) {
         comment: note,
         action: "NONE",
         creditsUsed: 0,
-        model: PRIMARY_MODEL,
+        // The model that actually wrote it (the backup, if the first failed).
+        model,
       },
     })
     historyId = history.id

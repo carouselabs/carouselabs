@@ -26,7 +26,7 @@ import {
   type MessageProfileInput,
   type MessageThreadEntryInput,
 } from "@/lib/ai/prompts/messagePrompt"
-import { callCommentModel, generationDeadline, GenerationTimeout, parseComment, sanitizeComment, PRIMARY_MODEL } from "@/lib/ai/commentModel"
+import { callCommentModelWithInfo, generationDeadline, GenerationTimeout, parseComment, sanitizeComment, PRIMARY_MODEL } from "@/lib/ai/commentModel"
 import { HISTORY_SNIPPET_CHARS, linkedInUrl } from "@/lib/extensionHistory"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
 
@@ -169,6 +169,11 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
   ].join(" ")
 
   let message = ""
+  // The model that wrote the message kept (recorded in History), and the
+  // one that wrote the fallback.
+  let model: string = PRIMARY_MODEL
+  let fallbackModel: string = PRIMARY_MODEL
+  let answerModel: string = PRIMARY_MODEL
   // Clean but weak-patterned, held in case the retry fails outright.
   let fallback = ""
   let remindAboutFabrication = false
@@ -179,7 +184,12 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
 
     let raw: string
     try {
-      raw = await callCommentModel(systemMessage, userContent, label, { deadline })
+      const answer = await callCommentModelWithInfo(systemMessage, userContent, label, {
+        deadline,
+        engage: { userId: user.id, kind: isX ? "x_messages" : "messages" },
+      })
+      raw = answer.raw
+      answerModel = answer.model
     } catch (err) {
       if (err instanceof GenerationTimeout) {
         console.error(`[${label}] attempt ${attempt}: out of time, giving up`)
@@ -220,15 +230,22 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
     const weak = [...MESSAGE_WEAK_PATTERNS, ...WEAK_COMMENT_PATTERNS].filter(({ pattern }) => pattern.test(cleaned))
     if (weak.length > 0 && attempt === 1) {
       console.warn(`[${label}] attempt ${attempt}: weak patterns (${weak.map((w) => w.label).join(", ")}), retrying`)
-      if (!fallback) fallback = cleaned
+      if (!fallback) {
+        fallback = cleaned
+        fallbackModel = answerModel
+      }
       continue
     }
 
     message = cleaned
+    model = answerModel
     break
   }
 
-  if (!message) message = fallback
+  if (!message) {
+    message = fallback
+    model = fallbackModel
+  }
 
   if (!message) {
     await gate.release()
@@ -254,7 +271,8 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
         comment: message,
         action: "NONE",
         creditsUsed: 0,
-        model: PRIMARY_MODEL,
+        // The model that actually wrote it (the backup, if the first failed).
+        model,
       },
     })
     historyId = history.id

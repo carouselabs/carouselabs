@@ -216,7 +216,7 @@ async function loadUserRows(ids: string[], now: Date): Promise<UserListRow[]> {
   const lastActive = new Map<string, Date>()
   const platformOfToken = new Map<string, EngagePlatform>()
   const uses = new Map<string, Set<EngagePlatform>>()
-  const use = (userId: string, platform: EngagePlatform) => {
+  const markUse = (userId: string, platform: EngagePlatform) => {
     if (!uses.has(userId)) uses.set(userId, new Set())
     uses.get(userId)!.add(platform)
   }
@@ -225,11 +225,11 @@ async function loadUserRows(ids: string[], now: Date): Promise<UserListRow[]> {
     if (!seen || t.lastUsedAt > seen) lastActive.set(t.userId, t.lastUsedAt)
     const platform = tokenPlatform(t.device)
     platformOfToken.set(t.id, platform)
-    use(t.userId, platform)
+    markUse(t.userId, platform)
   }
   for (const h of history) {
     const feature = HISTORY_KIND_TO_FEATURE[h.kind]
-    if (feature) use(h.userId, X_FEATURES.includes(feature) ? "x" : "linkedin")
+    if (feature) markUse(h.userId, X_FEATURES.includes(feature) ? "x" : "linkedin")
   }
   // Newest first, so the first seen per user and extension is the current one.
   // A version reported by a token since signed out counts as LinkedIn's.

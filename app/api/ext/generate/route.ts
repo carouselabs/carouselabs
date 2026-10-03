@@ -160,7 +160,14 @@ export async function POST(req: Request) {
     ...(reply?.thread.map((entry) => entry.text) ?? []),
   ].join(" ")
 
-  const input: GenerationInput = { systemMessage, userMessage, min, max, numberSources }
+  const input: GenerationInput = {
+    systemMessage,
+    userMessage,
+    min,
+    max,
+    numberSources,
+    engage: { userId: user.id, kind: reply ? "replies" : "comments" },
+  }
   const beforeModelMs = timer.elapsed()
 
   // action stays NONE until the user actually copies or inserts the comment;

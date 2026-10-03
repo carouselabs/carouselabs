@@ -51,18 +51,21 @@ export function AdminLineChart({
   xKey,
   series,
   height = 240,
+  decimals = false,
 }: {
   data: Record<string, unknown>[]
   xKey: string
   series: { key: string; label: string; color: string }[]
   height?: number
+  // Values below 1 (dollars of AI cost): ticks with decimals.
+  decimals?: boolean
 }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
         <CartesianGrid stroke={GRID} vertical={false} />
         <XAxis dataKey={xKey} tick={AXIS} tickFormatter={shortDate} tickLine={false} axisLine={{ stroke: GRID }} minTickGap={28} />
-        <YAxis tick={AXIS} tickLine={false} axisLine={false} allowDecimals={false} />
+        <YAxis tick={AXIS} tickLine={false} axisLine={false} allowDecimals={decimals} />
         <Tooltip contentStyle={tooltipStyle} labelFormatter={shortDate} cursor={{ stroke: GRID }} />
         {series.length > 1 && <Legend wrapperStyle={{ fontSize: 12, color: "#B0B0B0" }} />}
         {series.map((s) => (

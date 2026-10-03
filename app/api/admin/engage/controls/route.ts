@@ -10,39 +10,16 @@
 //        plus an optional reason. Takes effect within SETTINGS_CACHE_MS.
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { db } from "@/lib/db"
 import { requireEngagePermission } from "@/lib/engage/adminAccess"
 import { parseBody } from "@/lib/engage/adminApi"
 import { ENGAGE_FEATURES, ENGAGE_PLATFORMS, FEATURE_LABELS, PLATFORM_LABELS } from "@/lib/engage/features"
-import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
-import { saveGlobalSetting } from "@/lib/engage/settings"
-import {
-  PAUSE_MESSAGE_MAX,
-  VERSION_PATTERN,
-  compareVersions,
-  defaultGlobalSettings,
-  globalSettingsFrom,
-  type EngageGlobalSettings,
-} from "@/lib/engage/settingsRules"
+import { readGlobalSettingsFresh, saveGlobalSetting } from "@/lib/engage/settings"
+import { PAUSE_MESSAGE_MAX, VERSION_PATTERN, compareVersions } from "@/lib/engage/settingsRules"
 import { extensionVersions } from "@/lib/engage/versions"
 import { getRequestIp, logAdminAction, type AdminAuditAction } from "@/lib/auditLog"
 
-type Saved = Record<string, { updatedAt: string; updatedBy: string | null }>
-
 // Read fresh (not the generation path's cache): the admin sees what is stored.
-async function readSettings(): Promise<{ ready: boolean; settings: EngageGlobalSettings; saved: Saved }> {
-  try {
-    const rows = await db.engageSetting.findMany()
-    return {
-      ready: true,
-      settings: globalSettingsFrom(rows),
-      saved: Object.fromEntries(rows.map((r) => [r.key, { updatedAt: r.updatedAt.toISOString(), updatedBy: r.updatedBy }])),
-    }
-  } catch (err) {
-    if (!isEngageSchemaMissing(err)) throw err
-    return { ready: false, settings: defaultGlobalSettings(), saved: {} }
-  }
-}
+const readSettings = readGlobalSettingsFresh
 
 async function state() {
   const [read, versions] = await Promise.all([readSettings(), extensionVersions()])

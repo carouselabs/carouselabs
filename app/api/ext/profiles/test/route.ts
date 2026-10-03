@@ -95,7 +95,10 @@ export async function POST(req: Request) {
   const deadline = generationDeadline()
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      const modelRaw = await callCommentModel(systemMessage, userMessage, "ext/profiles/test", { deadline })
+      const modelRaw = await callCommentModel(systemMessage, userMessage, "ext/profiles/test", {
+        deadline,
+        engage: { userId: user.id, kind: "tests" },
+      })
       const candidate = parseComment(modelRaw)
       if (!candidate?.trim()) continue
       comment = sanitizeComment(candidate).comment

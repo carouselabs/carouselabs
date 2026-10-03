@@ -54,6 +54,15 @@ export const USAGE_KIND_LABELS: Record<EngageUsageKind, string> = {
 
 export const USAGE_KINDS: EngageUsageKind[] = [...ENGAGE_FEATURES, "rewrites", "tests", "x_rewrites", "x_tests"]
 
+// The feature a usage kind belongs to, for per-feature settings (the AI model)
+// and figures: Shorter/Longer and profile tests are comment tools on LinkedIn
+// and reply tools on X.
+export function featureOfUsageKind(kind: EngageUsageKind): EngageFeature {
+  if (kind === "rewrites" || kind === "tests") return "comments"
+  if (kind === "x_rewrites" || kind === "x_tests") return "x_replies"
+  return kind
+}
+
 // The same, as a plural noun inside a sentence ("your limit of 30 comments").
 export const USAGE_KIND_NOUNS: Record<EngageUsageKind, string> = {
   comments: "comments",

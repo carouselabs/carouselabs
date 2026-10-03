@@ -18,6 +18,7 @@ import {
   type EngagePlatform,
 } from "@/lib/engage/features"
 import {
+  fmtDollars,
   ErrorState,
   EmptyState,
   FEATURE_COLORS,
@@ -34,6 +35,7 @@ interface Overview {
   generations: Record<EngageFeature, number> & { total: number }
   actions: { copied: number; inserted: number; none: number }
   clientErrors: number | null
+  ai?: { recording: boolean; cost: number; calls: number; unpricedModels: string[] }
   series: Array<{ date: string; activeUsers: number; newUsers: number } & Record<EngageFeature, number>>
 }
 
@@ -173,7 +175,20 @@ export function EngageOverview() {
                 value={data.clientErrors === null ? "—" : fmtNumber(data.clientErrors)}
                 hint={data.clientErrors === null ? "Run the Engage admin SQL" : "Reported by 1.3.0 and later"}
               />
-              <NotTracked label="AI tokens & cost" when="Recorded from phase C onward" />
+              {!data.ai || !data.ai.recording ? (
+                <NotTracked label="AI cost" when="Run the phase C SQL to start recording" />
+              ) : (
+                <Kpi
+                  label="AI cost"
+                  value={fmtDollars(data.ai.cost)}
+                  hint={
+                    data.ai.unpricedModels.length > 0
+                      ? `${fmtNumber(data.ai.calls)} AI calls · some prices not set`
+                      : `${fmtNumber(data.ai.calls)} AI calls`
+                  }
+                  href="/admin/engage/ai"
+                />
+              )}
             </div>
           </section>
 

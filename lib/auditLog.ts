@@ -66,6 +66,11 @@ export type AdminAuditAction =
   | "ENGAGE_RESUME_FEATURE"
   | "ENGAGE_SET_INSERT"
   | "ENGAGE_SET_MIN_VERSION"
+  // AI (admin → Engage → AI)
+  | "ENGAGE_SET_AI_MODEL"
+  | "ENGAGE_SET_AI_PRICE"
+  // A CSV download of Engage data (who, what, how many rows)
+  | "ENGAGE_EXPORT"
 
 // Rows are only ever created: there is no route that edits or deletes them.
 export async function logAdminAction({

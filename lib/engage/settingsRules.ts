@@ -6,9 +6,13 @@
 //   features    a feature paused for all users, with the message they see
 //   insert      the Insert button on or off, per extension
 //   minVersion  the oldest extension version still allowed to write
+//   models      which AI model each feature tries first (the other is backup)
+//   aiPrices    dollars per million tokens, per model, for the AI cost figures
 //
-// No stored value means the default: everything on, no minimum version.
+// No stored value means the default: everything on, no minimum version,
+// GPT Luna first everywhere, Claude Haiku's list price.
 import { z } from "zod"
+import { AI_MODEL_KEYS, DEFAULT_AI_PRICES, type AiModelKey, type ModelPrice } from "@/lib/ai/models"
 import {
   ENGAGE_FEATURES,
   ENGAGE_PLATFORMS,
@@ -17,7 +21,7 @@ import {
   type EngagePlatform,
 } from "@/lib/engage/features"
 
-export const SETTING_KEYS = ["features", "insert", "minVersion"] as const
+export const SETTING_KEYS = ["features", "insert", "minVersion", "models", "aiPrices"] as const
 export type SettingKey = (typeof SETTING_KEYS)[number]
 
 // What the extensions send in x-engage-version (lib/extensionCommentAuth.ts).
@@ -34,6 +38,11 @@ export const SETTING_SCHEMAS = {
   features: z.partialRecord(z.enum(ENGAGE_FEATURES), featureSwitch),
   insert: z.partialRecord(z.enum(ENGAGE_PLATFORMS), z.boolean()),
   minVersion: z.partialRecord(z.enum(ENGAGE_PLATFORMS), z.string().regex(VERSION_PATTERN).nullable()),
+  models: z.partialRecord(z.enum(ENGAGE_FEATURES), z.enum(AI_MODEL_KEYS)),
+  aiPrices: z.record(
+    z.string().min(1).max(100),
+    z.object({ input: z.number().min(0).max(1000), output: z.number().min(0).max(1000) }),
+  ),
 } satisfies Record<SettingKey, z.ZodType>
 
 export interface FeatureSwitch {
@@ -45,6 +54,9 @@ export interface EngageGlobalSettings {
   features: Record<EngageFeature, FeatureSwitch>
   insert: Record<EngagePlatform, boolean>
   minVersion: Record<EngagePlatform, string | null>
+  models: Record<EngageFeature, AiModelKey>
+  // Keyed by model id (lib/ai/models.ts).
+  aiPrices: Record<string, ModelPrice>
 }
 
 export function defaultGlobalSettings(): EngageGlobalSettings {
@@ -55,6 +67,8 @@ export function defaultGlobalSettings(): EngageGlobalSettings {
     >,
     insert: { linkedin: true, x: true },
     minVersion: { linkedin: null, x: null },
+    models: Object.fromEntries(ENGAGE_FEATURES.map((f) => [f, "luna"])) as Record<EngageFeature, AiModelKey>,
+    aiPrices: { ...DEFAULT_AI_PRICES },
   }
 }
 
@@ -73,6 +87,12 @@ export function globalSettingsFrom(rows: { key: string; value: unknown }[]): Eng
     } else if (row.key === "minVersion") {
       const parsed = SETTING_SCHEMAS.minVersion.safeParse(row.value)
       if (parsed.success) Object.assign(settings.minVersion, parsed.data)
+    } else if (row.key === "models") {
+      const parsed = SETTING_SCHEMAS.models.safeParse(row.value)
+      if (parsed.success) Object.assign(settings.models, parsed.data)
+    } else if (row.key === "aiPrices") {
+      const parsed = SETTING_SCHEMAS.aiPrices.safeParse(row.value)
+      if (parsed.success) Object.assign(settings.aiPrices, parsed.data)
     }
   }
   return settings

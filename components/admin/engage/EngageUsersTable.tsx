@@ -2,18 +2,21 @@
 
 // Engage → Users. Filtering, sorting and paging happen on the server; this
 // page only ever holds one page of rows. Filters live in the URL, so a view
-// can be bookmarked or shared.
+// can be bookmarked or shared, and saved here by name (in this browser).
+// Selected users take one bulk action at a time; the list downloads as CSV.
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ChevronLeft, ChevronRight, Columns3, Plus, Search } from "lucide-react"
+import { ChevronLeft, ChevronRight, Columns3, Plus, Search, X } from "lucide-react"
 import { AdminButton, AdminInput, AdminSelect, fmtDate } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
 import { ENGAGE_FEATURES, FEATURE_LABELS } from "@/lib/engage/features"
 import type { UserListRow } from "@/lib/engage/adminQueries"
 import { GrantAccessModal } from "./GrantAccessForm"
+import { BulkActionModal, type BulkAction } from "./BulkActionModal"
 import {
   AccessPill,
+  CsvLink,
   EmptyState,
   ErrorState,
   Pill,
@@ -72,6 +75,14 @@ const COLUMN_LABELS: Record<Column, string> = {
   tags: "Tags",
 }
 
+const NO_SELECTION = new Map<string, string>()
+
+// A named set of filters, kept in this browser.
+interface SavedView {
+  name: string
+  query: string
+}
+
 // "1.3.0 · X 1.0.0": each extension they use, with its version when known.
 function extensionCell(u: UserListRow): string {
   const parts = u.extensions.map((p) =>
@@ -87,6 +98,12 @@ export function EngageUsersTable() {
   const [columns, setColumns] = useStoredState<Column[]>("engage-admin:user-columns", [...COLUMNS])
   const [showColumns, setShowColumns] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [views, setViews] = useStoredState<SavedView[]>("engage-admin:user-views", [])
+  const [naming, setNaming] = useState<string | null>(null)
+  // Selected users, by id with their email, for the page they were selected
+  // on: another page or filter starts with nothing selected.
+  const [selection, setSelection] = useState<{ url: string; ids: Map<string, string> }>({ url: "", ids: new Map() })
+  const [bulk, setBulk] = useState<BulkAction | null>(null)
 
   const filters = {
     q: params.get("q") ?? "",
@@ -125,6 +142,27 @@ export function EngageUsersTable() {
     return `/api/admin/engage/users?${p.toString()}`
   }, [filters.access, filters.activity, filters.platform, filters.sort, filters.page, filters.q, filters.tag])
   const { data, error, loading, reload } = useAdminApi<Page>(url)
+  const selected = selection.url === url ? selection.ids : NO_SELECTION
+  const setSelected = (ids: Map<string, string>) => setSelection({ url, ids })
+
+  // The filters, without paging, for a saved view and the CSV download.
+  const filterQuery = useMemo(() => {
+    const p = new URLSearchParams(params.toString())
+    p.delete("page")
+    return p.toString()
+  }, [params])
+  const activeView = views.find((v) => v.query === filterQuery)
+  const pageRows = data?.rows ?? []
+  const allSelected = pageRows.length > 0 && pageRows.every((u) => selected.has(u.id))
+  function toggleAll(users: UserListRow[], on: boolean) {
+    const next = new Map(selected)
+    for (const u of users) {
+      if (on) next.set(u.id, u.email)
+      else next.delete(u.id)
+    }
+    setSelected(next)
+  }
+  const toggle = (u: UserListRow, on: boolean) => toggleAll([u], on)
 
   const visible = (c: Column) => columns.includes(c)
   const filtered = filters.q || filters.access !== "all" || filters.activity !== "any" || filters.platform !== "any" || filters.tag
@@ -138,10 +176,13 @@ export function EngageUsersTable() {
           <h1 className="text-[18px] font-semibold tracking-tight text-white">Engage users</h1>
           <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">Everyone who has signed in to the extension, paid for it, or been given access.</p>
         </div>
-        <AdminButton onClick={() => setAdding(true)}>
-          <Plus className="h-3.5 w-3.5" aria-hidden />
-          Add user
-        </AdminButton>
+        <div className="flex flex-wrap items-center gap-2">
+          <CsvLink type="users" query={filterQuery} />
+          <AdminButton onClick={() => setAdding(true)}>
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+            Add user
+          </AdminButton>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -225,6 +266,80 @@ export function EngageUsersTable() {
         )}
       </div>
 
+      <div className="flex flex-wrap items-center gap-2" aria-label="Saved views" role="group">
+        {views.length > 0 && (
+          <AdminSelect
+            aria-label="Saved view"
+            value={activeView?.name ?? ""}
+            onChange={(e) => {
+              const view = views.find((v) => v.name === e.target.value)
+              if (!view) return
+              setQuery(new URLSearchParams(view.query).get("q") ?? "")
+              router.replace(`?${view.query}`, { scroll: false })
+            }}
+          >
+            <option value="">Saved views…</option>
+            {views.map((v) => (
+              <option key={v.name} value={v.name}>
+                {v.name}
+              </option>
+            ))}
+          </AdminSelect>
+        )}
+        {activeView ? (
+          <AdminButton variant="ghost" onClick={() => setViews(views.filter((v) => v.name !== activeView.name))}>
+            Delete view “{activeView.name}”
+          </AdminButton>
+        ) : naming === null ? (
+          filtered && (
+            <AdminButton variant="ghost" onClick={() => setNaming("")}>
+              Save these filters
+            </AdminButton>
+          )
+        ) : (
+          <form
+            className="flex items-center gap-1.5"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const name = naming.trim()
+              if (!name) return
+              setViews([...views.filter((v) => v.name !== name), { name, query: filterQuery }])
+              setNaming(null)
+            }}
+          >
+            <AdminInput aria-label="View name" autoFocus maxLength={40} placeholder="Name this view" value={naming} onChange={(e) => setNaming(e.target.value)} />
+            <AdminButton type="submit" disabled={!naming.trim()}>
+              Save
+            </AdminButton>
+            <AdminButton type="button" variant="ghost" onClick={() => setNaming(null)}>
+              Cancel
+            </AdminButton>
+          </form>
+        )}
+      </div>
+
+      {selected.size > 0 && (
+        <div role="region" aria-label="Bulk actions" className="flex flex-wrap items-center gap-2 rounded-lg border border-[#3B2A6B] bg-[#1C1530] px-3 py-2">
+          <span className="text-[12.5px] font-medium text-white">{selected.size} selected</span>
+          <AdminButton variant="secondary" onClick={() => setBulk("grant")}>
+            Give free access
+          </AdminButton>
+          <AdminButton variant="secondary" onClick={() => setBulk("suspend")}>
+            Pause
+          </AdminButton>
+          <AdminButton variant="secondary" onClick={() => setBulk("resume")}>
+            Resume
+          </AdminButton>
+          <AdminButton variant="secondary" onClick={() => setBulk("tag")}>
+            Add tag
+          </AdminButton>
+          <AdminButton variant="ghost" onClick={() => setSelected(new Map())}>
+            <X className="h-3.5 w-3.5" aria-hidden />
+            Clear selection
+          </AdminButton>
+        </div>
+      )}
+
       {error ? (
         <ErrorState message={error} onRetry={reload} />
       ) : (
@@ -233,6 +348,16 @@ export function EngageUsersTable() {
             <table className="w-full text-left text-[12.5px]" aria-busy={loading}>
               <thead className="sticky top-0 z-10 bg-[#161616]">
                 <tr className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+                  <th className="w-8 border-b border-[#2A2A2A] py-2.5 pl-4">
+                    <input
+                      type="checkbox"
+                      aria-label="Select everyone on this page"
+                      className="accent-[#7C3AED]"
+                      checked={allSelected}
+                      disabled={pageRows.length === 0}
+                      onChange={(e) => toggleAll(pageRows, e.target.checked)}
+                    />
+                  </th>
                   <th className="border-b border-[#2A2A2A] px-4 py-2.5">User</th>
                   {visible("access") && <th className="border-b border-[#2A2A2A] px-4 py-2.5">Access</th>}
                   {visible("month") && <th className="border-b border-[#2A2A2A] px-4 py-2.5 text-right">This month</th>}
@@ -246,13 +371,22 @@ export function EngageUsersTable() {
                 {!data && loading
                   ? Array.from({ length: 8 }, (_, i) => (
                       <tr key={i}>
-                        <td className="px-4 py-3" colSpan={1 + columns.length}>
+                        <td className="px-4 py-3" colSpan={2 + columns.length}>
                           <SkeletonBlock className="h-4 w-full" />
                         </td>
                       </tr>
                     ))
                   : data?.rows.map((u) => (
                       <tr key={u.id} className="border-b border-[#232323] transition-colors hover:bg-[#1F1F1F]">
+                        <td className="py-2.5 pl-4">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${u.email}`}
+                            className="accent-[#7C3AED]"
+                            checked={selected.has(u.id)}
+                            onChange={(e) => toggle(u, e.target.checked)}
+                          />
+                        </td>
                         <td className="px-4 py-2.5">
                           <Link
                             href={`/admin/engage/users/${u.id}`}
@@ -328,6 +462,17 @@ export function EngageUsersTable() {
           )}
         </div>
       )}
+
+      <BulkActionModal
+        action={bulk}
+        users={[...selected].map(([id, email]) => ({ id, email }))}
+        onClose={() => setBulk(null)}
+        onDone={(message) => {
+          toast(message, "success")
+          setSelected(new Map())
+          reload()
+        }}
+      />
 
       <GrantAccessModal
         open={adding}

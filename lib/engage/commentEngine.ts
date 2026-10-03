@@ -8,6 +8,7 @@
 // Moved here unchanged from app/api/ext/generate/route.ts, plus the log label
 // and the length measure, which differ for X.
 import { generationDeadline, GenerationTimeout, parseComment, sanitizeComment, streamCommentModel } from "@/lib/ai/commentModel"
+import type { AiCaller } from "@/lib/engage/aiUsage"
 import { extractPartialComment, visibleCommentText } from "@/lib/ai/commentText"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
 import { ANTI_FABRICATION_REMINDER, WEAK_COMMENT_PATTERNS } from "@/lib/ai/prompts/commentPrompt"
@@ -45,6 +46,9 @@ export interface GenerationInput {
   // How long the text is for min/max: plain characters on LinkedIn, X's own
   // weighted count on X (lib/xText.ts).
   measure?: (text: string) => number
+  // Who asked and for what: picks the feature's AI model and records each
+  // call (lib/ai/commentModel.ts).
+  engage?: AiCaller
 }
 
 export interface GenerationHooks {
@@ -119,6 +123,7 @@ export async function generateComment(input: GenerationInput, hooks: GenerationH
       const result = await streamCommentModel(input.systemMessage, message, label, {
         signal: controller.signal,
         deadline,
+        engage: input.engage,
         onReset: () => show(""),
         onRaw: (sofar) => {
           const partial = extractPartialComment(sofar)

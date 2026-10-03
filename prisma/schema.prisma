@@ -1003,6 +1003,35 @@ model EngageSetting {
   updatedBy String?
 }
 
+// One AI model call made for the extensions (lib/ai/commentModel.ts): who,
+// for what, which model, the tokens it used, how long it took and how it
+// ended. A generation that fell back to the backup model has two rows. Cost
+// is worked out when shown, from the prices in admin → Engage → AI. Nothing
+// the user wrote or the model answered is stored here.
+model EngageAiCall {
+  id           String   @id @default(cuid())
+  userId       String?
+  // The usage kind ("comments", "x_rewrites", …) and its feature.
+  kind         String
+  feature      String
+  route        String
+  model        String
+  // This call was the backup, after the first model failed or refused.
+  fallback     Boolean  @default(false)
+  streamed     Boolean  @default(false)
+  // ok | refused | empty | error | timeout | cancelled
+  outcome      String
+  inputTokens  Int?
+  outputTokens Int?
+  firstTokenMs Int?
+  ms           Int
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([feature, createdAt])
+}
+
 // Internal notes on a user. Never shown to the user.
 model AdminNote {
   id          String   @id @default(cuid())

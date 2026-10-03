@@ -72,6 +72,9 @@ const db = vi.hoisted(() => ({
   },
   engageAccessGrant: { count: vi.fn(async () => 0), findMany: vi.fn(async () => []) },
   adminNote: { findMany: vi.fn(async () => []) },
+  // Phase C: the user page's AI cost this month, and the prices.
+  engageAiCall: { groupBy: vi.fn(async () => []) },
+  engageSetting: { findMany: vi.fn(async () => []) },
   adminUserTag: { findMany: vi.fn(async () => []) },
   auditLog: { findMany: vi.fn(async () => []) },
   engageClientError: {

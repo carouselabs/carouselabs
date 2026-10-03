@@ -4,7 +4,7 @@
 // palette (components/admin/ui.tsx). Text never uses the series colours;
 // status colours always come with a word, never colour alone.
 import { useCallback, useEffect, useState, type ReactNode } from "react"
-import { AlertTriangle, Loader2, RotateCw } from "lucide-react"
+import { AlertTriangle, Download, Loader2, RotateCw } from "lucide-react"
 import { AdminButton, fmtDate } from "@/components/admin/ui"
 import type { EngageFeature } from "@/lib/engage/features"
 
@@ -227,11 +227,34 @@ export function Segmented<T extends string>({
   )
 }
 
+// A CSV download of what the page shows (/api/admin/engage/export?type=…);
+// each download is recorded in the Engage audit log.
+export function CsvLink({ type, query = "" }: { type: string; query?: string }) {
+  return (
+    <a
+      href={`/api/admin/engage/export?type=${type}${query ? `&${query}` : ""}`}
+      download
+      className="inline-flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-[12.5px] font-medium text-[#D0D0D0] hover:bg-[#232323] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
+    >
+      <Download className="h-3.5 w-3.5" aria-hidden />
+      Download CSV
+    </a>
+  )
+}
+
 // ── Preferences remembered in this browser ─────────────────────────────
 
 export { useStoredState } from "@/components/admin/useStoredState"
 
 // ── Formatting ──────────────────────────────────────────────────────────
+
+// AI cost: cents shown, tiny amounts as "<$0.01".
+export function fmtDollars(n: number | null | undefined): string {
+  if (n === null || n === undefined) return "—"
+  if (n === 0) return "$0"
+  if (n < 0.01) return "<$0.01"
+  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
 
 export function fmtNumber(n: number | null | undefined): string {
   return n === null || n === undefined ? "—" : n.toLocaleString("en-US")

@@ -6,13 +6,20 @@
 // are stood in for.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const calls = vi.hoisted(() => ({ prompts: [] as { system: string; user: string }[], gate: [] as string[], history: [] as Record<string, unknown>[] }));
+const calls = vi.hoisted(() => ({
+  prompts: [] as { system: string; user: string }[],
+  gate: [] as string[],
+  history: [] as Record<string, unknown>[],
+  // GPT Luna failing, so Claude Haiku (the backup) writes.
+  lunaDown: false,
+}));
 
 vi.mock("openai", () => ({
   default: class {
     chat = {
       completions: {
         create: async (body: { messages: { content: string }[] }) => {
+          if (calls.lunaDown) throw new Error("Luna is down");
           calls.prompts.push({ system: body.messages[0].content, user: body.messages[1].content });
           return { choices: [{ message: { content: JSON.stringify({ comment: "Sounds good, happy to share what we tried." }) } }] };
         },
@@ -20,7 +27,16 @@ vi.mock("openai", () => ({
     };
   },
 }));
-vi.mock("@anthropic-ai/sdk", () => ({ default: class { messages = { create: async () => ({ content: [] }) }; } }));
+vi.mock("@anthropic-ai/sdk", () => ({
+  default: class {
+    messages = {
+      create: async () => ({
+        content: [{ type: "text", text: JSON.stringify({ comment: "Happy to share what we tried, from the backup." }) }],
+        usage: { input_tokens: 10, output_tokens: 5 },
+      }),
+    };
+  },
+}));
 
 const REASON = { id: "mp1", name: "Potential client", goal: "Understand their needs", tone: "Friendly", alwaysDo: null, neverDo: null, samples: [], isSystem: true, userId: null };
 
@@ -67,6 +83,7 @@ const request = (path: string, body: unknown) =>
   });
 
 beforeEach(() => {
+  calls.lunaDown = false;
   calls.prompts = [];
   calls.gate = [];
   calls.history = [];
@@ -92,7 +109,17 @@ describe("X DMs", () => {
       postAuthor: "Sam Lee",
       postUrl: "https://x.com/i/chat/1234-5678",
       postSnippet: "Sure! What are you working on?",
+      model: "gpt-6-luna",
     });
+  });
+
+  it("records the model that actually wrote it: the backup, when the first model failed", async () => {
+    calls.lunaDown = true;
+    const res = await xMessagePOST(
+      request("/api/ext/x/message", { contact: { name: "Sam Lee", handle: "@sam_lee" }, threadPath: "/i/chat/1234-5678", thread: THREAD, profileId: "mp1" }),
+    );
+    expect(((await res.json()) as { message: string }).message).toBe("Happy to share what we tried, from the backup.");
+    expect(calls.history[0]).toMatchObject({ kind: "x_message", model: "claude-haiku-4-5-20251001" });
   });
 
   it("refuses a chat with no one in it", async () => {

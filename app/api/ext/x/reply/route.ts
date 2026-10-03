@@ -67,6 +67,7 @@ export async function POST(req: Request) {
     numberSources: xNumberSources(reply, extraInstruction),
     label: "ext/x/reply",
     measure: xLength,
+    engage: { userId: user.id, kind: "x_replies" },
   }
   const beforeModelMs = timer.elapsed()
 

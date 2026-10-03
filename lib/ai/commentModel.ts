@@ -3,8 +3,19 @@
 // (app/api/ext/generate and app/api/ext/rewrite). Extracted so the lenient
 // parse ladder and the sanitiser exist once: a rewrite that stripped hashtags
 // differently from a fresh generate would be a quiet inconsistency.
+//
+// Each feature's AI model is chosen in admin → Engage → AI (GPT Luna unless
+// changed); the other model is the backup. Every call is recorded for that
+// page — model, tokens, time, how it ended (lib/engage/aiUsage.ts) — never
+// the text itself, and never in a way that can slow or fail the request.
 import Anthropic from "@anthropic-ai/sdk"
 import OpenAI from "openai"
+import { AI_MODELS, FALLBACK_MODEL, PRIMARY_MODEL, type AiModelKey } from "@/lib/ai/models"
+import { recordAiCall, type AiAttempt, type AiCaller, type AiOutcome } from "@/lib/engage/aiUsage"
+import { featureOfUsageKind } from "@/lib/engage/features"
+import { loadGlobalSettings } from "@/lib/engage/settings"
+
+export { FALLBACK_MODEL, PRIMARY_MODEL }
 
 // The SDK defaults (10-minute timeout, 2 retries each) let one Generate —
 // two attempts, each primary then fallback — run for many minutes while the
@@ -21,9 +32,8 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 30_000,
 // (src/lib/api.ts), so it always hears the answer or the failure.
 export const GENERATION_BUDGET_MS = 40_000
 // Luna normally answers in a second or two; past this it is stuck, and Haiku
-// gets the rest of the time.
-const LUNA_CALL_MS = 15_000
-const HAIKU_CALL_MS = 20_000
+// gets the rest of the time. Each model keeps its own cap whichever goes first.
+const CALL_MS: Record<AiModelKey, number> = { luna: 15_000, haiku: 20_000 }
 // A streamed answer that goes quiet this long (from the request, or between
 // pieces) has stalled: the SDK's own timeout stops at the first byte, so
 // without this a stall mid-answer would wait forever.
@@ -96,15 +106,6 @@ async function limited<T>(
   }
 }
 
-// Luna primary, Claude Haiku 4.5 as fallback. Both are the cheap/fast tier of
-// their respective families rather than a flagship model: a comment is a few
-// dozen words and the user is watching a side panel spinner, so latency
-// matters more here than headroom.
-export const PRIMARY_MODEL = "gpt-6-luna"
-// Only called if Luna errors or refuses — same cost/latency tier as
-// PRIMARY_MODEL, not a bigger fallback model.
-export const FALLBACK_MODEL = "claude-haiku-4-5-20251001"
-
 // A comment is a few dozen words; this is a runaway guard, not a target.
 const MAX_OUTPUT_TOKENS = 1024
 
@@ -124,6 +125,15 @@ function lunaRequest(systemMessage: string, userMessage: string) {
       { role: "system" as const, content: systemMessage },
       { role: "user" as const, content: userMessage },
     ],
+  }
+}
+
+function haikuRequest(systemMessage: string, userMessage: string) {
+  return {
+    model: FALLBACK_MODEL,
+    max_tokens: MAX_OUTPUT_TOKENS,
+    system: systemMessage,
+    messages: [{ role: "user" as const, content: userMessage }],
   }
 }
 
@@ -191,47 +201,108 @@ export interface ModelCallOptions {
   // From generationDeadline(): the whole request's time budget, shared by
   // every attempt. Throws GenerationTimeout once too little is left.
   deadline?: number
+  // Who asked and for what: picks the feature's model (admin → Engage → AI)
+  // and records each call for that page. Without it: Luna first, unrecorded.
+  engage?: AiCaller
 }
 
-// Luna primary, Claude Haiku 4.5 on refusal, error or timeout. `label` only
-// tags the log lines so the routes stay distinguishable in output.
+// The order to try the models in: the feature's chosen model, then the other.
+async function modelOrder(engage: AiCaller | undefined): Promise<[AiModelKey, AiModelKey]> {
+  const first = engage ? (await loadGlobalSettings()).models[featureOfUsageKind(engage.kind)] : "luna"
+  return first === "haiku" ? ["haiku", "luna"] : ["luna", "haiku"]
+}
+
+function failureOutcome(err: unknown, signal?: AbortSignal): AiOutcome {
+  if (signal?.aborted) return "cancelled"
+  return err instanceof CallStopped ? "timeout" : "error"
+}
+
+// A refusal or nothing at all counts as not answering: the other model gets
+// a turn (the last model's answer is returned either way, as before).
+function answerOutcome(raw: string): AiOutcome {
+  if (!raw.trim()) return "empty"
+  return isRefusal(raw) ? "refused" : "ok"
+}
+
+const pause = (ms: number) => Math.round(ms)
+
+// One whole (not streamed) answer from one model, with the tokens it used.
+async function complete(
+  key: AiModelKey,
+  systemMessage: string,
+  userMessage: string,
+  signal: AbortSignal,
+  usage: { input: number | null; output: number | null },
+): Promise<string> {
+  if (key === "luna") {
+    const response = await openai.chat.completions.create(lunaRequest(systemMessage, userMessage), { signal, maxRetries: 0 })
+    usage.input = response.usage?.prompt_tokens ?? null
+    usage.output = response.usage?.completion_tokens ?? null
+    return response.choices[0]?.message?.content ?? ""
+  }
+  const response = await anthropic.messages.create(haikuRequest(systemMessage, userMessage), { signal, maxRetries: 0 })
+  usage.input = response.usage?.input_tokens ?? null
+  usage.output = response.usage?.output_tokens ?? null
+  return response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("")
+}
+
+// The chosen model first, the other on refusal, error or timeout; returns
+// what was written and the model that wrote it. `label` tags the log lines
+// and the recorded calls so the routes stay distinguishable.
+export async function callCommentModelWithInfo(
+  systemMessage: string,
+  userMessage: string,
+  label: string,
+  { deadline, engage }: ModelCallOptions = {},
+): Promise<{ raw: string; model: string }> {
+  const order = await modelOrder(engage)
+  for (let i = 0; i < order.length; i += 1) {
+    const key = order[i]
+    const last = i === order.length - 1
+    const limitMs = callLimit(CALL_MS[key], deadline)
+    const usage = { input: null as number | null, output: null as number | null }
+    const start = performance.now()
+    const note = (outcome: AiOutcome) => {
+      if (!engage) return
+      const attempt: AiAttempt = {
+        model: AI_MODELS[key].id,
+        fallback: i > 0,
+        streamed: false,
+        outcome,
+        inputTokens: usage.input,
+        outputTokens: usage.output,
+        firstTokenMs: null,
+        ms: pause(performance.now() - start),
+      }
+      recordAiCall(engage, label, attempt)
+    }
+    try {
+      const raw = await limited(limitMs, undefined, false, (signal) => complete(key, systemMessage, userMessage, signal, usage))
+      const outcome = answerOutcome(raw)
+      note(outcome)
+      if (outcome === "ok" || last) return { raw, model: AI_MODELS[key].id }
+      console.warn(`[${label}] ${AI_MODELS[key].label} refused or returned empty, falling back to ${AI_MODELS[order[i + 1]].label}`)
+    } catch (err) {
+      note(failureOutcome(err))
+      if (last) throw err
+      const e = err as { message?: string }
+      console.warn(`[${label}] ${AI_MODELS[key].label} error, falling back to ${AI_MODELS[order[i + 1]].id}:`, e?.message ?? err)
+    }
+  }
+  throw new Error("unreachable")
+}
+
+// callCommentModelWithInfo, for callers that only need the text.
 export async function callCommentModel(
   systemMessage: string,
   userMessage: string,
   label: string,
-  { deadline }: ModelCallOptions = {},
+  options: ModelCallOptions = {},
 ): Promise<string> {
-  try {
-    const raw = await limited(callLimit(LUNA_CALL_MS, deadline), undefined, false, async (signal) => {
-      const response = await openai.chat.completions.create(lunaRequest(systemMessage, userMessage), {
-        signal,
-        maxRetries: 0,
-      })
-      return response.choices[0]?.message?.content ?? ""
-    })
-    if (!isRefusal(raw) && raw.trim()) return raw
-    console.warn(`[${label}] Luna refused or returned empty, falling back to Claude Haiku`)
-  } catch (err) {
-    if (err instanceof GenerationTimeout) throw err
-    const e = err as { message?: string }
-    console.warn(`[${label}] Luna error, falling back to ${FALLBACK_MODEL}:`, e?.message ?? err)
-  }
-
-  return limited(callLimit(HAIKU_CALL_MS, deadline), undefined, false, async (signal) => {
-    const response = await anthropic.messages.create(
-      {
-        model: FALLBACK_MODEL,
-        max_tokens: MAX_OUTPUT_TOKENS,
-        system: systemMessage,
-        messages: [{ role: "user", content: userMessage }],
-      },
-      { signal, maxRetries: 0 },
-    )
-    return response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("")
-  })
+  return (await callCommentModelWithInfo(systemMessage, userMessage, label, options)).raw
 }
 
 export interface ModelStreamResult {
@@ -239,7 +310,7 @@ export interface ModelStreamResult {
   // The model that actually produced `raw`.
   model: string
   // From the start of the call to the first token of the model that answered,
-  // including any time spent on a failed Luna attempt: what the user waited.
+  // including any time spent on a failed first attempt: what the user waited.
   ttftMs: number | null
   totalMs: number
 }
@@ -247,73 +318,108 @@ export interface ModelStreamResult {
 export interface ModelStreamOptions extends ModelCallOptions {
   // The whole response so far, each time more of it arrives.
   onRaw?: (raw: string) => void
-  // Luna failed after sending some text and Haiku is starting over, so
-  // anything shown from Luna's partial response must be forgotten.
+  // The first model failed after sending some text and the backup is starting
+  // over, so anything shown from the partial response must be forgotten.
   onReset?: () => void
   // Aborting stops generation mid-response; the call then rejects.
   signal?: AbortSignal
 }
 
-// callCommentModel, streamed: same models, same fallback rule (Luna, then
-// Haiku on error, refusal, empty output, a stall or a timeout), but the text
-// is handed over as it arrives instead of when the model is done.
+// One model's streamed answer: each piece of text to `onText`, the tokens it
+// used into `usage` (Luna sends them in its last chunk when asked; Claude in
+// message_start and message_delta).
+async function streamOne(
+  key: AiModelKey,
+  systemMessage: string,
+  userMessage: string,
+  signal: AbortSignal,
+  alive: () => void,
+  onText: (text: string) => void,
+  usage: { input: number | null; output: number | null },
+): Promise<void> {
+  if (key === "luna") {
+    const stream = await openai.chat.completions.create(
+      { ...lunaRequest(systemMessage, userMessage), stream: true, stream_options: { include_usage: true } },
+      { signal, maxRetries: 0 },
+    )
+    for await (const chunk of stream) {
+      alive()
+      if (chunk.usage) {
+        usage.input = chunk.usage.prompt_tokens ?? null
+        usage.output = chunk.usage.completion_tokens ?? null
+      }
+      const delta = chunk.choices?.[0]?.delta?.content
+      if (delta) onText(delta)
+    }
+    return
+  }
+  const stream = await anthropic.messages.create({ ...haikuRequest(systemMessage, userMessage), stream: true }, { signal, maxRetries: 0 })
+  for await (const event of stream) {
+    alive()
+    if (event.type === "message_start") usage.input = event.message?.usage?.input_tokens ?? null
+    else if (event.type === "message_delta") usage.output = event.usage?.output_tokens ?? null
+    else if (event.type === "content_block_delta" && event.delta.type === "text_delta") onText(event.delta.text)
+  }
+}
+
+// callCommentModel, streamed: same models, same fallback rule (the chosen
+// model, then the other on error, refusal, empty output, a stall or a
+// timeout), but the text is handed over as it arrives.
 export async function streamCommentModel(
   systemMessage: string,
   userMessage: string,
   label: string,
-  { onRaw, onReset, signal, deadline }: ModelStreamOptions = {},
+  { onRaw, onReset, signal, deadline, engage }: ModelStreamOptions = {},
 ): Promise<ModelStreamResult> {
   const start = performance.now()
+  const order = await modelOrder(engage)
   let raw = ""
   let ttftMs: number | null = null
 
-  try {
-    await limited(callLimit(LUNA_CALL_MS, deadline), signal, true, async (callSignal, alive) => {
-      const stream = await openai.chat.completions.create(
-        { ...lunaRequest(systemMessage, userMessage), stream: true },
-        { signal: callSignal, maxRetries: 0 },
+  for (let i = 0; i < order.length; i += 1) {
+    const key = order[i]
+    const last = i === order.length - 1
+    if (i > 0) {
+      if (raw) onReset?.()
+      raw = ""
+      ttftMs = null
+    }
+    const limitMs = callLimit(CALL_MS[key], deadline)
+    const usage = { input: null as number | null, output: null as number | null }
+    const callStart = performance.now()
+    let firstTokenMs: number | null = null
+    const note = (outcome: AiOutcome) => {
+      if (!engage) return
+      recordAiCall(engage, label, {
+        model: AI_MODELS[key].id,
+        fallback: i > 0,
+        streamed: true,
+        outcome,
+        inputTokens: usage.input,
+        outputTokens: usage.output,
+        firstTokenMs: firstTokenMs === null ? null : pause(firstTokenMs),
+        ms: pause(performance.now() - callStart),
+      })
+    }
+    try {
+      await limited(limitMs, signal, true, (callSignal, alive) =>
+        streamOne(key, systemMessage, userMessage, callSignal, alive, (text) => {
+          firstTokenMs ??= performance.now() - callStart
+          ttftMs ??= performance.now() - start
+          raw += text
+          onRaw?.(raw)
+        }, usage),
       )
-      for await (const chunk of stream) {
-        alive()
-        const delta = chunk.choices[0]?.delta?.content
-        if (!delta) continue
-        ttftMs ??= performance.now() - start
-        raw += delta
-        onRaw?.(raw)
-      }
-    })
-    if (!isRefusal(raw) && raw.trim()) {
-      return { raw, model: PRIMARY_MODEL, ttftMs, totalMs: performance.now() - start }
+      const outcome = answerOutcome(raw)
+      note(outcome)
+      if (outcome === "ok" || last) return { raw, model: AI_MODELS[key].id, ttftMs, totalMs: performance.now() - start }
+      console.warn(`[${label}] ${AI_MODELS[key].label} refused or returned empty, falling back to ${AI_MODELS[order[i + 1]].label}`)
+    } catch (err) {
+      note(failureOutcome(err, signal))
+      if (signal?.aborted || last) throw err
+      const e = err as { message?: string }
+      console.warn(`[${label}] ${AI_MODELS[key].label} error, falling back to ${AI_MODELS[order[i + 1]].id}:`, e?.message ?? err)
     }
-    console.warn(`[${label}] Luna refused or returned empty, falling back to Claude Haiku`)
-  } catch (err) {
-    if (signal?.aborted || err instanceof GenerationTimeout) throw err
-    const e = err as { message?: string }
-    console.warn(`[${label}] Luna error, falling back to ${FALLBACK_MODEL}:`, e?.message ?? err)
   }
-
-  if (raw) onReset?.()
-  raw = ""
-  ttftMs = null
-
-  await limited(callLimit(HAIKU_CALL_MS, deadline), signal, true, async (callSignal, alive) => {
-    const stream = await anthropic.messages.create(
-      {
-        model: FALLBACK_MODEL,
-        max_tokens: MAX_OUTPUT_TOKENS,
-        system: systemMessage,
-        messages: [{ role: "user", content: userMessage }],
-        stream: true,
-      },
-      { signal: callSignal, maxRetries: 0 },
-    )
-    for await (const event of stream) {
-      alive()
-      if (event.type !== "content_block_delta" || event.delta.type !== "text_delta") continue
-      ttftMs ??= performance.now() - start
-      raw += event.delta.text
-      onRaw?.(raw)
-    }
-  })
-  return { raw, model: FALLBACK_MODEL, ttftMs, totalMs: performance.now() - start }
+  throw new Error("unreachable")
 }

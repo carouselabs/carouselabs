@@ -105,7 +105,7 @@ export async function handleRewriteRequest(req: Request, platform: RewritePlatfo
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     let raw: string
     try {
-      raw = await callCommentModel(systemMessage, userMessage, label, { deadline })
+      raw = await callCommentModel(systemMessage, userMessage, label, { deadline, engage: { userId: user.id, kind: usage } })
     } catch (err) {
       if (err instanceof GenerationTimeout) {
         console.error(`[${label}] attempt ${attempt}: out of time, giving up`)

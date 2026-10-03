@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { AdminButton, AdminInput, fmtDateTime } from "@/components/admin/ui"
-import { EmptyState, ErrorState, SkeletonBlock, fmtNumber, useAdminApi } from "./shared"
+import { CsvLink, EmptyState, ErrorState, SkeletonBlock, fmtNumber, useAdminApi } from "./shared"
 
 interface Entry {
   id: string
@@ -49,7 +49,10 @@ export function EngageAuditTable() {
           <h1 className="text-[18px] font-semibold tracking-tight text-white">Engage audit log</h1>
           <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">Every change an admin made to someone&apos;s Engage access. Entries can&apos;t be edited or deleted.</p>
         </div>
-        <AdminInput aria-label="Filter by user email" className="w-[260px]" placeholder="Filter by user email" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="flex flex-wrap items-center gap-2">
+          <AdminInput aria-label="Filter by user email" className="w-[260px]" placeholder="Filter by user email" value={q} onChange={(e) => setQ(e.target.value)} />
+          <CsvLink type="audit" query={query ? `q=${encodeURIComponent(query)}` : ""} />
+        </div>
       </div>
 
       {error ? (

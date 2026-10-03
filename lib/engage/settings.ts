@@ -60,6 +60,27 @@ export async function saveGlobalSetting(key: SettingKey, value: Prisma.InputJson
   clearGlobalSettingsCache()
 }
 
+// The stored settings, read fresh (not the generation path's cache) for the
+// admin pages, with who changed each and when. ready: false until
+// scripts/engage-admin-phase-b.sql has run; then the defaults are shown.
+export async function readGlobalSettingsFresh(): Promise<{
+  ready: boolean
+  settings: EngageGlobalSettings
+  saved: Record<string, { updatedAt: string; updatedBy: string | null }>
+}> {
+  try {
+    const rows = await db.engageSetting.findMany()
+    return {
+      ready: true,
+      settings: globalSettingsFrom(rows),
+      saved: Object.fromEntries(rows.map((r) => [r.key, { updatedAt: r.updatedAt.toISOString(), updatedBy: r.updatedBy }])),
+    }
+  } catch (err) {
+    if (!isEngageSchemaMissing(err)) throw err
+    return { ready: false, settings: defaultGlobalSettings(), saved: {} }
+  }
+}
+
 // A writing request from an extension older than the minimum version an admin
 // set for it: 426, with how to update. null when it may go ahead.
 export async function outdatedExtensionResponse(req: Request): Promise<NextResponse | null> {

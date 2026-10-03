@@ -32,6 +32,7 @@ import {
   SkeletonBlock,
   Tabs,
   adminSend,
+  fmtDollars,
   fmtNumber,
   fmtRelative,
   useAdminApi,
@@ -243,6 +244,14 @@ export function EngageUserDetail({ userId }: { userId: string }) {
           </SummaryCell>
         ))}
         <SummaryCell label="Daily cap">{formatLimit(access.limits.dailyCap.effective)}</SummaryCell>
+        {data.aiMonth && (
+          <SummaryCell label="AI cost · month">
+            <span className="tabular-nums">
+              {fmtDollars(data.aiMonth.cost)}
+              {data.aiMonth.unpriced ? " +" : ""}
+            </span>
+          </SummaryCell>
+        )}
       </section>
 
       {access.status === "suspended" && data.control?.suspendReason && (

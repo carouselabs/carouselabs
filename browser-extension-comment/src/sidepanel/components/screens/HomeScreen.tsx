@@ -9,6 +9,8 @@ import { ConnectionNotePanel } from "../ConnectionNotePanel";
 import { RecommendedBadge } from "../RecommendedBadge";
 import { RewriteButton } from "../RewriteButton";
 import { FreeGenerationsNote, UnlockCard } from "../UnlockCard";
+import { GoToSiteCard, goToSite } from "../GoToSiteCard";
+import { useOnSite } from "../../useOnSite";
 import {
   isPaywalled,
   noteFreeRemaining,
@@ -51,6 +53,9 @@ import type { LinkedInProfileInfo } from "@/lib/connectionNote";
 // selection — it hands off to the Profile Builder on the Profiles screen,
 // through the same App-level deep link onboarding uses.
 const CREATE_CUSTOM_VALUE = "__create_custom__";
+
+// The "Go to LinkedIn" card's words, while another site is the active tab.
+const GO_TO_LINKEDIN = "Comments, replies and notes are written on LinkedIn. Go back to LinkedIn to write one.";
 
 // Must match MESSAGE_TYPE in src/content-script.ts exactly — no shared
 // package between the content script and sidepanel bundles' message
@@ -199,10 +204,13 @@ export function HomeScreen({ onCreateProfile }: Props) {
   // Insert failures in Connection Note mode, shown inside that panel.
   const [connectInsertError, setConnectInsertError] = useState<string | null>(null);
 
-  // null while unknown. Chrome reveals tab.url only for hosts the extension
-  // has permission for, so a readable linkedin.com URL is itself the signal —
-  // no "tabs" permission needed.
-  const [onLinkedIn, setOnLinkedIn] = useState<boolean | null>(null);
+  // null while unknown, and live as tabs change (src/sidepanel/useOnSite.ts).
+  // Chrome reveals tab.url only for hosts the extension has permission for,
+  // so a readable linkedin.com URL is itself the signal — no "tabs"
+  // permission needed. Writing and Insert happen on LinkedIn, so on any other
+  // site Home points back to it (what was written stays for Copy).
+  const onLinkedIn = useOnSite();
+  const offLinkedIn = onLinkedIn === false;
   const [commentsToday, setCommentsToday] = useState(0);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
 
@@ -373,11 +381,11 @@ export function HomeScreen({ onCreateProfile }: Props) {
   const postHasNoText =
     !!selectedPost && (reply ? !reply.targetText.trim() : !selectedPost.text.trim());
   const generateDisabled =
-    !selectedPost || !selectedId || paywalled || postHasNoText || busy;
+    !selectedPost || !selectedId || paywalled || postHasNoText || busy || offLinkedIn;
   // Copy / Shorter / Longer all need a comment to act on. Shorter / Longer
   // are model calls too, so the paywall stops them; Copy and Insert never.
   const actionsDisabled = !hasComment || busy;
-  const rewriteDisabled = actionsDisabled || paywalled;
+  const rewriteDisabled = actionsDisabled || paywalled || offLinkedIn;
 
   // The server kill switch and the per-install preference are read separately
   // from the account data above, since the config route is public and the
@@ -399,13 +407,10 @@ export function HomeScreen({ onCreateProfile }: Props) {
       if (!cancelled) setShowInsertPref(show);
     });
 
-    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      if (!cancelled) setOnLinkedIn(!!tab?.url?.includes("linkedin.com"));
-      // A LinkedIn tab left over from before an update has no working content
-      // script, so a Comment click in it would never reach this panel. Put one
-      // in now, before the user clicks.
-      void ensureContentScript(tab);
-    });
+    // A LinkedIn tab left over from before an update has no working content
+    // script, so a Comment click in it would never reach this panel. Put one
+    // in now, before the user clicks.
+    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => void ensureContentScript(tab));
 
     return () => {
       cancelled = true;
@@ -718,11 +723,13 @@ export function HomeScreen({ onCreateProfile }: Props) {
   if (connectTarget && selectedPost) {
     return (
       <div className="flex flex-col gap-4 p-4">
+        {offLinkedIn && <GoToSiteCard body={GO_TO_LINKEDIN} homeUrl={LINKEDIN_FEED_URL} />}
         <ConnectionNotePanel
           key={selectedPost.capturedAt}
           target={connectTarget}
           paywalled={paywalled}
-          showInsert={insertEnabled && showInsertPref}
+          offSite={offLinkedIn}
+          showInsert={insertEnabled && showInsertPref && !offLinkedIn}
           inserting={inserting}
           insertError={connectInsertError}
           onInsert={(text, noteHistoryId) => void performInsert(text, "connect", noteHistoryId)}
@@ -742,7 +749,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
   // The result card replaces the Generate button from the click on, so the
   // wait, the streaming text and the finished comment all happen in one place.
   const showResult = generating || hasResult;
-  const showInsert = insertEnabled && showInsertPref;
+  const showInsert = insertEnabled && showInsertPref && !offLinkedIn;
   const postTypeLabel = selectedPost ? POST_TYPE_LABEL[selectedPost.type] : null;
 
   const errorBox = generateError && <Alert>{generateError}</Alert>;
@@ -799,6 +806,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
 
   return (
     <div className="flex flex-col gap-4 p-4">
+      {selectedPost && offLinkedIn && <GoToSiteCard body={GO_TO_LINKEDIN} homeUrl={LINKEDIN_FEED_URL} />}
       <div className="space-y-1.5">
         <label id="home-profile-label" className="text-xs font-medium text-muted-foreground">
           Comment profile
@@ -879,7 +887,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
       )}
 
       {selectedPost ? (
-        <div className="space-y-1.5">
+        <div className={`space-y-1.5 ${offLinkedIn ? "opacity-60" : ""}`}>
           <p className="text-xs font-medium text-muted-foreground">{reply ? "Replying to" : "Selected post"}</p>
 
           {reply ? (
@@ -942,7 +950,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
             </p>
           </div>
           {onLinkedIn === false && (
-            <Button size="sm" onClick={() => chrome.tabs.create({ url: LINKEDIN_FEED_URL })}>
+            <Button size="sm" onClick={() => void goToSite(LINKEDIN_FEED_URL)}>
               Open LinkedIn
               <ExternalLink aria-hidden />
             </Button>
@@ -979,7 +987,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
       ) : paywalled ? (
         // Used-up free generations replace Generate entirely (see UnlockCard).
         <UnlockCard />
-      ) : (
+      ) : offLinkedIn ? null : (
         <div className="space-y-2">
           {errorBox}
           <Button className="w-full" disabled={generateDisabled} onClick={handleGenerate}>

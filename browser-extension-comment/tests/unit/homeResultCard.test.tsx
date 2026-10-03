@@ -3,8 +3,8 @@
 // so to screen readers, a failed generation offers Try again, and a new post
 // never inherits the previous post's comment; Insert puts the comment straight
 // into LinkedIn, with no warning first.
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { setExtensionAccess } from "@/lib/extensionAccess";
 import { HomeScreen } from "@/sidepanel/components/screens/HomeScreen";
 import { chromeMock } from "../setup/chrome";
@@ -59,6 +59,8 @@ const box = () => screen.getByRole("textbox", { name: "Your comment" }) as HTMLT
 const copy = () => screen.getByRole("button", { name: /^Cop(y|ied)$/ }) as HTMLButtonElement;
 
 beforeEach(() => {
+  // On LinkedIn: off it, Home points back there instead of writing.
+  (chromeMock().tabs.query as unknown as Mock).mockResolvedValue([{ id: 5, url: "https://www.linkedin.com/feed/" }]);
   insertEnabled = false;
   const store = chromeMock().__store;
   store.extensionToken = "cl_cmt_abc";
@@ -153,5 +155,26 @@ describe("Home result card", () => {
     expect(await screen.findByText("Pick a post on LinkedIn")).toBeTruthy();
     expect(screen.queryByLabelText(/Extra instruction/)).toBeNull();
     expect((screen.getByRole("button", { name: "Generate" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("off LinkedIn: points back to LinkedIn instead of Generate, and follows tab switches", async () => {
+    let active = { id: 12 } as chrome.tabs.Tab;
+    (chromeMock().tabs.query as unknown as Mock).mockImplementation(async (info: chrome.tabs.QueryInfo) =>
+      info.url ? [{ id: 5, url: "https://www.linkedin.com/feed/" }] : [active],
+    );
+    server();
+    render(<HomeScreen onCreateProfile={() => {}} />);
+    expect(await screen.findByText("You're not on LinkedIn")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Generate" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Go to LinkedIn/ }));
+    await waitFor(() => expect(chromeMock().tabs.update).toHaveBeenCalledWith(5, { active: true }));
+
+    active = { id: 5, url: "https://www.linkedin.com/feed/" } as chrome.tabs.Tab;
+    await act(async () => {
+      for (const fn of [...chromeMock().tabs.onActivated.listeners]) fn({ tabId: 5, windowId: 1 });
+    });
+    await waitFor(() => expect(screen.queryByText("You're not on LinkedIn")).toBeNull());
+    expect(screen.getByRole("button", { name: "Generate" })).toBeTruthy();
   });
 });

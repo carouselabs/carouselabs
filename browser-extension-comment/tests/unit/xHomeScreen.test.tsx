@@ -106,11 +106,12 @@ describe("X Reply screen", () => {
     render(<XHomeScreen />);
     expect(await screen.findByText("Pick a post on X")).toBeTruthy();
     cleanup();
-    (chromeMock().tabs.query as Mock).mockResolvedValue([{ id: 4, url: undefined }]);
+    // On another site, with no X tab open: Open X opens one.
+    (chromeMock().tabs.query as Mock).mockImplementation(async (info: chrome.tabs.QueryInfo) => (info.url ? [] : [{ id: 4, url: undefined }]));
     render(<XHomeScreen />);
     expect(await screen.findByText("Open X to start")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Open X/ }));
-    expect(chromeMock().tabs.create).toHaveBeenCalledWith({ url: "https://x.com/home" });
+    await waitFor(() => expect(chromeMock().tabs.create).toHaveBeenCalledWith({ url: "https://x.com/home" }));
   });
 
   it("shows the captured post and writes a reply in the default X profile, sending the whole context", async () => {
@@ -282,5 +283,63 @@ describe("X Reply screen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Shorter" }));
     expect(await screen.findByText("Couldn't make it shorter without losing the point")).toBeTruthy();
     expect(replyBox().value).toBe(REPLY);
+  });
+
+  it("off X: points back to X, keeps the written reply for Copy, and waits to write", async () => {
+    chromeMock().__store[X_LAST_POST_STORAGE_KEY] = captured();
+    let active = { id: 4, url: POST_URL } as chrome.tabs.Tab;
+    const xTabs = [
+      { id: 4, url: POST_URL, lastAccessed: 1 },
+      { id: 9, url: "https://x.com/home", lastAccessed: 5 },
+    ];
+    (chromeMock().tabs.query as Mock).mockImplementation(async (info: chrome.tabs.QueryInfo) => (info.url ? xTabs : [active]));
+    const switchTo = async (tab: chrome.tabs.Tab) => {
+      active = tab;
+      await act(async () => {
+        for (const fn of [...chromeMock().tabs.onActivated.listeners]) fn({ tabId: tab.id!, windowId: 1 });
+      });
+    };
+
+    render(<XHomeScreen />);
+    await writeReply();
+    await waitFor(() => expect(replyBox().value).toBe(REPLY));
+    expect(screen.queryByText("You're not on X")).toBeNull();
+
+    // Another site: its address isn't visible to the extension.
+    await switchTo({ id: 12 } as chrome.tabs.Tab);
+    expect(await screen.findByText("You're not on X")).toBeTruthy();
+    expect(replyBox().value).toBe(REPLY);
+    expect((screen.getByRole("button", { name: "Copy" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByRole("button", { name: "Insert" })).toBeNull();
+    expect((screen.getByRole("button", { name: "Regenerate" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Shorter" }) as HTMLButtonElement).disabled).toBe(true);
+
+    // Go to X: the X tab used last, not a new one.
+    fireEvent.click(screen.getByRole("button", { name: /Go to X/ }));
+    await waitFor(() => expect(chromeMock().tabs.update).toHaveBeenCalledWith(9, { active: true }));
+    expect(chromeMock().tabs.create).not.toHaveBeenCalled();
+
+    await switchTo({ id: 9, url: "https://x.com/home" } as chrome.tabs.Tab);
+    await waitFor(() => expect(screen.queryByText("You're not on X")).toBeNull());
+    expect(screen.getByRole("button", { name: "Insert" })).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Regenerate" }) as HTMLButtonElement).disabled).toBe(false);
+
+    // Leaving X in the same tab (no tab switch) counts too.
+    active = { id: 9 } as chrome.tabs.Tab;
+    await act(async () => {
+      for (const fn of [...chromeMock().tabs.onUpdated.listeners]) fn(9, { status: "complete" }, active);
+    });
+    expect(await screen.findByText("You're not on X")).toBeTruthy();
+  });
+
+  it("off X before writing: the way back instead of Write reply", async () => {
+    chromeMock().__store[X_LAST_POST_STORAGE_KEY] = captured();
+    (chromeMock().tabs.query as Mock).mockImplementation(async (info: chrome.tabs.QueryInfo) => (info.url ? [] : [{ id: 12 }]));
+    render(<XHomeScreen />);
+    expect(await screen.findByText("You're not on X")).toBeTruthy();
+    expect(screen.getByText("Priya Raman")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Write reply" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Go to X/ }));
+    await waitFor(() => expect(chromeMock().tabs.create).toHaveBeenCalledWith({ url: "https://x.com/home" }));
   });
 });

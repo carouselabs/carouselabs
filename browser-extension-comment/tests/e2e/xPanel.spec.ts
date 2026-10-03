@@ -23,6 +23,19 @@ async function shot(page: Page, name: string) {
   await page.screenshot({ path: path.join(dir, `${name}.png`) });
 }
 
+// The panel, opened as a page beside the post's X tab, which it takes as the
+// active tab (Home points back to X when the active tab is another site).
+async function openPanel(harness: Harness): Promise<Page> {
+  await harness.openX("/priya/status/1840000000000000001", "x-post.html");
+  const panel = await harness.context.newPage();
+  await panel.addInitScript(() => {
+    const query = chrome.tabs.query.bind(chrome.tabs);
+    chrome.tabs.query = ((info: chrome.tabs.QueryInfo) =>
+      info.active ? query({ url: "https://x.com/*" }) : query(info)) as typeof chrome.tabs.query;
+  });
+  return panel;
+}
+
 async function setup(harness: Harness) {
   harness.apiResponses.set("/api/ext/x/profiles", {
     status: 200,
@@ -64,7 +77,7 @@ async function setup(harness: Harness) {
 
 test("writes a reply to a captured X post", async ({ harness }) => {
   await setup(harness);
-  const panel = await harness.context.newPage();
+  const panel = await openPanel(harness);
   await panel.setViewportSize({ width: 400, height: 720 });
   await panel.emulateMedia({ reducedMotion: "reduce", colorScheme: SCHEME });
   await panel.goto(`chrome-extension://${harness.extensionId}/src/x/sidepanel/index.html`);
@@ -110,7 +123,7 @@ test("Shorter, then the X Profiles, Settings and History screens", async ({ harn
   });
   harness.apiResponses.set("/api/ext/message-profiles", { status: 200, body: { profiles: [] } });
 
-  const panel = await harness.context.newPage();
+  const panel = await openPanel(harness);
   await panel.setViewportSize({ width: 400, height: 720 });
   await panel.emulateMedia({ reducedMotion: "reduce", colorScheme: SCHEME });
   await panel.goto(`chrome-extension://${harness.extensionId}/src/x/sidepanel/index.html`);

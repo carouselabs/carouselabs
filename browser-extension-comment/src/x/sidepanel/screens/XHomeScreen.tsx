@@ -18,6 +18,8 @@ import { ResultCard } from "@/sidepanel/components/ResultCard";
 import { RewriteButton } from "@/sidepanel/components/RewriteButton";
 import { Initials } from "@/sidepanel/components/Initials";
 import { FreeGenerationsNote, UnlockCard } from "@/sidepanel/components/UnlockCard";
+import { GoToSiteCard, goToSite } from "@/sidepanel/components/GoToSiteCard";
+import { useOnSite } from "@/sidepanel/useOnSite";
 import { apiFetch, apiStream, ApiError, fetchExtConfig, isCancelled, type MeResponse, type RewriteResponse } from "@/lib/api";
 import {
   isPaywalled,
@@ -96,7 +98,11 @@ export function XHomeScreen({ onCreateProfile }: Props) {
   const [insertEnabled, setInsertEnabled] = useState(false);
   const [insertHidden, setInsertHidden] = useState(false);
   const [inserting, setInserting] = useState(false);
-  const [onX, setOnX] = useState<boolean | null>(null);
+  // Whether the active tab is on X, live: writing and Insert happen on X, so
+  // on any other site Home points back to X instead (what was written stays
+  // for Copy).
+  const onX = useOnSite();
+  const offX = onX === false;
   const access = useExtensionAccess();
 
   // The generation in flight, so Stop, a new post or leaving can cancel it.
@@ -141,12 +147,9 @@ export function XHomeScreen({ onCreateProfile }: Props) {
       .then((config) => !cancelled && setInsertEnabled(config.insertEnabled))
       .catch(() => {});
 
-    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      if (!cancelled) setOnX(isSiteTab(tab));
-      // An X tab left over from before an update has no working content
-      // script; put one in now, before Reply is clicked.
-      void ensureContentScript(tab);
-    });
+    // An X tab left over from before an update has no working content
+    // script; put one in now, before Reply is clicked.
+    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => void ensureContentScript(tab));
 
     return () => {
       cancelled = true;
@@ -209,11 +212,11 @@ export function XHomeScreen({ onCreateProfile }: Props) {
 
   const paywalled = isPaywalled(access);
   const busy = generating || rewriting !== null;
-  const generateDisabled = !target || !selectedId || paywalled || busy;
+  const generateDisabled = !target || !selectedId || paywalled || busy || offX;
   const hasReply = reply.trim().length > 0;
   // Shorter / Longer are model calls, so the paywall stops them; Copy and
   // Insert never.
-  const rewriteDisabled = !hasReply || busy || paywalled;
+  const rewriteDisabled = !hasReply || busy || paywalled || offX;
   const length = xLength(reply);
   const overLimit = length > maxLength;
 
@@ -383,11 +386,14 @@ export function XHomeScreen({ onCreateProfile }: Props) {
     hasResult && !generateDisabled && resultProfileId !== null && selectedId !== resultProfileId
       ? (profiles.find((p) => p.id === selectedId) ?? null)
       : null;
-  const showInsert = insertEnabled && !insertHidden;
+  const showInsert = insertEnabled && !insertHidden && !offX;
   const errorBox = generateError && <Alert>{generateError}</Alert>;
 
   return (
     <div className="flex flex-col gap-4 p-4">
+      {target && offX && (
+        <GoToSiteCard body="Replies are written for posts on X. Go back to X to write one." homeUrl={X_HOME_URL} />
+      )}
       <div className="space-y-1.5">
         <label id="x-profile-label" className="text-xs font-medium text-muted-foreground">
           X profile
@@ -441,7 +447,8 @@ export function XHomeScreen({ onCreateProfile }: Props) {
       </div>
 
       {target ? (
-        <div className="space-y-1.5">
+        // Faded off X: it waits there until X is the active tab again.
+        <div className={`space-y-1.5 ${offX ? "opacity-60" : ""}`}>
           <p className="text-xs font-medium text-muted-foreground">Replying to</p>
           <div key={target.capturedAt} className="animate-fade-in space-y-2 rounded-lg border bg-card p-3 shadow-sm">
             {target.thread.length > 0 && (
@@ -487,7 +494,7 @@ export function XHomeScreen({ onCreateProfile }: Props) {
             </p>
           </div>
           {onX === false && (
-            <Button size="sm" onClick={() => chrome.tabs.create({ url: X_HOME_URL })}>
+            <Button size="sm" onClick={() => void goToSite(X_HOME_URL)}>
               Open X
               <ExternalLink aria-hidden />
             </Button>
@@ -580,7 +587,7 @@ export function XHomeScreen({ onCreateProfile }: Props) {
         </>
       ) : paywalled ? (
         <UnlockCard />
-      ) : (
+      ) : offX ? null : (
         <div className="space-y-2">
           {errorBox}
           <Button className="w-full" disabled={generateDisabled} onClick={handleGenerate}>

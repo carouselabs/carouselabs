@@ -1,0 +1,54 @@
+/* CarouseLabs Engage for X: the LinkedIn panel's design (sidepanel/styles.css)
+   in black and white, like X itself: black where LinkedIn's panel is purple,
+   neutral greys, and white on black in dark mode. Errors (red), success
+   (green) and warnings keep their colours so they still stand out.
+   Unlayered, so these win over the base tokens they replace. */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 7%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 7%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 7%;
+
+  --primary: 0 0% 7%;
+  --primary-foreground: 0 0% 100%;
+  --primary-text: 0 0% 7%;
+
+  --secondary: 0 0% 95%;
+  --secondary-foreground: 0 0% 7%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 40%;
+  --accent: 0 0% 94%;
+  --accent-foreground: 0 0% 7%;
+
+  --border: 0 0% 90%;
+  --input: 0 0% 85%;
+  --ring: 0 0% 7%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 93%;
+    --card: 0 0% 6%;
+    --card-foreground: 0 0% 93%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 93%;
+
+    --primary: 0 0% 96%;
+    --primary-foreground: 0 0% 4%;
+    --primary-text: 0 0% 96%;
+
+    --secondary: 0 0% 13%;
+    --secondary-foreground: 0 0% 93%;
+    --muted: 0 0% 11%;
+    --muted-foreground: 0 0% 62%;
+    --accent: 0 0% 15%;
+    --accent-foreground: 0 0% 96%;
+
+    --border: 0 0% 18%;
+    --input: 0 0% 25%;
+    --ring: 0 0% 80%;
+  }
+}

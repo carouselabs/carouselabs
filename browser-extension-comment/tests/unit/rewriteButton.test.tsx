@@ -3,7 +3,7 @@
 // miss), naming what wrote the current text; using it rewrites with the new
 // pick and the offer goes away. Also: the shared default profile (here
 // Simple & Human, as the database marks it) is preselected and labelled.
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { setExtensionAccess } from "@/lib/extensionAccess";
 import { HomeScreen } from "@/sidepanel/components/screens/HomeScreen";
@@ -59,6 +59,8 @@ describe("Home", () => {
   const EXPERT = { id: "sys-thoughtful-expert", name: "Thoughtful Expert", tone: "Professional", isDefault: false, isSystem: true, isRecommended: false };
 
   beforeEach(() => {
+    // On LinkedIn: off it, Home points back there instead of writing.
+    (chromeMock().tabs.query as unknown as Mock).mockResolvedValue([{ id: 5, url: "https://www.linkedin.com/feed/" }]);
     chromeMock().__store.lastSelectedPost = {
       mode: "comment", authorName: "Anthony N.", authorHeadline: "Founder", text: "LinkedIn algorithm solved. Just pay for reach.",
       type: "text", url: "https://www.linkedin.com/feed/update/urn:li:activity:1", capturedAt: 1,

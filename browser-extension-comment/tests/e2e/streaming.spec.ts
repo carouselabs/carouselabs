@@ -32,6 +32,13 @@ async function openPanelWithPost(harness: Harness) {
 
   const page = await harness.open("/feed/", "feed.html");
   const panel = await harness.context.newPage();
+  // The panel is a page here; the LinkedIn tab stands in as the active tab
+  // (off LinkedIn, Home points back there instead of offering Generate).
+  await panel.addInitScript(() => {
+    const query = chrome.tabs.query.bind(chrome.tabs);
+    chrome.tabs.query = ((info: chrome.tabs.QueryInfo) =>
+      info.active ? query({ url: "https://www.linkedin.com/*" }) : query(info)) as typeof chrome.tabs.query;
+  });
   const perf: string[] = [];
   panel.on("console", (msg) => {
     if (msg.text().startsWith("[perf]")) perf.push(msg.text());

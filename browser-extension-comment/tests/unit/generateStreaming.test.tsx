@@ -3,7 +3,7 @@
 // comment (the one that passed every guardrail) replacing it, editable and
 // copyable. A draft that ends in an error must not be left behind: the result
 // card goes away and Generate comes back as "Try again".
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { setExtensionAccess } from "@/lib/extensionAccess";
 import { HomeScreen } from "@/sidepanel/components/screens/HomeScreen";
@@ -61,6 +61,8 @@ const box = () => screen.getByRole("textbox", { name: "Your comment" }) as HTMLT
 const copy = () => screen.getByRole("button", { name: "Copy" }) as HTMLButtonElement;
 
 beforeEach(() => {
+  // On LinkedIn: off it, Home points back there instead of writing.
+  (chromeMock().tabs.query as unknown as Mock).mockResolvedValue([{ id: 5, url: "https://www.linkedin.com/feed/" }]);
   const store = chromeMock().__store;
   store.extensionToken = "cl_cmt_abc";
   store.lastSelectedPost = {

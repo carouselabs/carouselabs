@@ -37,7 +37,15 @@ async function openPanel(harness: Harness, width: number): Promise<Page> {
     (post) => chrome.storage.local.set({ extensionToken: "cl_cmt_qa", onboardingComplete: true, lastSelectedPost: post }),
     POST,
   );
+  await harness.open("/feed/", "feed.html");
   const panel = await harness.context.newPage();
+  // The panel is a page here; the LinkedIn tab stands in as the active tab
+  // (off LinkedIn, Home points back there instead of offering Generate).
+  await panel.addInitScript(() => {
+    const query = chrome.tabs.query.bind(chrome.tabs);
+    chrome.tabs.query = ((info: chrome.tabs.QueryInfo) =>
+      info.active ? query({ url: "https://www.linkedin.com/*" }) : query(info)) as typeof chrome.tabs.query;
+  });
   await panel.setViewportSize({ width, height: 720 });
   await panel.emulateMedia({ reducedMotion: "reduce" });
   await panel.goto(`chrome-extension://${harness.extensionId}/src/sidepanel/index.html`);

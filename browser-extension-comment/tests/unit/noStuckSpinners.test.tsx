@@ -228,6 +228,8 @@ describe("Home: Stop and a new post", () => {
   }
 
   beforeEach(() => {
+    // On LinkedIn: off it, Home points back there instead of writing.
+    (chromeMock().tabs.query as Mock).mockResolvedValue([{ id: 5, url: "https://www.linkedin.com/feed/" }]);
     generations = [];
     answerFirstAtOnce = false;
     chromeMock().__store.lastSelectedPost = post(1, "Priya");

@@ -236,12 +236,20 @@ describe("X panel", () => {
     expect(await screen.findByRole("heading", { name: "New X profile" })).toBeTruthy();
   });
 
-  it("shows the X extension's own mark in the header, not LinkedIn's", async () => {
+  it("names itself in the header, with the same mark as the LinkedIn extension", async () => {
     render(<App />);
     await screen.findByRole("combobox", { name: "X profile" });
     const header = screen.getByRole("banner");
     expect(within(header).getByRole("heading", { name: "CarouseLabs Engage for X" })).toBeTruthy();
-    expect(header.querySelector("svg text")?.textContent).toBe("X");
+    // The shared chat-bubble mark, with no letter in it.
+    expect(header.querySelector("svg.lucide-message-circle")).toBeTruthy();
+    expect(header.querySelector("svg text")).toBeNull();
+  });
+
+  it("marks an open X chat with a black badge, not LinkedIn's purple", async () => {
+    const { markConversationTabs } = await import("@/lib/conversationBadge");
+    markConversationTabs("https://x.com/i/chat/*");
+    expect(chromeMock().action.setBadgeBackgroundColor).toHaveBeenCalledWith({ color: "#000000" });
   });
 
   it("has History and Settings, with nothing left as a placeholder", async () => {

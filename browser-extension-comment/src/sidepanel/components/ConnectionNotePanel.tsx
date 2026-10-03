@@ -79,6 +79,9 @@ interface Props {
   onInsert: (text: string, historyId: string | null) => void;
   // Opens the connection-profile builder; owned by App, like the comment one.
   onCreateProfile: () => void;
+  // The active tab isn't on LinkedIn: HomeScreen shows "Go to LinkedIn" above,
+  // and writing waits (a written note stays for Copy).
+  offSite?: boolean;
 }
 
 // Connection Note mode of the Home screen. Rendered with key={capturedAt}, so a
@@ -95,6 +98,7 @@ export function ConnectionNotePanel({
   insertError,
   onInsert,
   onCreateProfile,
+  offSite = false,
 }: Props) {
   // undefined while loading; null when the user has never chosen, which shows
   // the first-time chooser in place of the Generate controls.
@@ -205,7 +209,7 @@ export function ConnectionNotePanel({
         : null;
 
   const busy = generating || inserting;
-  const generateDisabled = !context || !length || !!contextProblem || paywalled || busy;
+  const generateDisabled = !context || !length || !!contextProblem || paywalled || busy || offSite;
   const hasNote = note.trim().length > 0;
   const overLimit = note.length > CONNECT_NOTE_HARD_MAX;
   const showResult = generating || hasResult;
@@ -514,7 +518,7 @@ export function ConnectionNotePanel({
         </>
       ) : paywalled ? (
         <UnlockCard />
-      ) : (
+      ) : offSite ? null : (
         <div className="space-y-2">
           {error && <Alert>{error}</Alert>}
           <Button className="w-full" disabled={generateDisabled} onClick={handleGenerate}>

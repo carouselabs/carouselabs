@@ -26,13 +26,16 @@
 // this — production (carouselabs.com) isn't a private address so PNA never
 // triggers there, but the plain CORS headers are still required in both.
 import { NextResponse } from "next/server"
+import { CONTENT_SCRIPT_ORIGINS } from "@/lib/contentScriptOrigins"
 
-// Content script only ever runs on linkedin.com (manifest.config.ts's
-// content_scripts matches) — no need to reflect an arbitrary Origin.
-const ALLOWED_ORIGIN = "https://www.linkedin.com"
-
-function withCorsHeaders(res: NextResponse) {
-  res.headers.set("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
+// The pages the content scripts run on (lib/contentScriptOrigins.ts): X's
+// content script also asks this route whether Insert is on before it inserts.
+// Each is answered with its own origin; any other page gets no CORS header,
+// so its browser drops the response. Reading the Origin also keeps this route
+// answered per request.
+function withCorsHeaders(req: Request, res: NextResponse) {
+  const origin = req.headers.get("origin")
+  if (origin && CONTENT_SCRIPT_ORIGINS.includes(origin)) res.headers.set("Access-Control-Allow-Origin", origin)
   res.headers.set("Vary", "Origin")
   return res
 }
@@ -41,9 +44,9 @@ function withCorsHeaders(res: NextResponse) {
 // page can reach a private-network address (localhost, in dev). Also
 // satisfies a normal CORS preflight if the browser ever sends one for other
 // reasons; harmless either way since this route has no side effects.
-export async function OPTIONS() {
+export async function OPTIONS(req: Request) {
   const res = new NextResponse(null, { status: 204 })
-  withCorsHeaders(res)
+  withCorsHeaders(req, res)
   res.headers.set("Access-Control-Allow-Methods", "GET, OPTIONS")
   // The actual PNA opt-in — without this, Chrome blocks the follow-up GET
   // when the target address is private (e.g. localhost) and the requesting
@@ -53,7 +56,7 @@ export async function OPTIONS() {
 }
 
 // GET /api/ext/config
-export async function GET() {
+export async function GET(req: Request) {
   const res = NextResponse.json({
     // Matches the (icon-only) comment action button in a post's social
     // action bar. aria-label-based rather than class-based on purpose —
@@ -140,5 +143,5 @@ export async function GET() {
     // so the feature can be withdrawn without an extension redeploy.
     insertEnabled: true,
   })
-  return withCorsHeaders(res)
+  return withCorsHeaders(req, res)
 }

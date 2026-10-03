@@ -94,3 +94,27 @@ test("an X chat: badge, hint, read, write with a shared reason, insert", async (
   await panel.getByRole("button", { name: "Insert" }).click();
   await expect(page.locator('textarea[data-testid="dm-composer-textarea"]')).toHaveValue(REPLY);
 });
+
+test("a chat X opens in place (the address changes, no page load) gets the badge and the hint", async ({ harness }) => {
+  await signedIn(harness);
+  const page = await harness.openX("/i/chat", "x-dm-inbox.html");
+  const badge = () =>
+    harness.worker.evaluate(async () => {
+      const [tab] = await chrome.tabs.query({ url: "https://x.com/*" });
+      return chrome.action.getBadgeText({ tabId: tab.id! });
+    });
+  const panel = await openPanel(harness);
+  await expect(panel.getByRole("combobox", { name: "X profile" })).toBeVisible();
+  // The inbox is not a chat.
+  expect(await badge()).toBe("");
+  await expect(panel.getByRole("button", { name: "Write a reply with AI" })).toHaveCount(0);
+
+  await page.evaluate(() => history.pushState({}, "", "/i/chat/1234-5678"));
+  await expect.poll(badge).toBe("AI");
+  await expect(panel.getByRole("button", { name: "Write a reply with AI" })).toBeVisible();
+
+  // And back to the inbox: both go away.
+  await page.evaluate(() => history.pushState({}, "", "/i/chat"));
+  await expect.poll(badge).toBe("");
+  await expect(panel.getByRole("button", { name: "Write a reply with AI" })).toHaveCount(0);
+});

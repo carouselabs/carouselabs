@@ -29,6 +29,20 @@ npm run build
 
 Outputs the loadable extension to `dist/`.
 
+## CarouseLabs Engage for X
+
+The same folder also builds a second extension for x.com, with its own
+manifest (`manifest.x.config.ts`, version `X_VERSION`), icons (`public-x/`),
+background, content script and panel screens (`src/x/`). Shared code reads
+`src/lib/platform.ts` to know which one it is in.
+
+```
+npm run build:x:dev                                            # dist-x/, loads localhost too
+npx vite build --config vite.x.config.ts --outDir dist-x-store  # the store build
+```
+
+End-to-end tests for it: `EXT_DIST=dist-x npx playwright test tests/e2e/x*.spec.ts tests/e2e/signIn.spec.ts`.
+
 ## Structure
 
 - `manifest.config.ts` — MV3 manifest (via `@crxjs/vite-plugin`'s

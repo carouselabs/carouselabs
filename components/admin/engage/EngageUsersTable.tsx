@@ -47,6 +47,12 @@ const ACTIVITY_OPTIONS = [
   ["inactive30", "Inactive 30+ days"],
   ["never", "Never signed in"],
 ] as const
+// Which of the two extensions they use (one plan covers both).
+const PLATFORM_OPTIONS = [
+  ["any", "Any extension"],
+  ["linkedin", "Uses LinkedIn"],
+  ["x", "Uses X"],
+] as const
 const SORT_OPTIONS = [
   ["last_active", "Last active"],
   ["usage_month", "Most generated this month"],
@@ -66,6 +72,14 @@ const COLUMN_LABELS: Record<Column, string> = {
   tags: "Tags",
 }
 
+// "1.3.0 · X 1.0.0": each extension they use, with its version when known.
+function extensionCell(u: UserListRow): string {
+  const parts = u.extensions.map((p) =>
+    p === "x" ? `X ${u.xExtensionVersion ?? ""}`.trim() : (u.extensionVersion ?? "LinkedIn"),
+  )
+  return parts.length > 0 ? parts.join(" · ") : "—"
+}
+
 export function EngageUsersTable() {
   const router = useRouter()
   const params = useSearchParams()
@@ -78,6 +92,7 @@ export function EngageUsersTable() {
     q: params.get("q") ?? "",
     access: params.get("access") ?? "all",
     activity: params.get("activity") ?? "any",
+    platform: params.get("platform") ?? "any",
     tag: params.get("tag") ?? "",
     sort: params.get("sort") ?? "last_active",
     page: Number(params.get("page") ?? "1") || 1,
@@ -87,7 +102,7 @@ export function EngageUsersTable() {
     const next = new URLSearchParams(params.toString())
     for (const [k, v] of Object.entries({ page: 1, ...patch })) {
       const s = String(v)
-      if (!s || (k === "page" && s === "1") || (k === "access" && s === "all") || (k === "activity" && s === "any") || (k === "sort" && s === "last_active")) next.delete(k)
+      if (!s || (k === "page" && s === "1") || (k === "access" && s === "all") || (k === "activity" && s === "any") || (k === "platform" && s === "any") || (k === "sort" && s === "last_active")) next.delete(k)
       else next.set(k, s)
     }
     router.replace(`?${next.toString()}`, { scroll: false })
@@ -106,12 +121,13 @@ export function EngageUsersTable() {
     const p = new URLSearchParams({ access: filters.access, activity: filters.activity, sort: filters.sort, page: String(filters.page), pageSize: "50" })
     if (filters.q) p.set("q", filters.q)
     if (filters.tag) p.set("tag", filters.tag)
+    if (filters.platform !== "any") p.set("platform", filters.platform)
     return `/api/admin/engage/users?${p.toString()}`
-  }, [filters.access, filters.activity, filters.sort, filters.page, filters.q, filters.tag])
+  }, [filters.access, filters.activity, filters.platform, filters.sort, filters.page, filters.q, filters.tag])
   const { data, error, loading, reload } = useAdminApi<Page>(url)
 
   const visible = (c: Column) => columns.includes(c)
-  const filtered = filters.q || filters.access !== "all" || filters.activity !== "any" || filters.tag
+  const filtered = filters.q || filters.access !== "all" || filters.activity !== "any" || filters.platform !== "any" || filters.tag
   const from = data ? (data.page - 1) * data.pageSize + 1 : 0
   const to = data ? Math.min(data.total, data.page * data.pageSize) : 0
 
@@ -148,6 +164,13 @@ export function EngageUsersTable() {
         </AdminSelect>
         <AdminSelect aria-label="Activity" value={filters.activity} onChange={(e) => setFilter({ activity: e.target.value })}>
           {ACTIVITY_OPTIONS.map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          ))}
+        </AdminSelect>
+        <AdminSelect aria-label="Extension" value={filters.platform} onChange={(e) => setFilter({ platform: e.target.value })}>
+          {PLATFORM_OPTIONS.map(([v, l]) => (
             <option key={v} value={v}>
               {l}
             </option>
@@ -256,7 +279,11 @@ export function EngageUsersTable() {
                           </td>
                         )}
                         {visible("lastActive") && <td className="whitespace-nowrap px-4 py-2.5 text-[#B0B0B0]">{fmtRelative(u.lastActiveAt)}</td>}
-                        {visible("version") && <td className="px-4 py-2.5 tabular-nums text-[#B0B0B0]">{u.extensionVersion ?? "—"}</td>}
+                        {visible("version") && (
+                          <td className="px-4 py-2.5 tabular-nums text-[#B0B0B0]">
+                            {extensionCell(u)}
+                          </td>
+                        )}
                         {visible("joined") && <td className="whitespace-nowrap px-4 py-2.5 text-[#B0B0B0]">{fmtDate(u.createdAt)}</td>}
                         {visible("tags") && (
                           <td className="px-4 py-2.5">

@@ -236,6 +236,14 @@ describe("X panel", () => {
     expect(await screen.findByRole("heading", { name: "New X profile" })).toBeTruthy();
   });
 
+  it("shows the X extension's own mark in the header, not LinkedIn's", async () => {
+    render(<App />);
+    await screen.findByRole("combobox", { name: "X profile" });
+    const header = screen.getByRole("banner");
+    expect(within(header).getByRole("heading", { name: "CarouseLabs Engage for X" })).toBeTruthy();
+    expect(header.querySelector("svg text")?.textContent).toBe("X");
+  });
+
   it("has History and Settings, with nothing left as a placeholder", async () => {
     render(<App />);
     await screen.findByRole("combobox", { name: "X profile" });

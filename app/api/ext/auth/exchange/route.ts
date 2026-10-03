@@ -9,6 +9,7 @@ import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { generateCommentExtensionToken, hashCommentExtensionToken } from "@/lib/extensionCommentAuth"
+import { X_DEVICE_PREFIX } from "@/lib/engage/features"
 
 // POST /api/ext/auth/exchange — body: { device?: string }. Requires an
 // active Clerk web session; issues a new token (does not revoke any existing
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
     }
     // The X extension (CarouseLabs Engage for X) says so, and its browsers
     // are labelled that way in "Signed-in browsers".
-    if (body?.client === "x") device = `X extension · ${device ?? "Chrome"}`.slice(0, 200)
+    if (body?.client === "x") device = `${X_DEVICE_PREFIX} · ${device ?? "Chrome"}`.slice(0, 200)
   } catch {
     // no/empty body is fine — device is optional
   }

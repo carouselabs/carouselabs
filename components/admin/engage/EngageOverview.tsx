@@ -2,13 +2,21 @@
 
 // Engage → Overview. Every figure is counted from recorded data
 // (/api/admin/engage/overview); what isn't recorded yet says so instead of
-// showing a number.
+// showing a number. All, or one extension at a time (LinkedIn or X); plan
+// figures are the account's either way, since one plan covers both.
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import { AdminLineChart } from "@/components/admin/charts"
 import { AdminButton, AdminInput } from "@/components/admin/ui"
 import { RANGE_KEYS, RANGE_LABELS, type RangeKey } from "@/lib/engage/ranges"
-import { ENGAGE_FEATURES, LINKEDIN_FEATURES, FEATURE_LABELS, type EngageFeature } from "@/lib/engage/features"
+import {
+  ENGAGE_FEATURES,
+  FEATURE_LABELS,
+  PLATFORM_FEATURES,
+  PLATFORM_LABELS,
+  type EngageFeature,
+  type EngagePlatform,
+} from "@/lib/engage/features"
 import {
   ErrorState,
   EmptyState,
@@ -57,29 +65,41 @@ function NotTracked({ label, when }: { label: string; when: string }) {
   )
 }
 
+type PlatformView = EngagePlatform | "all"
+const PLATFORM_VIEWS: { value: PlatformView; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "linkedin", label: PLATFORM_LABELS.linkedin },
+  { value: "x", label: PLATFORM_LABELS.x },
+]
+
 const pct = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : "—")
 
 export function EngageOverview() {
   const [range, setRange] = useStoredState<RangeKey>("engage-admin:range", "30d")
+  const [platform, setPlatform] = useStoredState<PlatformView>("engage-admin:platform", "all")
   const [custom, setCustom] = useState({ from: "", to: "" })
   const url = useMemo(() => {
-    if (range !== "custom") return `/api/admin/engage/overview?range=${range}`
+    const only = platform === "all" ? "" : `&platform=${platform}`
+    if (range !== "custom") return `/api/admin/engage/overview?range=${range}${only}`
     if (!custom.from || !custom.to) return null
-    return `/api/admin/engage/overview?range=custom&from=${custom.from}&to=${custom.to}`
-  }, [range, custom])
+    return `/api/admin/engage/overview?range=custom&from=${custom.from}&to=${custom.to}${only}`
+  }, [range, custom, platform])
   const { data, error, loading, reload } = useAdminApi<Overview>(url)
 
   const g = data?.generations
   const usedAtAll = data ? data.actions.copied + data.actions.inserted : 0
+  const features: EngageFeature[] = platform === "all" ? [...ENGAGE_FEATURES] : PLATFORM_FEATURES[platform]
+  const where = platform === "all" ? "LinkedIn or X" : PLATFORM_LABELS[platform]
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[18px] font-semibold tracking-tight text-white">CarouseLabs Engage</h1>
-          <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">Who uses the extension and what they write with it. Days are UTC.</p>
+          <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">Who uses the extensions and what they write with them. Days are UTC.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Segmented label="Extension" options={PLATFORM_VIEWS} value={platform} onChange={setPlatform} />
           <Segmented
             label="Date range"
             options={RANGE_KEYS.map((k) => ({ value: k, label: RANGE_LABELS[k] }))}
@@ -117,9 +137,17 @@ export function EngageOverview() {
             </h2>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
               <Kpi label="Engage users" value={fmtNumber(data.users.total)} hint="Ever signed in or given access" href="/admin/engage/users" />
-              <Kpi label="Active in range" value={fmtNumber(data.users.active)} hint="Generated at least once" />
-              <Kpi label="New in range" value={fmtNumber(data.users.new)} hint="First extension sign-in" />
-              <Kpi label="Paid" value={fmtNumber(data.users.paid)} hint="$15/month, active now" href="/admin/engage/users?access=paid" />
+              <Kpi
+                label="Active in range"
+                value={fmtNumber(data.users.active)}
+                hint={platform === "all" ? "Generated at least once" : `Generated on ${PLATFORM_LABELS[platform]}`}
+              />
+              <Kpi
+                label="New in range"
+                value={fmtNumber(data.users.new)}
+                hint={platform === "all" ? "First extension sign-in" : `First sign-in to the ${PLATFORM_LABELS[platform]} extension`}
+              />
+              <Kpi label="Paid" value={fmtNumber(data.users.paid)} hint="$15/month, covers both" href="/admin/engage/users?access=paid" />
               <Kpi
                 label="Free access (granted)"
                 value={fmtNumber(data.users.granted)}
@@ -136,10 +164,10 @@ export function EngageOverview() {
               Generated in range
             </h2>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
-              {ENGAGE_FEATURES.map((f) => (
+              {features.map((f) => (
                 <Kpi key={f} label={FEATURE_LABELS[f]} value={fmtNumber(g?.[f])} />
               ))}
-              <Kpi label="Copied or inserted" value={pct(usedAtAll, g?.total ?? 0)} hint={`${fmtNumber(usedAtAll)} of ${fmtNumber(g?.total)} used on LinkedIn`} />
+              <Kpi label="Copied or inserted" value={pct(usedAtAll, g?.total ?? 0)} hint={`${fmtNumber(usedAtAll)} of ${fmtNumber(g?.total)} used on ${where}`} />
               <Kpi
                 label="Extension errors"
                 value={data.clientErrors === null ? "—" : fmtNumber(data.clientErrors)}
@@ -161,7 +189,7 @@ export function EngageOverview() {
                   data={data.series}
                   xKey="date"
                   height={260}
-                  series={LINKEDIN_FEATURES.map((f) => ({ key: f, label: FEATURE_LABELS[f], color: FEATURE_COLORS[f] }))}
+                  series={features.map((f) => ({ key: f, label: FEATURE_LABELS[f], color: FEATURE_COLORS[f] }))}
                 />
               </section>
               <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-4" aria-labelledby="engage-users-trend">

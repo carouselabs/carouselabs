@@ -6,8 +6,18 @@
 // fixed list.
 import { Prisma } from "@prisma/client"
 import { db } from "@/lib/db"
-import { ENGAGE_FEATURES, HISTORY_KIND_TO_FEATURE, PLAN_FREE_GENERATIONS, type EngageFeature } from "@/lib/engage/features"
+import {
+  ENGAGE_FEATURES,
+  HISTORY_KIND_TO_FEATURE,
+  PLAN_FREE_GENERATIONS,
+  X_DEVICE_PREFIX,
+  X_FEATURES,
+  tokenPlatform,
+  type EngageFeature,
+  type EngagePlatform,
+} from "@/lib/engage/features"
 import { grantState } from "@/lib/engage/grants"
+import { kindsFor } from "@/lib/extensionHistory"
 
 // ── Shared SQL fragments ────────────────────────────────────────────────
 // u = "User". An Engage user is anyone who ever signed in to the extension,
@@ -42,6 +52,18 @@ const HAS_OVERRIDES = Prisma.sql`EXISTS (
 
 const LAST_ACTIVE = Prisma.sql`(SELECT max(t."lastUsedAt") FROM "ExtensionToken" t WHERE t."userId" = u.id)`
 
+// Which extension a sign-in (t) belongs to: the X extension labels its
+// tokens (X_DEVICE_PREFIX); everything else is the LinkedIn extension.
+const X_TOKEN = Prisma.sql`t.device LIKE ${`${X_DEVICE_PREFIX}%`}`
+const tokenOf = (platform: EngagePlatform) =>
+  platform === "x" ? X_TOKEN : Prisma.sql`(t.device IS NULL OR NOT (${X_TOKEN}))`
+
+// Someone who uses that extension: signed in to it, or generated with it.
+const USES = (platform: EngagePlatform) => Prisma.sql`(
+  EXISTS (SELECT 1 FROM "ExtensionToken" t WHERE t."userId" = u.id AND ${tokenOf(platform)})
+  OR EXISTS (SELECT 1 FROM "CommentHistory" h WHERE h."userId" = u.id AND h.kind IN (${Prisma.join([...kindsFor(platform)])}))
+)`
+
 const monthStartUtc = (now: Date) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
 
 // ── Users table ─────────────────────────────────────────────────────────
@@ -49,11 +71,14 @@ const monthStartUtc = (now: Date) => new Date(Date.UTC(now.getUTCFullYear(), now
 export const USER_ACCESS_FILTERS = ["all", "paid", "granted", "free", "suspended", "overrides"] as const
 export const USER_ACTIVITY_FILTERS = ["any", "today", "7d", "30d", "inactive30", "never"] as const
 export const USER_SORTS = ["last_active", "newest", "oldest", "email", "usage_month"] as const
+export const USER_PLATFORM_FILTERS = ["any", "linkedin", "x"] as const
 
 export interface UserListParams {
   q?: string
   access: (typeof USER_ACCESS_FILTERS)[number]
   activity: (typeof USER_ACTIVITY_FILTERS)[number]
+  // Which extension they use; "any" when not given.
+  platform?: (typeof USER_PLATFORM_FILTERS)[number]
   tag?: string
   sort: (typeof USER_SORTS)[number]
   page: number
@@ -76,7 +101,11 @@ export interface UserListRow {
   hasOverrides: boolean
   monthByFeature: Partial<Record<EngageFeature, number>>
   monthTotal: number
+  // The LinkedIn extension's version, and the X extension's.
   extensionVersion: string | null
+  xExtensionVersion: string | null
+  // The extensions they use (signed in to or generated with).
+  extensions: EngagePlatform[]
   tags: string[]
 }
 
@@ -93,6 +122,7 @@ export async function listEngageUsers(params: UserListParams, now: Date = new Da
   if (params.access === "free") where.push(Prisma.sql`(NOT ${paidAt(now)} AND NOT ${grantedAt(now)})`)
   if (params.access === "suspended") where.push(SUSPENDED)
   if (params.access === "overrides") where.push(HAS_OVERRIDES)
+  if (params.platform === "linkedin" || params.platform === "x") where.push(USES(params.platform))
 
   const day = 86_400_000
   const since = {
@@ -167,11 +197,14 @@ async function loadUserRows(ids: string[], now: Date): Promise<UserListRow[]> {
         adminTags: { select: { tag: true }, orderBy: { tag: "asc" } },
       },
     }),
-    db.extensionToken.groupBy({ by: ["userId"], where: { userId: { in: ids } }, _max: { lastUsedAt: true } }),
+    db.extensionToken.findMany({
+      where: { userId: { in: ids } },
+      select: { id: true, userId: true, device: true, lastUsedAt: true },
+    }),
     db.engageClientInfo.findMany({
       where: { userId: { in: ids } },
       orderBy: { lastSeenAt: "desc" },
-      select: { userId: true, extensionVersion: true },
+      select: { userId: true, tokenId: true, extensionVersion: true },
     }),
     db.commentHistory.groupBy({
       by: ["userId", "kind"],
@@ -180,9 +213,31 @@ async function loadUserRows(ids: string[], now: Date): Promise<UserListRow[]> {
     }),
   ])
 
-  const lastActive = new Map(tokens.map((t) => [t.userId, t._max.lastUsedAt]))
+  const lastActive = new Map<string, Date>()
+  const platformOfToken = new Map<string, EngagePlatform>()
+  const uses = new Map<string, Set<EngagePlatform>>()
+  const use = (userId: string, platform: EngagePlatform) => {
+    if (!uses.has(userId)) uses.set(userId, new Set())
+    uses.get(userId)!.add(platform)
+  }
+  for (const t of tokens) {
+    const seen = lastActive.get(t.userId)
+    if (!seen || t.lastUsedAt > seen) lastActive.set(t.userId, t.lastUsedAt)
+    const platform = tokenPlatform(t.device)
+    platformOfToken.set(t.id, platform)
+    use(t.userId, platform)
+  }
+  for (const h of history) {
+    const feature = HISTORY_KIND_TO_FEATURE[h.kind]
+    if (feature) use(h.userId, X_FEATURES.includes(feature) ? "x" : "linkedin")
+  }
+  // Newest first, so the first seen per user and extension is the current one.
+  // A version reported by a token since signed out counts as LinkedIn's.
   const version = new Map<string, string>()
-  for (const c of clients) if (!version.has(c.userId)) version.set(c.userId, c.extensionVersion)
+  for (const c of clients) {
+    const key = `${c.userId}:${platformOfToken.get(c.tokenId) ?? "linkedin"}`
+    if (!version.has(key)) version.set(key, c.extensionVersion)
+  }
 
   const byId = new Map(users.map((u) => [u.id, u]))
   return ids.flatMap((id) => {
@@ -232,7 +287,9 @@ async function loadUserRows(ids: string[], now: Date): Promise<UserListRow[]> {
         hasOverrides,
         monthByFeature,
         monthTotal,
-        extensionVersion: version.get(id) ?? null,
+        extensionVersion: version.get(`${id}:linkedin`) ?? null,
+        xExtensionVersion: version.get(`${id}:x`) ?? null,
+        extensions: (["linkedin", "x"] as const).filter((p) => uses.get(id)?.has(p)),
         tags: u.adminTags.map((t) => t.tag),
       } satisfies UserListRow,
     ]
@@ -253,7 +310,26 @@ export interface OverviewSeriesPoint {
   newUsers: number
 }
 
-export async function engageOverview(from: Date, to: Date, now: Date = new Date()) {
+// "all", or one extension's figures: its generations, the people who used
+// it, its first sign-ins and its errors. Plan figures (paid, granted, free,
+// suspended) are the account's either way, since one plan covers both.
+export type OverviewPlatform = EngagePlatform | "all"
+
+export async function engageOverview(
+  from: Date,
+  to: Date,
+  now: Date = new Date(),
+  platform: OverviewPlatform = "all",
+) {
+  const kinds = platform === "all" ? null : [...kindsFor(platform)]
+  const historyKinds = kinds ? { kind: { in: kinds } } : {}
+  const kindSql = kinds ? Prisma.sql`AND kind IN (${Prisma.join(kinds)})` : Prisma.empty
+  const tokenSql = platform === "all" ? Prisma.empty : Prisma.sql`WHERE ${tokenOf(platform)}`
+  // An error's feature says which extension it came from; generic ones
+  // (insert, read, auth, other) are the LinkedIn extension's.
+  const errorFeatures =
+    platform === "x" ? { feature: { in: X_FEATURES } } : platform === "linkedin" ? { feature: { notIn: X_FEATURES } } : {}
+
   const [population] = await db.$queryRaw<
     { total: bigint; paid: bigint; granted: bigint; suspended: bigint }[]
   >(Prisma.sql`
@@ -270,36 +346,37 @@ export async function engageOverview(from: Date, to: Date, now: Date = new Date(
     db.engageAccessGrant.count({
       where: { userId: null, revokedAt: null, OR: [{ endsAt: null }, { endsAt: { gt: now } }] },
     }),
-    db.commentHistory.groupBy({ by: ["kind"], where: { createdAt: { gte: from, lt: to } }, _count: { _all: true } }),
-    db.commentHistory.groupBy({ by: ["action"], where: { createdAt: { gte: from, lt: to } }, _count: { _all: true } }),
+    db.commentHistory.groupBy({ by: ["kind"], where: { createdAt: { gte: from, lt: to }, ...historyKinds }, _count: { _all: true } }),
+    db.commentHistory.groupBy({ by: ["action"], where: { createdAt: { gte: from, lt: to }, ...historyKinds }, _count: { _all: true } }),
     db.$queryRaw<{ count: bigint }[]>(Prisma.sql`
-      SELECT count(DISTINCT "userId") AS count FROM "CommentHistory" WHERE "createdAt" >= ${from} AND "createdAt" < ${to}
+      SELECT count(DISTINCT "userId") AS count FROM "CommentHistory"
+      WHERE "createdAt" >= ${from} AND "createdAt" < ${to} ${kindSql}
     `),
     db.$queryRaw<{ count: bigint }[]>(Prisma.sql`
       SELECT count(*) AS count FROM (
-        SELECT "userId", min("createdAt") AS first FROM "ExtensionToken" GROUP BY "userId"
+        SELECT "userId", min("createdAt") AS first FROM "ExtensionToken" t ${tokenSql} GROUP BY "userId"
       ) f WHERE f.first >= ${from} AND f.first < ${to}
     `),
-    db.engageClientError.count({ where: { createdAt: { gte: from, lt: to } } }).catch(() => null),
+    db.engageClientError.count({ where: { createdAt: { gte: from, lt: to }, ...errorFeatures } }).catch(() => null),
     db.$queryRaw<
       { day: string; kind: string; generations: bigint; users: bigint }[]
     >(Prisma.sql`
       SELECT to_char(date_trunc('day', "createdAt"), 'YYYY-MM-DD') AS day, kind,
              count(*) AS generations, count(DISTINCT "userId") AS users
       FROM "CommentHistory"
-      WHERE "createdAt" >= ${from} AND "createdAt" < ${to}
+      WHERE "createdAt" >= ${from} AND "createdAt" < ${to} ${kindSql}
       GROUP BY 1, 2
     `),
   ])
 
   const newPerDay = await db.$queryRaw<{ day: string; count: bigint }[]>(Prisma.sql`
     SELECT to_char(date_trunc('day', f.first), 'YYYY-MM-DD') AS day, count(*) AS count FROM (
-      SELECT "userId", min("createdAt") AS first FROM "ExtensionToken" GROUP BY "userId"
+      SELECT "userId", min("createdAt") AS first FROM "ExtensionToken" t ${tokenSql} GROUP BY "userId"
     ) f WHERE f.first >= ${from} AND f.first < ${to} GROUP BY 1
   `)
   const activePerDay = await db.$queryRaw<{ day: string; count: bigint }[]>(Prisma.sql`
     SELECT to_char(date_trunc('day', "createdAt"), 'YYYY-MM-DD') AS day, count(DISTINCT "userId") AS count
-    FROM "CommentHistory" WHERE "createdAt" >= ${from} AND "createdAt" < ${to} GROUP BY 1
+    FROM "CommentHistory" WHERE "createdAt" >= ${from} AND "createdAt" < ${to} ${kindSql} GROUP BY 1
   `)
 
   // One point per UTC day in the range, zeros included, so charts never skip
@@ -336,6 +413,7 @@ export async function engageOverview(from: Date, to: Date, now: Date = new Date(
 
   return {
     range: { from: from.toISOString(), to: to.toISOString() },
+    platform,
     users: {
       total,
       paid,

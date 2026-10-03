@@ -10,7 +10,7 @@ export default function PrivacyPage() {
   return (
     <LegalShell
       title="Privacy Policy"
-      updated="October 2, 2026"
+      updated="October 3, 2026"
       intro="This Privacy Policy explains what information CarouseLabs (“we,” “us,” “our”) collects, how we use and share it, and the choices and rights you have. We aim to collect only what we need to operate the Service and to keep your data secure. By using CarouseLabs, you agree to the practices described here."
     >
       <LegalSection heading="1. Information we collect">
@@ -259,7 +259,57 @@ export default function PrivacyPage() {
         </ul>
       </LegalSection>
 
-      <LegalSection heading="11. Contact">
+      <LegalSection heading="11. Browser Extension for X (CarouseLabs Engage for X)">
+        <p>
+          CarouseLabs Engage for X is a separate extension that helps you write replies and
+          messages on X (x.com). It signs in to the same CarouseLabs account and follows the same
+          practices as the LinkedIn extension in section 10: its own token per browser, generated
+          text kept in your History and deleted automatically after 90 days, diagnostics without
+          any page content, no sale or sharing with third parties, and signing out from its Account
+          screen. In addition:
+        </p>
+        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-[#1A1A1A]">
+          <li>
+            <span className="text-[#0A0A0A] font-medium">Posts you select</span> — when you click
+            Reply on a post on X, that post&rsquo;s visible text, author name and @handle, its link,
+            and which kinds of media it carries (for example image, video or poll, never the media
+            itself) are read, together with the same details for a post it quotes and for the posts
+            shown above it in that conversation. Whether the post is your own is worked out in your
+            browser from the account shown in X&rsquo;s sidebar; only that yes or no is sent. All of
+            this is sent to CarouseLabs only when you ask for a reply to be written.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">Chats you select</span> — when you click
+            Read this conversation in Messages while an X chat is open, the messages visible in that
+            chat and the other person&rsquo;s name and @handle are read. The @handle is used to look
+            up the reason you saved for that person; the messages and name are sent to CarouseLabs
+            when you generate a reply.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">Your X profiles and settings</span> — the
+            reply profiles you create for X, your default profile, whether you have X Premium (which
+            allows longer replies) and whether the Insert button is shown are stored with your
+            account, separately from your LinkedIn profiles. The reasons you save for conversations
+            are shared by both extensions.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">No automatic browsing tracking</span> — the
+            extension reads a post only when you click its Reply button and a chat only when you
+            click Read. To offer help when you open an X chat, it checks whether the page&rsquo;s
+            address is a chat; that check happens in your browser and nothing about it is sent. It
+            does not monitor your timeline, your messages, or any page you have not selected.
+          </li>
+          <li>
+            <span className="text-[#0A0A0A] font-medium">It never posts for you</span> — the
+            extension never submits anything to X. Copy places the text on your clipboard. Insert,
+            which is optional and can be hidden in the extension&rsquo;s Settings, only places text
+            into X&rsquo;s reply or message box; you still review it and press Reply or Send
+            yourself.
+          </li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection heading="12. Contact">
         <p>
           For privacy questions, requests, or concerns, email{" "}
           <a href="mailto:support@carouselabs.com" className="text-[#1A1A1A] hover:underline">

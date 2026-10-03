@@ -3,7 +3,7 @@
 // time, what the user did with it), never the generated text or post content.
 import { db } from "@/lib/db"
 import { loadEngageAccess } from "@/lib/engage/access"
-import { HISTORY_KIND_TO_FEATURE, type EngageFeature } from "@/lib/engage/features"
+import { ENGAGE_FEATURES, HISTORY_KIND_TO_FEATURE, type EngageFeature } from "@/lib/engage/features"
 import { grantState } from "@/lib/engage/grants"
 import { periodStart, readUsage } from "@/lib/engage/usage"
 
@@ -79,10 +79,11 @@ export async function engageUserDetail(userId: string, now: Date = new Date()) {
     return out
   }
 
-  // Generations per day for the last 30 days, every day present.
+  // Generations per day for the last 30 days, every day and every feature
+  // (both extensions') present.
   const series = Array.from({ length: 30 }, (_, i) => {
     const date = new Date(since30.getTime() + i * DAY).toISOString().slice(0, 10)
-    return { date, comments: 0, replies: 0, connection_notes: 0, messages: 0 } as Record<string, number | string>
+    return { date, ...Object.fromEntries(ENGAGE_FEATURES.map((f) => [f, 0])) } as Record<string, number | string>
   })
   const index = new Map(series.map((p, i) => [p.date as string, i]))
   for (const h of daily) {

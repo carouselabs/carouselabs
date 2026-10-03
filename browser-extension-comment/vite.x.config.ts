@@ -10,6 +10,9 @@ import manifest from "./manifest.x.config";
 
 export default defineConfig({
   plugins: [react(), crx({ manifest })],
+  // Its own icons (a filled bubble with an X), so the two extensions never
+  // look alike side by side; same file names as public/icons.
+  publicDir: "public-x",
   define: {
     "import.meta.env.VITE_ENGAGE_PLATFORM": JSON.stringify("x"),
   },

@@ -13,6 +13,20 @@ export type EngageFeature = (typeof ENGAGE_FEATURES)[number]
 export const LINKEDIN_FEATURES: EngageFeature[] = ["comments", "replies", "connection_notes", "messages"]
 export const X_FEATURES: EngageFeature[] = ["x_replies", "x_messages"]
 
+// The two extensions on one account and one plan, for the admin's split.
+export const ENGAGE_PLATFORMS = ["linkedin", "x"] as const
+export type EngagePlatform = (typeof ENGAGE_PLATFORMS)[number]
+export const PLATFORM_LABELS: Record<EngagePlatform, string> = { linkedin: "LinkedIn", x: "X" }
+export const PLATFORM_FEATURES: Record<EngagePlatform, EngageFeature[]> = { linkedin: LINKEDIN_FEATURES, x: X_FEATURES }
+
+// How the X extension's sign-ins are labelled (ExtensionToken.device, set by
+// app/api/ext/auth/exchange): the only record of which extension a token
+// belongs to. Anything else, including no label, is the LinkedIn extension.
+export const X_DEVICE_PREFIX = "X extension"
+export function tokenPlatform(device: string | null | undefined): EngagePlatform {
+  return device?.startsWith(X_DEVICE_PREFIX) ? "x" : "linkedin"
+}
+
 export const FEATURE_LABELS: Record<EngageFeature, string> = {
   comments: "AI comments",
   replies: "Comment replies",

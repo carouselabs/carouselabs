@@ -9,7 +9,17 @@ import { ArrowLeft, Copy, Gift, LogOut, PauseCircle, PlayCircle, RotateCcw, Slid
 import { AdminLineChart } from "@/components/admin/charts"
 import { AdminButton, AdminInput, AdminSelect, Modal, fmtDate, fmtDateTime } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
-import { ENGAGE_FEATURES, LINKEDIN_FEATURES, FEATURE_LABELS, USAGE_KINDS, USAGE_KIND_LABELS, formatLimit } from "@/lib/engage/features"
+import { ENGAGE_FEATURES, LINKEDIN_FEATURES, X_FEATURES, FEATURE_LABELS, USAGE_KINDS, USAGE_KIND_LABELS, formatLimit } from "@/lib/engage/features"
+
+// What a history row was, in the admin's words.
+const GENERATION_LABELS: Record<string, string> = {
+  comment: "Comment",
+  reply: "Reply",
+  connection_note: "Connection note",
+  message: "Message",
+  x_reply: "X reply",
+  x_message: "X message",
+}
 import { GRANT_DURATIONS, GRANT_DURATION_LABELS, type GrantDuration } from "@/lib/engage/grants"
 import type { EngageUserDetail as Detail } from "@/lib/engage/userDetail"
 import { AccessEditor } from "./AccessEditor"
@@ -369,7 +379,11 @@ export function EngageUserDetail({ userId }: { userId: string }) {
               data={data.usage.series as Record<string, unknown>[]}
               xKey="date"
               height={220}
-              series={LINKEDIN_FEATURES.map((f) => ({ key: f, label: FEATURE_LABELS[f], color: FEATURE_COLORS[f] }))}
+              // X's lines only for someone who used the X extension in these 30 days.
+              series={[
+                ...LINKEDIN_FEATURES,
+                ...X_FEATURES.filter((f) => data.usage.series.some((p) => Number((p as Record<string, unknown>)[f] ?? 0) > 0)),
+              ].map((f) => ({ key: f, label: FEATURE_LABELS[f], color: FEATURE_COLORS[f] }))}
             />
           </section>
           <section className="overflow-x-auto rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]">
@@ -418,7 +432,7 @@ export function EngageUserDetail({ userId }: { userId: string }) {
                 {data.activity.generations.map((h) => (
                   <li key={h.id} className="flex items-center justify-between gap-3 px-4 py-2 text-[12.5px]">
                     <span className="text-[#D0D0D0]">
-                      {h.kind === "reply" ? "Reply" : h.kind === "connection_note" ? "Connection note" : h.kind === "message" ? "Message" : "Comment"}
+                      {GENERATION_LABELS[h.kind] ?? "Comment"}
                       {h.profileName && <span className="text-[#8A8A8A]"> · {h.profileName}</span>}
                     </span>
                     <span className="flex shrink-0 items-center gap-2 text-[#8A8A8A]">

@@ -21,6 +21,7 @@ const db = vi.hoisted(() => ({
     updateMany: vi.fn(),
   },
   extensionSubscription: { findUnique: vi.fn(), upsert: vi.fn() },
+  xSubscription: { findUnique: vi.fn(), upsert: vi.fn() },
   subscription: { update: vi.fn(), findUnique: vi.fn(), upsert: vi.fn() },
   processedWebhookEvent: { create: vi.fn(), delete: vi.fn() },
 }));

@@ -126,6 +126,32 @@ export const EXTENSION_STORE_URL: string | null =
 // sign-up first and come straight back here (app/checkout/extension).
 export const EXTENSION_CHECKOUT_PATH = "/checkout/extension"
 
+// CarouseLabs Engage for X, sold separately from the LinkedIn extension: its
+// own $15/month Lemon Squeezy product, its own 10 free generations. The
+// checkout link and variant id are public (every checkout page shows them),
+// so they live here; LEMONSQUEEZY_X_CHECKOUT_URL / LEMONSQUEEZY_X_VARIANT_ID
+// override them.
+export const X_EXTENSION_CHECKOUT_URL = "https://carouselabs.lemonsqueezy.com/checkout/buy/e1f7d284-11e7-4110-abf8-9a8afba3bdda"
+export const X_EXTENSION_VARIANT_ID = 2202499
+export const X_EXTENSION_CHECKOUT_PATH = "/checkout/extension?platform=x"
+
+export const X_EXTENSION_PLAN = {
+  name: "CarouseLabs Engage for X",
+  price: 15,
+  priceSuffix: "/month",
+  freeGenerations: 10,
+  tagline: "Unlimited X replies and messages — written in your own voice, right inside x.com.",
+  features: [
+    "Unlimited X replies and messages",
+    "Voice profiles: Short & Simple, Natural (Slang), Simple & Detailed, Funny",
+    "Make your own profiles in your own voice",
+    "Shorter / Longer rewrites in one click",
+    "Reads the post, the thread and the chat before writing",
+    "Insert straight into X — nothing is ever posted or sent for you",
+  ],
+  note: "For the X extension only. CarouseLabs Engage for LinkedIn is sold separately.",
+} as const
+
 export const CREDIT_COST_LINES = [
   "Caption Only = 5 credits · Image + Caption = 15 credits · Carousel = 40 credits",
   "Regenerate caption = 1 credit · Regenerate image = 8 credits · Regenerate slide = 8 credits",

@@ -25,6 +25,10 @@ export async function engageUserDetail(userId: string, now: Date = new Date()) {
       extensionSubscription: {
         select: { status: true, renewsAt: true, endsAt: true, createdAt: true, lsSubscriptionId: true, customerPortalUrl: true },
       },
+      // The X extension is sold separately.
+      xSubscription: {
+        select: { status: true, renewsAt: true, endsAt: true, createdAt: true, lsSubscriptionId: true, customerPortalUrl: true },
+      },
     },
   })
   if (!user) return null
@@ -109,6 +113,7 @@ export async function engageUserDetail(userId: string, now: Date = new Date()) {
     access,
     control: user.engageControl,
     subscription: user.extensionSubscription,
+    xSubscription: user.xSubscription,
     usage: {
       // Counted at the moment each generation is allowed (lib/engage/usage.ts):
       // starts when this version deployed.

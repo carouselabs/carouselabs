@@ -19,7 +19,7 @@ import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { reserveExtGeneration, reserveFreeGeneration, type ExtGenerationGate } from "@/lib/extAccess"
 import { isEngageSchemaMissing, loadEngageAccess } from "@/lib/engage/access"
 import { blockedReason, featureLimitsFor, type EngageAccess } from "@/lib/engage/accessRules"
-import { USAGE_KIND_NOUNS, type EngageUsageKind } from "@/lib/engage/features"
+import { platformOfUsageKind, USAGE_KIND_NOUNS, type EngageUsageKind } from "@/lib/engage/features"
 import { reserveUsage } from "@/lib/engage/usage"
 import { outdatedExtensionResponse } from "@/lib/engage/settings"
 
@@ -76,7 +76,10 @@ export async function reserveEngageGeneration(
   if (loaded instanceof NextResponse) return { ok: false, response: loaded }
 
   const access = loaded.access
-  if (!access) return reserveExtGeneration(userId)
+  // LinkedIn and X are sold separately: each has its own subscription and
+  // its own free generations.
+  const platform = platformOfUsageKind(kind)
+  if (!access) return reserveExtGeneration(userId, platform)
 
   const blocked = blockedReason(access, kind)
   if (blocked) {
@@ -99,11 +102,11 @@ export async function reserveEngageGeneration(
     }
   }
 
-  if (access.access !== "free") {
+  if (access.platforms[platform].access !== "free") {
     return { ok: true, freeRemaining: null, release: usage.release }
   }
 
-  const free = await reserveFreeGeneration(userId, access.freeGenerations.effective)
+  const free = await reserveFreeGeneration(userId, access.freeGenerations.effective, platform)
   if (!free.ok) {
     await usage.release()
     return free

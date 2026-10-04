@@ -12,7 +12,7 @@ import { db } from "@/lib/db"
 import { requireEngagePermission, type EngagePermission } from "@/lib/engage/adminAccess"
 import { parseBody } from "@/lib/engage/adminApi"
 import { createGrant } from "@/lib/engage/grantActions"
-import { GRANT_DURATIONS } from "@/lib/engage/grants"
+import { GRANT_DURATIONS, grantPlatformSchema } from "@/lib/engage/grants"
 import { addUserTag, setEngageSuspended, type ActionResult } from "@/lib/engage/userActions"
 import { getRequestIp } from "@/lib/auditLog"
 
@@ -22,7 +22,14 @@ const BULK_MAX = 100
 const reason = z.string().trim().min(3, "Say why").max(500)
 const userIds = z.array(z.string().min(1).max(64)).min(1, "Select at least one user").max(BULK_MAX, `At most ${BULK_MAX} users at a time`)
 const body = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("grant"), userIds, reason, duration: z.enum(GRANT_DURATIONS), customEndsAt: z.string().optional() }),
+  z.object({
+    action: z.literal("grant"),
+    userIds,
+    reason,
+    duration: z.enum(GRANT_DURATIONS),
+    customEndsAt: z.string().optional(),
+    platform: grantPlatformSchema,
+  }),
   z.object({ action: z.literal("suspend"), userIds, reason }),
   z.object({ action: z.literal("resume"), userIds, reason }),
   z.object({
@@ -73,6 +80,7 @@ export async function POST(req: Request) {
           customEndsAt: input.customEndsAt,
           reason: `${input.reason} (bulk)`,
           sendInvite: false,
+          platform: input.platform,
           ip,
         })
         result = { ok: true }

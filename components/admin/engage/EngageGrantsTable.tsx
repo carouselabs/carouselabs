@@ -7,6 +7,7 @@ import Link from "next/link"
 import { Plus } from "lucide-react"
 import { AdminButton, fmtDate } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
+import { GRANT_PLATFORM_LABELS, type GrantPlatform } from "@/lib/engage/grants"
 import { GrantAccessModal } from "./GrantAccessForm"
 import { EmptyState, ErrorState, Pill, SkeletonBlock, Tabs, adminSend, fmtNumber, useAdminApi } from "./shared"
 
@@ -21,6 +22,8 @@ interface GrantRow {
   endsAt: string | null
   reason: string
   grantedBy: string
+  // Which extension it unlocks (absent from an older server: both).
+  platform?: GrantPlatform
   createdAt: string
   revokedAt: string | null
   revokedBy: string | null
@@ -110,7 +113,10 @@ export function EngageGrantsTable() {
                       <span className="font-medium text-white">{g.email}</span>
                     )}
                     {g.name && <div className="text-[11.5px] text-[#8A8A8A]">{g.email}</div>}
-                    {g.pending && g.state === "active" && <Pill tone="amber">Waiting for sign-up</Pill>}
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      <Pill>{GRANT_PLATFORM_LABELS[g.platform ?? "both"]}</Pill>
+                      {g.pending && g.state === "active" && <Pill tone="amber">Waiting for sign-up</Pill>}
+                    </div>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5">
                     {g.state === "revoked" ? (

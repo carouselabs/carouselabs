@@ -10,7 +10,7 @@ import { db } from "@/lib/db"
 import { requireEngagePermission } from "@/lib/engage/adminAccess"
 import { parseBody } from "@/lib/engage/adminApi"
 import { createGrant } from "@/lib/engage/grantActions"
-import { grantLengthSchema, grantState } from "@/lib/engage/grants"
+import { grantLengthSchema, grantPlatformSchema, grantState } from "@/lib/engage/grants"
 import { getRequestIp } from "@/lib/auditLog"
 
 const STATUSES = ["active", "expiring", "expired", "revoked", "pending", "all"] as const
@@ -64,6 +64,7 @@ export async function GET(req: Request) {
       endsAt: g.endsAt,
       reason: g.reason,
       grantedBy: g.grantedBy,
+      platform: g.platform,
       createdAt: g.createdAt,
       revokedAt: g.revokedAt,
       revokedBy: g.revokedBy,
@@ -80,6 +81,7 @@ const addBody = z.intersection(
     email: z.email("Enter a valid email").max(254),
     reason: z.string().trim().min(3, "Say why").max(500),
     sendInvite: z.boolean().default(false),
+    platform: grantPlatformSchema,
   }),
 )
 
@@ -98,6 +100,7 @@ export async function POST(req: Request) {
       customEndsAt: parsed.data.endsAt,
       reason: parsed.data.reason,
       sendInvite: parsed.data.sendInvite,
+      platform: parsed.data.platform,
       ip: getRequestIp(req),
     })
     return NextResponse.json(result, { status: 201 })

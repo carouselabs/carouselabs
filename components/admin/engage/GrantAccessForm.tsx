@@ -5,7 +5,7 @@
 // and do exactly the same thing.
 import { useState } from "react"
 import { AdminButton, AdminInput, AdminSelect, Modal } from "@/components/admin/ui"
-import { GRANT_DURATIONS, GRANT_DURATION_LABELS, type GrantDuration } from "@/lib/engage/grants"
+import { GRANT_DURATIONS, GRANT_DURATION_LABELS, GRANT_PLATFORMS, GRANT_PLATFORM_LABELS, type GrantDuration, type GrantPlatform } from "@/lib/engage/grants"
 import { adminSend } from "./shared"
 
 export function GrantAccessModal({
@@ -24,6 +24,7 @@ export function GrantAccessModal({
 }) {
   const [email, setEmail] = useState("")
   const [duration, setDuration] = useState<GrantDuration>("30d")
+  const [platform, setPlatform] = useState<GrantPlatform>("both")
   const [endsAt, setEndsAt] = useState("")
   const [reason, setReason] = useState("")
   const [sendInvite, setSendInvite] = useState(!userId)
@@ -37,6 +38,7 @@ export function GrantAccessModal({
     try {
       const body = {
         duration,
+        platform,
         endsAt: duration === "custom" && endsAt ? new Date(`${endsAt}T23:59:59.000Z`).toISOString() : undefined,
         reason,
         sendInvite,
@@ -86,6 +88,17 @@ export function GrantAccessModal({
             </span>
           </label>
         )}
+
+        <label className="block space-y-1.5">
+          <span className="text-[12px] font-medium text-[#B0B0B0]">Extension</span>
+          <AdminSelect aria-label="Extension" className="w-full" value={platform} onChange={(e) => setPlatform(e.target.value as GrantPlatform)}>
+            {GRANT_PLATFORMS.map((p) => (
+              <option key={p} value={p}>
+                {GRANT_PLATFORM_LABELS[p]}
+              </option>
+            ))}
+          </AdminSelect>
+        </label>
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block space-y-1.5">

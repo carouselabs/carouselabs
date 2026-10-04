@@ -31,15 +31,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
   if (!parsed.ok) return parsed.response
   const { scope, reason } = parsed.data
 
-  let oldValue: number | null = null
+  let oldValue: { linkedin: number; x: number } | null = null
   if (scope === "today") {
     await Promise.all([resetUsage(userId, ["day"]), resetExtDailyLimit(userId)])
   } else if (scope === "month") {
     await resetUsage(userId, ["month"])
   } else {
-    const before = await db.user.findUnique({ where: { id: userId }, select: { extensionTrialUsed: true } })
-    oldValue = before?.extensionTrialUsed ?? null
-    await db.user.update({ where: { id: userId }, data: { extensionTrialUsed: 0 } })
+    // Both extensions' free generations (each has its own).
+    const before = await db.user.findUnique({ where: { id: userId }, select: { extensionTrialUsed: true, xTrialUsed: true } })
+    oldValue = before ? { linkedin: before.extensionTrialUsed, x: before.xTrialUsed } : null
+    await db.user.update({ where: { id: userId }, data: { extensionTrialUsed: 0, xTrialUsed: 0 } })
   }
 
   await logAdminAction({
@@ -50,7 +51,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
     targetEmail: user.email,
     details: `Reset ${LABELS[scope]}`,
     oldValue: scope === "free" ? { freeUsed: oldValue } : { scope },
-    newValue: scope === "free" ? { freeUsed: 0 } : { scope, count: 0 },
+    newValue: scope === "free" ? { freeUsed: { linkedin: 0, x: 0 } } : { scope, count: 0 },
     reason,
     ipAddress: getRequestIp(req),
   })

@@ -287,6 +287,10 @@ describe("Engage user page", () => {
     access: {
       status: "active", suspendReason: null, access: "unlimited", source: "subscription", subscriptionActive: true, activeGrant: null,
       freeGenerations: { plan: 10, override: null, effective: 10 }, freeUsed: 0, freeRemaining: null,
+      platforms: {
+        linkedin: { access: "unlimited", source: "subscription", subscriptionActive: true, activeGrant: null, freeUsed: 0, freeRemaining: null },
+        x: { access: "free", source: "free", subscriptionActive: false, activeGrant: null, freeUsed: 4, freeRemaining: 6 },
+      },
       features: { ...Object.fromEntries(ENGAGE_FEATURES.map((f) => [f, feature()])), x_replies: feature(true), messages: feature(false, "off") },
       limits: Object.fromEntries(LIMIT_KEYS.map((k) => [k, { plan: planLimit(k), override: null, effective: planLimit(k) }])),
     },
@@ -311,6 +315,23 @@ describe("Engage user page", () => {
     // This month's AI cost.
     expect(screen.getByText("AI cost · month")).toBeTruthy();
     expect(screen.getByText("$1.25")).toBeTruthy();
+  });
+
+  it("shows the LinkedIn and X plans apart: paid on one, free on the other", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ ...detail, subscription: { status: "active", createdAt: "2026-09-01T00:00:00Z", renewsAt: "2026-11-01T00:00:00Z", endsAt: null } })),
+      ),
+    );
+    render(<EngageUserDetail userId="u1" />);
+    const summary = within(await screen.findByRole("region", { name: "Access summary" }));
+    expect(summary.getByText("LinkedIn plan")).toBeTruthy();
+    expect(summary.getByText("X plan")).toBeTruthy();
+    expect(summary.getByText("Paid ($15/month)")).toBeTruthy();
+    expect(summary.getByText("Free plan")).toBeTruthy();
+    expect(summary.getByText("4 / 10 free used")).toBeTruthy();
+    expect(summary.getByText(/^Renews /)).toBeTruthy();
   });
 });
 
@@ -529,9 +550,14 @@ describe("Engage users: bulk actions, saved views, CSV", () => {
     expect(lengths).toContain("30d");
     expect(lengths).not.toContain("custom");
     fireEvent.change(box.getByRole("combobox", { name: "For how long" }), { target: { value: "3m" } });
+    // LinkedIn and X are sold separately: Both unless picked.
+    expect((box.getByRole("combobox", { name: "Extension" }) as HTMLSelectElement).value).toBe("both");
+    fireEvent.change(box.getByRole("combobox", { name: "Extension" }), { target: { value: "x" } });
     fireEvent.change(box.getByLabelText("Reason (for the audit log)"), { target: { value: "Launch partners" } });
     fireEvent.click(box.getByRole("button", { name: "Give free access" }));
-    await waitFor(() => expect(posts).toEqual([{ action: "grant", userIds: ["u2"], reason: "Launch partners", duration: "3m" }]));
+    await waitFor(() =>
+      expect(posts).toEqual([{ action: "grant", userIds: ["u2"], reason: "Launch partners", duration: "3m", platform: "x" }]),
+    );
   });
 
   it("saves the current filters under a name, and opens them again from the list", async () => {

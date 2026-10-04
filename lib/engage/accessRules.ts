@@ -6,7 +6,9 @@
 //   plan defaults        10 free generations, 450/day, every feature on
 //   paused for everyone  a feature an admin paused for all users (Controls,
 //                        lib/engage/settingsRules.ts): off whatever else says
-//   subscription         $15/month (Lemon Squeezy) → unlimited
+//   subscription         $15/month (Lemon Squeezy) → unlimited; LinkedIn
+//                        and X are sold separately, so each extension has
+//                        its own subscription and its own free generations
 //   user overrides       per-feature on/off, limits, free generations
 //   admin grant          unlimited until a date, or for life
 //   suspension           Engage-only or whole account: blocks everything
@@ -17,11 +19,13 @@ import { z } from "zod"
 import { isExtensionSubscriptionActive } from "@/lib/extensionAccessRules"
 import {
   ENGAGE_FEATURES,
+  ENGAGE_PLATFORMS,
   FEATURE_LABELS,
   LIMIT_KEYS,
   PLAN_FREE_GENERATIONS,
   planLimit,
   type EngageFeature,
+  type EngagePlatform,
   type EngageUsageKind,
   type Limit,
   type LimitKey,
@@ -63,6 +67,8 @@ export interface GrantInput {
   reason: string
   grantedBy: string
   createdAt: Date
+  // Which extension it unlocks: "linkedin", "x" or "both" (absent: both).
+  platform?: string
 }
 
 export interface EngageAccessInput {
@@ -78,9 +84,13 @@ export interface EngageAccessInput {
     suspendedAt: Date | null
     suspendReason: string | null
   } | null
+  // The LinkedIn extension's subscription, and the X extension's.
   subscription: { status: string; endsAt: Date | null } | null
+  xSubscription?: { status: string; endsAt: Date | null } | null
   grants: GrantInput[]
+  // Free generations used on LinkedIn, and on X.
   freeUsed: number
+  xFreeUsed?: number
   // Settings for everyone (admin → Engage → Controls); absent means none.
   global?: Pick<EngageGlobalSettings, "features">
 }
@@ -101,6 +111,17 @@ export interface FeatureAccess {
   enabled: boolean
 }
 
+// One extension's paywall: paid, granted, or counting its own free
+// generations.
+export interface PaywallAccess {
+  access: "unlimited" | "free" | "testing"
+  source: "subscription" | "grant" | "free" | "testing"
+  subscriptionActive: boolean
+  activeGrant: GrantInput | null
+  freeUsed: number
+  freeRemaining: number | null
+}
+
 export interface EngageAccess {
   status: "active" | "suspended" | "account_suspended"
   suspendReason: string | null
@@ -114,8 +135,16 @@ export interface EngageAccess {
   freeUsed: number
   // null when unlimited or testing: free generations don't apply.
   freeRemaining: number | null
+  // Each extension's own paywall. The fields above are LinkedIn's, as before
+  // the two were sold separately.
+  platforms: Record<EngagePlatform, PaywallAccess>
   features: Record<EngageFeature, FeatureAccess>
   limits: Record<LimitKey, LimitValue>
+}
+
+export function grantCovers(grant: GrantInput, platform: EngagePlatform): boolean {
+  const p = grant.platform ?? "both"
+  return p === "both" || p === platform
 }
 
 export function isGrantActive(grant: GrantInput, now: Date): boolean {
@@ -141,21 +170,39 @@ export function computeEngageAccess(input: EngageAccessInput): EngageAccess {
   const features = parseFeatureOverrides(input.control?.features)
   const limits = parseLimitOverrides(input.control?.limits)
 
-  const subscriptionActive = isExtensionSubscriptionActive(input.subscription, now)
-  const activeGrant = pickActiveGrant(input.grants, now)
-
-  const source: EngageAccess["source"] = !input.paywallEnforced
-    ? "testing"
-    : subscriptionActive
-      ? "subscription"
-      : activeGrant
-        ? "grant"
-        : "free"
-  const access: EngageAccess["access"] = source === "testing" ? "testing" : source === "free" ? "free" : "unlimited"
-
+  // The admin's free-generations override applies to each extension.
   const freeOverride = input.control?.freeGenerations ?? null
   const freeEffective = freeOverride ?? PLAN_FREE_GENERATIONS
-  const freeUsed = Math.max(0, input.freeUsed)
+
+  const paywall = (platform: EngagePlatform): PaywallAccess => {
+    const subscriptionActive = isExtensionSubscriptionActive(
+      platform === "x" ? (input.xSubscription ?? null) : input.subscription,
+      now,
+    )
+    const activeGrant = pickActiveGrant(
+      input.grants.filter((g) => grantCovers(g, platform)),
+      now,
+    )
+    const source: PaywallAccess["source"] = !input.paywallEnforced
+      ? "testing"
+      : subscriptionActive
+        ? "subscription"
+        : activeGrant
+          ? "grant"
+          : "free"
+    const access: PaywallAccess["access"] = source === "testing" ? "testing" : source === "free" ? "free" : "unlimited"
+    const used = Math.max(0, platform === "x" ? (input.xFreeUsed ?? 0) : input.freeUsed)
+    return {
+      access,
+      source,
+      subscriptionActive,
+      activeGrant,
+      freeUsed: Math.min(used, freeEffective),
+      freeRemaining: access === "free" ? Math.max(0, freeEffective - used) : null,
+    }
+  }
+  const platforms = Object.fromEntries(ENGAGE_PLATFORMS.map((p) => [p, paywall(p)])) as Record<EngagePlatform, PaywallAccess>
+  const { access, source, subscriptionActive, activeGrant } = platforms.linkedin
 
   const status: EngageAccess["status"] = input.accountSuspendedAt
     ? "account_suspended"
@@ -171,8 +218,9 @@ export function computeEngageAccess(input: EngageAccessInput): EngageAccess {
     subscriptionActive,
     activeGrant,
     freeGenerations: { plan: PLAN_FREE_GENERATIONS, override: freeOverride, effective: freeEffective },
-    freeUsed: Math.min(freeUsed, freeEffective),
-    freeRemaining: access === "free" ? Math.max(0, freeEffective - freeUsed) : null,
+    freeUsed: platforms.linkedin.freeUsed,
+    freeRemaining: platforms.linkedin.freeRemaining,
+    platforms,
     features: Object.fromEntries(
       ENGAGE_FEATURES.map((f) => {
         const override = features[f] ?? null

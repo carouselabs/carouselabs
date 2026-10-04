@@ -149,20 +149,33 @@ export function EngageUserDetail({ userId }: { userId: string }) {
     reload()
   }
 
-  const accessLabel =
-    access.source === "subscription" ? "Paid ($15/month)" : access.source === "grant" ? "Free access (granted)" : access.source === "testing" ? "Testing (paywall off)" : "Free plan"
-  const expires =
-    access.source === "grant"
-      ? access.activeGrant?.endsAt
-        ? fmtDate(access.activeGrant.endsAt)
-        : "Never (lifetime)"
-      : access.source === "subscription"
-        ? data.subscription?.status === "cancelled"
-          ? `Ends ${fmtDate(data.subscription.endsAt)}`
-          : data.subscription?.renewsAt
-            ? `Renews ${fmtDate(data.subscription.renewsAt)}`
-            : "—"
-        : "—"
+  // LinkedIn and X are sold separately: each has its own plan, expiry and
+  // free generations.
+  const plans = (["linkedin", "x"] as const).map((p) => {
+    const paywall = access.platforms[p]
+    const sub = p === "x" ? data.xSubscription : data.subscription
+    const label =
+      paywall.source === "subscription"
+        ? "Paid ($15/month)"
+        : paywall.source === "grant"
+          ? "Free access (granted)"
+          : paywall.source === "testing"
+            ? "Testing (paywall off)"
+            : "Free plan"
+    const expires =
+      paywall.source === "grant"
+        ? paywall.activeGrant?.endsAt
+          ? fmtDate(paywall.activeGrant.endsAt)
+          : "Never (lifetime)"
+        : paywall.source === "subscription"
+          ? sub?.status === "cancelled"
+            ? `Ends ${fmtDate(sub.endsAt)}`
+            : sub?.renewsAt
+              ? `Renews ${fmtDate(sub.renewsAt)}`
+              : "—"
+          : null
+    return { platform: p, name: p === "x" ? "X" : "LinkedIn", paywall, sub, label, expires }
+  })
   const monthUse = (f: (typeof ENGAGE_FEATURES)[number]) => data.usage.historyMonth[f] ?? 0
   const activeSessions = data.sessions.filter((s) => !s.revokedAt)
 
@@ -223,13 +236,20 @@ export function EngageUserDetail({ userId }: { userId: string }) {
         <SummaryCell label="Status" tone={access.status === "active" ? undefined : "bad"}>
           {access.status === "active" ? "Active" : access.status === "suspended" ? "Engage paused" : "Account suspended"}
         </SummaryCell>
-        <SummaryCell label="Access">{accessLabel}</SummaryCell>
-        <SummaryCell label="Expires">{expires}</SummaryCell>
-        {access.access === "free" && (
-          <SummaryCell label="Free generations" tone={access.freeRemaining === 0 ? "warn" : undefined}>
-            {access.freeUsed} / {access.freeGenerations.effective}
+        {plans.map((p) => (
+          <SummaryCell
+            key={p.platform}
+            label={`${p.name} plan`}
+            tone={p.paywall.access === "free" && p.paywall.freeRemaining === 0 ? "warn" : undefined}
+          >
+            {p.label}
+            <span className="block text-[11.5px] font-normal text-[#8A8A8A]">
+              {p.paywall.access === "free"
+                ? `${p.paywall.freeUsed} / ${access.freeGenerations.effective} free used`
+                : p.expires}
+            </span>
           </SummaryCell>
-        )}
+        ))}
         {ENGAGE_FEATURES.map((f) => (
           <SummaryCell key={f} label={`${FEATURE_LABELS[f]} · month`} tone={access.features[f].enabled ? undefined : "bad"}>
             {access.features[f].enabled ? (
@@ -364,19 +384,27 @@ export function EngageUserDetail({ userId }: { userId: string }) {
             </section>
 
             <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3">
-              <h2 className="mb-2 text-[13px] font-semibold text-white">Subscription (Lemon Squeezy)</h2>
-              {data.subscription ? (
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px]">
-                  <dt className="text-[#8A8A8A]">Status</dt>
-                  <dd className="text-white">{data.subscription.status}</dd>
-                  <dt className="text-[#8A8A8A]">Started</dt>
-                  <dd className="text-white">{fmtDate(data.subscription.createdAt)}</dd>
-                  <dt className="text-[#8A8A8A]">{data.subscription.status === "cancelled" ? "Ends" : "Renews"}</dt>
-                  <dd className="text-white">{fmtDate(data.subscription.status === "cancelled" ? data.subscription.endsAt : data.subscription.renewsAt)}</dd>
-                </dl>
-              ) : (
-                <p className="text-[12.5px] text-[#8A8A8A]">Never subscribed. Billing is separate from free access you grant.</p>
-              )}
+              <h2 className="mb-2 text-[13px] font-semibold text-white">Subscriptions (Lemon Squeezy)</h2>
+              <div className="space-y-3">
+                {plans.map((p) => (
+                  <div key={p.platform} aria-label={`${p.name} subscription`}>
+                    <h3 className="mb-1 text-[12px] font-semibold text-[#D0D0D0]">{p.name}</h3>
+                    {p.sub ? (
+                      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px]">
+                        <dt className="text-[#8A8A8A]">Status</dt>
+                        <dd className="text-white">{p.sub.status}</dd>
+                        <dt className="text-[#8A8A8A]">Started</dt>
+                        <dd className="text-white">{fmtDate(p.sub.createdAt)}</dd>
+                        <dt className="text-[#8A8A8A]">{p.sub.status === "cancelled" ? "Ends" : "Renews"}</dt>
+                        <dd className="text-white">{fmtDate(p.sub.status === "cancelled" ? p.sub.endsAt : p.sub.renewsAt)}</dd>
+                      </dl>
+                    ) : (
+                      <p className="text-[12.5px] text-[#8A8A8A]">Never subscribed.</p>
+                    )}
+                  </div>
+                ))}
+                <p className="text-[11.5px] text-[#8A8A8A]">Billing is separate from free access you grant.</p>
+              </div>
             </section>
           </div>
         </div>
@@ -585,7 +613,9 @@ export function EngageUserDetail({ userId }: { userId: string }) {
         <AdminSelect aria-label="What to reset" className="w-full" value={resetScope} onChange={(e) => setResetScope(e.target.value as typeof resetScope)}>
           <option value="today">Today&apos;s counts and the 24-hour cap</option>
           <option value="month">This month&apos;s counts</option>
-          <option value="free">Free generations used ({access.freeUsed} → 0)</option>
+          <option value="free">
+            Free generations used (LinkedIn {access.platforms.linkedin.freeUsed}, X {access.platforms.x.freeUsed} → 0)
+          </option>
         </AdminSelect>
       </ReasonDialog>
       <ReasonDialog

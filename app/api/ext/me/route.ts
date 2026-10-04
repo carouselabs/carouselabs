@@ -5,7 +5,7 @@
 // app/api/ideas-board/capture using lib/extensionAuth.ts.
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { getExtensionUser } from "@/lib/extensionCommentAuth"
+import { extensionCallerPlatform, getExtensionUser } from "@/lib/extensionCommentAuth"
 import { extAccessSummary } from "@/lib/extAccess"
 import { COMMENT_KINDS } from "@/lib/extensionHistory"
 
@@ -43,7 +43,8 @@ export async function GET(req: Request) {
     db.commentHistory.count({
       where: { userId: user.id, kind: { in: COMMENT_KINDS }, createdAt: { gte: dayStart } },
     }),
-    extAccessSummary(user.id),
+    // The calling extension's own plan: LinkedIn and X are sold separately.
+    extAccessSummary(user.id, extensionCallerPlatform(req)),
   ])
 
   return NextResponse.json({

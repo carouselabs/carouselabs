@@ -5,7 +5,7 @@ import { db } from "@/lib/db"
 import { logAdminAction } from "@/lib/auditLog"
 import { sendEngageAccessGrantedEmail } from "@/lib/email"
 import { EXTENSION_STORE_URL } from "@/lib/plans"
-import { grantEndsAt, GRANT_DURATION_LABELS, type GrantDuration } from "@/lib/engage/grants"
+import { grantEndsAt, GRANT_DURATION_LABELS, GRANT_PLATFORM_LABELS, type GrantDuration, type GrantPlatform } from "@/lib/engage/grants"
 import type { EngageAdmin } from "@/lib/engage/adminAccess"
 
 const fmt = (d: Date | null) =>
@@ -18,9 +18,12 @@ export async function createGrant(input: {
   customEndsAt?: string
   reason: string
   sendInvite: boolean
+  // Which extension it unlocks (sold separately); default both.
+  platform?: GrantPlatform
   ip?: string
   now?: Date
 }) {
+  const platform = input.platform ?? "both"
   const now = input.now ?? new Date()
   const email = input.email.trim().toLowerCase()
   const endsAt = grantEndsAt(input.duration, now, input.customEndsAt)
@@ -28,7 +31,7 @@ export async function createGrant(input: {
 
   const user = await db.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true } })
   const grant = await db.engageAccessGrant.create({
-    data: { userId: user?.id ?? null, email, startsAt: now, endsAt, reason: input.reason, grantedBy: input.admin.email },
+    data: { userId: user?.id ?? null, email, startsAt: now, endsAt, reason: input.reason, grantedBy: input.admin.email, platform },
   })
 
   await logAdminAction({
@@ -37,8 +40,8 @@ export async function createGrant(input: {
     product: "engage",
     targetUserId: user?.id,
     targetEmail: email,
-    details: `Granted Engage access (${GRANT_DURATION_LABELS[input.duration]}, until ${fmt(endsAt)})${user ? "" : " — waiting for sign-up"}`,
-    newValue: { grantId: grant.id, endsAt: endsAt?.toISOString() ?? null, duration: input.duration },
+    details: `Granted Engage access for ${GRANT_PLATFORM_LABELS[platform]} (${GRANT_DURATION_LABELS[input.duration]}, until ${fmt(endsAt)})${user ? "" : " — waiting for sign-up"}`,
+    newValue: { grantId: grant.id, endsAt: endsAt?.toISOString() ?? null, duration: input.duration, platform },
     reason: input.reason,
     ipAddress: input.ip,
   })

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   admin: { id: "admin1", email: "owner@carouselabs.com" } as null | { id: string; email: string },
-  users: new Map<string, { id: string; email: string; deletedAt: Date | null; extensionTrialUsed: number }>(),
+  users: new Map<string, { id: string; email: string; deletedAt: Date | null; extensionTrialUsed: number; xTrialUsed?: number }>(),
   controls: new Map<string, { userId: string; features: unknown; limits: unknown; freeGenerations: number | null; suspendedAt: Date | null }>(),
   grants: [] as Array<Record<string, unknown> & { id: string; userId: string | null; email: string; endsAt: Date | null; revokedAt: Date | null }>,
   audit: [] as Array<Record<string, unknown>>,
@@ -20,9 +20,9 @@ const db = vi.hoisted(() => ({
     findUnique: vi.fn(async ({ where }: { where: { id: string } }) => state.users.get(where.id) ?? null),
     findFirst: vi.fn(async ({ where }: { where: { email: { equals: string } } }) =>
       [...state.users.values()].find((u) => u.email.toLowerCase() === where.email.equals.toLowerCase()) ?? null),
-    update: vi.fn(async ({ where, data }: { where: { id: string }; data: { extensionTrialUsed: number } }) => {
-      const u = state.users.get(where.id)!;
-      u.extensionTrialUsed = data.extensionTrialUsed;
+    update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, number> }) => {
+      const u = state.users.get(where.id)! as Record<string, unknown>;
+      Object.assign(u, data);
       return u;
     }),
   },
@@ -91,7 +91,7 @@ const ctx = <T extends Record<string, string>>(p: T) => ({ params: Promise.resol
 beforeEach(() => {
   state.admin = { id: "admin1", email: "owner@carouselabs.com" };
   state.users = new Map([
-    ["u1", { id: "u1", email: "john@example.com", deletedAt: null, extensionTrialUsed: 7 }],
+    ["u1", { id: "u1", email: "john@example.com", deletedAt: null, extensionTrialUsed: 7, xTrialUsed: 3 }],
     ["admin1", { id: "admin1", email: "owner@carouselabs.com", deletedAt: null, extensionTrialUsed: 0 }],
   ]);
   state.controls = new Map();
@@ -211,10 +211,15 @@ describe("suspension, usage resets, sessions, tags", () => {
     expect(state.audit.map((a) => a.action)).toEqual(["ENGAGE_SUSPEND", "ENGAGE_REACTIVATE"]);
   });
 
-  it("gives back every free generation, recording how many were used", async () => {
+  it("gives back every free generation on both extensions, recording how many were used", async () => {
     expect((await resetRoute(req("POST", { scope: "free", reason: "support case" }), ctx({ userId: "u1" }))).status).toBe(200);
     expect(state.users.get("u1")?.extensionTrialUsed).toBe(0);
-    expect(state.audit[0]).toMatchObject({ action: "ENGAGE_RESET_USAGE", oldValue: { freeUsed: 7 }, newValue: { freeUsed: 0 } });
+    expect(state.users.get("u1")?.xTrialUsed).toBe(0);
+    expect(state.audit[0]).toMatchObject({
+      action: "ENGAGE_RESET_USAGE",
+      oldValue: { freeUsed: { linkedin: 7, x: 3 } },
+      newValue: { freeUsed: { linkedin: 0, x: 0 } },
+    });
   });
 
   it("signs the extension out of one browser or all", async () => {

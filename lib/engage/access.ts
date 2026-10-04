@@ -14,8 +14,10 @@ export async function loadEngageAccess(userId: string, now: Date = new Date()): 
       suspendedAt: true,
       deletedAt: true,
       extensionTrialUsed: true,
+      xTrialUsed: true,
       engageControl: true,
       extensionSubscription: { select: { status: true, endsAt: true } },
+      xSubscription: { select: { status: true, endsAt: true } },
     },
   })
   if (!user) return null
@@ -44,8 +46,10 @@ export async function loadEngageAccess(userId: string, now: Date = new Date()): 
     accountSuspendedAt: user.suspendedAt ?? user.deletedAt,
     control: user.engageControl,
     subscription: user.extensionSubscription,
+    xSubscription: user.xSubscription,
     grants,
     freeUsed: user.extensionTrialUsed,
+    xFreeUsed: user.xTrialUsed,
     global,
   })
 }

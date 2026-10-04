@@ -86,7 +86,10 @@ function escapeAttribute(value: string): string {
     .replace(/>/g, "&gt;")
 }
 
-export function buildCommentSystemMessage(profile: CommentProfileInput): string {
+// example: false leaves out the WEAK/STRONG LinkedIn example at the end. X
+// uses that: the example is a polished LinkedIn insight, and showing it pulls
+// every X reply toward the same AI-sounding "that's the real story" shape.
+export function buildCommentSystemMessage(profile: CommentProfileInput, options: { example?: boolean } = {}): string {
   const sections: string[] = []
 
   // Only profiles whose length is an explicit character range get the
@@ -179,7 +182,7 @@ fabricating one.
 Every number that appears in your comment must come from the post itself or
 from the user's own instruction. If it appears in neither, do not write it.`)
 
-  if (hardRange && hardRange.max < EXAMPLE_LENGTH) return sections.join("\n\n")
+  if (options.example === false || (hardRange && hardRange.max < EXAMPLE_LENGTH)) return sections.join("\n\n")
 
   sections.push(`## Example
 

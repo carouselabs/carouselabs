@@ -186,6 +186,46 @@ describe("X Reply route", () => {
     expect(script.prompts).toHaveLength(2);
   });
 
+  it("tells the model to sound like a person, and leaves out the LinkedIn example", async () => {
+    state.profiles[0] = { ...PRESET, length: "100-240 characters" };
+    script.luna = [raw(GOOD)];
+    await events(await replyPOST(request("/api/ext/x/reply", { method: "POST", body: JSON.stringify(POST_BODY) })));
+    const { system } = script.prompts[0];
+    expect(system).toMatch(/## Sound like a person, not an AI/);
+    expect(system).toMatch(/"underrated", "game changer", "the real story"/);
+    expect(system).toMatch(/"says a lot", "speaks volumes"/);
+    expect(system).not.toMatch(/Example of a STRONG comment/);
+  });
+
+  it("rolls again once when a reply gives itself away as AI", async () => {
+    const tells = [
+      "The 14 to 5 cut is so underrated.",
+      "14 to 5 steps is a total game changer for activation.",
+      "The real story here is cutting 14 steps to 5.",
+      "It's not the 14 to 5 cut, it's the order that matters.",
+      "Love this, 14 to 5 steps is a big move.",
+    ];
+    // A range every one of them fits, so only the tell can cause the retry.
+    state.profiles[0] = { ...PRESET, length: "15-90 characters" };
+    for (const tell of tells) {
+      script.prompts = [];
+      const plain = "14 steps down to 5 is a big drop, makes sense more people stuck around";
+      script.luna = [raw(tell), raw(plain)];
+      const list = await events(await replyPOST(request("/api/ext/x/reply", { method: "POST", body: JSON.stringify(POST_BODY) })));
+      expect(list.at(-1), tell).toMatchObject({ event: "final", data: { comment: plain } });
+      expect(script.prompts, tell).toHaveLength(2);
+    }
+  });
+
+  it("a plain, human reply goes through first time", async () => {
+    const plain = "14 steps down to 5 is a big drop, makes sense more people stuck around";
+    state.profiles[0] = { ...PRESET, length: "15-90 characters" };
+    script.luna = [raw(plain)];
+    const list = await events(await replyPOST(request("/api/ext/x/reply", { method: "POST", body: JSON.stringify(POST_BODY) })));
+    expect(list.at(-1)).toMatchObject({ event: "final", data: { comment: plain } });
+    expect(script.prompts).toHaveLength(1);
+  });
+
   it("lets an X Premium account's longer limit through, but never past the profile's range", async () => {
     state.settings = { maxReplyLength: 600 };
     state.profiles[0] = { ...PRESET, length: "100-500 characters" };

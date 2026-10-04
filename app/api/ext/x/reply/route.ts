@@ -12,8 +12,8 @@ import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import { engagePreflight, reserveEngageGeneration } from "@/lib/engage/gate"
 import { stageTimer, streamGeneration, type GenerationInput, type GenerationResult } from "@/lib/engage/commentEngine"
-import { targetLengthRange } from "@/lib/ai/prompts/commentPrompt"
-import { buildXReplySystemMessage, buildXReplyUserMessage, xNumberSources } from "@/lib/ai/prompts/xReplyPrompt"
+import { targetLengthRange, WEAK_COMMENT_PATTERNS } from "@/lib/ai/prompts/commentPrompt"
+import { buildXReplySystemMessage, buildXReplyUserMessage, xNumberSources, X_AI_TELLS } from "@/lib/ai/prompts/xReplyPrompt"
 import { parseReplyBody } from "@/lib/xReply"
 import { xLength, X_MAX_LENGTH } from "@/lib/xText"
 import { HISTORY_SNIPPET_CHARS } from "@/lib/extensionHistory"
@@ -68,6 +68,7 @@ export async function POST(req: Request) {
     label: "ext/x/reply",
     measure: xLength,
     engage: { userId: user.id, kind: "x_replies" },
+    weakPatterns: [...WEAK_COMMENT_PATTERNS, ...X_AI_TELLS],
   }
   const beforeModelMs = timer.elapsed()
 

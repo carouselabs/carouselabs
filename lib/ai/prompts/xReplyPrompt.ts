@@ -46,6 +46,25 @@ ${escapeText(post.text.trim()) || "(no text, only media)"}
 </${tag}>`
 }
 
+// Phrases that make an X reply read as AI-written. Named in the prompt, and a
+// reply that still uses one is rolled again once (the generate and rewrite
+// routes add these to WEAK_COMMENT_PATTERNS for X). Only clear tells: a
+// pattern here costs a second model call whenever it matches.
+export const X_AI_TELLS: { label: string; pattern: RegExp }[] = [
+  { label: "'underrated'", pattern: /\bunderrated\b/i },
+  { label: "'game changer'", pattern: /\bgame[\s-]?changer\b/i },
+  { label: "'the real story/lesson/...'", pattern: /\bthe real (?:story|lesson|win|takeaway|unlock|insight|magic)\b/i },
+  { label: "'nobody talks about'", pattern: /\bnobody(?:'s| is)? (?:talks?|talking) about\b|\bthe part nobody\b/i },
+  { label: "'it's not X, it's Y'", pattern: /\bit(?:'|’)?s not (?:just |only |about )?[^.!?\n]{1,60}[,;]\s*it(?:'|’)?s\b/i },
+  { label: "'love this'", pattern: /\blove this\b/i },
+  { label: "'resonates'", pattern: /\bresonat(?:e|es|ed|ing)\b/i },
+  { label: "'key takeaway'", pattern: /\bkey takeaway\b/i },
+  {
+    label: "AI vocabulary",
+    pattern: /\b(?:testament to|insightful|invaluable|crucial|leverag(?:e|es|ed|ing)|landscape|tapestry|navigat(?:e|es|ing) the|unlock(?:s|ed|ing)? (?:the|new|real))\b/i,
+  },
+]
+
 export function buildXReplySystemMessage(profile: CommentProfileInput, maxLength: number, isOwnPost: boolean | null): string {
   const role = isOwnPost
     ? `You wrote the post being replied to. You are continuing your own thread or
@@ -53,7 +72,7 @@ answering someone in it. Speak in the first person; never refer to "the author".
     : `You are replying to someone else's post. Respond to what THEY said: agree with
 a reason, add a detail, or push back respectfully. Do not restate their post.`
 
-  return `${buildCommentSystemMessage(profile).replace(
+  return `${buildCommentSystemMessage(profile, { example: false }).replace(
     /^You write LinkedIn comments for this person:/,
     "You write replies on X (formerly Twitter) for this person:",
   )}
@@ -73,7 +92,21 @@ ${role}
   the whole reply.
 - Do not start with an @mention or the person's name: X adds the @mention to a
   reply by itself.
-- Never use em dashes.`
+- Never use em dashes.
+
+## Sound like a person, not an AI
+People on X can tell an AI reply at once. Yours must read like a real person
+typed it on their phone.
+- Use plain, everyday words. If there is a simpler word, use it.
+- Not every reply needs an insight or a lesson. A simple honest reaction is fine.
+- Don't wrap up with a neat conclusion or a clever closing line.
+- Don't make every sentence perfect. Follow the profile's style: if it says
+  lowercase or slang, write that way.
+- Never use: "underrated", "game changer", "the real story", "the real lesson",
+  "nobody talks about", "the part nobody...", "love this", "resonates",
+  "key takeaway", "testament to", "insightful", "invaluable", "crucial",
+  "leverage", "landscape", "unlock", "says a lot", "speaks volumes".
+- Never use the "It's not X, it's Y" shape.`
 }
 
 export function buildXReplyUserMessage(input: XReplyInput, extraInstruction?: string): string {

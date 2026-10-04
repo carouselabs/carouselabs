@@ -49,6 +49,9 @@ export interface GenerationInput {
   // Who asked and for what: picks the feature's AI model and records each
   // call (lib/ai/commentModel.ts).
   engage?: AiCaller
+  // Generic-AI tells that get a reply rolled again once. Default
+  // WEAK_COMMENT_PATTERNS; X adds X_AI_TELLS.
+  weakPatterns?: { label: string; pattern: RegExp }[]
 }
 
 export interface GenerationHooks {
@@ -188,7 +191,7 @@ export async function generateComment(input: GenerationInput, hooks: GenerationH
     // Generic-AI tells are retried rather than stripped: they are positional
     // or mid-sentence, so deleting them would leave broken text. A second roll
     // usually lands somewhere more specific.
-    const weak = WEAK_COMMENT_PATTERNS.filter(({ pattern }) => pattern.test(cleaned))
+    const weak = (input.weakPatterns ?? WEAK_COMMENT_PATTERNS).filter(({ pattern }) => pattern.test(cleaned))
     if (weak.length > 0 && attempt === 1) {
       console.warn(
         `[${label}] attempt ${attempt}: weak patterns (${weak

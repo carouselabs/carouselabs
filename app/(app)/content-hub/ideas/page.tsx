@@ -1,8 +1,7 @@
 "use client"
 
 // Content Hub > Ideas Board — a lightweight scratchpad for raw material (a
-// link, an image, or a quick note) saved for later, either typed in here or
-// captured from any webpage via browser-extension-ideas/. "Turn into Post"
+// link, an image, or a quick note) saved for later, typed in here. "Turn into Post"
 // hands an item off to the Custom Post composer (see
 // app/(app)/content-hub/_client.tsx's boardItemId deep-link handling) — no
 // AI generation, no credit charge, same as any other Custom Post.

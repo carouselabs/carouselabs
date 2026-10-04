@@ -1,7 +1,7 @@
 import Link from "next/link"
 import type { Metadata } from "next"
 import type { LucideIcon } from "lucide-react"
-import { ArrowRight, AtSign, ExternalLink, Hand, ImageIcon, Lightbulb, MessageSquare } from "lucide-react"
+import { ArrowRight, AtSign, ExternalLink, Hand, ImageIcon, MessageSquare } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { extAccessSummary } from "@/lib/extAccess"
 import {
@@ -18,12 +18,9 @@ export const metadata: Metadata = {
   description: "Every CarouseLabs tool and browser extension in one place.",
 }
 
-// Chrome Web Store listing URLs. null renders a disabled button rather than a
-// link, so a listing that is not live yet can never ship as a broken href.
-// The Engage extension's lives in lib/plans.ts with the rest of its product
-// data, since the billing page links to it too.
-const IDEAS_BOARD_STORE_URL: string | null =
-  "https://chromewebstore.google.com/detail/carouselabs-ideas-board/jiambimimcofcfnefffcpcciocfpajma"
+// The Engage extensions' Chrome Web Store listings live in lib/plans.ts with
+// the rest of their product data, since the billing pages link to them too.
+// null renders no Install button rather than a broken link.
 
 type ToolCard =
   | { kind: "tool"; name: string; description: string; icon: LucideIcon; href: string }
@@ -52,13 +49,6 @@ const TOOLS: ToolCard[] = [
     description: "Recreate any YouTube thumbnail style with AI.",
     icon: ImageIcon,
     href: "/thumbnail",
-  },
-  {
-    kind: "extension",
-    name: "CarouseLabs Ideas Board",
-    description: "Save inspiration from anywhere on the web with one right-click.",
-    icon: Lightbulb,
-    storeUrl: IDEAS_BOARD_STORE_URL,
   },
   {
     kind: "extension",

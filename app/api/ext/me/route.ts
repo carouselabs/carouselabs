@@ -1,8 +1,7 @@
 // app/api/ext/me/route.ts — called by browser-extension-comment/ to fetch
 // the signed-in user's basic account info (email, plan, extension access,
 // default profiles) for its Account/Home screens. Bearer-token authenticated
-// via lib/extensionCommentAuth.ts — same pattern as
-// app/api/ideas-board/capture using lib/extensionAuth.ts.
+// via lib/extensionCommentAuth.ts.
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { extensionCallerPlatform, getExtensionUser } from "@/lib/extensionCommentAuth"

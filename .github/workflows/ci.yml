@@ -1,0 +1,56 @@
+name: Application checks
+on:
+  pull_request:
+  push:
+    branches: [master, main]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://audit:audit@127.0.0.1:5432/audit
+      DIRECT_URL: postgresql://audit:audit@127.0.0.1:5432/audit
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
+      CLERK_SECRET_KEY: sk_test_audit_placeholder
+      ANTHROPIC_API_KEY: test-placeholder
+      OPENAI_API_KEY: test-placeholder
+      RESEND_API_KEY: re_test_placeholder
+      UPSTASH_REDIS_REST_URL: https://audit.example.invalid
+      UPSTASH_REDIS_REST_TOKEN: test-placeholder
+      NEXT_PUBLIC_APP_URL: http://localhost:3102
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            browser-extension-comment/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm audit --audit-level=high
+      - run: npm ci --prefix browser-extension-comment
+      - run: npm run test:unit --prefix browser-extension-comment
+      - run: npm run build --prefix browser-extension-comment
+      - run: npm audit --audit-level=high --prefix browser-extension-comment
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Public browser regressions on a production build
+        run: |
+          npm run start -- --hostname localhost --port 3102 > server.log 2>&1 &
+          for attempt in $(seq 1 30); do curl -fsS http://localhost:3102/terms > /dev/null && break; sleep 1; done
+          npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failures
+          path: |
+            test-results/
+            playwright-report/
+            server.log

@@ -25,7 +25,7 @@ export function Navbar() {
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/favicon.ico" alt="CarouseLabs" className="w-7 h-7 rounded-lg object-cover" />
+          <img src="/icon.png" alt="CarouseLabs" className="w-7 h-7 rounded-lg object-cover" />
           <span className="text-[15px] font-semibold text-[#0A0A0A]">CarouseLabs</span>
         </Link>
 

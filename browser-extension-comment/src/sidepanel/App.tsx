@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { MessageCircle } from "lucide-react";
 import { Header } from "./components/Header";
 import { IconBar } from "./components/IconBar";
 import { SignInScreen } from "./components/SignInScreen";
@@ -79,10 +80,15 @@ export default function App() {
     setActiveScreen("profiles");
   }
 
+  // Usually gone within a frame (two storage reads), so just the brand mark,
+  // not a spinner that would flash.
   if (signedIn === null || needsOnboarding === null) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-background text-sm text-muted-foreground">
-        Loading…
+      <div role="status" className="flex h-screen w-screen items-center justify-center bg-background">
+        <div className="flex h-10 w-10 animate-soft-pulse items-center justify-center rounded-xl bg-primary text-primary-foreground">
+          <MessageCircle aria-hidden className="h-5 w-5" />
+        </div>
+        <span className="sr-only">Loading…</span>
       </div>
     );
   }
@@ -99,12 +105,12 @@ export default function App() {
     return (
       <div className="flex h-screen w-screen flex-col bg-background">
         <Header />
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <main className="min-h-0 flex-1 overflow-y-auto">
           <Onboarding
             onCreateProfile={() => goToProfileBuilder("comment")}
             onFinish={() => setNeedsOnboarding(false)}
           />
-        </div>
+        </main>
       </div>
     );
   }
@@ -114,7 +120,9 @@ export default function App() {
       <CaptureToast />
       <Header />
       <div className="flex min-h-0 flex-1">
-        <main className="min-w-0 flex-1 overflow-y-auto">
+        {/* Keyed by screen: a switch starts the new screen at the top with a
+            short fade, instead of at the old screen's scroll position. */}
+        <main key={activeScreen} className="min-w-0 flex-1 animate-fade-in overflow-y-auto">
           {renderScreen(
             activeScreen,
             openProfileBuilder,

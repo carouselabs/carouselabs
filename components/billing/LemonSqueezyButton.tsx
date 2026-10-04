@@ -15,15 +15,13 @@ declare global {
     }
     createLemonSqueezy?: () => void
     // X (Twitter) Ads pixel — attached by the base script in app/layout.tsx.
-    twq: (...args: any[]) => void
+    twq: (...args: unknown[]) => void
   }
 }
 
 export function LemonSqueezyButton({
-  email,
   label = "Upgrade to Pro · $24.99/mo",
   variant = "purple",
-  checkoutUrl,
   plan = "pro",
 }: {
   email?: string
@@ -41,23 +39,20 @@ export function LemonSqueezyButton({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  function buildCheckoutUrl(): string {
-    const base = checkoutUrl ?? process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL
-    if (!base) throw new Error("Payments are not configured")
-    // embed=1 → overlay; media=0&logo=0 → minimal chrome.
-    let url = `${base}?embed=1&media=0&logo=0`
-    if (email) url += `&checkout[email]=${encodeURIComponent(email)}`
-    return url
-  }
-
-  function handleUpgrade() {
+  async function handleUpgrade() {
+    if (loading) return
     setError(null)
+    setLoading(true)
     try {
-      const url = buildCheckoutUrl()
       const ls = window.LemonSqueezy
       if (!ready || !ls) throw new Error("Checkout is still loading, try again")
-      setLoading(true)
-      ls.Url.Open(url)
+      const response = await fetch("/api/billing/checkout", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: plan }), signal: AbortSignal.timeout(15000),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Checkout unavailable")
+      ls.Url.Open(data.url)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
       setLoading(false)

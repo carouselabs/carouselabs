@@ -7,14 +7,15 @@ import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
+import { getOwnedInternId } from "@/lib/internAuth"
 import { sendAdminNewSupportMessageEmail } from "@/lib/email"
 import { ADMIN_URL } from "@/emails/EmailLayout"
 
 async function safeEmail(fn: () => Promise<unknown>) {
   try {
     await fn()
-  } catch (err) {
-    console.error("[intern/messages] email failed:", err)
+  } catch {
+    console.error("[intern/messages] email delivery failed")
   }
 }
 
@@ -23,7 +24,8 @@ async function findMyIntern() {
   if (!clerkId) return null
   const user = await getCurrentUser()
   if (!user) return null
-  return db.intern.findUnique({ where: { email: user.email } })
+  const internId = await getOwnedInternId(user)
+  return internId ? db.intern.findUnique({ where: { id: internId } }) : null
 }
 
 export async function GET() {
@@ -44,10 +46,11 @@ export async function POST(req: Request) {
   let message: string
   try {
     const body = await req.json()
-    message = String(body.message ?? "").trim()
+    if (typeof body.message !== "string" || body.message.length > 4000) throw new Error()
+    message = body.message.trim()
     if (!message) throw new Error()
   } catch {
-    return NextResponse.json({ error: "message is required" }, { status: 400 })
+    return NextResponse.json({ error: "A message of 1 to 4000 characters is required" }, { status: 400 })
   }
 
   const created = await db.internMessage.create({

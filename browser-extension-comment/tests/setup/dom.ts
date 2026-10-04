@@ -33,8 +33,8 @@ if (!Object.getOwnPropertyDescriptor(HTMLElement.prototype, "innerText")) {
 Object.defineProperty(HTMLElement.prototype, "offsetParent", {
   configurable: true,
   get(this: HTMLElement) {
-    if (!this.isConnected) return null;
-    for (let el: Element | null = this; el; el = el.parentElement) {
+    if (!this.isConnected || this.hidden || this.style.display === "none") return null;
+    for (let el: Element | null = this.parentElement; el; el = el.parentElement) {
       if (el instanceof HTMLElement && (el.hidden || el.style.display === "none")) return null;
     }
     return this.parentElement ?? document.body;

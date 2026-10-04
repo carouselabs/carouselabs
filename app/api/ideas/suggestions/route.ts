@@ -1,3 +1,4 @@
+import { requestLimit } from "@/lib/requestLimit"
 // app/api/ideas/suggestions/route.ts
 import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
@@ -5,7 +6,7 @@ import crypto from "node:crypto"
 import Anthropic from "@anthropic-ai/sdk"
 import { db } from "@/lib/db"
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 20_000, maxRetries: 0 })
 
 // Shown when there's no profile or generation fails. Never persisted with a key,
 // so a transient failure is retried on the next load rather than cached forever.
@@ -50,6 +51,7 @@ export async function GET() {
     where: { clerkId },
     include: { profile: true },
   })
+  if (user?.suspendedAt || user?.deletedAt) return NextResponse.json({ error: "Account unavailable" }, { status: 403 })
   const profile = user?.profile
   if (!profile) return NextResponse.json({ suggestions: FALLBACK })
 
@@ -61,6 +63,8 @@ export async function GET() {
   }
 
   // ── Generate fresh (only reaches here on first run or after a profile edit) ──
+  const limited = await requestLimit("suggestions", user!.id)
+  if (limited) return limited
   let suggestions = FALLBACK
   let generated = false
 

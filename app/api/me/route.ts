@@ -14,6 +14,8 @@ export async function GET() {
   })
 
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 })
+  if (user.suspendedAt || user.deletedAt) return NextResponse.json({ error: "Account unavailable" }, { status: 403 })
+
 
   const sub = user.subscription
   const plan = sub?.plan ?? "FREE"

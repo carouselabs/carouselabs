@@ -39,11 +39,19 @@ export async function loadImage(file: File): Promise<LoadedImage> {
 
   const url = URL.createObjectURL(file)
   const image = new Image()
-  await new Promise<void>((resolve, reject) => {
-    image.onload = () => resolve()
-    image.onerror = () =>
-      reject(new Error("That image couldn't be opened — it may be corrupted. Try re-exporting it or use a different file."))
-    image.src = url
-  })
+  try {
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve()
+      image.onerror = () =>
+        reject(new Error("That image couldn't be opened; it may be corrupted. Try re-exporting it or use a different file."))
+      image.src = url
+    })
+  } catch (error) {
+    URL.revokeObjectURL(url)
+    throw error
+  } finally {
+    image.onload = null
+    image.onerror = null
+  }
   return { source: image, width: image.naturalWidth, height: image.naturalHeight, dispose: () => URL.revokeObjectURL(url) }
 }

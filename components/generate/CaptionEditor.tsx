@@ -16,7 +16,7 @@ interface CaptionEditorProps {
   caption: string
   onChange: (value: string) => void
   isGenerating: boolean
-  ideaId: string
+  onSave: (caption: string) => Promise<string>
   onRegenerate: () => void
   regenerateDisabled?: boolean
 }
@@ -25,19 +25,16 @@ export function CaptionEditor({
   caption,
   onChange,
   isGenerating,
-  ideaId,
+  onSave,
   onRegenerate,
   regenerateDisabled = false,
 }: CaptionEditorProps) {
   const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [savedCaption, setSavedCaption] = useState<string | null>(null)
+  const saved = savedCaption === caption
+  const saveInFlight = useRef<Promise<string> | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
-
-  // Caches the last-saved Post id against the caption it was saved for, so
-  // ScheduleForLaterButton and repeat "Save Draft" clicks on an unchanged
-  // caption reuse the same row instead of creating a new draft Post every time.
-  const savedPostIdRef = useRef<{ caption: string; postId: string } | null>(null)
 
   const charCount = caption.length
   const isOverLimit = charCount > MAX_CHARS
@@ -45,54 +42,52 @@ export function CaptionEditor({
 
   async function handleCopy() {
     if (!caption) return
-    await navigator.clipboard.writeText(caption)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    try {
+      await navigator.clipboard.writeText(caption)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setSaveError("Could not copy. Select the caption and copy it manually.")
+    }
   }
 
-  // Saves the current caption as a Post (or reuses the cached one if the
-  // caption hasn't changed since) and returns its id.
-  async function savePost(): Promise<string | null> {
-    if (savedPostIdRef.current?.caption === caption) return savedPostIdRef.current.postId
-    const res = await fetch("/api/posts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ideaId, caption }),
+  async function savePost(): Promise<string> {
+    if (saveInFlight.current) return saveInFlight.current
+    const submittedCaption = caption
+    setSaving(true)
+    setSaveError(null)
+    const operation = Promise.resolve().then(() => onSave(submittedCaption)).then((id) => {
+      setSavedCaption(submittedCaption)
+      return id
+    }).finally(() => {
+      saveInFlight.current = null
+      setSaving(false)
     })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error ?? "Failed to save")
-    const postId = typeof data.postId === "string" ? data.postId : null
-    if (postId) savedPostIdRef.current = { caption, postId }
-    return postId
+    saveInFlight.current = operation
+    return operation
   }
 
   async function handleSave() {
-    if (!caption || isOverLimit || saving) return
-    setSaving(true)
-    setSaveError(null)
+    if (!caption || isOverLimit) return
     try {
       await savePost()
-      setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Failed to save")
-    } finally {
-      setSaving(false)
     }
   }
 
   return (
     <div className="flex flex-col gap-4">
       {/* Toolbar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-[12px] font-medium text-[#ADA99F] uppercase tracking-widest">
           Caption
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Regenerate */}
           <button
             onClick={onRegenerate}
-            disabled={isGenerating || regenerateDisabled}
+            disabled={isGenerating || regenerateDisabled || saving}
             title="Regenerate — 1 credit"
             className="flex items-center gap-1.5 h-[30px] px-2.5 rounded-lg border border-[#E5E3DE] text-[12px] font-medium text-[#6B7280] hover:border-[#DEDBD4] hover:text-[#4B5563] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
@@ -140,17 +135,19 @@ export function CaptionEditor({
           </button>
 
           {/* Post to LinkedIn — text-only post (no images in this flow) */}
-          <PostToLinkedInButton caption={caption} disabled={!caption || isGenerating} />
+          <PostToLinkedInButton caption={caption} disabled={!caption || isGenerating || isOverLimit || saving} />
 
           {/* Schedule for Later — saves (or reuses) the Post, then deep-links
               into Content Hub with it pre-selected */}
-          <ScheduleForLaterButton getPostId={savePost} disabled={!caption || isGenerating} />
+          <ScheduleForLaterButton getPostId={savePost} disabled={!caption || isGenerating || isOverLimit || saving} />
         </div>
       </div>
 
       {/* Textarea */}
       <div className="relative">
         <textarea
+          aria-label="Caption"
+          aria-invalid={isOverLimit}
           value={caption}
           onChange={(e) => onChange(e.target.value)}
           disabled={isGenerating}
@@ -183,7 +180,7 @@ export function CaptionEditor({
       <div className="flex items-center justify-between">
         <div>
           {saveError && (
-            <p className="text-[12px] text-[rgba(239,68,68,0.8)]">{saveError}</p>
+            <p role="alert" className="text-[12px] text-[rgba(239,68,68,0.8)]">{saveError}</p>
           )}
         </div>
         <div className="flex items-center gap-1.5">

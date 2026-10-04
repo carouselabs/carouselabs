@@ -44,12 +44,12 @@ export interface Harness {
   blocked: string[];
   open(pathname: string, fixture: string): Promise<Page>;
   sendToLinkedInTab<T = unknown>(message: unknown): Promise<T>;
-  storage(): Promise<Record<string, any>>;
+  storage(): Promise<Record<string, unknown>>;
 }
 
 export const test = base.extend<{ harness: Harness }>({
   // eslint-disable-next-line no-empty-pattern
-  harness: async ({}, use) => {
+  harness: async ({}, runFixture) => {
     if (!fs.existsSync(path.join(DIST, "manifest.json"))) {
       throw new Error("dist/ is missing — run `npm run build:dev` first (npm run test:e2e does this).");
     }
@@ -134,7 +134,7 @@ export const test = base.extend<{ harness: Harness }>({
       },
     };
 
-    await use(harness);
+    await runFixture(harness);
     await context.close();
     fs.rmSync(profileDir, { recursive: true, force: true });
   },

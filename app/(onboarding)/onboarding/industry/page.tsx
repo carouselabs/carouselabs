@@ -74,9 +74,9 @@ export default function IndustryPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-[#0A0A0A] mb-1">What's your industry?</h1>
+      <h1 className="text-2xl font-semibold text-[#0A0A0A] mb-1">What&apos;s your industry?</h1>
       <p className="text-sm text-[#6B7280] mb-8">
-        We'll align your content with your space.
+        We&apos;ll align your content with your space.
       </p>
 
       <div className="space-y-5">

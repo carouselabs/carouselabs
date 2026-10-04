@@ -1,8 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Download, RefreshCw, Loader2, FileDown } from "lucide-react"
-import { jsPDF } from "jspdf"
 import { InstructionBox } from "@/components/generate/InstructionBox"
 import { countWords } from "@/lib/wordCount"
 
@@ -19,6 +18,8 @@ interface CarouselImageGridProps {
   ideaId: string
   onRegenerate: (slideNumber: number) => void
   regeneratingSlide: number | null
+  complete?: boolean
+  busy?: boolean
   // Per-slide custom instructions, keyed by slideNumber, and a change handler.
   instructions: Record<number, string>
   onInstructionChange: (slideNumber: number, value: string) => void
@@ -44,12 +45,12 @@ const ROLE_CONFIG = {
 // can't block it. Throws if the proxy fetch fails.
 async function fetchAsDataUrl(url: string): Promise<string> {
   const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`
-  const res = await fetch(proxyUrl)
+  const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(30_000) })
   if (!res.ok) throw new Error("fetch failed")
   const blob = await res.blob()
   return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
-    reader.onloadend = () => resolve(reader.result as string)
+    reader.onload = () => resolve(reader.result as string)
     reader.onerror = reject
     reader.readAsDataURL(blob)
   })
@@ -70,31 +71,38 @@ export function CarouselImageGrid({
   ideaId,
   onRegenerate,
   regeneratingSlide,
+  complete = true,
+  busy = false,
   instructions,
   onInstructionChange,
 }: CarouselImageGridProps) {
   const [downloadingAll, setDownloadingAll] = useState(false)
   const [downloadingSlide, setDownloadingSlide] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [pdfProgress, setPdfProgress] = useState(0)
+  const downloadingRef = useRef(false)
 
   const sorted = [...images].sort((a, b) => a.slideNumber - b.slideNumber)
 
   // Per-slide download. Blob → object URL so it saves as a file; on CORS failure
   // fall back to opening the image in a new tab.
   async function downloadSlide(slide: SlideImage) {
+    if (downloadingRef.current) return
+    downloadingRef.current = true
     setDownloadingSlide(slide.slideNumber)
     setError(null)
     try {
       const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(slide.imageUrl)}`
-      const res = await fetch(proxyUrl)
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(30_000) })
       if (!res.ok) throw new Error("fetch failed")
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       triggerDownload(url, `carouselabs-slide-${slide.slideNumber}.png`)
-      URL.revokeObjectURL(url)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch {
-      window.open(slide.imageUrl, "_blank") // fallback — open original in new tab
+      setError(`Slide ${slide.slideNumber} could not be downloaded. Check your connection and try again.`)
     } finally {
+      downloadingRef.current = false
       setDownloadingSlide(null)
     }
   }
@@ -102,6 +110,9 @@ export function CarouselImageGrid({
   // Combine every slide into a single multi-page PDF — one slide per page, each
   // page exactly the image size so the image fills the page edge-to-edge.
   async function downloadAllAsPdf() {
+    if (downloadingRef.current || !complete || busy || sorted.length === 0) return
+    downloadingRef.current = true
+    setPdfProgress(0)
     setDownloadingAll(true)
     setError(null)
 
@@ -113,8 +124,10 @@ export function CarouselImageGrid({
     const pageH = imgH
 
     try {
+      const { jsPDF } = await import("jspdf")
       const doc = new jsPDF({
         unit: "px",
+        hotfixes: ["px_scaling"],
         format: [pageW, pageH],
         orientation: "portrait",
       })
@@ -124,28 +137,30 @@ export function CarouselImageGrid({
         const dataUrl = await fetchAsDataUrl(slide.imageUrl) // throws on CORS
         if (i > 0) doc.addPage([pageW, pageH], "portrait")
 
-        doc.addImage(dataUrl, "PNG", 0, 0, imgW, imgH)
+        doc.addImage(dataUrl, dataUrl.startsWith("data:image/jpeg") ? "JPEG" : "PNG", 0, 0, imgW, imgH)
+        setPdfProgress(i + 1)
       }
 
       doc.save(`carouselabs-carousel-${ideaId}.pdf`)
     } catch {
       setError(
-        "Couldn't build the PDF — the images may be blocked by CORS. Download slides individually instead.",
+        "Could not build the PDF. Your slides are unchanged. Check your connection and retry, or download slides individually.",
       )
     } finally {
+      downloadingRef.current = false
       setDownloadingAll(false)
     }
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
           Generated Slides
         </p>
         <button
           onClick={downloadAllAsPdf}
-          disabled={downloadingAll}
+          disabled={downloadingAll || downloadingSlide !== null || !complete || busy || images.length === 0}
           className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-colors disabled:opacity-50"
         >
           {downloadingAll ? (
@@ -153,12 +168,12 @@ export function CarouselImageGrid({
           ) : (
             <FileDown size={13} strokeWidth={2.2} />
           )}
-          {downloadingAll ? "Building PDF…" : "Download All as PDF"}
+          {downloadingAll ? `Building PDF ${pdfProgress}/${sorted.length}...` : "Download All as PDF"}
         </button>
       </div>
 
       {error && (
-        <div className="px-3.5 py-2.5 rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[12px] text-[rgba(239,68,68,0.9)]">
+        <div role="alert" className="px-3.5 py-2.5 rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[12px] text-[rgba(239,68,68,0.9)]">
           {error}
         </div>
       )}
@@ -204,6 +219,10 @@ export function CarouselImageGrid({
                 <img
                   src={slide.imageUrl}
                   alt={`Slide ${slide.slideNumber}: ${slide.headline}`}
+                  loading="lazy"
+                  decoding="async"
+                  width={1024}
+                  height={size === "4:5" ? 1280 : 1024}
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -219,10 +238,10 @@ export function CarouselImageGrid({
               )}
 
               {/* Actions: regenerate + download (both functional) */}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => onRegenerate(slide.slideNumber)}
-                  disabled={isRegenerating || regeneratingSlide !== null}
+                  disabled={isRegenerating || regeneratingSlide !== null || busy || downloadingAll}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[rgba(26,26,26,0.2)] bg-[rgba(26,26,26,0.08)] hover:bg-[rgba(26,26,26,0.16)] text-[11px] font-medium text-[#1A1A1A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <RefreshCw size={11} strokeWidth={2.2} />
@@ -230,7 +249,7 @@ export function CarouselImageGrid({
                 </button>
                 <button
                   onClick={() => downloadSlide(slide)}
-                  disabled={isDownloading}
+                  disabled={downloadingSlide !== null || downloadingAll}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] hover:bg-[#E9E7E1] text-[11px] font-medium text-[#6B7280] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {isDownloading ? (

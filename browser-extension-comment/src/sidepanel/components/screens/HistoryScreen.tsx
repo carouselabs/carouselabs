@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Check, Copy, ExternalLink, History as HistoryIcon, Search, X } from "lucide-react";
 import {
   apiFetch,
   ApiError,
@@ -6,10 +7,12 @@ import {
   type HistoryKind,
   type HistoryResponse,
 } from "@/lib/api";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-
-const fieldClass =
-  "w-full rounded-md border border-input bg-background p-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ScreenHeader } from "../ScreenHeader";
 
 // History holds every kind of generation. Rows from before that carry no
 // kind and are comments.
@@ -27,9 +30,27 @@ const LINK_LABELS: Record<HistoryKind, string> = {
   message: "Open chat",
 };
 
-function formatDate(iso: string): string {
+// What the user did with it, in words ("NONE" says nothing).
+const ACTION_LABELS: Record<string, string> = {
+  COPIED: "Copied",
+  INSERTED: "Inserted",
+};
+
+// Today's rows show the time, older ones the date: "14:05", "Yesterday", "28 Sep".
+function formatWhen(iso: string, now = new Date()): string {
   const d = new Date(iso);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const days = Math.round(
+    (new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() -
+      new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) /
+      864e5,
+  );
+  if (days === 0) return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (days === 1) return "Yesterday";
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: d.getFullYear() === now.getFullYear() ? undefined : "numeric",
+  });
 }
 
 export function HistoryScreen() {
@@ -98,84 +119,132 @@ export function HistoryScreen() {
     );
   }, [entries, query]);
 
-  if (loading) {
-    return <div className="p-4 text-sm text-muted-foreground">Loading history…</div>;
-  }
-
   return (
-    <div className="flex flex-col gap-3 p-4">
-      <h2 className="text-sm font-semibold">History</h2>
+    <div className="flex flex-col gap-4 p-4">
+      <ScreenHeader
+        title="History"
+        description="Everything you've written with Engage, newest first. Also on carouselabs.com."
+      />
 
-      {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
-          {error}
-        </div>
-      )}
+      {error && <Alert>{error}</Alert>}
 
-      {entries.length === 0 ? (
-        <p className="rounded-md border border-dashed border-input p-3 text-xs text-muted-foreground">
-          Nothing yet. Comments, replies, connection notes and messages you generate show up
-          here, and on carouselabs.com under Extension.
-        </p>
+      {loading ? (
+        <ul role="status" aria-label="Loading history" className="space-y-2">
+          {[0, 1, 2].map((i) => (
+            <li key={i} className="space-y-2.5 rounded-lg border bg-card p-3">
+              <Skeleton className="h-3.5 w-1/2" />
+              <Skeleton className="w-full" />
+              <Skeleton className="w-3/4" />
+            </li>
+          ))}
+        </ul>
+      ) : entries.length === 0 ? (
+        !error && (
+          <div className="flex animate-fade-in flex-col items-center gap-3 rounded-lg border border-dashed border-input px-4 py-6 text-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground">
+              <HistoryIcon aria-hidden className="h-5 w-5" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-semibold">Nothing yet</p>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Comments, replies, connection notes and messages you generate show up here, and on carouselabs.com
+                under Extension.
+              </p>
+            </div>
+          </div>
+        )
       ) : (
         <>
-          <input
-            className={fieldClass}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by author or comment text"
-          />
+          <div className="relative">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              type="search"
+              aria-label="Search history"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by name or text"
+              className="pl-9 pr-9 [&::-webkit-search-cancel-button]:hidden"
+            />
+            {query && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setQuery("")}
+                className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors duration-fast hover:bg-muted hover:text-foreground"
+              >
+                <X aria-hidden className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
 
           {filtered.length === 0 && (
-            <p className="text-xs text-muted-foreground">
-              Nothing matches "{query}".
-            </p>
+            <p className="text-xs text-muted-foreground">Nothing matches &quot;{query}&quot;.</p>
           )}
 
-          {filtered.map((entry) => (
-            <div key={entry.id} className="space-y-1.5 rounded-md border border-input p-3">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="truncate text-sm font-medium">
-                  {entry.postAuthor || "Unknown author"}
-                </span>
-                <span className="shrink-0 text-[10px] text-muted-foreground">
-                  {formatDate(entry.createdAt)}
-                </span>
-              </div>
+          <ul className="space-y-2">
+            {filtered.map((entry) => {
+              const kind = entry.kind ?? "comment";
+              const action = ACTION_LABELS[entry.action];
+              return (
+                <li key={entry.id} className="animate-fade-in space-y-2 rounded-lg border bg-card p-3">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="accent">{KIND_LABELS[kind]}</Badge>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                      {entry.postAuthor || "Unknown author"}
+                    </span>
+                    <time dateTime={entry.createdAt} className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      {formatWhen(entry.createdAt)}
+                    </time>
+                  </div>
 
-              <p className="line-clamp-3 whitespace-pre-wrap text-xs text-foreground/90">
-                {entry.comment}
-              </p>
+                  <p className="line-clamp-3 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
+                    {entry.comment}
+                  </p>
 
-              <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-                <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
-                  {KIND_LABELS[entry.kind ?? "comment"]}
-                </span>
-                <span className="rounded bg-muted px-1.5 py-0.5">{entry.profileName}</span>
-                {entry.action !== "NONE" && (
-                  <span className="rounded bg-muted px-1.5 py-0.5 uppercase">{entry.action}</span>
-                )}
-              </div>
+                  <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                    <span className="truncate">{entry.profileName}</span>
+                    {action && (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span className="inline-flex items-center gap-0.5 text-success">
+                          <Check aria-hidden className="h-3 w-3" />
+                          {action}
+                        </span>
+                      </>
+                    )}
+                  </p>
 
-              <div className="flex flex-wrap gap-1.5">
-                <Button size="sm" variant="secondary" onClick={() => handleCopyAgain(entry)}>
-                  {copiedId === entry.id ? "Copied" : "Copy again"}
-                </Button>
-                {entry.postUrl.startsWith("https://www.linkedin.com/") && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => chrome.tabs.create({ url: entry.postUrl })}
-                  >
-                    {LINK_LABELS[entry.kind ?? "comment"]}
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
+                  <div className="-ml-2 flex flex-wrap gap-0.5">
+                    <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => handleCopyAgain(entry)}>
+                      {copiedId === entry.id ? (
+                        <Check aria-hidden className="!size-3.5 animate-pop" />
+                      ) : (
+                        <Copy aria-hidden className="!size-3.5" />
+                      )}
+                      {copiedId === entry.id ? "Copied" : "Copy again"}
+                    </Button>
+                    {entry.postUrl.startsWith("https://www.linkedin.com/") && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2"
+                        onClick={() => chrome.tabs.create({ url: entry.postUrl })}
+                      >
+                        <ExternalLink aria-hidden className="!size-3.5" />
+                        {LINK_LABELS[kind]}
+                      </Button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
 
           {nextCursor && !query && (
-            <Button variant="outline" disabled={loadingMore} onClick={loadMore}>
+            <Button variant="outline" loading={loadingMore} onClick={loadMore}>
               {loadingMore ? "Loading…" : "Load more"}
             </Button>
           )}

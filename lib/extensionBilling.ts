@@ -10,9 +10,10 @@
 // already stored for them — never by the checkout email, which the buyer can
 // type freely (same rule as the credit top-ups).
 import { db } from "@/lib/db"
+import type { Prisma } from "@prisma/client"
+import { verifyBillingIdentity } from "@/lib/billingIdentity"
 import { createCommissionForPayment } from "@/lib/referral"
 import {
-  isExtensionPayload,
   shouldApplyToStored,
   subscriptionIdOf,
   type ExtensionWebhookPayload,
@@ -22,11 +23,14 @@ function extensionVariantId(): number {
   return parseInt(process.env.LEMONSQUEEZY_EXTENSION_VARIANT_ID ?? "0", 10) || 0
 }
 
-export async function isExtensionWebhook(payload: ExtensionWebhookPayload): Promise<boolean> {
-  if (isExtensionPayload(payload, extensionVariantId())) return true
+export async function isExtensionWebhook(payload: ExtensionWebhookPayload, client: Prisma.TransactionClient = db): Promise<boolean> {
+  const variant = extensionVariantId()
+  const attrs = payload.data?.attributes
+  // Custom checkout metadata cannot turn an unrelated product into paid access.
+  if (variant > 0 && (attrs?.variant_id === variant || attrs?.first_order_item?.variant_id === variant)) return true
   const subId = subscriptionIdOf(payload)
   if (!subId) return false
-  return (await db.extensionSubscription.findUnique({ where: { lsSubscriptionId: subId }, select: { id: true } })) !== null
+  return (await client.extensionSubscription.findUnique({ where: { lsSubscriptionId: subId }, select: { id: true } })) !== null
 }
 
 const SUBSCRIPTION_STATE_EVENTS = new Set([
@@ -50,11 +54,11 @@ type SubscriptionAttributes = {
 
 const asDate = (value: string | null | undefined) => (value ? new Date(value) : null)
 
-export async function handleExtensionWebhook(payload: ExtensionWebhookPayload): Promise<void> {
+export async function handleExtensionWebhook(payload: ExtensionWebhookPayload, client: Prisma.TransactionClient = db): Promise<void> {
   const eventName = payload.meta?.event_name ?? ""
 
   if (eventName === "subscription_payment_success") {
-    await payReferralCommission(payload)
+    await payReferralCommission(payload, client)
     return
   }
 
@@ -72,18 +76,20 @@ export async function handleExtensionWebhook(payload: ExtensionWebhookPayload): 
   }
 
   const customUserId = payload.meta?.custom_data?.user_id
-  const stored = await db.extensionSubscription.findUnique({ where: { lsSubscriptionId: subId } })
+  const stored = await client.extensionSubscription.findUnique({ where: { lsSubscriptionId: subId } })
   let userId = stored?.userId ?? null
   if (!userId && typeof customUserId === "string" && customUserId) {
-    const user = await db.user.findUnique({ where: { id: customUserId }, select: { id: true } })
+    if (!verifyBillingIdentity(customUserId, String(extensionVariantId()), payload.meta?.custom_data?.identity_signature)) {
+      throw new Error("Invalid extension checkout identity")
+    }
+    const user = await client.user.findUnique({ where: { id: customUserId }, select: { id: true } })
     userId = user?.id ?? null
   }
   if (!userId) {
-    console.error(`[extensionBilling] ${eventName}: can't identify the buyer of subscription ${subId} — needs manual review`)
-    return
+    throw new Error("Extension subscription owner unavailable; retry or reconcile checkout")
   }
 
-  const current = await db.extensionSubscription.findUnique({ where: { userId }, select: { lsSubscriptionId: true } })
+  const current = await client.extensionSubscription.findUnique({ where: { userId }, select: { lsSubscriptionId: true } })
   if (!shouldApplyToStored(current?.lsSubscriptionId ?? null, subId, eventName)) {
     console.log(`[extensionBilling] ${eventName}: subscription ${subId} is older than the one stored for ${userId}, ignored`)
     return
@@ -99,7 +105,7 @@ export async function handleExtensionWebhook(payload: ExtensionWebhookPayload): 
     endsAt: asDate(attrs.ends_at),
     customerPortalUrl: attrs.urls?.customer_portal ?? null,
   }
-  await db.extensionSubscription.upsert({ where: { userId }, create: { userId, ...fields }, update: fields })
+  await client.extensionSubscription.upsert({ where: { userId }, create: { userId, ...fields }, update: fields })
   console.log(`[extensionBilling] ${eventName}: user ${userId} → ${fields.status}`)
 }
 
@@ -107,22 +113,24 @@ export async function handleExtensionWebhook(payload: ExtensionWebhookPayload): 
 // (lib/referral.ts). Each successful invoice — the first payment and every
 // renewal — is one commission; the invoice's own id is the key that makes a
 // redelivered event a no-op instead of a double payout.
-async function payReferralCommission(payload: ExtensionWebhookPayload): Promise<void> {
+async function payReferralCommission(payload: ExtensionWebhookPayload, client: Prisma.TransactionClient = db): Promise<void> {
   const invoiceId = payload.data?.id
   const subId = subscriptionIdOf(payload)
   const stored = subId
-    ? await db.extensionSubscription.findUnique({ where: { lsSubscriptionId: subId }, select: { userId: true } })
+    ? await client.extensionSubscription.findUnique({ where: { lsSubscriptionId: subId }, select: { userId: true } })
     : null
   // The first payment can arrive before subscription_created has stored the
   // subscription; the id stamped at checkout identifies the buyer then.
   let userId = stored?.userId ?? null
   const customUserId = payload.meta?.custom_data?.user_id
   if (!userId && typeof customUserId === "string" && customUserId) {
-    userId = (await db.user.findUnique({ where: { id: customUserId }, select: { id: true } }))?.id ?? null
+    if (!verifyBillingIdentity(customUserId, String(extensionVariantId()), payload.meta?.custom_data?.identity_signature)) {
+      throw new Error("Invalid extension checkout identity")
+    }
+    userId = (await client.user.findUnique({ where: { id: customUserId }, select: { id: true } }))?.id ?? null
   }
   if (!userId || !invoiceId) {
-    console.error(`[extensionBilling] payment ${invoiceId ?? "?"}: can't identify the buyer — no referral commission, needs manual review`)
-    return
+    throw new Error("Extension payment owner unavailable; retry after subscription creation")
   }
 
   const attrs = (payload.data?.attributes ?? {}) as { subtotal?: number; total?: number }
@@ -133,7 +141,7 @@ async function payReferralCommission(payload: ExtensionWebhookPayload): Promise<
       // Pre-tax, like the web plans' commissions.
       subtotalCents: attrs.subtotal ?? attrs.total ?? 0,
       sourceEvent: "subscription_payment_success",
-    })
+    }, client)
     console.log(`[extensionBilling] payment ${invoiceId}: referral commission ${result}`)
   } catch (err) {
     // Best effort, like the web plans': access was never tied to this.

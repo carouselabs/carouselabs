@@ -2,12 +2,11 @@ import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { isFunctionalPlatform, type Platform } from "@/lib/platforms"
+import { needsPublicationReconciliation } from "@/lib/scheduledPostState"
 
 const VALID_STATUSES = [
   "draft",
   "queued",
-  "publishing",
-  "published",
   "failed",
   "cancelled",
   "pending_connection",
@@ -35,9 +34,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   let scheduledFor: Date | undefined
   let status: Status | undefined
   let tagIds: string[] | undefined
+  let confirmNotPublished = false
 
   try {
     const body = await req.json()
+    confirmNotPublished = body.confirmNotPublished === true
     if (body.scheduledFor !== undefined) {
       const parsed = new Date(body.scheduledFor)
       if (isNaN(parsed.getTime())) throw new Error("Invalid scheduledFor date")
@@ -55,6 +56,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       { error: err instanceof Error ? err.message : "Invalid request body" },
       { status: 400 },
     )
+  }
+
+  if (existing.status === "publishing" || existing.status === "published") {
+    return NextResponse.json({ error: "This post is already publishing or published and cannot be rescheduled" }, { status: 409 })
+  }
+  if (needsPublicationReconciliation(existing.failureReason) && !confirmNotPublished) {
+    return NextResponse.json({ error: "Check LinkedIn first. Confirm that this post was not published before changing its schedule.", requiresPublicationConfirmation: true }, { status: 409 })
   }
 
   // Tags live on the underlying Post, not this ScheduledPost row — same
@@ -89,7 +97,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       : nextStatus
 
   const updated = await db.scheduledPost.update({
-    where: { id },
+    // Compare-and-swap: a cron claim after the read must win over rescheduling.
+    where: { id, userId: user.id, status: existing.status, updatedAt: existing.updatedAt },
     data: {
       ...(scheduledFor ? { scheduledFor } : {}),
       ...(status ? { status: effectiveNextStatus } : {}),
@@ -109,7 +118,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         },
       },
     },
+  }).catch((error: unknown) => {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2025") return null
+    throw error
   })
+
+  if (!updated) return NextResponse.json({ error: "The schedule changed. Refresh before trying again." }, { status: 409 })
 
   return NextResponse.json({ scheduled: updated })
 }
@@ -126,6 +140,10 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
-  await db.scheduledPost.delete({ where: { id } })
+  if (existing.status === "publishing" || needsPublicationReconciliation(existing.failureReason)) {
+    return NextResponse.json({ error: "Publication must be reconciled before removing this schedule" }, { status: 409 })
+  }
+  const removed = await db.scheduledPost.deleteMany({ where: { id, userId: user.id, status: existing.status, updatedAt: existing.updatedAt } })
+  if (!removed.count) return NextResponse.json({ error: "The schedule changed. Refresh before trying again." }, { status: 409 })
   return NextResponse.json({ ok: true })
 }

@@ -39,27 +39,35 @@ export function UnlockCard() {
   const limit = access?.freeLimit ?? 10;
 
   return (
-    <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
-      <p className="text-sm font-medium">You&apos;ve used your {limit} free generations</p>
-      <p className="text-xs text-muted-foreground">
-        Get unlimited comments, replies, connection notes and messages for {EXTENSION_PRICE_LABEL}. Cancel anytime.
-      </p>
-      <Button className="w-full" disabled={opening} onClick={start}>
+    <div className="animate-fade-in space-y-3 rounded-lg border border-primary/25 bg-accent/60 p-4">
+      <div className="space-y-1">
+        <p className="text-sm font-semibold">You&apos;ve used your {limit} free generations</p>
+        <p className="text-xs text-muted-foreground">
+          Get unlimited comments, replies, connection notes and messages for {EXTENSION_PRICE_LABEL}. Cancel anytime.
+        </p>
+      </div>
+      <Button className="w-full" loading={opening} onClick={start}>
         {opening ? "Opening checkout…" : `Get unlimited — ${EXTENSION_PRICE_LABEL}`}
       </Button>
-      <button
-        type="button"
-        disabled={refreshing}
-        onClick={async () => {
-          setRefreshing(true);
-          await refreshExtensionAccess();
-          setRefreshing(false);
-        }}
-        className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-50"
-      >
-        {refreshing ? "Checking…" : "Already subscribed? Refresh"}
-      </button>
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      <div className="text-center">
+        <button
+          type="button"
+          disabled={refreshing}
+          onClick={async () => {
+            setRefreshing(true);
+            await refreshExtensionAccess();
+            setRefreshing(false);
+          }}
+          className="rounded text-xs text-muted-foreground underline underline-offset-2 transition-colors duration-fast hover:text-foreground disabled:opacity-50"
+        >
+          {refreshing ? "Checking…" : "Already subscribed? Refresh"}
+        </button>
+      </div>
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -72,13 +80,13 @@ export function FreeGenerationsNote() {
 
   return (
     <div className="space-y-1">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-center text-xs text-muted-foreground">
         {left} of {access.freeLimit} free generation{access.freeLimit === 1 ? "" : "s"} left ·{" "}
         <button
           type="button"
           disabled={opening}
           onClick={start}
-          className="font-medium text-foreground underline underline-offset-2 disabled:opacity-50"
+          className="rounded font-medium text-primary-text underline-offset-2 hover:underline disabled:opacity-50"
         >
           {opening ? "Opening…" : "Get unlimited"}
         </button>

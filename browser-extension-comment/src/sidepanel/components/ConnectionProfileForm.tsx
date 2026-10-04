@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { apiFetch, ApiError, type ConnectionProfile, type ConnectionProfileDraft } from "@/lib/api";
-import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { CharRangePicker } from "./CharRangePicker";
+import { DefaultCheckbox, FormField, FormLayout, OptionSelect, SamplesField } from "./form";
 import { CONNECT_NOTE_HARD_MAX, CONNECT_NOTE_MIN } from "@/lib/connectionNote";
 
 // Builder for a custom Connection Note profile. Same shape as ProfileForm for
@@ -52,32 +54,6 @@ export function connectionDraftFromProfile(profile: ConnectionProfile): Connecti
   };
 }
 
-const fieldClass =
-  "w-full rounded-md border border-input bg-background p-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50";
-
-function Field({
-  label,
-  hint,
-  required,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <label className="text-xs font-medium text-muted-foreground">
-        {label}
-        {required && <span className="ml-0.5 text-destructive">*</span>}
-      </label>
-      {children}
-      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
-    </div>
-  );
-}
-
 interface Props {
   // Present when editing: the form PUTs instead of POSTing.
   existing?: ConnectionProfile;
@@ -99,12 +75,6 @@ export function ConnectionProfileForm({ existing, seed, onSaved, onCancel }: Pro
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
-  function setSample(index: number, value: string) {
-    setDraft((current) => ({
-      ...current,
-      samples: current.samples.map((sample, i) => (i === index ? value : sample)),
-    }));
-  }
 
   const range = rangeFromLength(draft.length);
   const canSave = Boolean(draft.name.trim() && draft.angle.trim() && draft.goal.trim() && draft.tone.trim());
@@ -137,134 +107,97 @@ export function ConnectionProfileForm({ existing, seed, onSaved, onCancel }: Pro
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <h2 className="text-sm font-semibold">
-        {existing ? "Edit connection profile" : "New connection profile"}
-      </h2>
+    <FormLayout
+      title={existing ? "Edit connection note profile" : "New connection note profile"}
+      onCancel={onCancel}
+      busy={saving}
+      error={error}
+      saveLabel={existing ? "Save changes" : "Create profile"}
+      saving={saving}
+      canSave={canSave}
+      onSave={handleSave}
+    >
+      <FormField label="Profile name" required>
+        {(id) => (
+          <Input id={id} value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Agency founders" />
+        )}
+      </FormField>
 
-      {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
-          {error}
-        </div>
-      )}
-
-      <Field label="Profile name" required>
-        <input
-          className={fieldClass}
-          value={draft.name}
-          onChange={(e) => set("name", e.target.value)}
-          placeholder="e.g. Agency founders"
-        />
-      </Field>
-
-      <Field
+      <FormField
         label="How you come across"
         required
-        hint="The note's angle, not your bio — who you sound like. Your own details come from the 'Your context' setting."
+        hint="The note's angle, not your bio: who you sound like. Your own details come from what your notes say about you (in Settings)."
       >
-        <textarea
-          className={fieldClass}
-          rows={3}
-          value={draft.angle}
-          onChange={(e) => set("angle", e.target.value)}
-          placeholder="e.g. A peer in the same field, dealing with the same problems, not an outsider admiring them"
-        />
-      </Field>
+        {(id) => (
+          <Textarea
+            id={id}
+            autoGrow
+            value={draft.angle}
+            onChange={(e) => set("angle", e.target.value)}
+            placeholder="e.g. A peer in the same field, dealing with the same problems, not an outsider admiring them"
+            className="max-h-48 min-h-[4.5rem]"
+          />
+        )}
+      </FormField>
 
-      <Field label="Note goal" required>
-        <input
-          className={fieldClass}
-          value={draft.goal}
-          onChange={(e) => set("goal", e.target.value)}
-          placeholder="e.g. Get the invite accepted"
-        />
-      </Field>
+      <FormField label="Note goal" required>
+        {(id) => (
+          <Input id={id} value={draft.goal} onChange={(e) => set("goal", e.target.value)} placeholder="e.g. Get the invite accepted" />
+        )}
+      </FormField>
 
-      <Field label="Tone" required>
-        <select className={fieldClass} value={draft.tone} onChange={(e) => set("tone", e.target.value)}>
-          {(TONES.includes(draft.tone) ? TONES : [draft.tone, ...TONES]).map((tone) => (
-            <option key={tone} value={tone}>
-              {tone}
-            </option>
-          ))}
-        </select>
-      </Field>
+      <FormField label="Tone" required>
+        {(id) => <OptionSelect id={id} value={draft.tone} onChange={(v) => set("tone", v)} options={TONES} />}
+      </FormField>
 
-      <Field label="Length" hint={`LinkedIn allows 300 characters; notes are capped at ${CONNECT_NOTE_HARD_MAX}.`}>
-        <CharRangePicker
-          min={range.min}
-          max={range.max}
-          bounds={{ min: CONNECT_NOTE_MIN, max: CONNECT_NOTE_HARD_MAX }}
-          onChange={(min, max) => set("length", connectionLengthFromRange(min, max))}
-          caption={`${range.min}-${range.max} characters`}
-        />
-      </Field>
+      <FormField label="Length" hint={`LinkedIn allows 300 characters; notes are capped at ${CONNECT_NOTE_HARD_MAX}.`}>
+        {() => (
+          <CharRangePicker
+            min={range.min}
+            max={range.max}
+            bounds={{ min: CONNECT_NOTE_MIN, max: CONNECT_NOTE_HARD_MAX }}
+            onChange={(min, max) => set("length", connectionLengthFromRange(min, max))}
+            caption={`${range.min}-${range.max} characters`}
+          />
+        )}
+      </FormField>
 
-      <Field label="Always" hint="Rules every note must follow.">
-        <textarea
-          className={fieldClass}
-          rows={2}
-          value={draft.alwaysDo}
-          onChange={(e) => set("alwaysDo", e.target.value)}
-          placeholder="e.g. Reference one concrete detail from their profile, then a plain reason to connect"
-        />
-      </Field>
+      <FormField label="Always" hint="Rules every note must follow.">
+        {(id) => (
+          <Textarea
+            id={id}
+            autoGrow
+            value={draft.alwaysDo}
+            onChange={(e) => set("alwaysDo", e.target.value)}
+            placeholder="e.g. Reference one concrete detail from their profile, then a plain reason to connect"
+            className="max-h-40 min-h-[2.625rem]"
+          />
+        )}
+      </FormField>
 
-      <Field label="Never" hint="Rules every note must avoid.">
-        <textarea
-          className={fieldClass}
-          rows={2}
-          value={draft.neverDo}
-          onChange={(e) => set("neverDo", e.target.value)}
-          placeholder="e.g. No compliments, no asking for a call, no pitching"
-        />
-      </Field>
+      <FormField label="Never" hint="Rules every note must avoid.">
+        {(id) => (
+          <Textarea
+            id={id}
+            autoGrow
+            value={draft.neverDo}
+            onChange={(e) => set("neverDo", e.target.value)}
+            placeholder="e.g. No compliments, no asking for a call, no pitching"
+            className="max-h-40 min-h-[2.625rem]"
+          />
+        )}
+      </FormField>
 
-      <Field
+      <SamplesField
         label="Example notes"
         hint="Optional, but the strongest lever on voice. Avoid digits: a figure that isn't on the recipient's profile is rejected."
-      >
-        <div className="space-y-2">
-          {draft.samples.map((sample, index) => (
-            <textarea
-              key={index}
-              className={fieldClass}
-              rows={2}
-              value={sample}
-              onChange={(e) => setSample(index, e.target.value)}
-              placeholder={`Example ${index + 1}`}
-            />
-          ))}
-          {draft.samples.length < MAX_SAMPLES && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => set("samples", [...draft.samples, ""])}
-            >
-              + Add example
-            </Button>
-          )}
-        </div>
-      </Field>
+        noun="example"
+        samples={draft.samples}
+        max={MAX_SAMPLES}
+        onChange={(samples) => set("samples", samples)}
+      />
 
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          className="accent-[#7C3AED]"
-          checked={setAsDefault}
-          onChange={(e) => setSetAsDefault(e.target.checked)}
-        />
-        Use this profile by default
-      </label>
-
-      <div className="flex gap-2">
-        <Button disabled={!canSave || saving} onClick={handleSave}>
-          {saving ? "Saving…" : existing ? "Save changes" : "Create profile"}
-        </Button>
-        <Button variant="outline" disabled={saving} onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </div>
+      <DefaultCheckbox checked={setAsDefault} onChange={setSetAsDefault} />
+    </FormLayout>
   );
 }

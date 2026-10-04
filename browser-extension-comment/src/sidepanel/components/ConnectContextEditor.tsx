@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
+import { Check, ExternalLink, ScanText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import {
   MAX_PURPOSE_CHARS,
   OWN_PROFILE_URL,
@@ -95,29 +98,32 @@ export function ConnectContextEditor({ onSaved }: { onSaved?: (setting: ConnectC
 
   return (
     <div className="space-y-2">
-      {OPTIONS.map((option) => (
-        <label
-          key={option.choice}
-          className={`flex cursor-pointer items-start gap-2 rounded-md border p-2 text-sm ${
-            choice === option.choice ? "border-primary bg-primary/5" : "border-input"
-          }`}
-        >
-          <input
-            type="radio"
-            name="connect-context"
-            className="mt-0.5 accent-[#7C3AED]"
-            checked={choice === option.choice}
-            onChange={() => void save({ choice: option.choice, purpose: setting?.purpose ?? purposeDraft })}
-          />
-          <span className="space-y-0.5">
-            <span className="block font-medium">{option.title}</span>
-            <span className="block text-xs text-muted-foreground">{option.hint}</span>
-          </span>
-        </label>
-      ))}
+      <div role="radiogroup" aria-label="What your notes say about you" className="space-y-2">
+        {OPTIONS.map((option) => (
+          <label
+            key={option.choice}
+            className={cn(
+              "flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 transition-[border-color,background-color] duration-fast ease-out hover:border-primary/40",
+              choice === option.choice ? "border-primary bg-accent/50" : "border-input bg-card",
+            )}
+          >
+            <input
+              type="radio"
+              name="connect-context"
+              className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+              checked={choice === option.choice}
+              onChange={() => void save({ choice: option.choice, purpose: setting?.purpose ?? purposeDraft })}
+            />
+            <span className="min-w-0 space-y-0.5">
+              <span className="block text-sm font-medium">{option.title}</span>
+              <span className="block text-xs leading-relaxed text-muted-foreground">{option.hint}</span>
+            </span>
+          </label>
+        ))}
+      </div>
 
       {choice === "profile" && (
-        <div className="space-y-2 rounded-md border border-dashed border-input p-2 text-xs">
+        <div className="animate-fade-in space-y-2.5 rounded-lg border border-dashed border-input p-3 text-xs">
           {self ? (
             <p>
               <span className="font-medium">{self.name}</span>
@@ -131,8 +137,10 @@ export function ConnectContextEditor({ onSaved }: { onSaved?: (setting: ConnectC
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={openMyProfile}>
               Open my profile
+              <ExternalLink aria-hidden />
             </Button>
-            <Button size="sm" variant="outline" disabled={reading} onClick={readMyProfile}>
+            <Button size="sm" variant="outline" loading={reading} onClick={readMyProfile}>
+              {!reading && <ScanText aria-hidden />}
               {reading ? "Reading…" : self ? "Re-read my profile" : "Read my profile"}
             </Button>
           </div>
@@ -140,30 +148,37 @@ export function ConnectContextEditor({ onSaved }: { onSaved?: (setting: ConnectC
       )}
 
       {choice === "custom" && (
-        <div className="space-y-1.5">
-          <textarea
+        <div className="animate-fade-in space-y-1.5">
+          <Textarea
+            autoGrow
+            aria-label="Your purpose"
             value={purposeDraft}
             onChange={(e) => setPurposeDraft(e.target.value.slice(0, MAX_PURPOSE_CHARS))}
-            rows={3}
             placeholder="e.g. I help SaaS founders fix their pricing, and connect with people building in B2B"
-            className="w-full resize-none rounded-md border border-input bg-background p-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="max-h-40 min-h-[4.5rem]"
           />
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-xs tabular-nums text-muted-foreground">
               {purposeDraft.length}/{MAX_PURPOSE_CHARS}
             </span>
             <Button
               size="sm"
+              variant={purposeChanged ? "default" : "ghost"}
               disabled={!purposeDraft.trim() || !purposeChanged}
               onClick={() => void save({ choice: "custom", purpose: purposeDraft.trim() })}
             >
+              {!purposeChanged && <Check aria-hidden />}
               {purposeChanged ? "Save purpose" : "Saved"}
             </Button>
           </div>
         </div>
       )}
 
-      {message && <p className="text-xs text-muted-foreground">{message}</p>}
+      {message && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {message}
+        </p>
+      )}
     </div>
   );
 }

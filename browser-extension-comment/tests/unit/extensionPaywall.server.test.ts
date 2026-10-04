@@ -12,17 +12,19 @@ const state = vi.hoisted(() => ({
   enforced: true,
   users: new Map<string, { id: string; email: string; extensionTrialUsed: number }>(),
   extSubs: [] as Sub[],
+  processedEvents: new Set<string>(),
 }));
 
 const db = vi.hoisted(() => ({
+  $transaction: vi.fn(),
   user: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
     updateMany: vi.fn(),
   },
   extensionSubscription: { findUnique: vi.fn(), upsert: vi.fn() },
-  subscription: { update: vi.fn(), findUnique: vi.fn(), upsert: vi.fn() },
-  processedWebhookEvent: { create: vi.fn(), delete: vi.fn() },
+  subscription: { update: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), upsert: vi.fn() },
+  processedWebhookEvent: { create: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn() },
 }));
 
 vi.mock("../../../lib/db", () => ({ db }));
@@ -43,11 +45,31 @@ vi.mock("../../../lib/referral", () => referral);
 
 import { reserveExtGeneration } from "../../../lib/extAccess";
 import { POST as lemonSqueezyWebhook } from "../../../app/api/webhooks/lemonsqueezy/route";
+import { signBillingIdentity } from "../../../lib/billingIdentity";
 
 beforeEach(() => {
   state.enforced = true;
   state.users = new Map([["u1", { id: "u1", email: "buyer@example.com", extensionTrialUsed: 0 }]]);
   state.extSubs = [];
+  state.processedEvents = new Set();
+
+  // A serialized, rollback-capable stand-in for the webhook's transaction.
+  // This checks application behavior; it is not a Postgres integration test.
+  let transactions: Promise<unknown> = Promise.resolve();
+  db.$transaction.mockImplementation((fn: (tx: typeof db) => Promise<unknown>) => {
+    const transaction = transactions.then(async () => {
+      const previousSubs = structuredClone(state.extSubs);
+      const previousEvents = new Set(state.processedEvents);
+      try { return await fn(db); }
+      catch (error) {
+        state.extSubs = previousSubs;
+        state.processedEvents = previousEvents;
+        throw error;
+      }
+    });
+    transactions = transaction.catch(() => {});
+    return transaction;
+  });
 
   db.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => state.users.get(where.id) ?? null);
   db.user.findFirst.mockImplementation(async ({ where }: { where: { email: string } }) =>
@@ -75,8 +97,18 @@ beforeEach(() => {
   });
   db.subscription.update.mockResolvedValue({});
   db.subscription.findUnique.mockResolvedValue({ plan: "FREE", creditsUsed: 0, creditsTotal: 0, upgradeScheduled: false });
-  db.processedWebhookEvent.create.mockResolvedValue({});
-  db.processedWebhookEvent.delete.mockResolvedValue({});
+  db.subscription.findFirst.mockResolvedValue(null);
+  db.processedWebhookEvent.findFirst.mockImplementation(async ({ where }: { where: { eventId: { in: string[] } } }) =>
+    where.eventId.in.some((id) => state.processedEvents.has(id)) ? { id: "event" } : null,
+  );
+  db.processedWebhookEvent.findUnique.mockImplementation(async ({ where }: { where: { eventId: string } }) =>
+    state.processedEvents.has(where.eventId) ? { id: "event" } : null,
+  );
+  db.processedWebhookEvent.create.mockImplementation(async ({ data }: { data: { eventId: string } }) => {
+    if (state.processedEvents.has(data.eventId)) throw { code: "P2002" };
+    state.processedEvents.add(data.eventId);
+    return data;
+  });
 });
 
 afterEach(() => {
@@ -155,6 +187,12 @@ const subscriptionEvent = (eventName: string, id: string, attributes: Record<str
   data: { id, type: "subscriptions", attributes: { user_email: "buyer@example.com", ...attributes } },
 });
 
+const checkoutIdentity = (userId = "u1", variant = "555") => ({
+  user_id: userId,
+  kind: variant === "555" ? "extension" : "pro",
+  identity_signature: signBillingIdentity(userId, variant),
+});
+
 describe("Lemon Squeezy webhook routing", () => {
   beforeEach(() => {
     vi.stubEnv("LEMONSQUEEZY_WEBHOOK_SECRET", SECRET);
@@ -171,7 +209,7 @@ describe("Lemon Squeezy webhook routing", () => {
           "subscription_created",
           "s1",
           { status: "active", variant_id: 555, customer_id: 7, renews_at: "2026-10-26T00:00:00Z", urls: { customer_portal: "https://portal" } },
-          { user_id: "u1", kind: "extension" },
+          checkoutIdentity(),
         ),
       ),
     );
@@ -210,18 +248,30 @@ describe("Lemon Squeezy webhook routing", () => {
       // Pre-tax subtotal, like the web plans.
       subtotalCents: 1500,
       sourceEvent: "subscription_payment_success",
-    });
+    }, db);
     expect(db.subscription.update).not.toHaveBeenCalled();
   });
 
-  it("pays it on the first payment too, before the subscription is stored", async () => {
-    await lemonSqueezyWebhook(
-      webhook({
-        meta: { event_name: "subscription_payment_success", custom_data: { user_id: "u1", kind: "extension" } },
-        data: { id: "inv_1", type: "subscription-invoices", attributes: { subscription_id: 99, subtotal: 1500 } },
-      }),
+  it("defers an early first invoice until subscription creation, then pays it once on retry", async () => {
+    const payment = {
+      meta: { event_name: "subscription_payment_success", custom_data: checkoutIdentity() },
+      data: { id: "inv_1", type: "subscription-invoices", attributes: { subscription_id: 99, subtotal: 1500 } },
+    };
+    // Invoices do not identify the product. Never trust the editable kind
+    // marker; request provider retry until the verified subscription exists.
+    expect((await lemonSqueezyWebhook(webhook(payment))).status).toBe(503);
+    expect(state.processedEvents.size).toBe(0);
+    expect(referral.createCommissionForPayment).not.toHaveBeenCalled();
+    expect((await lemonSqueezyWebhook(webhook(subscriptionEvent(
+      "subscription_created", "99", { status: "active", variant_id: 555 }, checkoutIdentity(),
+    )))).status).toBe(200);
+    expect((await lemonSqueezyWebhook(webhook(payment))).status).toBe(200);
+    expect((await lemonSqueezyWebhook(webhook(payment))).status).toBe(200);
+    expect(referral.createCommissionForPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ referredUserId: "u1", sourceOrderId: "inv_1", subtotalCents: 1500 }), db,
     );
-    expect(referral.createCommissionForPayment).toHaveBeenCalledWith(expect.objectContaining({ referredUserId: "u1", sourceOrderId: "inv_1" }));
+    expect(referral.createCommissionForPayment).toHaveBeenCalledTimes(1);
+    expect(db.subscription.update).not.toHaveBeenCalled();
   });
 
   it("expiring the extension subscription leaves the web plan alone", async () => {
@@ -234,21 +284,24 @@ describe("Lemon Squeezy webhook routing", () => {
   it("ignores a late event for an older extension subscription", async () => {
     state.extSubs.push({ userId: "u1", lsSubscriptionId: "s2", status: "active", endsAt: null });
     await lemonSqueezyWebhook(
-      webhook(subscriptionEvent("subscription_expired", "s1", { status: "expired", variant_id: 555 }, { user_id: "u1", kind: "extension" })),
+      webhook(subscriptionEvent("subscription_expired", "s1", { status: "expired", variant_id: 555 }, checkoutIdentity())),
     );
     expect(state.extSubs).toEqual([expect.objectContaining({ lsSubscriptionId: "s2", status: "active" })]);
   });
 
   it("doesn't grant anything when the buyer can't be identified", async () => {
-    await lemonSqueezyWebhook(
-      webhook(subscriptionEvent("subscription_created", "s9", { status: "active", variant_id: 555 }, { user_id: "nobody", kind: "extension" })),
+    const res = await lemonSqueezyWebhook(
+      webhook(subscriptionEvent("subscription_created", "s9", { status: "active", variant_id: 555 }, checkoutIdentity("nobody"))),
     );
+    expect(res.status).toBe(503);
+    expect(state.processedEvents.size).toBe(0);
     expect(db.extensionSubscription.upsert).not.toHaveBeenCalled();
     expect(db.subscription.update).not.toHaveBeenCalled();
   });
 
   it("still sends web-plan events down the web path", async () => {
-    await lemonSqueezyWebhook(webhook(subscriptionEvent("subscription_created", "w1", { status: "active", variant_id: 111 })));
+    const res = await lemonSqueezyWebhook(webhook(subscriptionEvent("subscription_created", "w1", { status: "active", variant_id: 111 }, checkoutIdentity("u1", "111"))));
+    expect(res.status).toBe(200);
     expect(db.subscription.update).toHaveBeenCalledTimes(1);
     expect(db.extensionSubscription.upsert).not.toHaveBeenCalled();
   });

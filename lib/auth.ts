@@ -14,9 +14,8 @@ export async function getCurrentUser() {
   if (existing) {
     if (existing.deletedAt || existing.suspendedAt) {
       console.log("[getCurrentUser] DIAGNOSTIC: existing row is deleted/suspended", {
-        clerkId: userId,
-        deletedAt: existing.deletedAt,
-        suspendedAt: existing.suspendedAt,
+        deleted: !!existing.deletedAt,
+        suspended: !!existing.suspendedAt,
       })
       return null
     }
@@ -24,22 +23,22 @@ export async function getCurrentUser() {
     // may have no Subscription row. Create one with schema defaults on access.
     if (!existing.subscription) {
       await db.subscription.upsert({ where: { userId: existing.id }, create: { userId: existing.id }, update: {} })
-      return db.user.findUnique({
+      const refreshed = await db.user.findUnique({
         where: { clerkId: userId },
         include: { profile: true, subscription: true },
       })
+      return refreshed && !refreshed.deletedAt && !refreshed.suspendedAt ? refreshed : null
     }
     return existing
   }
 
   // No DB row yet — webhook hasn't fired (common in local dev).
   // Bootstrap the user record from Clerk's session data.
-  console.log("[getCurrentUser] DIAGNOSTIC: no existing row for clerkId, bootstrapping", { clerkId: userId })
+  console.log("[getCurrentUser] DIAGNOSTIC: no existing row for clerkId, bootstrapping")
   const clerkUser = await currentUser()
   if (!clerkUser || clerkUser.id !== userId) {
     console.log("[getCurrentUser] DIAGNOSTIC: currentUser() mismatch/null", {
-      clerkId: userId,
-      clerkUserId: clerkUser?.id ?? null,
+      hasClerkUser: !!clerkUser,
     })
     return null
   }
@@ -47,7 +46,6 @@ export async function getCurrentUser() {
   const primary = clerkUser.primaryEmailAddress
   if (!primary || primary.verification?.status !== "verified") {
     console.log("[getCurrentUser] DIAGNOSTIC: primary email missing/unverified", {
-      clerkId: userId,
       hasPrimary: !!primary,
       verificationStatus: primary?.verification?.status ?? null,
     })
@@ -60,11 +58,7 @@ export async function getCurrentUser() {
   if (email) {
     const existingByEmail = await db.user.findUnique({ where: { email } })
     if (existingByEmail && existingByEmail.clerkId !== userId) {
-      console.log("[getCurrentUser] DIAGNOSTIC: email belongs to a different clerkId", {
-        thisClerkId: userId,
-        email,
-        existingRowClerkId: existingByEmail.clerkId,
-      })
+      console.log("[getCurrentUser] DIAGNOSTIC: email belongs to a different clerkId")
       return null
     }
   }
@@ -78,7 +72,15 @@ export async function getCurrentUser() {
       usage: { create: {} },
     },
     update: {},
+  }).catch(async (err: unknown) => {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
+      // Nested creates can race a webhook or another initial request. Read the
+      // winner only by the authenticated Clerk ID, never by email.
+      return db.user.findUnique({ where: { clerkId: userId } })
+    }
+    throw err
   })
+  if (!created || created.deletedAt || created.suspendedAt) return null
 
   // Reaching here means no User row existed for this clerkId (nor for this
   // email, checked above) before this call — a genuinely new signup. Apply
@@ -88,15 +90,16 @@ export async function getCurrentUser() {
   if (email) {
     try {
       await applyPendingPrefill(created.id, email)
-    } catch (err) {
-      console.error("[auth] pending prefill apply failed:", err)
+    } catch {
+      console.error("[auth] pending prefill apply failed:")
     }
   }
 
-  return db.user.findUnique({
+  const refreshed = await db.user.findUnique({
     where: { clerkId: userId },
     include: { profile: true, subscription: true },
   })
+  return refreshed && !refreshed.deletedAt && !refreshed.suspendedAt ? refreshed : null
 }
 
 export async function requireUser() {

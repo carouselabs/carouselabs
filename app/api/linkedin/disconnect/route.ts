@@ -10,6 +10,8 @@ export async function POST() {
   const user = await db.user.findUnique({ where: { clerkId: userId } })
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
+  if (user.suspendedAt || user.deletedAt) return NextResponse.json({ error: "Account unavailable" }, { status: 403 })
+
   // deleteMany so this is a no-op (not a throw) when nothing is connected.
   await db.linkedInAccount.deleteMany({ where: { userId: user.id } })
 

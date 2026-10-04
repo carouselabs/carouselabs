@@ -7,7 +7,7 @@
 // trust than one whose semantics have to be looked up.
 import { beforeEach, vi } from "vitest";
 
-type AnyFn = (...args: any[]) => any;
+type AnyFn = (...args: never[]) => unknown;
 
 export interface MockEvent<T extends AnyFn = AnyFn> {
   addListener(fn: T): void;
@@ -72,7 +72,7 @@ export function createChromeMock() {
     },
   };
 
-  const onMessage = createEvent<(message: any, sender: chrome.runtime.MessageSender, sendResponse: AnyFn) => any>();
+  const onMessage = createEvent<(message: unknown, sender: chrome.runtime.MessageSender, sendResponse: (...args: unknown[]) => void) => unknown>();
 
   // Messages this context sent with runtime.sendMessage. In the real browser
   // they go to OTHER extension contexts, never back to this context's own

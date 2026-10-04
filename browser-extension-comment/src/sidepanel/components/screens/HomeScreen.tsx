@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ExternalLink, Minus, MousePointerClick, Plus, RotateCcw, Sparkles, Timer, X } from "lucide-react";
 import { InsertWarningModal } from "../InsertWarningModal";
 import { ensureContentScript, noContentScriptMessage, sendToTab } from "@/lib/tabs";
 import { markHistoryAction } from "@/lib/history";
@@ -14,8 +15,10 @@ import {
   setExtensionAccess,
   useExtensionAccess,
 } from "@/lib/extensionAccess";
+import { generationPerf } from "@/lib/generationPerf";
 import {
   apiFetch,
+  apiStream,
   ApiError,
   fetchExtConfig,
   LINKEDIN_FEED_URL,
@@ -25,7 +28,13 @@ import {
   type MeResponse,
   type RewriteResponse,
 } from "@/lib/api";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LoadingField } from "@/components/ui/loading-field";
+import { Textarea } from "@/components/ui/textarea";
+import { Initials } from "../Initials";
+import { ResultCard } from "../ResultCard";
 import {
   Select,
   SelectContent,
@@ -93,6 +102,15 @@ interface SelectedPost {
 
 type InsertMode = "comment" | "reply" | "connect";
 
+// Plain text posts are the norm, so only the other kinds get a label.
+const POST_TYPE_LABEL: Record<SelectedPost["type"], string | null> = {
+  text: null,
+  image: "Image",
+  article: "Article",
+  poll: "Poll",
+  repost: "Repost",
+};
+
 type LoadState = "loading" | "ready" | "error";
 
 // 4xx messages are written for the user and say something actionable ("out of
@@ -130,10 +148,26 @@ export function HomeScreen({ onCreateProfile }: Props) {
   // including the user's own edits. Every action below (Copy, Shorter, Longer)
   // operates on this value rather than on the last thing the model returned.
   const [comment, setComment] = useState("");
+  // Whether the result card is showing. Separate from `comment` so that
+  // clearing the box by hand keeps the card (and the box being typed in) on
+  // screen; only a new post or a failed generation takes it away.
+  const [hasResult, setHasResult] = useState(false);
+  // True while a just-arrived comment is being typed into the box word by
+  // word (see revealComment below) rather than dropped in all at once. Rolled
+  // into `busy` further down so Copy/Insert/Rewrite and hand-editing are all
+  // blocked until the full text has actually landed in `comment`.
+  const [revealing, setRevealing] = useState(false);
+  const revealCancelRef = useRef<(() => void) | null>(null);
+  // Generate streams the comment in as the model writes it. Text arrives a
+  // word or two at a time, so the box is repainted at most once per frame,
+  // always with the newest text.
+  const pendingTextRef = useRef<string | null>(null);
+  const textFrameRef = useRef<number | null>(null);
+  const perfRef = useRef<ReturnType<typeof generationPerf> | null>(null);
   // The output can land below the fold once profile pickers/instructions have
   // pushed the page tall — scrolled into view automatically so a fresh
   // result is never hidden behind a scroll the user has to find themselves.
-  const outputRef = useRef<HTMLDivElement>(null);
+  const outputRef = useRef<HTMLElement>(null);
   // Row created by the last successful generate, so Copy can mark it COPIED.
   // Cleared on a new post: copying then would tag the wrong row.
   const [historyId, setHistoryId] = useState<string | null>(null);
@@ -188,6 +222,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
       // Profile selection above is untouched.
       setSelectedPost(post);
       setComment("");
+      setHasResult(false);
       setHistoryId(null);
       setCopied(false);
       setGenerateError(null);
@@ -318,7 +353,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
   // Button-state table. "Logged out" is not checked here: App.tsx renders
   // SignInScreen instead of this component when there is no token, so an
   // unauthenticated user never reaches these controls.
-  const busy = generating || rewriting !== null;
+  const busy = generating || rewriting !== null || revealing;
   const hasComment = comment.trim().length > 0;
   // True only once the free generations are known to be used up without a
   // subscription. Never while /api/ext/me is still in flight, nor while the
@@ -373,19 +408,114 @@ export function HomeScreen({ onCreateProfile }: Props) {
     };
   }, []);
 
+  // Cancel any in-flight reveal or queued streamed text when the screen
+  // itself unmounts, so neither calls setState after the component is gone.
+  useEffect(() => {
+    return () => {
+      revealCancelRef.current?.();
+      cancelQueuedText();
+    };
+  }, []);
+
+  // When streamed text first reaches the DOM — "first visible text" in the
+  // [perf] line (src/lib/generationPerf.ts).
+  useLayoutEffect(() => {
+    if (generating && comment) perfRef.current?.mark("shown");
+  }, [generating, comment]);
+
+  function queueStreamedText(text: string) {
+    pendingTextRef.current = text;
+    if (textFrameRef.current !== null) return;
+    textFrameRef.current = requestAnimationFrame(() => {
+      textFrameRef.current = null;
+      const next = pendingTextRef.current;
+      pendingTextRef.current = null;
+      if (next !== null) setComment(next);
+    });
+  }
+
+  function cancelQueuedText() {
+    if (textFrameRef.current !== null) cancelAnimationFrame(textFrameRef.current);
+    textFrameRef.current = null;
+    pendingTextRef.current = null;
+  }
+
+  // Shorter/Longer only (Generate streams real text as it's written): types
+  // `text` into the comment box a couple of words at a time instead of
+  // dropping the whole thing in at once. The rewrite is already complete when
+  // this runs, so it adds no real wait. ~12ms per 2-word chunk clears even a
+  // long comment in well under a second. Cancellable so a newer result always
+  // wins over a stale one still typing.
+  function revealComment(text: string) {
+    revealCancelRef.current?.();
+
+    if (!text) {
+      setComment("");
+      setRevealing(false);
+      return;
+    }
+
+    const words = text.match(/\S+\s*/g) ?? [text];
+    let index = 0;
+    let cancelled = false;
+    revealCancelRef.current = () => {
+      cancelled = true;
+    };
+
+    setComment("");
+    setRevealing(true);
+
+    function tick() {
+      if (cancelled) return;
+      index = Math.min(index + 2, words.length);
+      setComment(words.slice(0, index).join(""));
+      if (index >= words.length) {
+        setRevealing(false);
+        revealCancelRef.current = null;
+        return;
+      }
+      window.setTimeout(tick, 12);
+    }
+    tick();
+  }
+
   // Regenerate is the same call as Generate: same post, same profile, same
   // cost. The only difference is that it replaces existing output.
   async function handleGenerate() {
     if (!selectedPost || !selectedId) return;
 
+    const perf = generationPerf();
+    perfRef.current = perf;
+    revealCancelRef.current?.();
+    cancelQueuedText();
     setGenerating(true);
     setGenerateError(null);
     setComment("");
     setHistoryId(null);
     setCopied(false);
 
+    // Streamed text is a draft: the box stays read-only and Copy/Insert stay
+    // off (`busy`) until the final event, whose comment has passed every
+    // guardrail and replaces the draft. The result card shows from the click
+    // on (`generating`), with a skeleton until the first words arrive.
+    let scrolled = false;
+    const handlers = {
+      onRequest: () => perf.mark("request"),
+      onStart: () => perf.mark("start"),
+      onText: (text: string) => {
+        if (text) perf.mark("firstText");
+        queueStreamedText(text);
+        if (text && !scrolled) {
+          scrolled = true;
+          outputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      },
+      // A discarded draft: back to the thinking dots until the next one.
+      onRetry: () => queueStreamedText(""),
+    };
+
     try {
-      const res = await apiFetch<GenerateResponse>("/api/ext/generate", {
+      const res = await apiStream<GenerateResponse>("/api/ext/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -402,13 +532,20 @@ export function HomeScreen({ onCreateProfile }: Props) {
           // route to the reply prompt.
           reply: reply ? { thread: reply.thread, isOwnPost: reply.isOwnPost } : undefined,
         }),
-      });
+      }, handlers);
 
+      cancelQueuedText();
       setComment(res.comment);
+      setHasResult(true);
+      perf.mark("final");
       setHistoryId(res.historyId);
       noteFreeRemaining(res.freeRemaining);
-      outputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      if (!scrolled) outputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      perf.report(res.timing);
     } catch (err) {
+      cancelQueuedText();
+      setComment("");
+      setHasResult(false);
       // The paywall's 402 swaps in the unlock card, which says it better.
       if (!notePaywallError(err)) setGenerateError(userFacingError(err));
     } finally {
@@ -439,7 +576,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
         body: JSON.stringify({ currentComment: comment, direction, historyId }),
       });
 
-      setComment(res.comment);
+      revealComment(res.comment);
       noteFreeRemaining(res.freeRemaining);
     } catch (err) {
       if (!notePaywallError(err)) setGenerateError(userFacingError(err));
@@ -595,26 +732,80 @@ export function HomeScreen({ onCreateProfile }: Props) {
     );
   }
 
+  const noun = reply ? "reply" : "comment";
+  // The result card replaces the Generate button from the click on, so the
+  // wait, the streaming text and the finished comment all happen in one place.
+  const showResult = generating || hasResult;
+  const showInsert = insertEnabled && showInsertPref;
+  const postTypeLabel = selectedPost ? POST_TYPE_LABEL[selectedPost.type] : null;
+
+  const errorBox = generateError && <Alert>{generateError}</Alert>;
+
+  const resultCard = (
+    <ResultCard
+      sectionRef={outputRef}
+      noun={noun}
+      value={comment}
+      onChange={(value) => {
+        setComment(value);
+        setCopied(false);
+      }}
+      generating={generating}
+      busy={busy}
+      meta={rewriting === "shorter" ? "Shortening…" : rewriting === "longer" ? "Lengthening…" : undefined}
+      copied={copied}
+      copyDisabled={actionsDisabled}
+      onCopy={handleCopy}
+      // Hidden entirely when the server kill switch is off, regardless of the
+      // per-install preference.
+      insert={showInsert ? { disabled: actionsDisabled, inserting, onClick: handleInsertClick } : null}
+      tools={
+        <>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="px-2.5"
+            disabled={rewriteDisabled}
+            loading={rewriting === "shorter"}
+            onClick={() => handleRewrite("shorter")}
+          >
+            {rewriting !== "shorter" && <Minus aria-hidden />}
+            Shorter
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="px-2.5"
+            disabled={rewriteDisabled}
+            loading={rewriting === "longer"}
+            onClick={() => handleRewrite("longer")}
+          >
+            {rewriting !== "longer" && <Plus aria-hidden />}
+            Longer
+          </Button>
+        </>
+      }
+      onRegenerate={handleGenerate}
+      regenerateDisabled={generateDisabled}
+    />
+  );
+
   return (
     <div className="flex flex-col gap-4 p-4">
       {insertWarningModal}
 
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-muted-foreground">Comment Profile</label>
+        <label id="home-profile-label" className="text-xs font-medium text-muted-foreground">
+          Comment profile
+        </label>
 
-        {state === "loading" && (
-          <div className="text-sm text-muted-foreground">Loading profiles…</div>
-        )}
+        {state === "loading" && <LoadingField>Loading profiles…</LoadingField>}
 
-        {state === "error" && (
-          <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
-            {errorMessage}
-          </div>
-        )}
+        {state === "error" && <Alert>{errorMessage}</Alert>}
 
         {state === "ready" && (
           <Select value={selectedId} onValueChange={handleValueChange}>
-            <SelectTrigger>
+            <SelectTrigger aria-labelledby="home-profile-label">
               <SelectValue placeholder="Select a profile" />
             </SelectTrigger>
             <SelectContent>
@@ -646,7 +837,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
               )}
 
               <SelectSeparator />
-              <SelectItem value={CREATE_CUSTOM_VALUE} className="font-medium text-primary">
+              <SelectItem value={CREATE_CUSTOM_VALUE} className="font-medium text-primary-text">
                 + Create custom profile
               </SelectItem>
             </SelectContent>
@@ -657,160 +848,141 @@ export function HomeScreen({ onCreateProfile }: Props) {
       {/* Pacing nudge. Advisory only: it never blocks generating, because the
           judgement of what looks like automation is the user's to make. */}
       {commentsToday >= DAILY_NUDGE_THRESHOLD && !nudgeDismissed && (
-        <div className="flex items-start gap-2 rounded-md border border-input bg-muted/50 p-2">
-          <p className="flex-1 text-xs text-muted-foreground">
+        <div role="note" className="flex animate-fade-in items-start gap-2 rounded-lg border border-warning/30 bg-warning-soft p-3">
+          <Timer aria-hidden className="mt-px h-4 w-4 shrink-0 text-warning" />
+          <p className="flex-1 text-xs leading-relaxed text-foreground/80">
             Slow down: lots of comments in a short time can look like automation.
           </p>
           <button
+            type="button"
             onClick={() => setNudgeDismissed(true)}
             aria-label="Dismiss"
-            className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+            className="-m-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors duration-fast hover:bg-foreground/5 hover:text-foreground"
           >
-            ×
+            <X aria-hidden className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
 
-      {/* Nothing below this is reachable on a non-LinkedIn tab, so it replaces
-          the whole flow rather than sitting alongside it. */}
-      {onLinkedIn === false && (
-        <div className="space-y-2 rounded-md border border-dashed border-input p-3">
-          <p className="text-xs text-muted-foreground">Open LinkedIn to start commenting.</p>
-          <Button size="sm" onClick={() => chrome.tabs.create({ url: LINKEDIN_FEED_URL })}>
-            Open LinkedIn
-          </Button>
+      {selectedPost ? (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">{reply ? "Replying to" : "Selected post"}</p>
+
+          {reply ? (
+            // Reply mode leads with the comment being answered, since that is
+            // what the reply responds to; the post is only context underneath.
+            // Keyed by capture so a new pick fades in rather than swapping silently.
+            <div key={selectedPost.capturedAt} className="animate-fade-in space-y-2 rounded-lg border border-primary/25 bg-card p-3 shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-sm font-semibold">
+                  {reply.targetAuthor ? `${reply.targetAuthor}'s comment` : "A comment"}
+                </span>
+                <Badge variant="accent">Reply</Badge>
+              </div>
+              <p className="line-clamp-3 border-l-2 border-primary/30 pl-2.5 text-sm leading-relaxed text-foreground/85">
+                {reply.targetText}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {reply.isOwnPost
+                  ? "On your post"
+                  : `On ${selectedPost.authorName ? `${selectedPost.authorName}'s` : "a"} post`}
+                {reply.thread.length > 1 && ` · ${reply.thread.length} comments in thread`}
+              </p>
+            </div>
+          ) : (
+            <div key={selectedPost.capturedAt} className="animate-fade-in space-y-2 rounded-lg border bg-card p-3 shadow-sm">
+              <div className="flex items-center gap-2.5">
+                <Initials name={selectedPost.authorName} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-semibold">{selectedPost.authorName || "Unknown author"}</span>
+                    {postTypeLabel && <Badge>{postTypeLabel}</Badge>}
+                  </div>
+                  {selectedPost.authorHeadline && (
+                    <p className="truncate text-xs text-muted-foreground" title={selectedPost.authorHeadline}>
+                      {selectedPost.authorHeadline}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {selectedPost.text && (
+                <p className="line-clamp-3 text-sm leading-relaxed text-foreground/85">{selectedPost.text}</p>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        // Nothing to write about yet: one place that says what to do next,
+        // and, off LinkedIn, the button to get there.
+        <div className="flex animate-fade-in flex-col items-center gap-3 rounded-lg border border-dashed border-input px-4 py-6 text-center">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground">
+            <MousePointerClick aria-hidden className="h-5 w-5" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold">
+              {onLinkedIn === false ? "Open LinkedIn to start" : "Pick a post on LinkedIn"}
+            </p>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Click <span className="font-medium text-foreground">Comment</span> under any post, or{" "}
+              <span className="font-medium text-foreground">Reply</span> under a comment. It shows up here.
+            </p>
+          </div>
+          {onLinkedIn === false && (
+            <Button size="sm" onClick={() => chrome.tabs.create({ url: LINKEDIN_FEED_URL })}>
+              Open LinkedIn
+              <ExternalLink aria-hidden />
+            </Button>
+          )}
         </div>
       )}
 
-      <div className="space-y-1.5">
-        <label className="text-xs font-medium text-muted-foreground">
-          {reply ? "Replying to" : "Selected post"}
-        </label>
+      {selectedPost && (
+        <div className="space-y-1.5">
+          <label htmlFor="home-extra-instruction" className="text-xs font-medium text-muted-foreground">
+            Extra instruction <span className="font-normal">(optional)</span>
+          </label>
+          <Textarea
+            id="home-extra-instruction"
+            autoGrow
+            value={extraInstruction}
+            onChange={(e) => setExtraInstruction(e.target.value)}
+            readOnly={generating}
+            rows={1}
+            placeholder="e.g. mention my own experience with this"
+            className="max-h-40 min-h-[2.625rem]"
+          />
+        </div>
+      )}
 
-        {selectedPost && reply ? (
-          // Reply mode leads with the comment being answered, since that is
-          // what the reply responds to; the post is only context underneath.
-          <div className="space-y-1 rounded-md border border-primary/40 bg-background p-3 text-sm">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-medium">
-                Replying to {reply.targetAuthor || "a"}
-                {reply.targetAuthor ? "'s" : ""} comment
-              </span>
-              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] uppercase text-primary">
-                Reply
-              </span>
-            </div>
-            <p className="line-clamp-2 text-sm text-foreground/90">{reply.targetText}</p>
-            <div className="text-xs text-muted-foreground">
-              {reply.isOwnPost
-                ? "On your post"
-                : `On ${selectedPost.authorName ? `${selectedPost.authorName}'s` : "a"} post`}
-              {reply.thread.length > 1 && ` · ${reply.thread.length} comments in thread`}
-            </div>
-          </div>
-        ) : selectedPost ? (
-          <div className="space-y-1 rounded-md border border-input bg-background p-3 text-sm">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-medium">{selectedPost.authorName || "Unknown author"}</span>
-              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                {selectedPost.type}
-              </span>
-            </div>
-            {selectedPost.authorHeadline && (
-              <div className="text-xs text-muted-foreground">{selectedPost.authorHeadline}</div>
-            )}
-            <p className="line-clamp-2 text-sm text-foreground/90">{selectedPost.text}</p>
-          </div>
-        ) : (
-          <div className="rounded-md border border-dashed border-input p-3 text-xs text-muted-foreground">
-            Click Comment on a LinkedIn post, or Reply on a comment, to start
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-1.5">
-        <label className="text-xs font-medium text-muted-foreground">
-          Extra instruction <span className="font-normal">(optional)</span>
-        </label>
-        <textarea
-          value={extraInstruction}
-          onChange={(e) => setExtraInstruction(e.target.value)}
-          disabled={!selectedPost || generating}
-          rows={2}
-          placeholder="e.g. mention my own experience with this"
-          className="w-full resize-none rounded-md border border-input bg-background p-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-        />
-      </div>
-
-      {/* Used-up free generations replace Generate entirely (see UnlockCard). */}
-      {paywalled ? (
+      {showResult ? (
+        <>
+          {resultCard}
+          {errorBox}
+          {/* The last free generation still lands here to be copied; the
+              card below is what the next one needs. */}
+          {paywalled && <UnlockCard />}
+        </>
+      ) : paywalled ? (
+        // Used-up free generations replace Generate entirely (see UnlockCard).
         <UnlockCard />
       ) : (
-        <>
-          <Button disabled={generateDisabled} onClick={handleGenerate}>
-            {generating ? "Generating…" : comment ? "Regenerate" : "Generate"}
+        <div className="space-y-2">
+          {errorBox}
+          <Button className="w-full" disabled={generateDisabled} onClick={handleGenerate}>
+            {generateError ? <RotateCcw aria-hidden /> : <Sparkles aria-hidden />}
+            {generateError ? "Try again" : "Generate"}
           </Button>
-          <FreeGenerationsNote />
-        </>
-      )}
-
-      {postHasNoText && !paywalled && (
-        <p className="text-xs text-muted-foreground">
-          {reply
-            ? "Couldn't read that comment. Click Reply on it again."
-            : "Couldn't read this post. Try opening it in its own page."}
-        </p>
-      )}
-
-      {generateError && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
-          {generateError}
+          {postHasNoText && (
+            <p className="text-xs text-muted-foreground">
+              {reply
+                ? "Couldn't read that comment. Click Reply on it again."
+                : "Couldn't read this post. Try opening it in its own page."}
+            </p>
+          )}
         </div>
       )}
 
-      <div ref={outputRef} className="space-y-1.5">
-        <label className="text-xs font-medium text-muted-foreground">{reply ? "Reply" : "Comment"}</label>
-        <textarea
-          value={comment}
-          onChange={(e) => {
-            setComment(e.target.value);
-            setCopied(false);
-          }}
-          disabled={!hasComment || busy}
-          rows={6}
-          placeholder="Your generated comment appears here, and can be edited before copying."
-          className="w-full resize-y rounded-md border border-input bg-background p-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-        />
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="secondary" disabled={actionsDisabled} onClick={handleCopy}>
-          {copied ? "Copied" : "Copy"}
-        </Button>
-        {/* Hidden entirely when the server kill switch is off, regardless of
-            the per-install preference. */}
-        {insertEnabled && showInsertPref && (
-          <Button size="sm" variant="outline" disabled={actionsDisabled} onClick={handleInsertClick}>
-            {inserting ? "Inserting…" : "Insert"}
-          </Button>
-        )}
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={rewriteDisabled}
-          onClick={() => handleRewrite("shorter")}
-        >
-          {rewriting === "shorter" ? "Shortening…" : "Shorter"}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={rewriteDisabled}
-          onClick={() => handleRewrite("longer")}
-        >
-          {rewriting === "longer" ? "Lengthening…" : "Longer"}
-        </Button>
-      </div>
+      {!paywalled && <FreeGenerationsNote />}
     </div>
   );
 }

@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
+import { ownedR2Key } from "@/lib/postInput"
 import { isValidPlatform, MAX_PLATFORM_IMAGES } from "@/lib/platforms"
 import type { Prisma } from "@prisma/client"
 
@@ -32,6 +33,8 @@ export async function POST(req: Request) {
     const body = await req.json()
 
     caption = typeof body.caption === "string" ? body.caption.trim() : ""
+    if (caption.length > 100_000) throw new Error("Caption is too long")
+    if (body.imageUrls !== undefined && (!Array.isArray(body.imageUrls) || body.imageUrls.some((u: unknown) => typeof u !== "string"))) throw new Error("Invalid images")
 
     imageUrls = Array.isArray(body.imageUrls)
       ? body.imageUrls.filter((u: unknown): u is string => typeof u === "string")
@@ -40,8 +43,7 @@ export async function POST(req: Request) {
     // Every image must be one WE uploaded (see custom-post/upload/route.ts) —
     // never accept an arbitrary client-supplied URL that would then be
     // embedded in the user's own scheduled/published post.
-    const publicBase = process.env.CLOUDFLARE_R2_PUBLIC_URL
-    if (publicBase && imageUrls.some((u) => !u.startsWith(publicBase))) {
+    if (imageUrls.some((u) => u.length > 4096 || !ownedR2Key(u, user.id, ["custom-posts", "posts", "carousel", "thumbnails"]))) {
       throw new Error("Invalid image URL")
     }
 
@@ -51,18 +53,20 @@ export async function POST(req: Request) {
       throw new Error("Pick at least one platform")
     }
     if (!body.platforms.every(isValidPlatform)) throw new Error("Unsupported platform")
-    platforms = body.platforms
+    platforms = [...new Set(body.platforms as string[])]
 
     if (body.platformCaptions && typeof body.platformCaptions === "object") {
       const cleaned: Record<string, string> = {}
       for (const [key, value] of Object.entries(body.platformCaptions as Record<string, unknown>)) {
         if (isValidPlatform(key) && typeof value === "string" && value.trim()) {
+          if (value.length > 100_000) throw new Error("Platform caption is too long")
           cleaned[key] = value.trim()
         }
       }
       if (Object.keys(cleaned).length > 0) platformCaptions = cleaned
     }
 
+    if (Array.isArray(body.tagIds) && (body.tagIds.length > 100 || body.tagIds.some((t: unknown) => typeof t !== "string" || t.length > 128))) throw new Error("Invalid tags")
     tagIds = Array.isArray(body.tagIds)
       ? body.tagIds.filter((t: unknown): t is string => typeof t === "string")
       : []

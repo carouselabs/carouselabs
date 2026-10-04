@@ -420,7 +420,7 @@ export async function POST(req: Request) {
       } catch (err) {
         console.error("[generate/caption] Claude stream error:", err)
         // Generation failed after the charge — give the credits back.
-        await refundCreditsForAction(user.id, chargedAction)
+        await refundCreditsForAction(charge.receipt)
         controller.enqueue(encoder.encode("\n\n[Generation failed — please try again]"))
       } finally {
         controller.close()

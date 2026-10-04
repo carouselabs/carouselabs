@@ -7,6 +7,13 @@
 // account's free generations. The free use is reserved just before the model
 // call and given back if the request fails, so a user is never charged for
 // output they never saw, and a failed request writes no CommentHistory row.
+//
+// Two response shapes, one pipeline. A request with `Accept: text/event-stream`
+// (the side panel from 1.3.0) gets the comment as it is written, as
+// server-sent events; anything else (1.2.0 and earlier) gets the finished
+// comment as JSON, exactly as before. Every check — auth, daily limit, body,
+// profile, paywall — runs before either response starts, so failures keep
+// their JSON bodies and status codes in both modes.
 import { NextResponse } from "next/server"
 import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { db } from "@/lib/db"
@@ -24,7 +31,8 @@ import {
   type CommentReplyInput,
   type ReplyThreadEntryInput,
 } from "@/lib/ai/prompts/commentPrompt"
-import { callCommentModel, parseComment, sanitizeComment, PRIMARY_MODEL } from "@/lib/ai/commentModel"
+import { parseComment, sanitizeComment, streamCommentModel } from "@/lib/ai/commentModel"
+import { extractPartialComment, visibleCommentText } from "@/lib/ai/commentText"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
 
 // Caps on a reply payload, which arrives from a scraped page: enough for any
@@ -63,8 +71,204 @@ function parseReply(raw: unknown): CommentReplyInput | null {
   }
 }
 
+// Milliseconds spent in each stage of one request, for the Server-Timing
+// header, the stream's final event and one log line. Durations only: no
+// content, no identifiers.
+function stageTimer() {
+  const start = performance.now()
+  let last = start
+  const stages: Record<string, number> = {}
+  return {
+    stages,
+    mark(name: string) {
+      const now = performance.now()
+      stages[name] = Math.round(now - last)
+      last = now
+    },
+    elapsed: () => Math.round(performance.now() - start),
+  }
+}
+
+interface GenerationInput {
+  systemMessage: string
+  userMessage: string
+  min: number
+  max: number
+  // Everything the model is allowed to source a number from.
+  numberSources: string
+}
+
+interface GenerationHooks {
+  // The current attempt's comment so far, each time more of it can be shown.
+  // "" means clear what was shown.
+  onText?: (text: string) => void
+  // The attempt that was just shown has been discarded and another begins.
+  onRetry?: (attempt: number) => void
+}
+
+interface GenerationResult {
+  comment: string
+  // The model that wrote `comment` ("" when every attempt failed).
+  model: string
+  attempts: number
+  // From the start of generation: first token of the first attempt, and the
+  // first moment any comment text could be shown.
+  ttftMs: number | null
+  firstTextMs: number | null
+}
+
+async function generateComment(input: GenerationInput, hooks: GenerationHooks = {}): Promise<GenerationResult> {
+  const start = performance.now()
+  let ttftMs: number | null = null
+  let firstTextMs: number | null = null
+
+  let comment = ""
+  let commentModel = ""
+  // A generation that is clean but off-length is held here rather than
+  // discarded: if the retry then errors outright, returning a slightly long
+  // comment beats failing the request entirely. Fabricated output is never
+  // stored here: returning it would defeat the guardrail below.
+  let offLengthFallback: { text: string; model: string } | null = null
+  // Set when the previous attempt invented a figure, so the retry carries the
+  // blunter reminder rather than the same message that already failed.
+  let remindAboutFabrication = false
+  let attempts = 0
+
+  // Two attempts: the first failure (unparseable, empty, mostly-banned filler,
+  // invented figures, or wildly off the profile's length) is retried once
+  // before giving up.
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    attempts = attempt
+    if (attempt > 1) hooks.onRetry?.(attempt)
+
+    const message = remindAboutFabrication
+      ? `${input.userMessage}\n\n${ANTI_FABRICATION_REMINDER}`
+      : input.userMessage
+
+    // Mid-stream guard: the text shown so far is checked for invented figures
+    // BEFORE it is shown, so a made-up statistic never reaches the screen.
+    // Only whole words are ever checked (see visibleCommentText), so "8" is
+    // never judged while "80%" is still arriving. Finding one stops the model
+    // there — this attempt would be discarded anyway — rather than paying for
+    // the rest of it.
+    const controller = new AbortController()
+    let invented: string[] = []
+    let shown = ""
+    const show = (text: string) => {
+      if (text === shown) return
+      shown = text
+      if (text) firstTextMs ??= performance.now() - start
+      hooks.onText?.(text)
+    }
+
+    let raw: string
+    let model: string
+    try {
+      const result = await streamCommentModel(input.systemMessage, message, "ext/generate", {
+        signal: controller.signal,
+        onReset: () => show(""),
+        onRaw: (sofar) => {
+          const partial = extractPartialComment(sofar)
+          if (!partial) return
+          const visible = visibleCommentText(partial.text, partial.complete)
+          const unsourced = findUnsourcedNumbers(visible, input.numberSources)
+          if (unsourced.length > 0) {
+            invented = unsourced
+            controller.abort()
+            return
+          }
+          show(visible)
+        },
+      })
+      raw = result.raw
+      model = result.model
+      if (attempt === 1 && result.ttftMs !== null) ttftMs = result.ttftMs
+    } catch (err) {
+      if (invented.length > 0) {
+        console.warn(
+          `[ext/generate] attempt ${attempt}: unsourced figures (${invented.join(", ")}) not in post or instruction, stopped mid-stream`,
+        )
+        remindAboutFabrication = true
+        continue
+      }
+      console.error(`[ext/generate] attempt ${attempt}: both models failed:`, err)
+      continue
+    }
+
+    const parsed = parseComment(raw)
+    if (!parsed?.trim()) {
+      console.warn(`[ext/generate] attempt ${attempt}: unparseable response:`, raw.slice(0, 300))
+      continue
+    }
+
+    const { comment: cleaned, removedChars } = sanitizeComment(parsed)
+
+    // Sanitising away a large slice means the model leaned on banned filler
+    // rather than saying anything, so it's worth one more roll.
+    if (removedChars > parsed.length * 0.25) {
+      console.warn(`[ext/generate] attempt ${attempt}: ${removedChars} chars stripped, retrying`)
+      continue
+    }
+
+    // Invented figures are checked before anything else that could let the
+    // text through: a comment carrying a made-up statistic is never returned,
+    // and never kept as a fallback, even on the final attempt. Failing the
+    // request is the safer outcome, since the user posts this under their name.
+    const unsourced = findUnsourcedNumbers(cleaned, input.numberSources)
+    if (unsourced.length > 0) {
+      console.warn(
+        `[ext/generate] attempt ${attempt}: unsourced figures (${unsourced.join(", ")}) not in post or instruction, discarding`,
+      )
+      remindAboutFabrication = true
+      continue
+    }
+
+    // Generic-AI tells are retried rather than stripped: they are positional
+    // or mid-sentence, so deleting them would leave broken text. A second roll
+    // usually lands somewhere more specific.
+    const weak = WEAK_COMMENT_PATTERNS.filter(({ pattern }) => pattern.test(cleaned))
+    if (weak.length > 0 && attempt === 1) {
+      console.warn(
+        `[ext/generate] attempt ${attempt}: weak patterns (${weak
+          .map((w) => w.label)
+          .join(", ")}), retrying`,
+      )
+      offLengthFallback ??= { text: cleaned, model }
+      continue
+    }
+
+    if (cleaned.length < input.min || cleaned.length > input.max) {
+      console.warn(
+        `[ext/generate] attempt ${attempt}: length ${cleaned.length} outside ${input.min}-${input.max}, retrying`,
+      )
+      offLengthFallback ??= { text: cleaned, model }
+      continue
+    }
+
+    comment = cleaned
+    commentModel = model
+    break
+  }
+
+  if (!comment && offLengthFallback) {
+    comment = offLengthFallback.text
+    commentModel = offLengthFallback.model
+  }
+
+  return { comment, model: commentModel, attempts, ttftMs, firstTextMs }
+}
+
+const GENERIC_FAILURE = "Something went wrong, try again"
+
+function sse(event: string, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+}
+
 export async function POST(req: Request) {
+  const timer = stageTimer()
+
   const user = await getUserFromCommentExtensionToken(req)
+  timer.mark("auth")
   if (!user) {
     return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   }
@@ -72,6 +276,7 @@ export async function POST(req: Request) {
   // Shared daily cap across every extension generation route. Generate and
   // Regenerate both count, since both call this route.
   const limited = await extDailyLimitResponse(user.id)
+  timer.mark("limit")
   if (limited) return limited
 
   let profileId: string
@@ -120,12 +325,14 @@ export async function POST(req: Request) {
   const profile = await db.commentProfile.findFirst({
     where: { id: profileId, OR: [{ isSystem: true }, { userId: user.id }] },
   })
+  timer.mark("profile")
   if (!profile) {
     return NextResponse.json({ error: "Comment profile not found" }, { status: 404 })
   }
 
   // Last check before the model call, so a blocked account never burns one.
   const gate = await reserveExtGeneration(user.id)
+  timer.mark("reserve")
   if (!gate.ok) return gate.response
 
   const systemMessage = reply
@@ -137,7 +344,6 @@ export async function POST(req: Request) {
   const replyTarget = reply?.thread.find((entry) => entry.isTarget) ?? null
   const { min, max } = targetLengthRange(profile.length)
 
-  // Everything the model is allowed to source a number from.
   // In reply mode the thread is part of what the model was shown, so a figure
   // quoted from any comment in it counts as sourced.
   const numberSources = [
@@ -148,126 +354,170 @@ export async function POST(req: Request) {
     ...(reply?.thread.map((entry) => entry.text) ?? []),
   ].join(" ")
 
-  let comment = ""
-  // A generation that is clean but off-length is held here rather than
-  // discarded: if the retry then errors outright, returning a slightly long
-  // comment beats failing the request entirely. Fabricated output is never
-  // stored here: returning it would defeat the guardrail below.
-  let offLengthFallback = ""
-  // Set when the previous attempt invented a figure, so the retry carries the
-  // blunter reminder rather than the same message that already failed.
-  let remindAboutFabrication = false
-
-  // Two attempts: the first failure (unparseable, empty, mostly-banned filler,
-  // invented figures, or wildly off the profile's length) is retried once
-  // before giving up.
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const message = remindAboutFabrication
-      ? `${userMessage}\n\n${ANTI_FABRICATION_REMINDER}`
-      : userMessage
-
-    let raw: string
-    try {
-      raw = await callCommentModel(systemMessage, message, "ext/generate")
-    } catch (err) {
-      console.error(`[ext/generate] attempt ${attempt}: both models failed:`, err)
-      continue
-    }
-
-    const parsed = parseComment(raw)
-    if (!parsed?.trim()) {
-      console.warn(`[ext/generate] attempt ${attempt}: unparseable response:`, raw.slice(0, 300))
-      continue
-    }
-
-    const { comment: cleaned, removedChars } = sanitizeComment(parsed)
-
-    // Sanitising away a large slice means the model leaned on banned filler
-    // rather than saying anything, so it's worth one more roll.
-    if (removedChars > parsed.length * 0.25) {
-      console.warn(`[ext/generate] attempt ${attempt}: ${removedChars} chars stripped, retrying`)
-      continue
-    }
-
-    // Invented figures are checked before anything else that could let the
-    // text through: a comment carrying a made-up statistic is never returned,
-    // and never kept as a fallback, even on the final attempt. Failing the
-    // request is the safer outcome, since the user posts this under their name.
-    const unsourced = findUnsourcedNumbers(cleaned, numberSources)
-    if (unsourced.length > 0) {
-      console.warn(
-        `[ext/generate] attempt ${attempt}: unsourced figures (${unsourced.join(", ")}) not in post or instruction, discarding`,
-      )
-      remindAboutFabrication = true
-      continue
-    }
-
-    // Generic-AI tells are retried rather than stripped: they are positional
-    // or mid-sentence, so deleting them would leave broken text. A second roll
-    // usually lands somewhere more specific.
-    const weak = WEAK_COMMENT_PATTERNS.filter(({ pattern }) => pattern.test(cleaned))
-    if (weak.length > 0 && attempt === 1) {
-      console.warn(
-        `[ext/generate] attempt ${attempt}: weak patterns (${weak
-          .map((w) => w.label)
-          .join(", ")}), retrying`,
-      )
-      if (!offLengthFallback) offLengthFallback = cleaned
-      continue
-    }
-
-    if (cleaned.length < min || cleaned.length > max) {
-      console.warn(
-        `[ext/generate] attempt ${attempt}: length ${cleaned.length} outside ${min}-${max}, retrying`,
-      )
-      if (!offLengthFallback) offLengthFallback = cleaned
-      continue
-    }
-
-    comment = cleaned
-    break
-  }
-
-  if (!comment) comment = offLengthFallback
-
-  if (!comment) {
-    // The free use is given back and no history row is written — the user
-    // sees an error and can retry.
-    await gate.release()
-    return NextResponse.json(
-      { error: "Something went wrong, try again" },
-      { status: 502 },
-    )
-  }
+  const input: GenerationInput = { systemMessage, userMessage, min, max, numberSources }
+  const beforeModelMs = timer.elapsed()
 
   // action stays NONE until the user actually copies or inserts the comment;
   // the id goes back to the client so it can PATCH that field when they do.
-  const history = await db.commentHistory.create({
-    data: {
-      userId: user.id,
-      kind: reply ? "reply" : "comment",
-      profileId: profile.id,
-      profileName: profile.name,
-      postAuthor: post.author,
-      postUrl: post.url,
-      // No mode column on CommentHistory, so a reply is recorded by what it
-      // answered, which is also what the History screen should show for it.
-      postSnippet: (replyTarget
-        ? `Reply to ${replyTarget.author || "a comment"}: ${replyTarget.text}`
-        : post.text
-      ).slice(0, 280),
-      comment,
-      action: "NONE",
-      // The extension doesn't spend web-app credits (it has its own
-      // subscription), so nothing is charged against the web balance.
-      creditsUsed: 0,
-      model: PRIMARY_MODEL,
+  const saveHistory = (result: GenerationResult) =>
+    db.commentHistory.create({
+      data: {
+        userId: user.id,
+        kind: reply ? "reply" : "comment",
+        profileId: profile.id,
+        profileName: profile.name,
+        postAuthor: post.author,
+        postUrl: post.url,
+        // No mode column on CommentHistory, so a reply is recorded by what it
+        // answered, which is also what the History screen should show for it.
+        postSnippet: (replyTarget
+          ? `Reply to ${replyTarget.author || "a comment"}: ${replyTarget.text}`
+          : post.text
+        ).slice(0, 280),
+        comment: result.comment,
+        action: "NONE",
+        // The extension doesn't spend web-app credits (it has its own
+        // subscription), so nothing is charged against the web balance.
+        creditsUsed: 0,
+        // Whichever model actually wrote it, which is not always the primary.
+        model: result.model,
+      },
+    })
+
+  // One line per generation: stage durations only.
+  const logTiming = (stream: boolean, result: GenerationResult | null) => {
+    const s = timer.stages
+    console.log(
+      `[ext/generate] timing stream=${stream ? 1 : 0} model=${result?.model || "none"} attempts=${result?.attempts ?? 0}` +
+        ` auth=${s.auth} limit=${s.limit} profile=${s.profile} reserve=${s.reserve}` +
+        ` ttft=${Math.round(result?.ttftMs ?? -1)} first_text=${Math.round(result?.firstTextMs ?? -1)}` +
+        ` generate=${s.generate ?? -1} history=${s.history ?? -1} total=${timer.elapsed()}`,
+    )
+  }
+
+  const timingSummary = (result: GenerationResult) => ({
+    ...timer.stages,
+    beforeModel: beforeModelMs,
+    ttft: result.ttftMs === null ? null : Math.round(result.ttftMs),
+    firstText: result.firstTextMs === null ? null : Math.round(result.firstTextMs),
+    attempts: result.attempts,
+    model: result.model,
+    total: timer.elapsed(),
+  })
+
+  const wantsStream = (req.headers.get("accept") ?? "").includes("text/event-stream")
+
+  if (!wantsStream) {
+    const result = await generateComment(input)
+    timer.mark("generate")
+    if (!result.comment) {
+      logTiming(false, result)
+      // The free use is given back and no history row is written — the user
+      // sees an error and can retry.
+      await gate.release()
+      return NextResponse.json({ error: GENERIC_FAILURE }, { status: 502 })
+    }
+
+    const history = await saveHistory(result)
+    timer.mark("history")
+    logTiming(false, result)
+
+    const s = timer.stages
+    const serverTiming = [
+      `auth;dur=${s.auth}`,
+      `limit;dur=${s.limit}`,
+      `db;dur=${s.profile + s.reserve}`,
+      result.ttftMs === null ? null : `ai-ttft;dur=${Math.round(result.ttftMs)}`,
+      `ai;dur=${s.generate}`,
+      `history;dur=${s.history}`,
+      `total;dur=${timer.elapsed()}`,
+    ]
+      .filter(Boolean)
+      .join(", ")
+
+    return NextResponse.json(
+      {
+        comment: result.comment,
+        freeRemaining: gate.freeRemaining,
+        historyId: history.id,
+      },
+      { headers: { "Server-Timing": serverTiming } },
+    )
+  }
+
+  const encoder = new TextEncoder()
+  // Set once the client has gone (closed the panel mid-generation). Generation
+  // still finishes and is saved, exactly as a JSON request whose caller left
+  // would be; there's just nobody to send it to.
+  let gone = false
+
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: string, data: unknown) => {
+        if (gone) return
+        try {
+          controller.enqueue(encoder.encode(sse(event, data)))
+        } catch {
+          gone = true
+        }
+      }
+
+      // Sent before the model is called, so the panel can tell "the server
+      // has it" from "the model is thinking", and so any proxy in between
+      // starts forwarding the stream straight away.
+      send("start", { beforeModel: beforeModelMs })
+
+      try {
+        const result = await generateComment(input, {
+          onText: (text) => send("text", { text }),
+          onRetry: (attempt) => send("retry", { attempt }),
+        })
+        timer.mark("generate")
+
+        if (!result.comment) {
+          logTiming(true, result)
+          await gate.release()
+          send("error", { error: GENERIC_FAILURE, status: 502 })
+          return
+        }
+
+        const history = await saveHistory(result)
+        timer.mark("history")
+        logTiming(true, result)
+
+        // Authoritative: the panel replaces whatever it streamed with this.
+        // It is usually identical; it differs when the guardrails fell back
+        // to an earlier attempt's text.
+        send("final", {
+          comment: result.comment,
+          freeRemaining: gate.freeRemaining,
+          historyId: history.id,
+          timing: timingSummary(result),
+        })
+      } catch (err) {
+        console.error("[ext/generate] stream failed:", err)
+        send("error", { error: GENERIC_FAILURE, status: 500 })
+      } finally {
+        gone = true
+        try {
+          controller.close()
+        } catch {
+          // already closed by the client going away
+        }
+      }
+    },
+    cancel() {
+      gone = true
     },
   })
 
-  return NextResponse.json({
-    comment,
-    freeRemaining: gate.freeRemaining,
-    historyId: history.id,
+  return new Response(body, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      // no-transform: nothing between here and the panel may buffer or
+      // compress the stream into one late chunk.
+      "Cache-Control": "no-cache, no-transform",
+      "X-Accel-Buffering": "no",
+    },
   })
 }

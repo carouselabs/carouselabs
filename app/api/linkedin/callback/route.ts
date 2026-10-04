@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server"
+import { getCurrentUser } from "@/lib/auth"
 import { cookies } from "next/headers"
 import { NextResponse, type NextRequest } from "next/server"
 import { db } from "@/lib/db"
@@ -8,8 +8,8 @@ import { exchangeCodeForToken, getLinkedInProfile } from "@/lib/linkedin"
 // cookie set in /connect, exchange the code for a token, fetch the profile, and
 // upsert the connection — then bounce back to the account settings page.
 export async function GET(req: NextRequest) {
-  const { userId } = await auth()
-  if (!userId) return NextResponse.redirect(new URL("/sign-in", req.url))
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.redirect(new URL("/sign-in", req.url))
 
   const url = new URL(req.url)
   const code = url.searchParams.get("code")
@@ -37,8 +37,6 @@ export async function GET(req: NextRequest) {
     const token = await exchangeCodeForToken(code)
     const profile = await getLinkedInProfile(token.accessToken)
 
-    const user = await db.user.findUnique({ where: { clerkId: userId } })
-    if (!user) return NextResponse.redirect(new URL("/sign-in", req.url))
 
     const expiresAt = new Date(Date.now() + token.expiresIn * 1000)
 

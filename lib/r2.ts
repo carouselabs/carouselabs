@@ -14,12 +14,11 @@ export async function uploadToR2(
   filename: string,
   contentType = "image/png",
 ): Promise<string> {
-  console.log("[r2] Starting upload:", filename)
-  console.log("[r2] Account ID:", process.env.CLOUDFLARE_R2_ACCOUNT_ID)
-  console.log("[r2] Bucket:", process.env.CLOUDFLARE_R2_BUCKET_NAME)
-  console.log("[r2] Public URL:", process.env.CLOUDFLARE_R2_PUBLIC_URL)
-  console.log("[r2] Access Key exists:", !!process.env.CLOUDFLARE_R2_ACCESS_KEY_ID)
-  console.log("[r2] Secret Key exists:", !!process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY)
+  console.log("[r2] Starting upload", {
+    configured: Boolean(process.env.CLOUDFLARE_R2_ACCOUNT_ID && process.env.CLOUDFLARE_R2_BUCKET_NAME &&
+      process.env.CLOUDFLARE_R2_PUBLIC_URL && process.env.CLOUDFLARE_R2_ACCESS_KEY_ID && process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY),
+    contentType,
+  })
 
   try {
     const buffer = Buffer.from(base64, "base64")
@@ -35,10 +34,13 @@ export async function uploadToR2(
     )
 
     const url = `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${filename}`
-    console.log("[r2] Upload success:", url)
+    console.log("[r2] Upload succeeded")
     return url
   } catch (err) {
-    console.error("[r2] Upload failed:", err)
-    throw err
+    const metadata = err && typeof err === "object" && "$metadata" in err ? err.$metadata : null
+    const status = metadata && typeof metadata === "object" && "httpStatusCode" in metadata ? metadata.httpStatusCode : null
+    console.error("[r2] Upload failed", { status: typeof status === "number" ? status : null })
+    // SDK error bodies can include object paths and signed requests.
+    throw new Error("Image storage upload failed")
   }
 }

@@ -99,20 +99,25 @@ export async function POST(req: Request) {
       }
       const effectiveStatus = isFunctionalPlatform(platform as Platform) ? "queued" : "pending_connection"
 
-      const post = await db.post.create({
-        data: {
-          userId: user.id,
-          title: caption ? caption.slice(0, 80) : "Bulk import",
-          caption: caption || null,
-          format: "CUSTOM",
-          status: "READY",
-          imageUrls,
-          r2Keys: [],
-        },
-      })
-
-      await db.scheduledPost.create({
-        data: { userId: user.id, postId: post.id, platform, scheduledFor, status: effectiveStatus },
+      // Commit the post and its schedule together. A rejected schedule must
+      // not leave an orphan post that duplicates when this row is retried.
+      // Remote image/queue work stays outside this short DB transaction.
+      const post = await db.$transaction(async (tx) => {
+        const created = await tx.post.create({
+          data: {
+            userId: user.id,
+            title: caption ? caption.slice(0, 80) : "Bulk import",
+            caption: caption || null,
+            format: "CUSTOM",
+            status: "READY",
+            imageUrls,
+            r2Keys: [],
+          },
+        })
+        await tx.scheduledPost.create({
+          data: { userId: user.id, postId: created.id, platform, scheduledFor, status: effectiveStatus },
+        })
+        return created
       })
 
       results.push({ row: i, ok: true, postId: post.id })

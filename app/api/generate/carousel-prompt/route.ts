@@ -521,14 +521,12 @@ export async function POST(req: Request) {
   // bulk of the carousel price. Targeted edits charge text_regen (1).
   // FREE users can't reach this route at all (Pro gate above).
   const chargedAction: CreditAction = isEditMode ? "text_regen" : "carousel_prompts"
-  {
-    const charge = await chargeCreditsForAction(user, chargedAction)
-    if (!charge.ok) {
-      return NextResponse.json(
-        { error: "Insufficient credits", requiresUpgrade: charge.requiresUpgrade },
-        { status: 402 },
-      )
-    }
+  const charge = await chargeCreditsForAction(user, chargedAction)
+  if (!charge.ok) {
+    return NextResponse.json(
+      { error: "Insufficient credits", requiresUpgrade: charge.requiresUpgrade },
+      { status: 402 },
+    )
   }
 
   const userText = isEditMode
@@ -742,7 +740,7 @@ export async function POST(req: Request) {
   const finalResult = result!
 
   if (!finalResult.ok) {
-    await refundCreditsForAction(user.id, chargedAction)
+    await refundCreditsForAction(charge.receipt)
     return NextResponse.json({ error: finalResult.error }, { status: finalResult.status })
   }
 
@@ -756,7 +754,7 @@ export async function POST(req: Request) {
     console.error(
       `[carousel-prompt] Giving up after ${MAX_GENERATION_ATTEMPTS} attempts: got ${parsed.slides.length} slides, expected ${expectedSlideCount}`,
     )
-    await refundCreditsForAction(user.id, chargedAction)
+    await refundCreditsForAction(charge.receipt)
     return NextResponse.json(
       {
         error: `Expected ${expectedSlideCount} slides but only generated ${parsed.slides.length}. Please try again.`,

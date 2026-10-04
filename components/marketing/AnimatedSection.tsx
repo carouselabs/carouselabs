@@ -1,90 +1,31 @@
 "use client"
 
-import { motion, useInView } from "framer-motion"
-import { useRef, type ReactNode } from "react"
+import { useEffect, useRef, type CSSProperties, type ReactNode } from "react"
 
-type AnimatedProps = {
-  children: ReactNode
-  delay?: number
-  className?: string
-}
+type AnimatedProps = { children: ReactNode; delay?: number; className?: string }
 
-export function AnimatedSection({ children, delay = 0, className = "" }: AnimatedProps) {
+/** Above-the-fold content is visible in server HTML, even before hydration. */
+function Reveal({ children, delay = 0, className = "", direction = "up" }: AnimatedProps & { direction?: string }) {
   const ref = useRef<HTMLDivElement>(null)
-  const isInView = useInView(ref, { once: true, margin: "-100px" })
-  return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 40 }}
-      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
-      transition={{ duration: 0.6, delay, ease: "easeOut" }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  )
+  useEffect(() => {
+    const element = ref.current
+    if (!element || window.matchMedia("(prefers-reduced-motion: reduce)").matches || !("IntersectionObserver" in window)) return
+    if (element.getBoundingClientRect().top < window.innerHeight) return
+    element.dataset.reveal = "pending"
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        element.dataset.reveal = "visible"
+        observer.disconnect()
+      }
+    }, { rootMargin: "0px 0px -50px 0px" })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  return <div ref={ref} className={className} data-reveal-direction={direction} style={{ "--reveal-delay": delay + "s" } as CSSProperties}>{children}</div>
 }
 
-export function AnimatedFadeIn({ children, delay = 0, className = "" }: AnimatedProps) {
-  const ref = useRef<HTMLDivElement>(null)
-  const isInView = useInView(ref, { once: true })
-  return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0 }}
-      animate={isInView ? { opacity: 1 } : { opacity: 0 }}
-      transition={{ duration: 0.8, delay }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  )
-}
-
-export function AnimatedSlideLeft({ children, delay = 0, className = "" }: AnimatedProps) {
-  const ref = useRef<HTMLDivElement>(null)
-  const isInView = useInView(ref, { once: true, margin: "-50px" })
-  return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, x: -40 }}
-      animate={isInView ? { opacity: 1, x: 0 } : { opacity: 0, x: -40 }}
-      transition={{ duration: 0.6, delay }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  )
-}
-
-export function AnimatedSlideRight({ children, delay = 0, className = "" }: AnimatedProps) {
-  const ref = useRef<HTMLDivElement>(null)
-  const isInView = useInView(ref, { once: true, margin: "-50px" })
-  return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, x: 40 }}
-      animate={isInView ? { opacity: 1, x: 0 } : { opacity: 0, x: 40 }}
-      transition={{ duration: 0.6, delay }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  )
-}
-
-export function AnimatedScale({ children, delay = 0, className = "" }: AnimatedProps) {
-  const ref = useRef<HTMLDivElement>(null)
-  const isInView = useInView(ref, { once: true, margin: "-50px" })
-  return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={isInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.5, delay }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  )
-}
+export function AnimatedSection(props: AnimatedProps) { return <Reveal {...props} /> }
+export function AnimatedFadeIn(props: AnimatedProps) { return <Reveal {...props} direction="fade" /> }
+export function AnimatedSlideLeft(props: AnimatedProps) { return <Reveal {...props} direction="left" /> }
+export function AnimatedSlideRight(props: AnimatedProps) { return <Reveal {...props} direction="right" /> }
+export function AnimatedScale(props: AnimatedProps) { return <Reveal {...props} direction="scale" /> }

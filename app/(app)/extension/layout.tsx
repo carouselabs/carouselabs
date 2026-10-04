@@ -7,7 +7,7 @@ import { ExtensionTabs } from "@/components/extension/ExtensionTabs"
 
 export const metadata: Metadata = {
   title: "LinkedIn Extension",
-  description: "Your CarouseLabs Comment extension: voice profiles, history, settings and plan.",
+  description: "Your CarouseLabs Engage extension: voice profiles, history, settings and plan.",
 }
 
 export default function ExtensionLayout({ children }: { children: ReactNode }) {

@@ -45,14 +45,26 @@ export function validateReferenceImage(
   if (!ALLOWED_TYPES.includes(mediaType as AllowedImageType)) {
     return { ok: false, error: "Unsupported image type. Use PNG, JPEG, or WEBP." }
   }
+  if (typeof rawBase64 !== "string") return { ok: false, error: "Invalid image data" }
+  // Reject oversized encoded input before allocating a decoded Buffer.
+  if (rawBase64.length > 4 * Math.ceil(MAX_DECODED_BYTES / 3) + 64) {
+    return { ok: false, error: "Reference image too large (max 5MB)" }
+  }
   const type = mediaType as AllowedImageType
 
   // Strip an optional data-URL prefix (e.g. "data:image/png;base64,....").
   const data = rawBase64.replace(/^data:image\/\w+;base64,/, "")
 
-  // Buffer.from(base64) silently drops invalid chars rather than throwing, so an
-  // empty result is our signal that the input wasn't usable base64.
+  // Buffer.from silently ignores malformed characters. Only canonical base64
+  // is accepted, including optional padding for clients that omit it.
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(data) || data.length % 4 === 1 ||
+      (data.includes("=") && data.length % 4 !== 0)) {
+    return { ok: false, error: "Invalid image data" }
+  }
   const buf = Buffer.from(data, "base64")
+  if (buf.toString("base64").replace(/=+$/, "") !== data.replace(/=+$/, "")) {
+    return { ok: false, error: "Invalid image data" }
+  }
   if (buf.length === 0) return { ok: false, error: "Invalid image data" }
   if (buf.length > MAX_DECODED_BYTES) {
     return { ok: false, error: "Reference image too large (max 5MB)" }

@@ -31,7 +31,7 @@ export async function getUserFromExtensionKey(req: Request): Promise<User | null
     where: { keyHash: hashExtensionKey(key) },
     include: { user: true },
   })
-  if (!record) return null
+  if (!record || record.user.deletedAt || record.user.suspendedAt) return null
 
   db.extensionApiKey.update({ where: { id: record.id }, data: { lastUsedAt: new Date() } }).catch(() => {
     // best-effort — a failed timestamp bump must never fail the real request

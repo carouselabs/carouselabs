@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { apiFetch, ApiError, type MessageProfile, type MessageProfileDraft } from "@/lib/api";
-import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { DefaultCheckbox, FormField, FormLayout, OptionSelect, SamplesField } from "./form";
 import { MESSAGE_TONES } from "@/lib/messageThread";
 
 // Builder for a custom Conversation Assistant profile. Same shape as
@@ -33,32 +35,6 @@ export function messageDraftFromProfile(profile: MessageProfile): MessageProfile
   };
 }
 
-const fieldClass =
-  "w-full rounded-md border border-input bg-background p-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50";
-
-function Field({
-  label,
-  hint,
-  required,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <label className="text-xs font-medium text-muted-foreground">
-        {label}
-        {required && <span className="ml-0.5 text-destructive">*</span>}
-      </label>
-      {children}
-      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
-    </div>
-  );
-}
-
 interface Props {
   // Present when editing: the form PUTs instead of POSTing.
   existing?: MessageProfile;
@@ -80,12 +56,6 @@ export function MessageProfileForm({ existing, seed, onSaved, onCancel }: Props)
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
-  function setSample(index: number, value: string) {
-    setDraft((current) => ({
-      ...current,
-      samples: current.samples.map((sample, i) => (i === index ? value : sample)),
-    }));
-  }
 
   const canSave = Boolean(draft.name.trim() && draft.goal.trim() && draft.tone.trim());
 
@@ -114,109 +84,79 @@ export function MessageProfileForm({ existing, seed, onSaved, onCancel }: Props)
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <h2 className="text-sm font-semibold">{existing ? "Edit conversation profile" : "New conversation profile"}</h2>
+    <FormLayout
+      title={existing ? "Edit message profile" : "New message profile"}
+      onCancel={onCancel}
+      busy={saving}
+      error={error}
+      saveLabel={existing ? "Save changes" : "Create profile"}
+      saving={saving}
+      canSave={canSave}
+      onSave={handleSave}
+    >
+      <FormField label="Profile name" required>
+        {(id) => (
+          <Input id={id} value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Agency founder leads" />
+        )}
+      </FormField>
 
-      {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
-          {error}
-        </div>
-      )}
-
-      <Field label="Profile name" required>
-        <input
-          className={fieldClass}
-          value={draft.name}
-          onChange={(e) => set("name", e.target.value)}
-          placeholder="e.g. Agency founder leads"
-        />
-      </Field>
-
-      <Field
+      <FormField
         label="Reason"
         required
-        hint="The reason this conversation is happening — lead, warm intro, reconnecting, peer networking, or your own words. Read alongside the live thread on every message, so it stays the throughline across replies sent weeks apart."
+        hint="Why this conversation is happening: a lead, a warm intro, reconnecting, peer networking, or your own words. It's read alongside the live thread on every message, so it stays the thread's purpose across replies sent weeks apart."
       >
-        <textarea
-          className={fieldClass}
-          rows={3}
-          value={draft.goal}
-          onChange={(e) => set("goal", e.target.value)}
-          placeholder="e.g. Building a genuine relationship, no pitch — or: a potential client, understand their situation before proposing anything"
-        />
-      </Field>
+        {(id) => (
+          <Textarea
+            id={id}
+            autoGrow
+            value={draft.goal}
+            onChange={(e) => set("goal", e.target.value)}
+            placeholder="e.g. Building a genuine relationship, no pitch. Or: a potential client, understand their situation before proposing anything"
+            className="max-h-48 min-h-[4.5rem]"
+          />
+        )}
+      </FormField>
 
-      <Field label="Tone" required>
-        <select className={fieldClass} value={draft.tone} onChange={(e) => set("tone", e.target.value)}>
-          {(TONES.includes(draft.tone) ? TONES : [draft.tone, ...TONES]).map((tone) => (
-            <option key={tone} value={tone}>
-              {tone}
-            </option>
-          ))}
-        </select>
-      </Field>
+      <FormField label="Tone" required>
+        {(id) => <OptionSelect id={id} value={draft.tone} onChange={(v) => set("tone", v)} options={TONES} />}
+      </FormField>
 
-      <Field label="Always" hint="Rules every message in this conversation must follow.">
-        <textarea
-          className={fieldClass}
-          rows={2}
-          value={draft.alwaysDo}
-          onChange={(e) => set("alwaysDo", e.target.value)}
-          placeholder="e.g. Respond to what they actually said before adding anything new"
-        />
-      </Field>
+      <FormField label="Always" hint="Rules every message in this conversation must follow.">
+        {(id) => (
+          <Textarea
+            id={id}
+            autoGrow
+            value={draft.alwaysDo}
+            onChange={(e) => set("alwaysDo", e.target.value)}
+            placeholder="e.g. Respond to what they actually said before adding anything new"
+            className="max-h-40 min-h-[2.625rem]"
+          />
+        )}
+      </FormField>
 
-      <Field label="Never" hint="Rules every message in this conversation must avoid.">
-        <textarea
-          className={fieldClass}
-          rows={2}
-          value={draft.neverDo}
-          onChange={(e) => set("neverDo", e.target.value)}
-          placeholder="e.g. No pitching before there's a real conversation, no asking for a call too early"
-        />
-      </Field>
+      <FormField label="Never" hint="Rules every message in this conversation must avoid.">
+        {(id) => (
+          <Textarea
+            id={id}
+            autoGrow
+            value={draft.neverDo}
+            onChange={(e) => set("neverDo", e.target.value)}
+            placeholder="e.g. No pitching before there's a real conversation, no asking for a call too early"
+            className="max-h-40 min-h-[2.625rem]"
+          />
+        )}
+      </FormField>
 
-      <Field
+      <SamplesField
         label="Example messages"
         hint="Optional, but the strongest lever on voice. Avoid digits: a figure that isn't in the thread or their profile is rejected."
-      >
-        <div className="space-y-2">
-          {draft.samples.map((sample, index) => (
-            <textarea
-              key={index}
-              className={fieldClass}
-              rows={2}
-              value={sample}
-              onChange={(e) => setSample(index, e.target.value)}
-              placeholder={`Example ${index + 1}`}
-            />
-          ))}
-          {draft.samples.length < MAX_SAMPLES && (
-            <Button size="sm" variant="outline" onClick={() => set("samples", [...draft.samples, ""])}>
-              + Add example
-            </Button>
-          )}
-        </div>
-      </Field>
+        noun="example"
+        samples={draft.samples}
+        max={MAX_SAMPLES}
+        onChange={(samples) => set("samples", samples)}
+      />
 
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          className="accent-[#7C3AED]"
-          checked={setAsDefault}
-          onChange={(e) => setSetAsDefault(e.target.checked)}
-        />
-        Use this profile by default
-      </label>
-
-      <div className="flex gap-2">
-        <Button disabled={!canSave || saving} onClick={handleSave}>
-          {saving ? "Saving…" : existing ? "Save changes" : "Create profile"}
-        </Button>
-        <Button variant="outline" disabled={saving} onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </div>
+      <DefaultCheckbox checked={setAsDefault} onChange={setSetAsDefault} />
+    </FormLayout>
   );
 }

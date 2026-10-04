@@ -1,39 +1,34 @@
-// lib/refundCredits.ts — SERVER-ONLY. Refunds a charge when generation fails
-// after credits were already consumed, so users never pay for a 502.
 import { db } from "@/lib/db"
-import { CREDIT_COSTS, type CreditAction } from "@/lib/creditActions"
+import type { CreditReceipt } from "@/lib/credits"
 
-// Refund `count` charges of `action`. Best-effort — a refund failure is logged,
-// never thrown, so it can't mask the original generation error.
-export async function refundCreditsForAction(
-  userId: string,
-  action: CreditAction,
-  count = 1,
-): Promise<void> {
+// Request-scoped receipts prevent duplicate failure handlers from refunding
+// twice. A durable ledger is still needed for process-crash recovery.
+export async function refundCreditsForAction(receipt: CreditReceipt | undefined): Promise<void> {
+  if (!receipt || receipt.refunded) return
+  receipt.refunded = true
   try {
-    const sub = await db.subscription.findUnique({ where: { userId } })
-    if (!sub) return
-
-    const amount = (CREDIT_COSTS[action] ?? 0) * count
-    if (amount <= 0) return
-
-    // Undo a primary-allowance charge first (charges hit the primary
-    // allowance — FREE's lifetime pool or PRO/GROWTH's monthly allowance —
-    // before extras). Guarded so creditsUsed can never go below 0.
-    const res = await db.subscription.updateMany({
-      where: { userId, creditsUsed: { gte: amount } },
-      data: { creditsUsed: { decrement: amount } },
-    })
-    if (res.count === 0) {
-      // The charge (or part of it) came out of extra credits — return it there.
-      await db.subscription.updateMany({
-        where: { userId },
-        data: { extraCredits: { increment: amount } },
+    await db.$transaction(async (tx) => {
+      const sub = await tx.subscription.findUnique({ where: { userId: receipt.userId } })
+      if (!sub) throw new Error("Subscription missing during refund")
+      const samePeriod = sub.currentPeriodStart?.getTime() === receipt.periodStart?.getTime()
+      // Never refund an old-period debit against new-period usage.
+      const primary = samePeriod ? receipt.primary : 0
+      const sameExtraPool = sub.extraCreditsExpiry?.getTime() === receipt.extraExpiry?.getTime()
+      const originalExtrasStillValid = !receipt.extraExpiry || receipt.extraExpiry.getTime() > Date.now()
+      const currentExtrasStillValid = !sub.extraCreditsExpiry || sub.extraCreditsExpiry.getTime() > Date.now()
+      const extra = (sameExtraPool || (originalExtrasStillValid && currentExtrasStillValid)) ? receipt.extra : 0
+      if (!primary && !extra) return
+      const result = await tx.subscription.updateMany({
+        where: {
+          userId: receipt.userId, currentPeriodStart: sub.currentPeriodStart,
+          extraCreditsExpiry: sub.extraCreditsExpiry, creditsUsed: { gte: primary },
+        },
+        data: { creditsUsed: { decrement: primary }, extraCredits: { increment: extra } },
       })
-    }
-
-    console.log(`[credits] Refunded ${amount} credits to user ${userId} for failed ${action}`)
-  } catch (err) {
-    console.error("[credits] refund failed:", err)
+      if (!result.count) throw new Error("Credit refund raced a billing update")
+    })
+  } catch {
+    receipt.refunded = false
+    console.error("[credits] Refund failed; manual reconciliation required", { userId: receipt.userId })
   }
 }

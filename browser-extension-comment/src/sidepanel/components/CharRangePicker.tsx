@@ -57,7 +57,7 @@ function CharBound({
 
   return (
     <div className="flex items-center gap-2">
-      <span className="w-8 shrink-0 text-[11px] text-muted-foreground">{label}</span>
+      <span className="w-8 shrink-0 text-xs text-muted-foreground">{label}</span>
       <input
         type="range"
         min={bounds.min}
@@ -68,7 +68,7 @@ function CharBound({
         value={value}
         onChange={(e) => onCommit(Number(e.target.value))}
         aria-label={`${label} characters`}
-        className="h-2 flex-1 cursor-pointer accent-[#7C3AED]"
+        className="h-2 flex-1 cursor-pointer accent-primary"
       />
       <input
         type="text"
@@ -90,7 +90,7 @@ function CharBound({
           if (e.key === "Enter") commitText();
         }}
         aria-label={`${label} characters (number)`}
-        className="w-14 shrink-0 rounded-md border border-input bg-background px-1.5 py-1 text-center text-sm tabular-nums focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="w-14 shrink-0 rounded-md border border-input bg-card px-1.5 py-1 text-center text-sm tabular-nums transition-[border-color,box-shadow] duration-fast focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
       />
     </div>
   );
@@ -122,10 +122,10 @@ export function CharRangePicker({
   };
 
   return (
-    <div className="space-y-2 rounded-md border border-input p-2">
+    <div className="space-y-2 rounded-lg border border-input bg-card p-3">
       <CharBound label="Min" value={min} bounds={bounds} onCommit={setMin} acceptsWhileTyping={(n) => n <= max} />
       <CharBound label="Max" value={max} bounds={bounds} onCommit={setMax} acceptsWhileTyping={(n) => n >= min} />
-      <p className="text-[11px] text-muted-foreground">{caption}</p>
+      <p className="text-xs text-muted-foreground">{caption}</p>
     </div>
   );
 }

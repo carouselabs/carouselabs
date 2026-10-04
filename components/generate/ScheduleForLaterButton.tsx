@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { CalendarClock, Loader2 } from "lucide-react"
 
@@ -21,10 +21,13 @@ interface ScheduleForLaterButtonProps {
 // shown alongside it on every generation result screen.
 export function ScheduleForLaterButton({ getPostId, disabled }: ScheduleForLaterButtonProps) {
   const router = useRouter()
+  const inFlight = useRef(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function handleClick() {
+    if (inFlight.current) return
+    inFlight.current = true
     setError(null)
     setLoading(true)
     try {
@@ -33,10 +36,11 @@ export function ScheduleForLaterButton({ getPostId, disabled }: ScheduleForLater
         setError("Nothing to schedule yet")
         return
       }
-      router.push(`/content-hub?postId=${id}`)
-    } catch {
-      setError("Failed to save — please try again")
+      router.push(`/content-hub?postId=${encodeURIComponent(id)}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Saving failed. Please try again.")
     } finally {
+      inFlight.current = false
       setLoading(false)
     }
   }
@@ -55,7 +59,7 @@ export function ScheduleForLaterButton({ getPostId, disabled }: ScheduleForLater
         )}
         {loading ? "Saving…" : "Schedule for Later"}
       </button>
-      {error && <p className="text-[11px] text-[rgba(239,68,68,0.9)]">{error}</p>}
+      {error && <p role="alert" className="text-[11px] text-[rgba(239,68,68,0.9)]">{error}</p>}
     </div>
   )
 }

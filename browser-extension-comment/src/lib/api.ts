@@ -51,6 +51,8 @@ export interface GenerateResponse {
   // Id of the CommentHistory row this generation created, so a later Copy can
   // PATCH its action field. See app/api/ext/history/[id].
   historyId: string;
+  // Stage durations, streaming responses only (src/lib/generationPerf.ts).
+  timing?: import("./generationPerf").GenerateServerTiming;
 }
 
 export interface RewriteResponse {
@@ -273,6 +275,15 @@ async function getExtensionToken(): Promise<string | null> {
 // short enough that a hung server doesn't leave a spinner running forever.
 const REQUEST_TIMEOUT_MS = 120_000;
 
+const TIMEOUT_MESSAGE = "The server took too long to respond. Try again.";
+
+async function errorFrom(res: Response): Promise<ApiError> {
+  const parsed: unknown = await res.json().catch(() => ({}));
+  const body = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  const message = typeof body.error === "string" ? body.error : `Request failed (${res.status})`;
+  return new ApiError(res.status, message, body);
+}
+
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const [baseUrl, token] = await Promise.all([getApiBaseUrl(), getExtensionToken()]);
   if (!token) throw new ApiError(401, "Not signed in — no extension token stored yet");
@@ -290,18 +301,117 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
       },
     });
   } catch (err) {
-    if (controller.signal.aborted) throw new ApiError(408, "The server took too long to respond. Try again.");
+    if (controller.signal.aborted) throw new ApiError(408, TIMEOUT_MESSAGE);
     throw err;
   } finally {
     clearTimeout(timer);
   }
 
-  if (!res.ok) {
-    const parsed: unknown = await res.json().catch(() => ({}));
-    const body = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
-    const message = typeof body.error === "string" ? body.error : `Request failed (${res.status})`;
-    throw new ApiError(res.status, message, body);
-  }
+  if (!res.ok) throw await errorFrom(res);
 
   return (await res.json()) as T;
+}
+
+export interface StreamHandlers {
+  // Just before the request is sent (after the token/base URL are read).
+  onRequest?: () => void;
+  // The server accepted the request and is calling the model.
+  onStart?: () => void;
+  // The comment so far. "" means clear what's shown (a discarded attempt).
+  onText?: (text: string) => void;
+  // A draft was discarded and a new attempt is starting.
+  onRetry?: (attempt: number) => void;
+}
+
+// One server-sent event, as app/api/ext/generate writes them.
+function parseEvent(frame: string): { event: string; data: unknown } | null {
+  let event = "message";
+  const data: string[] = [];
+  for (const line of frame.split("\n")) {
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    else if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+  }
+  if (data.length === 0) return null;
+  try {
+    return { event, data: JSON.parse(data.join("\n")) };
+  } catch {
+    return null;
+  }
+}
+
+// Like apiFetch, but asks for the result as it is produced (server-sent
+// events) and reports each piece through `handlers`. Resolves with the final
+// event's payload — the authoritative result, which replaces anything
+// streamed. Failures are the same ApiErrors apiFetch throws: a non-2xx answer
+// before streaming starts keeps its status and JSON body (so a 402 still
+// reaches the paywall), and an `error` event carries its own status. A server
+// from before streaming answers with plain JSON, which is taken as the result.
+export async function apiStream<T>(path: string, init: RequestInit, handlers: StreamHandlers = {}): Promise<T> {
+  const [baseUrl, token] = await Promise.all([getApiBaseUrl(), getExtensionToken()]);
+  if (!token) throw new ApiError(401, "Not signed in — no extension token stored yet");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    handlers.onRequest?.();
+    const res = await fetch(`${baseUrl}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        ...init.headers,
+        Accept: "text/event-stream",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!res.ok) throw await errorFrom(res);
+    if (!(res.headers.get("content-type") ?? "").includes("text/event-stream") || !res.body) {
+      return (await res.json()) as T;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+
+      let end: number;
+      while ((end = buffer.indexOf("\n\n")) !== -1) {
+        const parsed = parseEvent(buffer.slice(0, end));
+        buffer = buffer.slice(end + 2);
+        if (!parsed) continue;
+        const data = (parsed.data ?? {}) as Record<string, unknown>;
+
+        switch (parsed.event) {
+          case "start":
+            handlers.onStart?.();
+            break;
+          case "text":
+            handlers.onText?.(typeof data.text === "string" ? data.text : "");
+            break;
+          case "retry":
+            handlers.onRetry?.(typeof data.attempt === "number" ? data.attempt : 2);
+            break;
+          case "final":
+            void reader.cancel().catch(() => {});
+            return data as T;
+          case "error":
+            throw new ApiError(
+              typeof data.status === "number" ? data.status : 500,
+              typeof data.error === "string" ? data.error : "Something went wrong, try again",
+              data,
+            );
+        }
+      }
+    }
+    // The connection ended without a result: the server died mid-generation.
+    throw new ApiError(502, "Something went wrong, try again");
+  } catch (err) {
+    if (controller.signal.aborted) throw new ApiError(408, TIMEOUT_MESSAGE);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }

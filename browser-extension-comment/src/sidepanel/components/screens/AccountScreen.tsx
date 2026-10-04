@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
+import { ExternalLink, LogOut, Sparkles } from "lucide-react";
 import { apiFetch, ApiError, openWebsite, type ExtensionAccess, type MeResponse } from "@/lib/api";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { clearAccountData } from "@/lib/account";
 import {
   EXTENSION_PRICE_LABEL,
@@ -9,6 +13,8 @@ import {
   setExtensionAccess,
   useExtensionAccess,
 } from "@/lib/extensionAccess";
+import { Initials } from "../Initials";
+import { ScreenHeader } from "../ScreenHeader";
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
@@ -21,6 +27,15 @@ function planLabel(access: ExtensionAccess): string {
     return "Unlimited";
   }
   return `Free — ${freeGenerationsLeft(access)} of ${access.freeLimit} left`;
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="text-right text-sm font-medium">{children}</dd>
+    </div>
+  );
 }
 
 export function AccountScreen() {
@@ -89,71 +104,128 @@ export function AccountScreen() {
     }
   }
 
-  if (loading) {
-    return <div className="p-4 text-sm text-muted-foreground">Loading account…</div>;
-  }
+  // Free generations used, as a bar: what's left is easier to see than read.
+  const freeUsedShare =
+    access?.access === "free" && access.freeLimit > 0
+      ? Math.min(1, (access.freeLimit - (freeGenerationsLeft(access) ?? 0)) / access.freeLimit)
+      : null;
 
   return (
-    <div className="flex flex-col gap-3 p-4">
-      <h2 className="text-sm font-semibold">Account</h2>
+    <div className="flex flex-col gap-4 p-4">
+      <ScreenHeader title="Account" />
 
-      {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
-          {error}
-        </div>
-      )}
+      {error && <Alert>{error}</Alert>}
 
-      {me && (
-        <>
-          <div className="space-y-2 rounded-md border border-input p-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">Signed in as</span>
-              <span className="truncate text-xs font-medium">{me.email}</span>
-            </div>
-            {access && (
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground">Extension plan</span>
-                <span className="text-xs font-medium">{planLabel(access)}</span>
-              </div>
-            )}
-            {access?.access === "unlimited" && access.status !== "cancelled" && access.renewsAt && (
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground">Renews</span>
-                <span className="text-xs font-medium">{formatDate(access.renewsAt)}</span>
-              </div>
-            )}
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">Comments this month</span>
-              <span className="text-xs font-medium">{me.commentsThisMonth}</span>
+      {loading ? (
+        <div role="status" aria-label="Loading account" className="space-y-3 rounded-lg border bg-card p-3">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="w-1/3" />
+              <Skeleton className="w-3/4" />
             </div>
           </div>
+          <Skeleton className="w-full" />
+        </div>
+      ) : (
+        me && (
+          <>
+            <div className="flex items-center gap-3 rounded-lg border bg-card p-3">
+              <Initials name={me.email} />
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Signed in as</p>
+                <p className="break-all text-sm font-medium">
+                  {me.email}
+                </p>
+              </div>
+            </div>
 
-          {/* Both open a real browser tab: checkout and the Lemon Squeezy
-              portal are full web flows, far too wide for the side panel. */}
-          {access?.access === "free" && (
-            <Button disabled={openingCheckout} onClick={handleGetUnlimited}>
-              {openingCheckout ? "Opening checkout…" : `Get unlimited — ${EXTENSION_PRICE_LABEL}`}
-            </Button>
-          )}
-          {access?.access === "unlimited" && access.manageUrl && (
-            <Button variant="secondary" onClick={() => chrome.tabs.create({ url: access.manageUrl! })}>
-              Manage subscription
-            </Button>
-          )}
-          <Button variant="outline" onClick={() => void openWebsite("/extension")}>
-            Open on carouselabs.com
-          </Button>
-          <p className="text-[11px] text-muted-foreground">
-            Your voice profiles, full history, settings and payments are on the website too.
-          </p>
-        </>
+            <section className="space-y-1.5" aria-label="Extension plan">
+              <h3 className="text-xs font-medium text-muted-foreground">Extension plan</h3>
+              <div className="overflow-hidden rounded-lg border bg-card">
+                {access && (
+                  <div className="space-y-2.5 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold">{planLabel(access)}</p>
+                      {access.access === "unlimited" && access.status === "past_due" ? (
+                        <Badge variant="warning">Action needed</Badge>
+                      ) : access.access === "unlimited" ? (
+                        <Badge variant="success">Active</Badge>
+                      ) : null}
+                    </div>
+                    {freeUsedShare !== null && (
+                      <div
+                        role="progressbar"
+                        aria-label="Free generations used"
+                        aria-valuemin={0}
+                        aria-valuemax={access.freeLimit}
+                        aria-valuenow={access.freeLimit - (freeGenerationsLeft(access) ?? 0)}
+                        className="h-1.5 overflow-hidden rounded-full bg-muted"
+                      >
+                        <div
+                          className="h-full rounded-full bg-primary transition-[width] duration-slow ease-out"
+                          style={{ width: `${freeUsedShare * 100}%` }}
+                        />
+                      </div>
+                    )}
+                    {/* Both open a real browser tab: checkout and the Lemon
+                        Squeezy portal are full web flows, far too wide for the
+                        side panel. */}
+                    {access.access === "free" && (
+                      <Button className="w-full" loading={openingCheckout} onClick={handleGetUnlimited}>
+                        {!openingCheckout && <Sparkles aria-hidden />}
+                        {openingCheckout ? "Opening checkout…" : `Get unlimited — ${EXTENSION_PRICE_LABEL}`}
+                      </Button>
+                    )}
+                    {access.access === "unlimited" && access.manageUrl && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => chrome.tabs.create({ url: access.manageUrl! })}
+                      >
+                        Manage subscription
+                        <ExternalLink aria-hidden />
+                      </Button>
+                    )}
+                  </div>
+                )}
+                <dl className="divide-y border-t">
+                  {access?.access === "unlimited" && access.status !== "cancelled" && access.renewsAt && (
+                    <Row label="Renews">{formatDate(access.renewsAt)}</Row>
+                  )}
+                  <Row label="Comments this month">
+                    <span className="tabular-nums">{me.commentsThisMonth}</span>
+                  </Row>
+                </dl>
+              </div>
+            </section>
+
+            <div className="space-y-1.5">
+              <Button variant="outline" className="w-full" onClick={() => void openWebsite("/extension")}>
+                Open on carouselabs.com
+                <ExternalLink aria-hidden />
+              </Button>
+              <p className="text-center text-xs text-muted-foreground">
+                Your profiles, full history, settings and payments are there too.
+              </p>
+            </div>
+          </>
+        )
       )}
 
       {/* Always available, even when the account can't be loaded: a revoked
           or expired token would otherwise leave the user stuck signed in. */}
-      <Button variant="outline" disabled={signingOut} onClick={handleSignOut}>
-        {signingOut ? "Signing out…" : "Sign out"}
-      </Button>
+      <div className="border-t pt-3">
+        <Button
+          variant="ghost"
+          className="w-full text-muted-foreground hover:bg-destructive-soft hover:text-destructive"
+          loading={signingOut}
+          onClick={handleSignOut}
+        >
+          {!signingOut && <LogOut aria-hidden />}
+          {signingOut ? "Signing out…" : "Sign out"}
+        </Button>
+      </div>
     </div>
   );
 }

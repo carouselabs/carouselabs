@@ -7,6 +7,7 @@
 // images in one ugcPost render as a native multi-image ("carousel") post.
 
 import sharp from "sharp"
+import { fetchPublicImage } from "@/lib/safeRemoteImage"
 
 const OAUTH_BASE = "https://www.linkedin.com/oauth/v2"
 const API_BASE = "https://api.linkedin.com"
@@ -119,8 +120,10 @@ interface RegisteredUpload {
 async function registerImageUpload(
   accessToken: string,
   ownerUrn: string,
+  signal: AbortSignal,
 ): Promise<RegisteredUpload> {
   const res = await fetch(`${API_BASE}/v2/assets?action=registerUpload`, {
+    signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -178,10 +181,10 @@ async function uploadImageBytes(
   uploadUrl: string,
   accessToken: string,
   imageUrl: string,
+  signal: AbortSignal,
 ): Promise<void> {
-  const imgRes = await fetch(imageUrl)
-  if (!imgRes.ok) throw new Error(`Failed to fetch image for upload: ${imageUrl}`)
-  const original = Buffer.from(await imgRes.arrayBuffer())
+  const image = await fetchPublicImage(imageUrl)
+  const original = image.bytes
 
   let bytes: Buffer
   let contentType = "image/png"
@@ -190,10 +193,11 @@ async function uploadImageBytes(
   } catch (err) {
     console.error("[linkedin] sharp metadata strip failed, using original bytes:", err)
     bytes = original
-    contentType = imgRes.headers.get("content-type") ?? "image/png"
+    contentType = image.mediaType
   }
 
   const res = await fetch(uploadUrl, {
+    signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
     method: "PUT",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -215,26 +219,40 @@ export interface LinkedInPostResult {
   postUrl: string
 }
 
+export class LinkedInPublishError extends Error {
+  constructor(message: string, readonly publicationMayHaveSucceeded: boolean) {
+    super(message)
+    this.name = "LinkedInPublishError"
+  }
+}
+
 export async function postToLinkedIn(
   accessToken: string,
   linkedinSub: string,
   text: string,
   imageUrls: string[],
 ): Promise<LinkedInPostResult> {
+  const signal = AbortSignal.timeout(90_000)
+  let publicationStarted = false
+  try {
   const author = `urn:li:person:${linkedinSub}`
 
   // Upload every image first, collecting their asset URNs (sequentially so a
   // failure surfaces clearly and we don't hammer the Assets API).
   const media: Array<{ status: "READY"; media: string }> = []
   for (const imageUrl of imageUrls) {
-    const { uploadUrl, asset } = await registerImageUpload(accessToken, author)
-    await uploadImageBytes(uploadUrl, accessToken, imageUrl)
+    signal.throwIfAborted()
+    const { uploadUrl, asset } = await registerImageUpload(accessToken, author, signal)
+    await uploadImageBytes(uploadUrl, accessToken, imageUrl, signal)
     media.push({ status: "READY", media: asset })
   }
 
   const shareMediaCategory = media.length > 0 ? "IMAGE" : "NONE"
 
+  signal.throwIfAborted()
+  publicationStarted = true
   const res = await fetch(`${API_BASE}/v2/ugcPosts`, {
+    signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -265,9 +283,20 @@ export async function postToLinkedIn(
   // The created URN comes back in the x-restli-id header (and the body `id`).
   const data = (await res.json().catch(() => ({}))) as { id?: string }
   const id = res.headers.get("x-restli-id") ?? data.id ?? ""
+  if (!id) throw new Error("LinkedIn returned no publication ID")
 
   return {
     id,
     postUrl: id ? `https://www.linkedin.com/feed/update/${id}/` : "https://www.linkedin.com/feed/",
+  }
+  } catch {
+    // After dispatch even an HTTP/network failure can leave an unknown result.
+    // Do not expose provider response bodies or ever retry a possible publish.
+    throw new LinkedInPublishError(
+      publicationStarted
+        ? "Publication outcome unknown. Check LinkedIn before trying again."
+        : "Could not prepare LinkedIn media. Check your connection and images, then retry.",
+      publicationStarted,
+    )
   }
 }

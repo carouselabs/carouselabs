@@ -30,12 +30,13 @@ function fmtRangeLabel(range: DateRange): string {
 export function LeaderboardCard({ internId }: { internId: string }) {
   const [period, setPeriod] = useState<Period>("all")
   const [leaderboard, setLeaderboard] = useState<Entry[] | null>(null)
+  const [error, setError] = useState(false)
   const [range, setRange] = useState<DateRange | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    setLeaderboard(null)
-    fetch(`/api/intern/leaderboard?period=${period}`)
+    const controller = new AbortController()
+    fetch(`/api/intern/leaderboard?period=${period}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data: { leaderboard: Entry[]; range: DateRange | null }) => {
         if (cancelled) return
@@ -43,10 +44,11 @@ export function LeaderboardCard({ internId }: { internId: string }) {
         setRange(data.range)
       })
       .catch(() => {
-        if (!cancelled) setLeaderboard([])
+        if (!cancelled) { setError(true); setLeaderboard([]) }
       })
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [period])
 
@@ -58,7 +60,7 @@ export function LeaderboardCard({ internId }: { internId: string }) {
           {PERIODS.map((p) => (
             <button
               key={p.key}
-              onClick={() => setPeriod(p.key)}
+              onClick={() => { if (p.key !== period) { setLeaderboard(null); setRange(null); setError(false); setPeriod(p.key) } }}
               className={`rounded-md px-2.5 py-1 text-[11.5px] font-semibold transition-colors ${
                 period === p.key ? "bg-[#7C3AED] text-white" : "text-[#6B7280] hover:text-[#0A0A0A]"
               }`}
@@ -71,7 +73,9 @@ export function LeaderboardCard({ internId }: { internId: string }) {
       <p className="mb-4 text-[11.5px] text-[#9CA3AF]">
         {range && period !== "all" ? `${PERIODS.find((p) => p.key === period)?.label} (${fmtRangeLabel(range)})` : " "}
       </p>
-      {leaderboard === null ? (
+      {error ? (
+        <p role="alert" className="text-[13px] text-red-700">Could not load the leaderboard. Choose another period or refresh to retry.</p>
+      ) : leaderboard === null ? (
         <p className="text-[13px] text-[#9CA3AF]">Loading…</p>
       ) : leaderboard.length === 0 ? (
         <p className="text-[13px] text-[#9CA3AF]">No active interns yet.</p>

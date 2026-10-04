@@ -1,4 +1,4 @@
-# CarouseLabs Comment — Architecture
+# CarouseLabs Engage — Architecture
 
 A Manifest V3 Chrome extension that **writes** LinkedIn comments, comment replies,
 connection-request notes and DM replies. It never posts, sends, or clicks
@@ -32,6 +32,9 @@ The real risk classes are instead: text placed into the **wrong** box / for the
 | `src/sidepanel/components/screens/MessagesScreen.tsx` | Conversation Assistant: read → reason/tone → generate → copy/insert. Owns its own Insert flow. |
 | `src/sidepanel/components/screens/*Profiles*.tsx`, `*ProfileForm.tsx` | CRUD UIs for comment / connection / message profiles. |
 | `src/sidepanel/components/screens/{History,Settings,Account}Screen.tsx` | History list, settings, account + sign-out. |
+| `src/sidepanel/components/ResultCard.tsx` | The generated text and what to do with it (Copy first, Insert, Regenerate), shared by comments, replies, notes and messages. |
+| `src/sidepanel/components/ProfileList.tsx`, `form.tsx` | The profile list (delete asks first) and the builder layout (pinned Save), shared by all three kinds of profile. |
+| `src/components/ui/*` | Primitives: Button (with `loading`), Textarea (`autoGrow`), Input, Select, Segmented, Switch, Badge, Alert, Tooltip, Skeleton. See "Side panel UI". |
 
 ## Message flows
 
@@ -57,6 +60,20 @@ Generate
     limit) → paywall gate (lib/extAccess.ts, see Paywall below) → gpt-6-luna,
     Claude Haiku fallback → number / placeholder / weak-pattern guards → text
     + freeRemaining (a failed generation gives its free use back)
+
+Generate, streamed (Comment and Reply; the other routes still answer JSON)
+  Panel → apiStream POST /api/ext/generate, Accept: text/event-stream
+  → every check above runs first; a failure is still a JSON status code
+  → SSE: start → text (the comment so far: whole words only, cleaned, never an
+    invented figure — that attempt is stopped instead) … → retry (draft
+    discarded, panel shows the dots again) → final {comment, historyId,
+    freeRemaining, timing} or error {status}
+  → the box is read-only with Copy/Insert off until `final`, whose comment
+    replaces the draft. Without the Accept header (1.2.0 and earlier) the route
+    answers JSON as before.
+  → timing: Server-Timing header (JSON), `timing` in `final`, one
+    "[ext/generate] timing" log line; the panel logs "[perf] generate".
+    Benchmark: npm run bench (real models, a few cents; see tests/bench).
 
 Insert (never submits)
   Panel → chrome.tabs.sendMessage(activeTab, {type:"carouselabs:insert-comment", text, mode})
@@ -224,3 +241,32 @@ messages return a `historyId`, and the panel marks Copy/Insert on it like it
 does for comments. The pacing nudge (`commentsToday`) still counts comments and
 replies only.
 
+
+## Side panel UI
+
+**Tokens, not colours.** Every colour is a CSS variable in
+`src/sidepanel/styles.css`, defined once for light and again for dark (dark
+follows the OS). Components use the Tailwind names (`bg-card`,
+`text-muted-foreground`, `text-primary-text` …), never raw colours, so a theme
+change is one file. Purple *text* uses `text-primary-text`; plain
+`text-primary` is too dark to read on the dark theme. Every text/surface pair
+is held to WCAG AA (4.5:1) in both themes by `tests/unit/designTokens.test.ts`.
+
+**Type, radius, motion.** Screen titles `text-base` semibold, body `text-sm`,
+labels and hints `text-xs`, badges 11px (the smallest). Controls `rounded-md`,
+cards `rounded-lg`, dialogs `rounded-xl`. Motion is short (`duration-fast`
+120ms, `normal` 180ms, `slow` 260ms, ease-out) and switches off under
+"reduce motion": the state change still happens, just instantly.
+
+**Patterns.** Generated text always lands in `ResultCard` (Copy is the main
+action: the user posts everything themselves). Empty states say what to do
+next. Errors use `Alert`, sit next to the action that failed, and a failed
+generation turns the button into "Try again". Destructive actions ask first.
+Settings apply at once and confirm with "Saved".
+
+**Checks.** `tests/e2e/theme.spec.ts` (dark mode, reduce motion, hover
+labels) and `tests/e2e/qa.spec.ts` (no sideways scroll at 320px, every Tab
+stop shows focus) run with the rest of the e2e suite. For design review,
+`UI_SCREENS=1 npx playwright test tests/e2e/uiScreens.spec.ts` screenshots
+every screen and state at 400 and 320px into `ui-screens/` (`UI_SCHEME=dark`
+for the dark theme).

@@ -95,7 +95,7 @@ export default async function ExtensionOverviewPage() {
         <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Using the extension</h2>
         <ol className="flex flex-col gap-2.5 text-[13px] text-[#374151] leading-[1.6] list-decimal pl-5">
           <li>
-            Install CarouseLabs Comment from the Chrome Web Store
+            Install CarouseLabs Engage from the Chrome Web Store
             {EXTENSION_STORE_URL && (
               <>
                 {" — "}

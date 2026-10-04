@@ -46,7 +46,7 @@ export default function AudiencePage() {
     <div>
       <h1 className="text-2xl font-semibold text-[#0A0A0A] mb-1">Who are you writing for?</h1>
       <p className="text-sm text-[#6B7280] mb-8">
-        Define your ideal reader so we can shape your content's angle.
+        Define your ideal reader so we can shape your content&apos;s angle.
       </p>
 
       <div className="space-y-6">

@@ -450,7 +450,7 @@ export async function POST(req: Request) {
     imageB64 = b64
   } catch (err) {
     console.error("[thumbnail/generate] generation error:", err)
-    await refundCreditsForAction(user.id, "thumbnail")
+    await refundCreditsForAction(charge.receipt)
     return NextResponse.json({ error: "Failed to generate thumbnail" }, { status: 502 })
   }
 
@@ -462,7 +462,7 @@ export async function POST(req: Request) {
     cleanedB64 = cleanedBuffer.toString("base64")
   } catch (err) {
     console.error("[thumbnail/generate] sharp re-encode error:", err)
-    await refundCreditsForAction(user.id, "thumbnail")
+    await refundCreditsForAction(charge.receipt)
     return NextResponse.json({ error: "Failed to process image" }, { status: 502 })
   }
 
@@ -472,7 +472,7 @@ export async function POST(req: Request) {
     imageUrl = await uploadToR2(cleanedB64, filename)
   } catch (err) {
     console.error("[thumbnail/generate] R2 upload error:", err)
-    await refundCreditsForAction(user.id, "thumbnail")
+    await refundCreditsForAction(charge.receipt)
     return NextResponse.json({ error: "Failed to store image" }, { status: 502 })
   }
 

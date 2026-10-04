@@ -19,7 +19,7 @@ const PHRASES = [
 ]
 
 export function TypewriterPrompt() {
-  const [text, setText] = useState("")
+  const [text, setText] = useState(PHRASES[0])
   const [phraseIndex, setPhraseIndex] = useState(0)
   const [deleting, setDeleting] = useState(false)
 
@@ -27,6 +27,7 @@ export function TypewriterPrompt() {
   // callbacks (never synchronously in the effect body), so it types a phrase
   // out, pauses, deletes it, then advances to the next one — forever.
   useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
     const current = PHRASES[phraseIndex]
     let timeout: ReturnType<typeof setTimeout>
 

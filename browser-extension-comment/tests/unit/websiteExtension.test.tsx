@@ -227,7 +227,7 @@ describe("website — connection note settings", () => {
     fireEvent.click(screen.getByRole("button", { name: /save note settings/i }));
 
     await waitFor(() => expect(calls.some((c) => c.method === "PATCH")).toBe(true));
-    const body = calls.find((c) => c.method === "PATCH")!.body as Record<string, any>;
+    const body = calls.find((c) => c.method === "PATCH")!.body as Record<string, unknown> & { linkedinProfile: { capturedAt: number } };
     expect(body.connectNoteContext).toEqual({ choice: "profile", purpose: "" });
     expect(body.connectNoteLength).toEqual({ preset: "custom", min: 100, max: 220 });
     expect(body.linkedinProfile).toMatchObject({ name: "Anant", headline: "Founder, CarouseLabs" });

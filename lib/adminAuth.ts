@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server"
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
+import { currentUser } from "@clerk/nextjs/server"
 
 type DbUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>
 
@@ -18,7 +19,7 @@ export function isAdminEmail(email: string | null | undefined): boolean {
 export async function requireAdminPage(): Promise<DbUser> {
   const user = await getCurrentUser()
   if (!user) redirect("/sign-in")
-  if (!isAdminEmail(user.email)) redirect("/dashboard")
+  if (!(await hasVerifiedAdminIdentity(user))) redirect("/dashboard")
   return user
 }
 
@@ -26,8 +27,16 @@ export async function requireAdminPage(): Promise<DbUser> {
 // return adminForbidden(). Split so routes stay explicit about the 403 path.
 export async function getAdminUser(): Promise<DbUser | null> {
   const user = await getCurrentUser()
-  if (!user || !isAdminEmail(user.email)) return null
+  if (!user || !(await hasVerifiedAdminIdentity(user))) return null
   return user
+}
+
+async function hasVerifiedAdminIdentity(user: DbUser): Promise<boolean> {
+  if (user.deletedAt || user.suspendedAt || !isAdminEmail(user.email)) return false
+  const identity = await currentUser()
+  const primary = identity?.primaryEmailAddress
+  return identity?.id === user.clerkId && primary?.verification?.status === "verified" &&
+    isAdminEmail(primary.emailAddress)
 }
 
 export function adminForbidden() {

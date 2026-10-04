@@ -180,7 +180,7 @@ export default function PrivacyPage() {
         </ul>
       </LegalSection>
 
-      <LegalSection heading="10. Browser Extension (CarouseLabs Comment)">
+      <LegalSection heading="10. Browser Extension (CarouseLabs Engage)">
         <p>
           If you install our LinkedIn commenting extension, the following additional practices
           apply:

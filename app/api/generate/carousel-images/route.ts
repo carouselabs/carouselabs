@@ -5,9 +5,10 @@ import { Redis } from "@upstash/redis"
 import { getCurrentUser } from "@/lib/auth"
 import OpenAI, { toFile } from "openai"
 import { db } from "@/lib/db"
+import { ownedR2Key, slidesSchema } from "@/lib/postInput"
 import { uploadToR2 } from "@/lib/r2"
 import { notifyFirstPostIfFirst } from "@/lib/email"
-import { hasGenerationBalance } from "@/lib/credits"
+import { hasGenerationBalance, type CreditReceipt } from "@/lib/credits"
 import { chargeCreditsForAction } from "@/lib/chargeCredits"
 import { refundCreditsForAction } from "@/lib/refundCredits"
 import { validateReferenceImage } from "@/lib/validateImage"
@@ -101,12 +102,6 @@ export async function POST(req: Request) {
     )
   }
 
-  // Defense-in-depth: credits are consumed via /api/credits/consume before the
-  // client calls this route — but a drained PRO balance is still blocked here.
-  if (!(await hasGenerationBalance(user.id))) {
-    return NextResponse.json({ error: "You're out of credits." }, { status: 402 })
-  }
-
   let slides: SlideInput[]
   let size: string
   let ideaId: string
@@ -150,6 +145,13 @@ export async function POST(req: Request) {
     )
   }
 
+  if (!persistOnly && !(await hasGenerationBalance(user.id))) {
+    return NextResponse.json({ error: "You're out of credits." }, { status: 402 })
+  }
+  if (persistOnly && (!slidesSchema.safeParse(slides).success || slides.some((s) => !s.imageUrl || !ownedR2Key(s.imageUrl, user.id, ["carousel"])))) {
+    return NextResponse.json({ error: "Invalid slide images" }, { status: 400 })
+  }
+
   // Validate the reference image (size / type / magic bytes) before it reaches
   // OpenAI. Replaces the client-supplied values with the cleaned, verified ones.
   if (referenceImageBase64) {
@@ -175,6 +177,7 @@ export async function POST(req: Request) {
   // charges. (Route is Pro-only.) chargedSlideRegens / grantConsumed are
   // tracked so a failed generation refunds exactly what was taken.
   const grantKey = `carousel_grant:${user.id}:${ideaId}`
+  const creditReceipts: CreditReceipt[] = []
   let chargedSlideRegens = 0
   let grantConsumed = 0
   if (!persistOnly) {
@@ -205,7 +208,7 @@ export async function POST(req: Request) {
         if (!charge.ok) {
           // Refund the slides already charged in this request before bailing.
           if (chargedSlideRegens > 0) {
-            await refundCreditsForAction(user.id, "slide_regen", chargedSlideRegens)
+            for (const receipt of creditReceipts) await refundCreditsForAction(receipt)
           }
           return NextResponse.json(
             { error: "Insufficient credits", requiresUpgrade: charge.requiresUpgrade },
@@ -213,6 +216,7 @@ export async function POST(req: Request) {
           )
         }
         chargedSlideRegens++
+        if (charge.receipt) creditReceipts.push(charge.receipt)
       }
     }
   }
@@ -220,13 +224,12 @@ export async function POST(req: Request) {
   // persistOnly mode — no image generation. Create one Post + child Slides from
   // the imageUrls the client already generated (one-by-one) and return.
   if (persistOnly) {
-    const publicUrl = process.env.CLOUDFLARE_R2_PUBLIC_URL ?? ""
     const withUrls = slides.filter((s) => typeof s.imageUrl === "string" && s.imageUrl)
     if (withUrls.length === 0) {
       return NextResponse.json({ error: "No image URLs to persist" }, { status: 400 })
     }
     // Derive the R2 object key from the public URL (best-effort).
-    const toKey = (url: string) => (publicUrl ? url.replace(`${publicUrl}/`, "") : url)
+    const toKey = (url: string) => ownedR2Key(url, user.id, ["carousel"])!
 
     try {
       const post = await db.post.create({
@@ -361,7 +364,7 @@ export async function POST(req: Request) {
     // Generation failed — give back whatever was taken: charged credits, or
     // consumed grant units (so a 502 doesn't burn the user's paid allowance).
     if (chargedSlideRegens > 0) {
-      await refundCreditsForAction(user.id, "slide_regen", chargedSlideRegens)
+      for (const receipt of creditReceipts) await refundCreditsForAction(receipt)
     }
     if (grantConsumed > 0) {
       try {

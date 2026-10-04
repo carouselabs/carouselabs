@@ -57,11 +57,11 @@ export function CaptureToast() {
     <div
       role="status"
       aria-live="polite"
-      // Full panel width less a gutter, white with the brand purple (the
-      // primary token, #7C3AED) for text and border. The same look for both
-      // modes; only the label differs.
-      className={`pointer-events-none absolute inset-x-3 top-3 z-50 rounded-lg border-2 border-primary bg-white px-4 py-3 text-center text-sm font-semibold text-primary shadow-lg transition-opacity duration-300 ${
-        visible ? "opacity-100" : "opacity-0"
+      // Full panel width less a gutter, card colour with the brand purple for
+      // text and border (theme tokens, so it follows dark mode). The same look
+      // for every mode; only the label differs.
+      className={`pointer-events-none absolute inset-x-3 top-3 z-50 rounded-lg border-2 border-primary bg-card px-4 py-3 text-center text-sm font-semibold text-primary-text shadow-lg transition-opacity duration-300 ${
+        visible ? "animate-fade-in-up opacity-100" : "opacity-0"
       }`}
     >
       {label}

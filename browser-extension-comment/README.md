@@ -1,4 +1,4 @@
-# CarouseLabs Comment — browser extension
+# CarouseLabs Engage — browser extension
 
 Side-panel extension for AI-assisted LinkedIn commenting. Separate project
 from `browser-extension-ideas/` (which is a plain-JS, no-build extension) —

@@ -7,6 +7,7 @@
 // at checkout, so a purchase can't land on the wrong account.
 import { db } from "@/lib/db"
 import { isExtensionSubscriptionActive } from "@/lib/extensionAccessRules"
+import { signBillingIdentity } from "@/lib/billingIdentity"
 
 export type ExtensionCheckout =
   | { kind: "checkout"; url: string }
@@ -19,14 +20,18 @@ export async function extensionCheckoutFor(user: { id: string; email: string }):
   if (isExtensionSubscriptionActive(sub)) return { kind: "subscribed", manageUrl: sub?.customerPortalUrl ?? null }
 
   const base = process.env.LEMONSQUEEZY_EXTENSION_CHECKOUT_URL
-  if (!base) {
-    console.error("[extensionCheckout] LEMONSQUEEZY_EXTENSION_CHECKOUT_URL is not set")
+  const variant = process.env.LEMONSQUEEZY_EXTENSION_VARIANT_ID
+  if (!base || !variant || !/^\d+$/.test(variant) || !process.env.LEMONSQUEEZY_WEBHOOK_SECRET) {
+    console.error("[extensionCheckout] Checkout configuration is incomplete")
     return { kind: "unavailable" }
   }
 
-  const url = new URL(base)
+  let url: URL
+  try { url = new URL(base) } catch { return { kind: "unavailable" } }
+  if (url.protocol !== "https:") return { kind: "unavailable" }
   url.searchParams.set("checkout[email]", user.email)
   url.searchParams.set("checkout[custom][user_id]", user.id)
+  url.searchParams.set("checkout[custom][identity_signature]", signBillingIdentity(user.id, variant))
   url.searchParams.set("checkout[custom][kind]", "extension")
   return { kind: "checkout", url: url.toString() }
 }

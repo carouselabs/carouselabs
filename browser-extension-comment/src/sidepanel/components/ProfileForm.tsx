@@ -6,8 +6,13 @@ import {
   type ProfileDraft,
   type TestResponse,
 } from "@/lib/api";
+import { FlaskConical } from "lucide-react";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { CharRangePicker } from "./CharRangePicker";
+import { DefaultCheckbox, FormField, FormLayout, OptionSelect, SamplesField } from "./form";
 import { noteFreeRemaining, notePaywallError } from "@/lib/extensionAccess";
 
 const GOALS = [
@@ -85,55 +90,6 @@ export function draftFromProfile(profile: CommentProfile): ProfileDraft {
   };
 }
 
-const fieldClass =
-  "w-full rounded-md border border-input bg-background p-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50";
-
-function Field({
-  label,
-  required,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <label className="text-xs font-medium text-muted-foreground">
-        {label}
-        {required && <span className="ml-0.5 text-destructive">*</span>}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-function NativeSelect({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: string[];
-}) {
-  // A duplicated preset can carry a value the fixed list doesn't offer (e.g.
-  // tone "Casual", goal "Quick genuine reaction"). Without adding it, the browser
-  // would display the first option while the form still held — and saved — the
-  // real value, so the builder would show a setting it isn't saving.
-  const all = value && !options.includes(value) ? [value, ...options] : options;
-
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className={fieldClass}>
-      {all.map((o) => (
-        <option key={o} value={o}>
-          {o}
-        </option>
-      ))}
-    </select>
-  );
-}
-
 // Reads and writes the profile's existing `length` string, so it needs no new
 // column: moving either control writes "N-M characters", which the server
 // already parses. An older profile ("Medium (2-3 lines)") opens showing the
@@ -182,6 +138,8 @@ export function ProfileForm({ existing, seed, onSaved, onCancel }: Props) {
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Shown in the Test box, not by Save: it's about the preview.
+  const [testError, setTestError] = useState<string | null>(null);
 
   // A saved profile's allowance lives on the row; an unsaved draft has no row,
   // so its count is tracked here until first save and then handed over to the
@@ -197,9 +155,6 @@ export function ProfileForm({ existing, seed, onSaved, onCancel }: Props) {
     setDraft((d) => ({ ...d, [key]: value }));
   }
 
-  function setSample(index: number, value: string) {
-    setDraft((d) => ({ ...d, samples: d.samples.map((s, i) => (i === index ? value : s)) }));
-  }
 
   const requiredFilled =
     draft.name.trim() && draft.whoIAm.trim() && draft.goal && draft.tone && draft.length;
@@ -208,7 +163,7 @@ export function ProfileForm({ existing, seed, onSaved, onCancel }: Props) {
     if (!pastedPost.trim() || testsLeft <= 0) return;
 
     setTesting(true);
-    setError(null);
+    setTestError(null);
     setTestResult(null);
 
     try {
@@ -231,7 +186,7 @@ export function ProfileForm({ existing, seed, onSaved, onCancel }: Props) {
     } catch (err) {
       // No unlock card in the builder: the 402's own message names the plan.
       notePaywallError(err);
-      setError(err instanceof ApiError ? err.message : "Something went wrong, try again");
+      setTestError(err instanceof ApiError ? err.message : "Something went wrong, try again");
     } finally {
       setTesting(false);
     }
@@ -271,168 +226,127 @@ export function ProfileForm({ existing, seed, onSaved, onCancel }: Props) {
   const busy = testing || saving;
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">
-          {existing ? "Edit profile" : "New custom profile"}
-        </h2>
-        <Button size="sm" variant="ghost" onClick={onCancel} disabled={busy}>
-          Cancel
-        </Button>
-      </div>
-
-      <Field label="Profile name" required>
-        <input
-          className={fieldClass}
-          value={draft.name}
-          onChange={(e) => set("name", e.target.value)}
-          placeholder="e.g. Founder voice"
-        />
-      </Field>
-
-      <Field label="Who I am" required>
-        <textarea
-          className={`${fieldClass} resize-y`}
-          rows={3}
-          value={draft.whoIAm}
-          onChange={(e) => set("whoIAm", e.target.value)}
-          placeholder="A B2B SaaS founder who has shipped to 10k users"
-        />
-      </Field>
-
-      <Field label="Comment goal" required>
-        <NativeSelect value={draft.goal} onChange={(v) => set("goal", v)} options={GOALS} />
-      </Field>
-
-      <Field label="Tone" required>
-        <NativeSelect value={draft.tone} onChange={(v) => set("tone", v)} options={TONES} />
-      </Field>
-
-      <Field label="Length" required>
-        <LengthRangePicker value={draft.length} onChange={(v) => set("length", v)} />
-      </Field>
-
-      <Field label="Emoji">
-        <NativeSelect value={draft.emoji} onChange={(v) => set("emoji", v)} options={EMOJI} />
-      </Field>
-
-      <Field label="Language">
-        <NativeSelect
-          value={draft.language}
-          onChange={(v) => set("language", v)}
-          options={LANGUAGES}
-        />
-      </Field>
-
-      <Field label="Always do">
-        <textarea
-          className={`${fieldClass} resize-y`}
-          rows={2}
-          value={draft.alwaysDo}
-          onChange={(e) => set("alwaysDo", e.target.value)}
-          placeholder="Optional"
-        />
-      </Field>
-
-      <Field label="Never do">
-        <textarea
-          className={`${fieldClass} resize-y`}
-          rows={2}
-          value={draft.neverDo}
-          onChange={(e) => set("neverDo", e.target.value)}
-          placeholder="Optional"
-        />
-      </Field>
-
-      <div className="space-y-1.5">
-        <label className="text-xs font-medium text-muted-foreground">
-          Sample comments{" "}
-          <span className="font-normal">
-            ({MIN_SAMPLES}-{MAX_SAMPLES} recommended, optional)
-          </span>
-        </label>
-        {draft.samples.map((sample, i) => (
-          <div key={i} className="flex gap-1.5">
-            <textarea
-              className={`${fieldClass} resize-y`}
-              rows={2}
-              value={sample}
-              onChange={(e) => setSample(i, e.target.value)}
-              placeholder={`Sample ${i + 1}`}
-            />
-            {draft.samples.length > 1 && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() =>
-                  setDraft((d) => ({ ...d, samples: d.samples.filter((_, j) => j !== i) }))
-                }
-              >
-                ×
-              </Button>
-            )}
-          </div>
-        ))}
-        {draft.samples.length < MAX_SAMPLES && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setDraft((d) => ({ ...d, samples: [...d.samples, ""] }))}
-          >
-            + Add sample
-          </Button>
+    <FormLayout
+      title={existing ? "Edit comment profile" : "New comment profile"}
+      onCancel={onCancel}
+      busy={busy}
+      error={error}
+      saveLabel={existing ? "Save changes" : "Create profile"}
+      saving={saving}
+      canSave={Boolean(requiredFilled)}
+      onSave={handleSave}
+    >
+      <FormField label="Profile name" required>
+        {(id) => (
+          <Input id={id} value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Founder voice" />
         )}
+      </FormField>
+
+      <FormField label="Who I am" required>
+        {(id) => (
+          <Textarea
+            id={id}
+            autoGrow
+            value={draft.whoIAm}
+            onChange={(e) => set("whoIAm", e.target.value)}
+            placeholder="A B2B SaaS founder who has shipped to 10k users"
+            className="max-h-48 min-h-[4.5rem]"
+          />
+        )}
+      </FormField>
+
+      <FormField label="Comment goal" required>
+        {(id) => <OptionSelect id={id} value={draft.goal} onChange={(v) => set("goal", v)} options={GOALS} />}
+      </FormField>
+
+      <FormField label="Tone" required>
+        {(id) => <OptionSelect id={id} value={draft.tone} onChange={(v) => set("tone", v)} options={TONES} />}
+      </FormField>
+
+      <FormField label="Length" required>
+        {() => <LengthRangePicker value={draft.length} onChange={(v) => set("length", v)} />}
+      </FormField>
+
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label="Emoji">
+          {(id) => <OptionSelect id={id} value={draft.emoji} onChange={(v) => set("emoji", v)} options={EMOJI} />}
+        </FormField>
+        <FormField label="Language">
+          {(id) => <OptionSelect id={id} value={draft.language} onChange={(v) => set("language", v)} options={LANGUAGES} />}
+        </FormField>
       </div>
 
-      <div className="space-y-1.5 rounded-md border border-input p-3">
-        <label className="text-xs font-medium text-muted-foreground">
-          Test this profile{" "}
-          <span className="font-normal">({testsLeft} of {testLimit} tests left)</span>
-        </label>
-        <textarea
-          className={`${fieldClass} resize-y`}
-          rows={4}
+      <FormField label="Always do">
+        {(id) => (
+          <Textarea
+            id={id}
+            autoGrow
+            value={draft.alwaysDo}
+            onChange={(e) => set("alwaysDo", e.target.value)}
+            placeholder="Optional"
+            className="max-h-40 min-h-[2.625rem]"
+          />
+        )}
+      </FormField>
+
+      <FormField label="Never do">
+        {(id) => (
+          <Textarea
+            id={id}
+            autoGrow
+            value={draft.neverDo}
+            onChange={(e) => set("neverDo", e.target.value)}
+            placeholder="Optional"
+            className="max-h-40 min-h-[2.625rem]"
+          />
+        )}
+      </FormField>
+
+      <SamplesField
+        label="Sample comments"
+        hint={`Optional. ${MIN_SAMPLES}-${MAX_SAMPLES} of your own comments teach it your voice better than any setting.`}
+        noun="sample"
+        samples={draft.samples}
+        max={MAX_SAMPLES}
+        onChange={(samples) => setDraft((d) => ({ ...d, samples }))}
+      />
+
+      <section className="space-y-2.5 rounded-lg border bg-muted/30 p-3" aria-label="Test this profile">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold">Test this profile</h3>
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {testsLeft} of {testLimit} tests left
+          </span>
+        </div>
+        <Textarea
+          autoGrow
+          aria-label="LinkedIn post to test on"
           value={pastedPost}
           onChange={(e) => setPastedPost(e.target.value)}
           placeholder="Paste a LinkedIn post here to preview what this profile writes."
+          className="max-h-60 min-h-[5rem]"
         />
         <Button
           size="sm"
           variant="secondary"
-          disabled={!pastedPost.trim() || testsLeft <= 0 || !requiredFilled || busy}
+          disabled={!pastedPost.trim() || testsLeft <= 0 || !requiredFilled || saving}
+          loading={testing}
           onClick={handleTest}
         >
+          {!testing && <FlaskConical aria-hidden />}
           {testing ? "Testing…" : "Test"}
         </Button>
-
+        {!requiredFilled && <p className="text-xs text-muted-foreground">Fill in the starred fields first.</p>}
+        {testError && <Alert>{testError}</Alert>}
         {testResult && (
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Preview</p>
-            <p className="whitespace-pre-wrap rounded-md border border-input bg-background p-2 text-sm">
-              {testResult}
-            </p>
+          <div className="animate-fade-in space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Preview</p>
+            <p className="whitespace-pre-wrap rounded-md border bg-card p-3 text-sm leading-relaxed">{testResult}</p>
           </div>
         )}
-      </div>
+      </section>
 
-      {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
-          {error}
-        </div>
-      )}
-
-      <label className="flex items-center gap-2 text-xs text-muted-foreground">
-        <input
-          type="checkbox"
-          checked={setAsDefault}
-          onChange={(e) => setSetAsDefault(e.target.checked)}
-        />
-        Set as default profile
-      </label>
-
-      <Button disabled={!requiredFilled || busy} onClick={handleSave}>
-        {saving ? "Saving…" : existing ? "Save changes" : "Save profile"}
-      </Button>
-    </div>
+      <DefaultCheckbox checked={setAsDefault} onChange={setSetAsDefault} />
+    </FormLayout>
   );
 }

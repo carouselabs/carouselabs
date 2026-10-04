@@ -1,3 +1,4 @@
+import { isAllowedMutation } from "@/lib/requestSecurity"
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import type { NextFetchEvent, NextRequest } from "next/server"
@@ -245,6 +246,7 @@ function skipsClerk(request: NextRequest): boolean {
 }
 
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
+  if (!isAllowedMutation(request)) return NextResponse.json({ error: "Cross-site request rejected" }, { status: 403 })
   if (skipsClerk(request)) {
     return NextResponse.next()
   }

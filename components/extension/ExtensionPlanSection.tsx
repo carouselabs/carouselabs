@@ -42,12 +42,14 @@ export function ExtensionPlanSection({ ext, platform = "linkedin" }: { ext: ExtA
   const cta =
     ext.access === "unlimited" ? (
       <ExtensionCTA
+        tone={isX ? "black" : "purple"}
         href={ext.manageUrl ?? "https://app.lemonsqueezy.com/my-orders"}
         label={isX ? "Manage X subscription" : "Manage extension subscription"}
         external
       />
     ) : ext.access === "free" && checkoutConfigured ? (
       <ExtensionCTA
+        tone={isX ? "black" : "purple"}
         href={isX ? X_EXTENSION_CHECKOUT_PATH : EXTENSION_CHECKOUT_PATH}
         label={isX ? `Get Engage for X — $${plan.price}/month` : `Get the extension — $${plan.price}/month`}
       />

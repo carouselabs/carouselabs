@@ -11,6 +11,8 @@ import {
   PRICING_FAQ,
   EXTENSION_CHECKOUT_PATH,
   EXTENSION_PLAN,
+  X_EXTENSION_CHECKOUT_PATH,
+  X_EXTENSION_PLAN,
 } from "@/lib/plans"
 
 // Raw checkout links are safe HERE because marketing visitors aren't logged
@@ -111,6 +113,15 @@ export function Pricing() {
         <AnimatedSection>
           <ExtensionPlanCard
             cta={<ExtensionCTA href={EXTENSION_CHECKOUT_PATH} label={`Get the extension — $${EXTENSION_PLAN.price}/month`} />}
+          />
+        </AnimatedSection>
+
+        {/* CarouseLabs Engage for X: a second extension, sold separately. */}
+        <AnimatedSection>
+          <ExtensionPlanCard
+            plan={X_EXTENSION_PLAN}
+            tone="black"
+            cta={<ExtensionCTA tone="black" href={X_EXTENSION_CHECKOUT_PATH} label={`Get Engage for X — $${X_EXTENSION_PLAN.price}/month`} />}
           />
         </AnimatedSection>
 

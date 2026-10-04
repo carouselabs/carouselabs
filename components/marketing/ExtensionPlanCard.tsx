@@ -95,13 +95,24 @@ export function ExtensionPlanCard({
   )
 }
 
-// White-on-purple button that sits inside the card.
-export function ExtensionCTA({ href, label, external = false }: { href: string; label: string; external?: boolean }) {
+// White button that sits inside the card: purple text on the LinkedIn card,
+// black on the X card.
+export function ExtensionCTA({
+  href,
+  label,
+  external = false,
+  tone = "purple",
+}: {
+  href: string
+  label: string
+  external?: boolean
+  tone?: "purple" | "black"
+}) {
   return (
     <a
       href={href}
       {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-      className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-white hover:bg-[#F5F3FF] text-[14px] font-bold text-[#6D28D9] transition-colors shadow-[0_8px_24px_rgba(0,0,0,0.18)]"
+      className={`w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-white hover:bg-[#F5F3FF] text-[14px] font-bold ${tone === "black" ? "text-black" : "text-[#6D28D9]"} transition-colors shadow-[0_8px_24px_rgba(0,0,0,0.18)]`}
     >
       {label}
     </a>

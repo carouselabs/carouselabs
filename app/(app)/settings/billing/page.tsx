@@ -120,7 +120,7 @@ export default async function BillingPage() {
   const percentUsed = effectiveTotal > 0 ? (creditSub.creditsUsed / effectiveTotal) * 100 : 0
 
   const growthCheckoutUrl = process.env.NEXT_PUBLIC_LEMONSQUEEZY_GROWTH_CHECKOUT_URL
-  const extension = await extAccessSummary(user.id)
+  const [extension, xExtension] = await Promise.all([extAccessSummary(user.id), extAccessSummary(user.id, "x")])
 
   return (
     <div className="max-w-5xl mx-auto flex flex-col gap-10">
@@ -286,6 +286,10 @@ export default async function BillingPage() {
         <ExtensionPlanSection ext={extension} />
         <a href="/extension/billing" className="text-[12.5px] font-medium text-[#7C3AED] hover:underline w-fit">
           Payment history and everything else for the extension →
+        </a>
+        <ExtensionPlanSection ext={xExtension} platform="x" />
+        <a href="/extension/x#plan" className="text-[12.5px] font-medium text-[#7C3AED] hover:underline w-fit">
+          Payment history and everything else for the X extension →
         </a>
       </div>
     </div>

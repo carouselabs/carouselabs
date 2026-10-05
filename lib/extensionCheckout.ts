@@ -1,6 +1,7 @@
-// lib/extensionCheckout.ts — the Lemon Squeezy checkout link for the
-// extension's $15/month subscription, shared by the side panel
-// (app/api/ext/checkout) and the website (app/checkout/extension).
+// lib/extensionCheckout.ts — the Lemon Squeezy checkout link for an
+// extension's $15/month subscription (LinkedIn and X are separate products),
+// shared by the side panels (app/api/ext/checkout) and the website
+// (app/checkout/extension).
 //
 // The link carries the account's id: the webhook (lib/extensionBilling.ts)
 // credits the subscription to custom_data.user_id, never to the email typed
@@ -8,6 +9,9 @@
 import { db } from "@/lib/db"
 import { isExtensionSubscriptionActive } from "@/lib/extensionAccessRules"
 import { signBillingIdentity } from "@/lib/billingIdentity"
+import { extensionVariantIds } from "@/lib/extensionBilling"
+import { X_EXTENSION_CHECKOUT_URL } from "@/lib/plans"
+import type { EngagePlatform } from "@/lib/engage/features"
 
 export type ExtensionCheckout =
   | { kind: "checkout"; url: string }
@@ -15,14 +19,25 @@ export type ExtensionCheckout =
   | { kind: "subscribed"; manageUrl: string | null }
   | { kind: "unavailable" }
 
-export async function extensionCheckoutFor(user: { id: string; email: string }): Promise<ExtensionCheckout> {
-  const sub = await db.extensionSubscription.findUnique({ where: { userId: user.id } })
+export async function extensionCheckoutFor(
+  user: { id: string; email: string },
+  platform: EngagePlatform = "linkedin",
+): Promise<ExtensionCheckout> {
+  const sub =
+    platform === "x"
+      ? await db.xSubscription.findUnique({ where: { userId: user.id } })
+      : await db.extensionSubscription.findUnique({ where: { userId: user.id } })
   if (isExtensionSubscriptionActive(sub)) return { kind: "subscribed", manageUrl: sub?.customerPortalUrl ?? null }
 
-  const base = process.env.LEMONSQUEEZY_EXTENSION_CHECKOUT_URL
-  const variant = process.env.LEMONSQUEEZY_EXTENSION_VARIANT_ID
-  if (!base || !variant || !/^\d+$/.test(variant) || !process.env.LEMONSQUEEZY_WEBHOOK_SECRET) {
-    console.error("[extensionCheckout] Checkout configuration is incomplete")
+  // Each extension is its own product: its own checkout link and variant.
+  // X's are public and have built-in defaults (lib/plans.ts).
+  const base =
+    platform === "x"
+      ? process.env.LEMONSQUEEZY_X_CHECKOUT_URL || X_EXTENSION_CHECKOUT_URL
+      : process.env.LEMONSQUEEZY_EXTENSION_CHECKOUT_URL
+  const variant = extensionVariantIds()[platform]
+  if (!base || !variant || !process.env.LEMONSQUEEZY_WEBHOOK_SECRET) {
+    console.error(`[extensionCheckout] ${platform} checkout configuration is incomplete`)
     return { kind: "unavailable" }
   }
 
@@ -31,7 +46,10 @@ export async function extensionCheckoutFor(user: { id: string; email: string }):
   if (url.protocol !== "https:") return { kind: "unavailable" }
   url.searchParams.set("checkout[email]", user.email)
   url.searchParams.set("checkout[custom][user_id]", user.id)
-  url.searchParams.set("checkout[custom][identity_signature]", signBillingIdentity(user.id, variant))
-  url.searchParams.set("checkout[custom][kind]", "extension")
+  // Binds the purchase to this account for this product: the webhook accepts
+  // the user id only with this signature (lib/extensionBilling.ts).
+  url.searchParams.set("checkout[custom][identity_signature]", signBillingIdentity(user.id, String(variant)))
+  // Informational only: the webhook decides the product by its variant.
+  url.searchParams.set("checkout[custom][kind]", platform === "x" ? "x_extension" : "extension")
   return { kind: "checkout", url: url.toString() }
 }

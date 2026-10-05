@@ -16,6 +16,17 @@ export const GRANT_DURATION_LABELS: Record<GrantDuration, string> = {
   custom: "Custom date",
 }
 
+// Which extension free access unlocks: LinkedIn and X are sold separately.
+// Grants from before that are "both".
+export const GRANT_PLATFORMS = ["both", "linkedin", "x"] as const
+export type GrantPlatform = (typeof GRANT_PLATFORMS)[number]
+export const GRANT_PLATFORM_LABELS: Record<GrantPlatform, string> = {
+  both: "LinkedIn + X",
+  linkedin: "LinkedIn",
+  x: "X",
+}
+export const grantPlatformSchema = z.enum(GRANT_PLATFORMS).default("both")
+
 export const grantLengthSchema = z
   .object({
     duration: z.enum(GRANT_DURATIONS),

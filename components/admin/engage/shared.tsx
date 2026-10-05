@@ -140,6 +140,7 @@ export function AccessPill({
   grantLifetime,
   freeUsed,
   freeLimit,
+  paidFor,
 }: {
   access: "paid" | "granted" | "free"
   status: "active" | "suspended" | "account_suspended"
@@ -147,10 +148,15 @@ export function AccessPill({
   grantLifetime?: boolean
   freeUsed?: number
   freeLimit?: number
+  // Which extensions they pay for (LinkedIn and X are sold separately).
+  paidFor?: ("linkedin" | "x")[]
 }) {
   if (status === "account_suspended") return <Pill tone="red">Account suspended</Pill>
   if (status === "suspended") return <Pill tone="red">Engage paused</Pill>
-  if (access === "paid") return <Pill tone="green">Paid</Pill>
+  if (access === "paid") {
+    const which = paidFor?.map((p) => (p === "x" ? "X" : "LinkedIn")).join(" + ")
+    return <Pill tone="green">{which ? `Paid · ${which}` : "Paid"}</Pill>
+  }
   if (access === "granted") {
     return <Pill tone="violet">{grantLifetime ? "Free access · lifetime" : `Free access · until ${fmtDate(grantEndsAt)}`}</Pill>
   }

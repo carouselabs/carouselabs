@@ -6,7 +6,14 @@
 // didn't apply to are listed with the reason.
 import { useState } from "react"
 import { AdminButton, AdminInput, AdminSelect, Modal } from "@/components/admin/ui"
-import { GRANT_DURATIONS, GRANT_DURATION_LABELS, type GrantDuration } from "@/lib/engage/grants"
+import {
+  GRANT_DURATIONS,
+  GRANT_DURATION_LABELS,
+  GRANT_PLATFORMS,
+  GRANT_PLATFORM_LABELS,
+  type GrantDuration,
+  type GrantPlatform,
+} from "@/lib/engage/grants"
 import { adminSend } from "./shared"
 
 export type BulkAction = "grant" | "suspend" | "resume" | "tag"
@@ -34,6 +41,7 @@ export function BulkActionModal({
 }) {
   const [reason, setReason] = useState("")
   const [duration, setDuration] = useState<GrantDuration>("30d")
+  const [platform, setPlatform] = useState<GrantPlatform>("both")
   const [tag, setTag] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -58,7 +66,10 @@ export function BulkActionModal({
       const body: Record<string, unknown> = { action, userIds: users.map((u) => u.id) }
       if (action === "tag") body.tag = tag.trim()
       else body.reason = reason.trim()
-      if (action === "grant") body.duration = duration
+      if (action === "grant") {
+        body.duration = duration
+        body.platform = platform
+      }
       const res = await adminSend<{ done: number; skipped: { userId: string; why: string }[] }>(
         "/api/admin/engage/users/bulk",
         "POST",
@@ -115,6 +126,18 @@ export function BulkActionModal({
             if (valid) void submit()
           }}
         >
+          {action === "grant" && (
+            <label className="block space-y-1">
+              <span className="block text-[12px] text-[#B0B0B0]">Extension</span>
+              <AdminSelect aria-label="Extension" value={platform} onChange={(e) => setPlatform(e.target.value as GrantPlatform)}>
+                {GRANT_PLATFORMS.map((p) => (
+                  <option key={p} value={p}>
+                    {GRANT_PLATFORM_LABELS[p]}
+                  </option>
+                ))}
+              </AdminSelect>
+            </label>
+          )}
           {action === "grant" && (
             <label className="block space-y-1">
               <span className="block text-[12px] text-[#B0B0B0]">For how long</span>

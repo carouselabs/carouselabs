@@ -14,7 +14,6 @@ vi.mock("@/lib/db", () => ({ db: mocks.db }))
 vi.mock("@/lib/profile/pendingPrefill", () => ({ applyPendingPrefill: mocks.applyPendingPrefill }))
 import { getCurrentUser } from "@/lib/auth"
 import { getAdminUser } from "@/lib/adminAuth"
-import { getUserFromExtensionKey } from "@/lib/extensionAuth"
 import { getUserFromCommentExtensionToken, getExtensionUser } from "@/lib/extensionCommentAuth"
 
 const user = { id: "user-a", clerkId: "clerk-a", email: "admin@example.com", subscription: { id: "sub-a" }, deletedAt: null, suspendedAt: null }
@@ -96,11 +95,8 @@ describe("admin authorization", () => {
 describe("bearer token account status", () => {
   it.each(["deletedAt", "suspendedAt"])("denies existing tokens after %s", async (flag) => {
     const record = { id: "token", user: { ...user, [flag]: new Date() } }
-    mocks.db.extensionApiKey.findUnique.mockResolvedValue(record)
     mocks.db.extensionToken.findFirst.mockResolvedValue(record)
-    expect(await getUserFromExtensionKey(new Request("https://app.test", { headers: { Authorization: "Bearer cl_ext_example" } }))).toBeNull()
     expect(await getUserFromCommentExtensionToken(new Request("https://app.test", { headers: { Authorization: "Bearer cl_cmt_example" } }))).toBeNull()
-    expect(mocks.db.extensionApiKey.update).not.toHaveBeenCalled()
     expect(mocks.db.extensionToken.update).not.toHaveBeenCalled()
   })
 })

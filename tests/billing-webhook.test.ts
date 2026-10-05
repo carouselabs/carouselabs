@@ -27,6 +27,8 @@ function transactionClient() {
       create: vi.fn(async ({ data }) => { if (ledger.has(data.eventId)) throw { code: "P2002" }; ledger.add(data.eventId) }),
     },
     extensionSubscription: { findUnique: vi.fn(async () => null) },
+    // CarouseLabs Engage for X's subscriptions (sold separately); none stored.
+    xSubscription: { findUnique: vi.fn(async () => null) },
     user: {
       findUnique: vi.fn(async ({ where }) => where.id === user.id || where.email === user.email ? user : null),
     },

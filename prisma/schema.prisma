@@ -127,6 +127,10 @@ model User {
   // an active ExtensionSubscription.
   extensionTrialUsed         Int                    @default(0)
   extensionSubscription      ExtensionSubscription?
+  // The X extension is sold separately: its own free generations and its
+  // own $15/month subscription (lib/extensionBilling.ts).
+  xTrialUsed                 Int                    @default(0)
+  xSubscription              XSubscription?
   // Extension settings that used to live only in one browser, moved here so
   // the website's Extension section can edit them too. All nullable: null
   // means "never set", which the extension treats as its old local value
@@ -486,6 +490,24 @@ model ExtensionSubscription {
   status            String
   renewsAt          DateTime?
   // Set once cancelled: access continues until this moment.
+  endsAt            DateTime?
+  customerPortalUrl String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+// The X extension's $15/month subscription (CarouseLabs Engage for X), sold
+// separately from LinkedIn's ExtensionSubscription; same fields, same
+// webhook (lib/extensionBilling.ts).
+model XSubscription {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lsSubscriptionId  String    @unique
+  lsCustomerId      String?
+  lsVariantId       String?
+  status            String
+  renewsAt          DateTime?
   endsAt            DateTime?
   customerPortalUrl String?
   createdAt         DateTime  @default(now())
@@ -936,6 +958,9 @@ model EngageAccessGrant {
   revokedAt    DateTime?
   revokedBy    String?
   revokeReason String?   @db.Text
+  // Which extension it unlocks: "linkedin", "x" or "both" (grants from
+  // before the two were sold separately are "both").
+  platform     String    @default("both")
 
   @@index([userId])
   @@index([email])

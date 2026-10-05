@@ -1,22 +1,26 @@
 import Link from "next/link"
 import type { Metadata } from "next"
 import type { LucideIcon } from "lucide-react"
-import { ArrowRight, ExternalLink, Hand, ImageIcon, Lightbulb, MessageSquare } from "lucide-react"
+import { ArrowRight, AtSign, ExternalLink, Hand, ImageIcon, MessageSquare } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { extAccessSummary } from "@/lib/extAccess"
-import { EXTENSION_CHECKOUT_PATH, EXTENSION_PLAN, EXTENSION_STORE_URL } from "@/lib/plans"
+import {
+  EXTENSION_CHECKOUT_PATH,
+  EXTENSION_PLAN,
+  EXTENSION_STORE_URL,
+  X_EXTENSION_CHECKOUT_PATH,
+  X_EXTENSION_PLAN,
+  X_EXTENSION_STORE_URL,
+} from "@/lib/plans"
 
 export const metadata: Metadata = {
   title: "Toolkit",
   description: "Every CarouseLabs tool and browser extension in one place.",
 }
 
-// Chrome Web Store listing URLs. null renders a disabled button rather than a
-// link, so a listing that is not live yet can never ship as a broken href.
-// The Engage extension's lives in lib/plans.ts with the rest of its product
-// data, since the billing page links to it too.
-const IDEAS_BOARD_STORE_URL: string | null =
-  "https://chromewebstore.google.com/detail/carouselabs-ideas-board/jiambimimcofcfnefffcpcciocfpajma"
+// The Engage extensions' Chrome Web Store listings live in lib/plans.ts with
+// the rest of their product data, since the billing pages link to them too.
+// null renders no Install button rather than a broken link.
 
 type ToolCard =
   | { kind: "tool"; name: string; description: string; icon: LucideIcon; href: string }
@@ -26,8 +30,9 @@ type ToolCard =
       description: string
       icon: LucideIcon
       storeUrl: string | null
-      // Paid extensions: the $15/month plan, bought separately (lib/plans.ts).
-      paid?: boolean
+      // Paid extensions: each its own $15/month plan, bought separately
+      // (lib/plans.ts). LinkedIn and X are separate products.
+      paid?: "linkedin" | "x"
     }
 
 const TOOLS: ToolCard[] = [
@@ -47,19 +52,20 @@ const TOOLS: ToolCard[] = [
   },
   {
     kind: "extension",
-    name: "CarouseLabs Ideas Board",
-    description: "Save inspiration from anywhere on the web with one right-click.",
-    icon: Lightbulb,
-    storeUrl: IDEAS_BOARD_STORE_URL,
-  },
-  {
-    kind: "extension",
-    name: "CarouseLabs Engage",
+    name: "CarouseLabs Engage for LinkedIn",
     description:
       "Unlimited LinkedIn comments, replies, connection notes and conversations in your own voice — $15/month, sold separately.",
     icon: MessageSquare,
     storeUrl: EXTENSION_STORE_URL,
-    paid: true,
+    paid: "linkedin",
+  },
+  {
+    kind: "extension",
+    name: "CarouseLabs Engage for X",
+    description: "Unlimited X replies and messages in your own, natural voice — $15/month, sold separately from LinkedIn.",
+    icon: AtSign,
+    storeUrl: X_EXTENSION_STORE_URL,
+    paid: "x",
   },
 ]
 
@@ -72,17 +78,18 @@ const secondaryClass =
 // The paid extension's second button: buy it, or show it's already unlocked.
 // Installing and trying it is free (10 generations), so Install stays the
 // primary action once the listing is live.
-function PlanCta({ unlimited }: { unlimited: boolean }) {
+function PlanCta({ unlimited, platform }: { unlimited: boolean; platform: "linkedin" | "x" }) {
   if (unlimited) {
     return (
-      <Link href="/extension" className={secondaryClass}>
+      <Link href={platform === "x" ? "/extension/x" : "/extension"} className={secondaryClass}>
         Unlimited — open
       </Link>
     )
   }
+  const price = platform === "x" ? X_EXTENSION_PLAN.price : EXTENSION_PLAN.price
   return (
-    <a href={EXTENSION_CHECKOUT_PATH} className={secondaryClass}>
-      Get unlimited — ${EXTENSION_PLAN.price}/month
+    <a href={platform === "x" ? X_EXTENSION_CHECKOUT_PATH : EXTENSION_CHECKOUT_PATH} className={secondaryClass}>
+      Get unlimited — ${price}/month
     </a>
   )
 }
@@ -121,8 +128,10 @@ function Cta({ tool }: { tool: ToolCard }) {
 export default async function ToolkitPage() {
   // The (app) layout has already required a signed-in user.
   const user = await getCurrentUser()
-  const extension = user ? await extAccessSummary(user.id) : null
-  const unlimited = extension?.access === "unlimited"
+  const [extension, xExtension] = user
+    ? await Promise.all([extAccessSummary(user.id), extAccessSummary(user.id, "x")])
+    : [null, null]
+  const unlimited = { linkedin: extension?.access === "unlimited", x: xExtension?.access === "unlimited" }
 
   return (
     <div className="max-w-5xl mx-auto flex flex-col gap-6">
@@ -161,7 +170,7 @@ export default async function ToolkitPage() {
                 {/* A paid extension with no listing yet shows only its plan
                     button, never a dead "Coming soon". */}
                 {!(tool.kind === "extension" && tool.paid && !tool.storeUrl) && <Cta tool={tool} />}
-                {tool.kind === "extension" && tool.paid && <PlanCta unlimited={unlimited} />}
+                {tool.kind === "extension" && tool.paid && <PlanCta unlimited={unlimited[tool.paid]} platform={tool.paid} />}
               </div>
             </article>
           )

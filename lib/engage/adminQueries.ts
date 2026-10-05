@@ -26,19 +26,31 @@ const ENGAGE_USER = Prisma.sql`(
   EXISTS (SELECT 1 FROM "ExtensionToken" t WHERE t."userId" = u.id)
   OR EXISTS (SELECT 1 FROM "CommentHistory" h WHERE h."userId" = u.id)
   OR EXISTS (SELECT 1 FROM "ExtensionSubscription" s WHERE s."userId" = u.id)
+  OR EXISTS (SELECT 1 FROM "XSubscription" s WHERE s."userId" = u.id)
   OR EXISTS (SELECT 1 FROM "EngageAccessGrant" g WHERE g."userId" = u.id OR (g."userId" IS NULL AND g.email = lower(u.email)))
   OR EXISTS (SELECT 1 FROM "EngageUserControl" c WHERE c."userId" = u.id)
 )`
 
-const paidAt = (now: Date) => Prisma.sql`EXISTS (
-  SELECT 1 FROM "ExtensionSubscription" s WHERE s."userId" = u.id
+// LinkedIn and X are sold separately. "any": paying for (or granted) either.
+type PlanScope = EngagePlatform | "any"
+
+const paidIn = (table: "ExtensionSubscription" | "XSubscription", now: Date) => Prisma.sql`EXISTS (
+  SELECT 1 FROM ${Prisma.raw(`"${table}"`)} s WHERE s."userId" = u.id
   AND (s.status IN ('active', 'on_trial', 'past_due') OR (s.status = 'cancelled' AND s."endsAt" > ${now}))
 )`
 
-const grantedAt = (now: Date) => Prisma.sql`EXISTS (
+const paidAt = (now: Date, scope: PlanScope = "any") =>
+  scope === "linkedin"
+    ? paidIn("ExtensionSubscription", now)
+    : scope === "x"
+      ? paidIn("XSubscription", now)
+      : Prisma.sql`(${paidIn("ExtensionSubscription", now)} OR ${paidIn("XSubscription", now)})`
+
+const grantedAt = (now: Date, scope: PlanScope = "any") => Prisma.sql`EXISTS (
   SELECT 1 FROM "EngageAccessGrant" g
   WHERE (g."userId" = u.id OR (g."userId" IS NULL AND g.email = lower(u.email)))
   AND g."revokedAt" IS NULL AND g."startsAt" <= ${now} AND (g."endsAt" IS NULL OR g."endsAt" > ${now})
+  ${scope === "any" ? Prisma.empty : Prisma.sql`AND g.platform IN ('both', ${scope})`}
 )`
 
 const SUSPENDED = Prisma.sql`(u."suspendedAt" IS NOT NULL OR EXISTS (
@@ -92,6 +104,8 @@ export interface UserListRow {
   createdAt: string
   lastActiveAt: string | null
   access: "paid" | "granted" | "free"
+  // The extensions they pay for: LinkedIn and X are sold separately.
+  paidFor: EngagePlatform[]
   status: "active" | "suspended" | "account_suspended"
   subscriptionStatus: string | null
   grantEndsAt: string | null
@@ -117,9 +131,11 @@ export async function listEngageUsers(params: UserListParams, now: Date = new Da
     where.push(Prisma.sql`(u.email ILIKE ${like} OR u.id = ${q}
       OR EXISTS (SELECT 1 FROM "Profile" p WHERE p."userId" = u.id AND p.name ILIKE ${like}))`)
   }
-  if (params.access === "paid") where.push(paidAt(now))
-  if (params.access === "granted") where.push(Prisma.sql`(${grantedAt(now)} AND NOT ${paidAt(now)})`)
-  if (params.access === "free") where.push(Prisma.sql`(NOT ${paidAt(now)} AND NOT ${grantedAt(now)})`)
+  // With an extension picked, the plan filters are about that extension.
+  const scope: PlanScope = params.platform === "linkedin" || params.platform === "x" ? params.platform : "any"
+  if (params.access === "paid") where.push(paidAt(now, scope))
+  if (params.access === "granted") where.push(Prisma.sql`(${grantedAt(now, scope)} AND NOT ${paidAt(now, scope)})`)
+  if (params.access === "free") where.push(Prisma.sql`(NOT ${paidAt(now, scope)} AND NOT ${grantedAt(now, scope)})`)
   if (params.access === "suspended") where.push(SUSPENDED)
   if (params.access === "overrides") where.push(HAS_OVERRIDES)
   if (params.platform === "linkedin" || params.platform === "x") where.push(USES(params.platform))
@@ -190,9 +206,10 @@ async function loadUserRows(ids: string[], now: Date): Promise<UserListRow[]> {
         profile: { select: { name: true } },
         engageControl: { select: { suspendedAt: true, features: true, limits: true, freeGenerations: true } },
         extensionSubscription: { select: { status: true, endsAt: true } },
+        xSubscription: { select: { status: true, endsAt: true } },
         engageGrants: {
           where: { revokedAt: null },
-          select: { startsAt: true, endsAt: true, revokedAt: true },
+          select: { startsAt: true, endsAt: true, revokedAt: true, platform: true },
         },
         adminTags: { select: { tag: true }, orderBy: { tag: "asc" } },
       },
@@ -244,10 +261,14 @@ async function loadUserRows(ids: string[], now: Date): Promise<UserListRow[]> {
     const u = byId.get(id)
     if (!u) return []
     const sub = u.extensionSubscription
-    const paid =
-      !!sub &&
-      (["active", "on_trial", "past_due"].includes(sub.status) ||
-        (sub.status === "cancelled" && !!sub.endsAt && sub.endsAt > now))
+    const isPaid = (s: { status: string; endsAt: Date | null } | null) =>
+      !!s && (["active", "on_trial", "past_due"].includes(s.status) || (s.status === "cancelled" && !!s.endsAt && s.endsAt > now))
+    // Which extensions they pay for (sold separately).
+    const paidFor: EngagePlatform[] = [
+      ...(isPaid(sub) ? (["linkedin"] as const) : []),
+      ...(isPaid(u.xSubscription) ? (["x"] as const) : []),
+    ]
+    const paid = paidFor.length > 0
     const activeGrants = u.engageGrants.filter((g) => grantState(g, now) === "active")
     const lifetime = activeGrants.some((g) => g.endsAt === null)
     const latestEnd = activeGrants.reduce<Date | null>(
@@ -278,6 +299,7 @@ async function loadUserRows(ids: string[], now: Date): Promise<UserListRow[]> {
         createdAt: u.createdAt.toISOString(),
         lastActiveAt: lastActive.get(id)?.toISOString() ?? null,
         access: paid ? "paid" : activeGrants.length > 0 ? "granted" : "free",
+        paidFor,
         status: u.suspendedAt ? "account_suspended" : control?.suspendedAt ? "suspended" : "active",
         subscriptionStatus: sub?.status ?? null,
         grantEndsAt: lifetime ? null : (latestEnd?.toISOString() ?? null),
@@ -335,8 +357,8 @@ export async function engageOverview(
   >(Prisma.sql`
     SELECT
       count(*) AS total,
-      count(*) FILTER (WHERE ${paidAt(now)}) AS paid,
-      count(*) FILTER (WHERE ${grantedAt(now)} AND NOT ${paidAt(now)}) AS granted,
+      count(*) FILTER (WHERE ${paidAt(now, platform === "all" ? "any" : platform)}) AS paid,
+      count(*) FILTER (WHERE ${grantedAt(now, platform === "all" ? "any" : platform)} AND NOT ${paidAt(now, platform === "all" ? "any" : platform)}) AS granted,
       count(*) FILTER (WHERE ${SUSPENDED}) AS suspended
     FROM "User" u
     WHERE ${ENGAGE_USER} AND u."deletedAt" IS NULL

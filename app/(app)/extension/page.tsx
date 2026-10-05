@@ -6,7 +6,7 @@ import { ArrowRight, ExternalLink, MessageSquare, MessagesSquare, Reply, UserPlu
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 import { extAccessSummary } from "@/lib/extAccess"
-import { EXTENSION_CHECKOUT_PATH, EXTENSION_PLAN, EXTENSION_STORE_URL } from "@/lib/plans"
+import { EXTENSION_CHECKOUT_PATH, EXTENSION_PLAN, EXTENSION_STORE_URL, X_EXTENSION_CHECKOUT_PATH, X_EXTENSION_PLAN } from "@/lib/plans"
 import { extensionStatusLine } from "@/components/extension/ExtensionPlanSection"
 import { DevicesList } from "@/components/extension/DevicesList"
 
@@ -29,8 +29,9 @@ export default async function ExtensionOverviewPage() {
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
-  const [ext, byKind] = await Promise.all([
+  const [ext, xExt, byKind] = await Promise.all([
     extAccessSummary(user.id),
+    extAccessSummary(user.id, "x"),
     db.commentHistory.groupBy({
       by: ["kind"],
       where: { userId: user.id, createdAt: { gte: monthStart } },
@@ -68,6 +69,36 @@ export default async function ExtensionOverviewPage() {
               <ArrowRight size={14} />
             </Link>
           )}
+        </div>
+      </div>
+
+      {/* CarouseLabs Engage for X: a separate extension, with its own plan. */}
+      <div className="rounded-2xl border border-black/10 bg-black p-5 text-white flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-white/60">Also on X</p>
+          <p className="text-[16px] font-bold">CarouseLabs Engage for X</p>
+          <p className="text-[13px] text-white/70">
+            {xExt.access === "unlimited" ? "Unlimited" : xExt.access === "testing" ? "Testing" : "Free"} ·{" "}
+            {extensionStatusLine(xExt)}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {xExt.access === "free" && (
+            <a
+              href={X_EXTENSION_CHECKOUT_PATH}
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-[13px] font-semibold text-black hover:bg-white/90 transition-colors"
+            >
+              Get unlimited — ${X_EXTENSION_PLAN.price}/month
+              <ArrowRight size={14} />
+            </a>
+          )}
+          <Link
+            href="/extension/x"
+            className="inline-flex items-center gap-2 rounded-xl border border-white/25 px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-white/10 transition-colors"
+          >
+            Open X settings
+            <ArrowRight size={14} />
+          </Link>
         </div>
       </div>
 

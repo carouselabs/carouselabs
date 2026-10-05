@@ -57,6 +57,12 @@ export const USAGE_KINDS: EngageUsageKind[] = [...ENGAGE_FEATURES, "rewrites", "
 // The feature a usage kind belongs to, for per-feature settings (the AI model)
 // and figures: Shorter/Longer and profile tests are comment tools on LinkedIn
 // and reply tools on X.
+// Which extension a usage kind belongs to: each is sold, and has its free
+// generations, separately.
+export function platformOfUsageKind(kind: EngageUsageKind): EngagePlatform {
+  return X_FEATURES.includes(featureOfUsageKind(kind)) ? "x" : "linkedin"
+}
+
 export function featureOfUsageKind(kind: EngageUsageKind): EngageFeature {
   if (kind === "rewrites" || kind === "tests") return "comments"
   if (kind === "x_rewrites" || kind === "x_tests") return "x_replies"

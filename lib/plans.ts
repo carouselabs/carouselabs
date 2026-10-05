@@ -98,7 +98,7 @@ export const PLANS: PlanDef[] = [FREE_PLAN, PRO_PLAN, GROWTH_PLAN]
 // lib/extensionBilling.ts. The price must match the Lemon Squeezy product
 // behind LEMONSQUEEZY_EXTENSION_CHECKOUT_URL.
 export const EXTENSION_PLAN = {
-  name: "Extension Tool",
+  name: "CarouseLabs Engage for LinkedIn",
   price: 15,
   priceSuffix: "/month",
   freeGenerations: 10,
@@ -114,7 +114,7 @@ export const EXTENSION_PLAN = {
     "Insert straight into LinkedIn — nothing is ever posted or sent for you",
   ],
   // Shown next to the price so nobody expects web credits from it.
-  note: "Extension only — no caption, image or carousel credits included.",
+  note: "For the LinkedIn extension only — no caption, image or carousel credits. CarouseLabs Engage for X is sold separately.",
 } as const
 
 // Chrome Web Store listing for the extension (CarouseLabs Engage). Set to
@@ -126,6 +126,36 @@ export const EXTENSION_STORE_URL: string | null =
 // sign-up first and come straight back here (app/checkout/extension).
 export const EXTENSION_CHECKOUT_PATH = "/checkout/extension"
 
+// CarouseLabs Engage for X, sold separately from the LinkedIn extension: its
+// own $15/month Lemon Squeezy product, its own 10 free generations. The
+// checkout link and variant id are public (every checkout page shows them),
+// so they live here; LEMONSQUEEZY_X_CHECKOUT_URL / LEMONSQUEEZY_X_VARIANT_ID
+// override them.
+export const X_EXTENSION_CHECKOUT_URL = "https://carouselabs.lemonsqueezy.com/checkout/buy/e1f7d284-11e7-4110-abf8-9a8afba3bdda"
+export const X_EXTENSION_VARIANT_ID = 2202499
+export const X_EXTENSION_CHECKOUT_PATH = "/checkout/extension?platform=x"
+
+// The X extension's Chrome Web Store listing. null until it's published:
+// every X Install button is then left out rather than shown broken.
+export const X_EXTENSION_STORE_URL: string | null = null
+
+export const X_EXTENSION_PLAN = {
+  name: "CarouseLabs Engage for X",
+  price: 15,
+  priceSuffix: "/month",
+  freeGenerations: 10,
+  tagline: "Unlimited X replies and messages — written in your own voice, right inside x.com.",
+  features: [
+    "Unlimited X replies and messages",
+    "Voice profiles: Short & Simple, Natural (Slang), Simple & Detailed, Funny",
+    "Make your own profiles in your own voice",
+    "Shorter / Longer rewrites in one click",
+    "Reads the post, the thread and the chat before writing",
+    "Insert straight into X — nothing is ever posted or sent for you",
+  ],
+  note: "For the X extension only. CarouseLabs Engage for LinkedIn is sold separately.",
+} as const
+
 export const CREDIT_COST_LINES = [
   "Caption Only = 5 credits · Image + Caption = 15 credits · Carousel = 40 credits",
   "Regenerate caption = 1 credit · Regenerate image = 8 credits · Regenerate slide = 8 credits",
@@ -134,19 +164,19 @@ export const CREDIT_COST_LINES = [
 
 export const PRICING_FAQ: { question: string; answer: string }[] = [
   {
-    question: "Is the Chrome extension included in Pro or Growth?",
+    question: "Are the Chrome extensions included in Pro or Growth?",
     answer:
-      "No. The CarouseLabs extension is its own $15/month plan, bought separately. It isn't part of Free, Pro or Growth, and buying it doesn't add any caption, image or carousel credits — it unlocks the extension only.",
+      "No. There are two CarouseLabs extensions, each its own $15/month plan bought separately: CarouseLabs Engage for LinkedIn and CarouseLabs Engage for X. They aren't part of Free, Pro or Growth, and buying one doesn't add any caption, image or carousel credits.",
   },
   {
-    question: "What does the $15 extension plan include?",
+    question: "What does each $15 extension plan include?",
     answer:
-      "Unlimited generations in the extension: LinkedIn comments, replies, connection request notes, and the Conversation Assistant that reads a chat and writes your next message. Every account gets 10 free generations to try it first, no card needed.",
+      "Engage for LinkedIn: unlimited LinkedIn comments, replies, connection request notes, and the Conversation Assistant that reads a chat and writes your next message. Engage for X: unlimited X replies and X messages. Buying one doesn't unlock the other, and each gives you 10 free generations to try it first, no card needed.",
   },
   {
     question: "Is the extension really unlimited?",
     answer:
-      "Yes, for normal use. To keep your LinkedIn account safe, the extension pauses for a while if you generate an unusually large amount in a single day, then comes back gradually.",
+      "Yes, for normal use. To keep your account safe, an extension pauses for a while if you generate an unusually large amount in a single day, then comes back gradually.",
   },
   {
     question: "Can I upgrade or downgrade anytime?",

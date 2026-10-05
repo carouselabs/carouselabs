@@ -6,12 +6,16 @@ import { z } from "zod"
 import { requireEngagePermission } from "@/lib/engage/adminAccess"
 import { findTargetUser, notFound, parseBody } from "@/lib/engage/adminApi"
 import { createGrant } from "@/lib/engage/grantActions"
-import { grantLengthSchema } from "@/lib/engage/grants"
+import { grantLengthSchema, grantPlatformSchema } from "@/lib/engage/grants"
 import { getRequestIp } from "@/lib/auditLog"
 
 const body = z.intersection(
   grantLengthSchema,
-  z.object({ reason: z.string().trim().min(3, "Say why").max(500), sendInvite: z.boolean().default(false) }),
+  z.object({
+    reason: z.string().trim().min(3, "Say why").max(500),
+    sendInvite: z.boolean().default(false),
+    platform: grantPlatformSchema,
+  }),
 )
 
 export async function POST(req: Request, { params }: { params: Promise<{ userId: string }> }) {
@@ -32,6 +36,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
       customEndsAt: parsed.data.endsAt,
       reason: parsed.data.reason,
       sendInvite: parsed.data.sendInvite,
+      platform: parsed.data.platform,
       ip: getRequestIp(req),
     })
     return NextResponse.json(result, { status: 201 })

@@ -9,7 +9,23 @@ import crypto from "node:crypto"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 import { cookieNamesFromHeader, hasClerkSessionCookie } from "@/lib/clerkSessionCookie"
+import { tokenPlatform, type EngagePlatform } from "@/lib/engage/features"
 import type { User } from "@prisma/client"
+
+// Which extension each authenticated request came from, read from its token
+// (the X extension's sign-ins are labelled; see tokenPlatform). Kept per
+// request, so routes that answer differently per extension (plan, checkout)
+// need no second lookup.
+const callerPlatforms = new WeakMap<Request, EngagePlatform>()
+
+// The extension a request is about: the X or LinkedIn extension's own token
+// says which; a website request (session cookie) names it with ?platform=x,
+// else LinkedIn. Call after getUserFromCommentExtensionToken/getExtensionUser.
+export function extensionCallerPlatform(req: Request): EngagePlatform {
+  const fromToken = callerPlatforms.get(req)
+  if (fromToken) return fromToken
+  return new URL(req.url).searchParams.get("platform") === "x" ? "x" : "linkedin"
+}
 
 const TOKEN_PREFIX = "cl_cmt_"
 
@@ -47,6 +63,7 @@ export async function getUserFromCommentExtensionToken(req: Request): Promise<Us
 
   recordExtensionVersion(record.id, record.userId, req.headers.get(VERSION_HEADER))
 
+  callerPlatforms.set(req, tokenPlatform(record.device))
   return record.user
 }
 

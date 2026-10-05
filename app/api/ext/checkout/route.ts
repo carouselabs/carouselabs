@@ -3,7 +3,7 @@
 // Built server-side (lib/extensionCheckout.ts) so it carries the signed-in
 // user's id, which is how the payment finds the right account.
 import { NextResponse } from "next/server"
-import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
+import { extensionCallerPlatform, getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import { extensionCheckoutFor } from "@/lib/extensionCheckout"
 
 // GET /api/ext/checkout → { url } or, when already subscribed, { alreadySubscribed, manageUrl }
@@ -13,7 +13,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   }
 
-  const checkout = await extensionCheckoutFor(user)
+  // The calling extension's own product: the X extension's token buys X.
+  const checkout = await extensionCheckoutFor(user, extensionCallerPlatform(req))
   if (checkout.kind === "subscribed") {
     return NextResponse.json({ alreadySubscribed: true, manageUrl: checkout.manageUrl })
   }

@@ -63,6 +63,26 @@ export function isExtensionPayload(payload: ExtensionWebhookPayload, extensionVa
   return attrs.variant_id === extensionVariantId || attrs.first_order_item?.variant_id === extensionVariantId
 }
 
+// The two extensions are sold separately, each its own Lemon Squeezy product.
+export type BillingPlatform = "linkedin" | "x"
+
+// Which extension's subscription a webhook is about, from the payload alone:
+// the product's variant. Never the checkout's custom "kind" marker — the
+// buyer can edit checkout metadata, and it must not turn another product (a
+// web plan, a top-up) into extension access. null: no extension variant (a
+// web plan, a top-up, or a renewal invoice, which carries none; the caller
+// then looks the subscription up in both tables).
+export function extensionPlatformOfPayload(
+  payload: ExtensionWebhookPayload,
+  variants: { linkedin: number; x: number },
+): BillingPlatform | null {
+  const attrs = payload.data?.attributes ?? {}
+  const variant = attrs.variant_id ?? attrs.first_order_item?.variant_id
+  if (variants.x && variant === variants.x) return "x"
+  if (variants.linkedin && variant === variants.linkedin) return "linkedin"
+  return null
+}
+
 // Events can arrive late or out of order. Once a user has a newer
 // subscription stored, an event about an older one must not overwrite it —
 // a late "expired" for last month's subscription would otherwise cut off the

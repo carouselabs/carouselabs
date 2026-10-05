@@ -8,7 +8,7 @@
 // one stored in ExtensionSubscription.
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { getExtensionUser } from "@/lib/extensionCommentAuth"
+import { extensionCallerPlatform, getExtensionUser } from "@/lib/extensionCommentAuth"
 
 type LsInvoice = {
   id: string
@@ -49,10 +49,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 })
   }
 
-  const sub = await db.extensionSubscription.findUnique({
-    where: { userId: user.id },
-    select: { lsSubscriptionId: true },
-  })
+  // One extension's payments: LinkedIn's, or X's (?platform=x, or the X
+  // extension's own token).
+  const sub =
+    extensionCallerPlatform(req) === "x"
+      ? await db.xSubscription.findUnique({ where: { userId: user.id }, select: { lsSubscriptionId: true } })
+      : await db.extensionSubscription.findUnique({ where: { userId: user.id }, select: { lsSubscriptionId: true } })
   if (!sub) return NextResponse.json({ payments: [] })
 
   if (!process.env.LEMONSQUEEZY_API_KEY) {

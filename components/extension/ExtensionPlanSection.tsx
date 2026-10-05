@@ -3,8 +3,15 @@
 // Server component: shown on Settings → Billing and on Extension → Plan &
 // payments, so both always agree.
 import { ExtensionCTA, ExtensionPlanCard } from "@/components/marketing/ExtensionPlanCard"
-import { EXTENSION_CHECKOUT_PATH, EXTENSION_PLAN, EXTENSION_STORE_URL } from "@/lib/plans"
+import {
+  EXTENSION_CHECKOUT_PATH,
+  EXTENSION_PLAN,
+  EXTENSION_STORE_URL,
+  X_EXTENSION_CHECKOUT_PATH,
+  X_EXTENSION_PLAN,
+} from "@/lib/plans"
 import type { ExtAccessSummary } from "@/lib/extAccess"
+import type { EngagePlatform } from "@/lib/engage/features"
 
 const shortDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })
@@ -23,18 +30,29 @@ export function extensionStatusLine(ext: ExtAccessSummary): string {
 }
 
 // Billed apart from the web plan (lib/extensionBilling.ts), so it has its own
-// actions: buy, manage, and install.
-export function ExtensionPlanSection({ ext }: { ext: ExtAccessSummary }) {
-  const checkoutConfigured = !!process.env.LEMONSQUEEZY_EXTENSION_CHECKOUT_URL
+// actions: buy, manage, and install. platform "x": CarouseLabs Engage for X,
+// sold separately from the LinkedIn extension.
+export function ExtensionPlanSection({ ext, platform = "linkedin" }: { ext: ExtAccessSummary; platform?: EngagePlatform }) {
+  const isX = platform === "x"
+  // X's checkout link has a built-in default (lib/plans.ts).
+  const checkoutConfigured = isX || !!process.env.LEMONSQUEEZY_EXTENSION_CHECKOUT_URL
+  const plan = isX ? X_EXTENSION_PLAN : EXTENSION_PLAN
+  // The X extension isn't in the Chrome Web Store yet.
+  const storeUrl = isX ? null : EXTENSION_STORE_URL
   const cta =
     ext.access === "unlimited" ? (
       <ExtensionCTA
+        tone={isX ? "black" : "purple"}
         href={ext.manageUrl ?? "https://app.lemonsqueezy.com/my-orders"}
-        label="Manage extension subscription"
+        label={isX ? "Manage X subscription" : "Manage extension subscription"}
         external
       />
     ) : ext.access === "free" && checkoutConfigured ? (
-      <ExtensionCTA href={EXTENSION_CHECKOUT_PATH} label={`Get the extension — $${EXTENSION_PLAN.price}/month`} />
+      <ExtensionCTA
+        tone={isX ? "black" : "purple"}
+        href={isX ? X_EXTENSION_CHECKOUT_PATH : EXTENSION_CHECKOUT_PATH}
+        label={isX ? `Get Engage for X — $${plan.price}/month` : `Get the extension — $${plan.price}/month`}
+      />
     ) : ext.access === "free" ? (
       <p className="text-[12.5px] text-white/80">Checkout isn&apos;t available right now. Please try again later.</p>
     ) : null
@@ -46,9 +64,9 @@ export function ExtensionPlanSection({ ext }: { ext: ExtAccessSummary }) {
           <span className="rounded-full bg-white/15 px-3 py-1 text-[12px] font-semibold">
             {extensionStatusLine(ext)}
           </span>
-          {EXTENSION_STORE_URL && (
+          {storeUrl && (
             <a
-              href={EXTENSION_STORE_URL}
+              href={storeUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="text-[12px] font-semibold underline underline-offset-2 text-white/90 hover:text-white"
@@ -60,6 +78,8 @@ export function ExtensionPlanSection({ ext }: { ext: ExtAccessSummary }) {
       }
       cta={cta}
       showTrialNote={ext.access === "free"}
+      plan={plan}
+      tone={isX ? "black" : "purple"}
     />
   )
 }

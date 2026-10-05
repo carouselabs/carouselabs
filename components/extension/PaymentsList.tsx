@@ -14,15 +14,16 @@ const STATUS_STYLES: Record<string, string> = {
   void: "text-[#6B7280] bg-[#F3F4F6]",
 }
 
-export function PaymentsList() {
+// platform "x": the X extension's payments (sold separately).
+export function PaymentsList({ platform = "linkedin" }: { platform?: "linkedin" | "x" }) {
   const [payments, setPayments] = useState<ExtPayment[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    extApi<{ payments: ExtPayment[] }>("/api/ext/payments")
+    extApi<{ payments: ExtPayment[] }>(platform === "x" ? "/api/ext/payments?platform=x" : "/api/ext/payments")
       .then((res) => setPayments(res.payments))
       .catch((err) => setError(errorMessage(err)))
-  }, [])
+  }, [platform])
 
   if (error) return <p className="text-[13px] text-[#DC2626]">{error}</p>
   if (!payments) return <p className="text-[13px] text-[#9CA3AF]">Loading payments…</p>

@@ -25,9 +25,7 @@ export async function GET() {
 }
 
 // POST /api/ideas-board — save an item manually from inside the app. Body:
-// { type, content, title?, sourceUrl? }. The browser extension's capture
-// endpoint (app/api/ideas-board/capture) is separate since it authenticates
-// differently (an extension API key, not a Clerk session).
+// { type, content, title?, sourceUrl? }.
 export async function POST(req: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

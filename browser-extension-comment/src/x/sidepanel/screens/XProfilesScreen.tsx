@@ -33,32 +33,41 @@ export function XProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {})
   const [maxLength, setMaxLength] = useState(X_MAX_LENGTH);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<View>({ mode: "list" });
+  const [view, setView] = useState<View>({ mode: startInBuilder === "replies" ? "create" : "list" });
+  // Opening the builder from elsewhere (Home's "Create profile") while this
+  // screen is already showing: switch to it during render, as the LinkedIn
+  // profile screens do, rather than in an effect.
+  const [previousStart, setPreviousStart] = useState(startInBuilder);
+  if (previousStart !== startInBuilder) {
+    setPreviousStart(startInBuilder);
+    if (startInBuilder === "replies") setView({ mode: "create" });
+  }
   const [pendingId, setPendingId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const [list, settings] = await Promise.all([
-        apiFetch<{ profiles: CommentProfile[]; defaultProfileId: string | null }>("/api/ext/x/profiles"),
-        apiFetch<{ maxReplyLength: number }>("/api/ext/x/settings"),
-      ]);
-      setProfiles(list.profiles);
-      setDefaultId(list.defaultProfileId ?? list.profiles.find((p) => p.isSystem && p.isDefault)?.id ?? null);
-      setMaxLength(settings.maxReplyLength);
-      setState("ready");
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load your X profiles");
-      setState("error");
-    }
+  const load = useCallback(() => {
+    return Promise.all([
+      apiFetch<{ profiles: CommentProfile[]; defaultProfileId: string | null }>("/api/ext/x/profiles"),
+      apiFetch<{ maxReplyLength: number }>("/api/ext/x/settings"),
+    ])
+      .then(([list, settings]) => {
+        setProfiles(list.profiles);
+        setDefaultId(list.defaultProfileId ?? list.profiles.find((p) => p.isSystem && p.isDefault)?.id ?? null);
+        setMaxLength(settings.maxReplyLength);
+        setState("ready");
+      })
+      .catch((err) => {
+        setError(err instanceof ApiError ? err.message : "Failed to load your X profiles");
+        setState("error");
+      });
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  // Consumed once, so navigating away and back does not reopen the builder.
   useEffect(() => {
     if (startInBuilder !== "replies") return;
-    setView({ mode: "create" });
     onBuilderOpened?.();
   }, [startInBuilder, onBuilderOpened]);
 

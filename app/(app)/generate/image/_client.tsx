@@ -15,11 +15,16 @@ import { trackHistory } from "@/lib/hooks/useHistory"
 import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
 import { friendlyGenerationError } from "@/lib/friendlyError"
 import { countWords } from "@/lib/wordCount"
+import { createDraftWriter } from "@/lib/postDraft"
+import { persistDraftValues, reconcileDraft } from "@/lib/draftRecovery"
+import { DraftRecoveryNotice } from "@/components/generate/DraftRecoveryNotice"
 import { useCreditStore } from "@/lib/store/creditStore"
 import { CAPTION_PLATFORMS } from "@/lib/captionPlatforms"
 import { isValidPlatform, validatePostForPlatform } from "@/lib/platforms"
 import { CAPTION_TEMPLATES, CATEGORY_ORDER, getTemplatesByCategory } from "@/lib/captionTemplates"
 import { IMAGE_CATEGORY_ORDER, getImageTemplatesByCategory } from "@/lib/imageStructureTemplates"
+
+type BrowserDraft = { caption: string | null; prompt: string | null; imageUrl: string | null; size: ImageSize | null }
 
 interface ImageClientProps {
   ideaId: string
@@ -103,6 +108,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
   const [captionCopied, setCaptionCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null)
   const [savingDraft, setSavingDraft] = useState(false)
   const [restored, setRestored] = useState(false)
   // True until init()'s session-restore check resolves — avoids flashing the
@@ -124,6 +130,9 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
 
   const abortRef = useRef<AbortController | null>(null)
   const didInit = useRef(false)
+  const [writer] = useState(() => createDraftWriter(ideaId, fetch, `imageDraft_${ideaId}`))
+  const restoreChecked = useRef(false)
+  const [browserRecovery, setBrowserRecovery] = useState<BrowserDraft | null>(null)
   // Guards against rapid double-clicks firing two simultaneous generations
   // (each of which would be charged server-side).
   const isChargingRef = useRef(false)
@@ -172,7 +181,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     // breakdown is guaranteed to exist (the server page redirects otherwise),
     // so this is just a cached DB read.
     try {
-      const res = await fetch(`/api/ideas/${ideaId}/breakdown`)
+      const res = await fetch(`/api/ideas/${ideaId}/breakdown`, { signal: AbortSignal.timeout(15_000) })
       if (res.ok) {
         const data = await res.json()
         if (typeof data.breakdown?.deepDive === "string") setDeepDive(data.breakdown.deepDive)
@@ -181,18 +190,29 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
       // best-effort — Stage 1 will still run with an empty deep dive
     }
 
-    // Legacy fallback: caption may live in the Post table from before this
-    // localStorage scheme existed.
-    if (!savedCaption) {
-      try {
-        const res = await fetch(`/api/posts?ideaId=${ideaId}`)
-        if (res.ok) {
-          const data = await res.json()
-          if (data.post?.caption) savedCaption = data.post.caption
-        }
-      } catch {
-        // ignore — treated as no saved caption
+    // Always restore the server record, including its identity and revision.
+    // Local unsaved text takes precedence, while server assets recover another device.
+    try {
+      const res = await fetch(`/api/posts?ideaId=${encodeURIComponent(ideaId)}&format=SINGLE_IMAGE`, { signal: AbortSignal.timeout(15_000) })
+      if (!res.ok) throw new Error("Saved posts could not be checked. Your local draft is still available; reload before scheduling.")
+      const { post } = await res.json()
+      restoreChecked.current = true
+      if (post) {
+        setPostId(post.id)
+        writer.restore({ postId: post.id, caption: post.caption ?? "", updatedAt: post.updatedAt })
+        const local: BrowserDraft | null = savedCaption !== null || savedPrompt || savedImageUrl || savedSize
+          ? { caption: savedCaption, prompt: savedPrompt, imageUrl: savedImageUrl, size: savedSize } : null
+        const remote: BrowserDraft = { caption: post.caption ?? "", prompt: post.metadata?.imagePrompt ?? null, imageUrl: post.imageUrls?.[0] ?? null, size: post.metadata?.size === "1:1" ? "1:1" : "4:5" }
+        const selected = reconcileDraft(`imageDraft_${ideaId}`, local, remote, post.updatedAt)
+        savedCaption = selected.draft.caption
+        savedPrompt = selected.draft.prompt
+        savedImageUrl = selected.draft.imageUrl
+        savedSize = selected.draft.size
+        setBrowserRecovery(selected.recovery)
+        persistBrowserDraft(selected.draft, post.updatedAt)
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not restore the saved post. Reload before scheduling.")
     }
 
     if (savedSize) setSize(savedSize)
@@ -235,6 +255,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     if (isChargingRef.current) return
     isChargingRef.current = true
     setIsStreamingCaption(true)
+    const previousCaption = caption
     setCaptionReady(false)
     setCaption("")
     setError(null)
@@ -296,6 +317,8 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
       // Credits were charged server-side — refresh the Topbar balance.
       void useCreditStore.getState().refresh()
     } catch (err) {
+      setCaption(previousCaption)
+      setCaptionReady(Boolean(previousCaption))
       if ((err as Error).name === "AbortError") return
       setError(err instanceof Error ? err.message : "Something went wrong")
     } finally {
@@ -305,16 +328,26 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
   }
 
   // ── localStorage persistence helpers (keyed per ideaId) ──
+  function persistBrowserDraft(draft: BrowserDraft, revision = writer.revision(), clearRecovery = false) {
+    try {
+      persistDraftValues(`imageDraft_${ideaId}`, {
+        [`imageCaption_${ideaId}`]: draft.caption, [`imagePrompt_${ideaId}`]: draft.prompt,
+        [`imageUrl_${ideaId}`]: draft.imageUrl, [`imageSize_${ideaId}`]: draft.size,
+      }, revision, clearRecovery)
+    } catch { setError("Browser draft recovery is unavailable. Save Draft before leaving this page.") }
+  }
+
   function persistCaption(value: string) {
     try {
       localStorage.setItem(`imageCaption_${ideaId}`, value)
     } catch {
-      // best-effort
+      setError("Browser draft recovery is unavailable. Save Draft before leaving this page.")
     }
   }
 
   // Caption edits are persisted too, so navigating back restores the latest text.
   function handleCaptionChange(value: string) {
+    setSaved(false)
     setCaption(value)
     persistCaption(value)
   }
@@ -662,9 +695,13 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
   }
 
   async function handleCopyCaption() {
-    await navigator.clipboard.writeText(caption)
-    setCaptionCopied(true)
-    setTimeout(() => setCaptionCopied(false), 2000)
+    try {
+      await navigator.clipboard.writeText(caption)
+      setCaptionCopied(true)
+      setTimeout(() => setCaptionCopied(false), 2000)
+    } catch {
+      setError("Could not copy. Select the caption and copy it manually.")
+    }
   }
 
   // Route through the same-origin proxy so R2's CORS policy can't block the
@@ -675,7 +712,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     setDownloading(true)
     try {
       const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`
-      const res = await fetch(proxyUrl)
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(30_000) })
       if (!res.ok) throw new Error("fetch failed")
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -685,9 +722,9 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
       document.body.appendChild(a)
       a.click()
       a.remove()
-      URL.revokeObjectURL(url)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch {
-      window.open(imageUrl, "_blank") // fallback — open original in new tab to save
+      setError("Could not download the image. Check your connection and try again.")
     } finally {
       setDownloading(false)
     }
@@ -695,42 +732,28 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
 
   async function handleSaveDraft() {
     if (!postId || savingDraft) return
+    const savedValue = JSON.stringify({ caption, imageUrl, imagePrompt, size })
     setSavingDraft(true)
+    setError(null)
     try {
-      await fetch(`/api/posts/${postId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caption }),
-      })
+      await getPostIdSynced()
+      // A saved indicator always belongs to the submitted snapshot.
+      setSavedSnapshot(savedValue)
       setSaved(true)
-      setTimeout(() => setSaved(false), 2500)
-    } catch {
-      // post already saved on generation
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Saving failed. Your edits are still here.")
     } finally {
       setSavingDraft(false)
     }
   }
 
-  // ScheduleForLaterButton's getPostId — syncs whatever caption edits haven't
-  // been explicitly "Save Draft"-ed yet, so the Content Hub preview shows the
-  // actual current caption, not whatever was there at generation time.
   async function getPostIdSynced(): Promise<string | null> {
-    if (!postId) return null
-    try {
-      await fetch(`/api/posts/${postId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caption }),
-      })
-    } catch {
-      // best-effort — worst case Content Hub shows the last-saved caption
-    }
-    return postId
+    if (!restoreChecked.current) throw new Error("Reload to check the saved draft before saving. Your browser copy is preserved.")
+    if (!postId || !imageUrl) throw new Error("Generate an image before saving or scheduling.")
+    if (isGeneratingImage) throw new Error("Wait for image generation to finish before saving or scheduling.")
+    return (await writer.save(caption, postId, undefined, size ?? "4:5", { imageUrl, imagePrompt: imagePrompt ?? "" })).postId
   }
 
-  // ── Structure selection handlers (own-idea flow) ──────────────
-  // Selection complete → log it and drop into the existing generation flow.
-  // Values are passed explicitly because the setState calls haven't committed.
   function completeSelection(
     mode: StructureMode,
     custom: string | null,
@@ -858,7 +881,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] hover:bg-[#E9E7E1] text-[12px] font-medium text-[#6B7280] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {savingDraft && <Loader2 size={12} className="animate-spin" />}
-              {savingDraft ? "Saving…" : saved ? "Saved!" : "Save Draft"}
+              {savingDraft ? "Saving…" : saved && savedSnapshot === JSON.stringify({ caption, imageUrl, imagePrompt, size }) ? "Saved!" : "Save Draft"}
             </button>
           )}
         </div>
@@ -1168,6 +1191,16 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
 
   return (
     <div className="max-w-4xl mx-auto flex flex-col gap-8">
+      {browserRecovery !== null && <DraftRecoveryNotice onRestore={() => {
+        setCaption(browserRecovery.caption ?? "")
+        setCaptionReady(Boolean(browserRecovery.caption))
+        setImagePrompt(browserRecovery.prompt ?? "")
+        setImageUrl(browserRecovery.imageUrl)
+        setSize(browserRecovery.size)
+        setSaved(false)
+        persistBrowserDraft(browserRecovery, writer.revision(), true)
+        setBrowserRecovery(null)
+      }} />}
       <Link
         href={`/idea/${ideaId}`}
         className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"

@@ -1,38 +1,30 @@
 import { NextResponse } from "next/server"
+import { fetchPublicImage, isSafeExternalUrl } from "@/lib/safeRemoteImage"
+import { getCurrentUser } from "@/lib/auth"
 
 export async function GET(req: Request) {
-  const url = new URL(req.url)
-  const imageUrl = url.searchParams.get("url")
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const imageUrl = new URL(req.url).searchParams.get("url")
+  if (!imageUrl) return NextResponse.json({ error: "Missing url" }, { status: 400 })
 
-  if (!imageUrl) {
-    return NextResponse.json({ error: "Missing url" }, { status: 400 })
-  }
-
-  // Only allow images served from our R2 public bucket. Compare full URL
-  // origins (not a string prefix) so a host like "<r2-host>.attacker.com" can't
-  // satisfy the check and turn this into an SSRF / open proxy. Any malformed
-  // URL (or unset env var) throws and fails closed with a 400.
+  let allowedOrigin: string
   try {
-    const allowedOrigin = new URL(process.env.CLOUDFLARE_R2_PUBLIC_URL!).origin
-    const requestedOrigin = new URL(imageUrl).origin
-    if (requestedOrigin !== allowedOrigin) {
-      return NextResponse.json({ error: "Invalid image URL" }, { status: 400 })
-    }
+    allowedOrigin = new URL(process.env.CLOUDFLARE_R2_PUBLIC_URL!).origin
+    if (!isSafeExternalUrl(imageUrl) || new URL(imageUrl).origin !== allowedOrigin) throw new Error()
   } catch {
     return NextResponse.json({ error: "Invalid image URL" }, { status: 400 })
   }
 
   try {
-    const res = await fetch(imageUrl)
-    if (!res.ok) throw new Error("Failed to fetch image")
-
-    const buffer = await res.arrayBuffer()
-
-    return new NextResponse(buffer, {
+    // Every redirect must remain on our configured image origin. Images from
+    // this bucket are public, but the authenticated proxy response is private.
+    const { bytes, mediaType } = await fetchPublicImage(imageUrl, { allowedOrigin })
+    return new NextResponse(new Uint8Array(bytes), {
       headers: {
-        "Content-Type": res.headers.get("Content-Type") ?? "image/png",
-        "Cache-Control": "public, max-age=31536000",
-        "Access-Control-Allow-Origin": "*",
+        "Content-Type": mediaType,
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
       },
     })
   } catch {

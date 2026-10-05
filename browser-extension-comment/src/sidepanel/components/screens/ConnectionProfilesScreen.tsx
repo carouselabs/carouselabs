@@ -29,22 +29,26 @@ export function ConnectionProfilesScreen({ header, startInBuilder, onBuilderOpen
   const [me, setMe] = useState<MeResponse | null>(null);
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<View>({ mode: "list" });
+  const [view, setView] = useState<View>({ mode: startInBuilder ? "create" : "list" });
+  const [previousStart, setPreviousStart] = useState(startInBuilder);
+  if (previousStart !== startInBuilder) {
+    setPreviousStart(startInBuilder);
+    if (startInBuilder) setView({ mode: "create" });
+  }
   const [pendingId, setPendingId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const [{ profiles: fetched }, meRes] = await Promise.all([
+  const load = useCallback(() => {
+    return Promise.all([
         apiFetch<{ profiles: ConnectionProfile[] }>("/api/ext/connection-profiles"),
         apiFetch<MeResponse>("/api/ext/me"),
-      ]);
+      ]).then(([{ profiles: fetched }, meRes]) => {
       setProfiles(fetched);
       setMe(meRes);
       setState("ready");
-    } catch (err) {
+    }).catch((err) => {
       setError(err instanceof ApiError ? err.message : "Failed to load connection profiles");
       setState("error");
-    }
+    });
   }, []);
 
   useEffect(() => {
@@ -54,7 +58,6 @@ export function ConnectionProfilesScreen({ header, startInBuilder, onBuilderOpen
   // Consumed once, so navigating away and back does not reopen the builder.
   useEffect(() => {
     if (!startInBuilder) return;
-    setView({ mode: "create" });
     onBuilderOpened?.();
   }, [startInBuilder, onBuilderOpened]);
 

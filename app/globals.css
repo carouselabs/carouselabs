@@ -160,3 +160,16 @@
 @media (prefers-reduced-motion: reduce) {
   [style*="float"] { animation: none !important; }
 }
+
+/* Visible by default: JS never delays the hero or prevents content access. */
+[data-reveal] { transition: opacity .6s ease-out var(--reveal-delay, 0s), transform .6s ease-out var(--reveal-delay, 0s); }
+[data-reveal="pending"] { opacity: 0; transform: translateY(40px); }
+[data-reveal="pending"][data-reveal-direction="fade"] { transform: none; }
+[data-reveal="pending"][data-reveal-direction="left"] { transform: translateX(-40px); }
+[data-reveal="pending"][data-reveal-direction="right"] { transform: translateX(40px); }
+[data-reveal="pending"][data-reveal-direction="scale"] { transform: scale(.9); }
+:focus-visible { outline: 2px solid #7C3AED; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] { opacity: 1 !important; transform: none !important; transition: none !important; }
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}

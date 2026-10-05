@@ -98,9 +98,9 @@ export async function getExtensionUser(req: Request): Promise<User | null> {
   if (req.method !== "GET" && req.method !== "HEAD" && !isSameOrigin(req)) return null
   try {
     return await getCurrentUser()
-  } catch (err) {
+  } catch {
     // A signed-out answer beats a 500 if Clerk isn't available here.
-    console.error("[extensionCommentAuth] session lookup failed:", err)
+    console.error("[extensionCommentAuth] session lookup failed")
     return null
   }
 }
@@ -109,7 +109,7 @@ function isSameOrigin(req: Request): boolean {
   const origin = req.headers.get("origin")
   if (!origin) return false
   try {
-    return new URL(origin).host === new URL(req.url).host
+    return new URL(origin).origin === new URL(req.url).origin
   } catch {
     return false
   }

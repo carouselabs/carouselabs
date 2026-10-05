@@ -209,7 +209,7 @@ export function HistoryScreen() {
           </div>
 
           {filtered.length === 0 && (
-            <p className="text-xs text-muted-foreground">Nothing matches "{query}".</p>
+            <p className="text-xs text-muted-foreground">Nothing matches &quot;{query}&quot;.</p>
           )}
 
           <ul className="space-y-2">

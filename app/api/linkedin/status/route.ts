@@ -13,7 +13,8 @@ export async function GET() {
     include: { linkedIn: true },
   })
 
-  const li = user?.linkedIn
+  if (!user || user.suspendedAt || user.deletedAt) return NextResponse.json({ connected: false }, { status: 403 })
+  const li = user.linkedIn
   return NextResponse.json({
     connected: !!li,
     name: li?.name ?? null,

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import NextLink from "next/link"
 import {
   Plus,
@@ -674,6 +674,7 @@ export function ContentHubClient({
   const [dateValue, setDateValue] = useState("")
   const [timeValue, setTimeValue] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const submittingRef = useRef(false)
   // Distinguishes which of the two footer buttons (Schedule vs. Save as
   // Draft) is the one in flight, so only the clicked button shows its own
   // spinner/text-change while `submitting` disables both.
@@ -1444,6 +1445,13 @@ export function ContentHubClient({
   }
 
   async function handleSchedule(asDraft = false) {
+    if (submittingRef.current) return
+    submittingRef.current = true
+    try { await submitSchedule(asDraft) }
+    finally { submittingRef.current = false }
+  }
+
+  async function submitSchedule(asDraft = false) {
     if (!dateValue || !timeValue) return
     const scheduledFor = new Date(`${dateValue}T${timeValue}`)
     if (isNaN(scheduledFor.getTime())) {
@@ -1577,6 +1585,13 @@ export function ContentHubClient({
   // platform (see lib/queue.ts), then creates the exact same ScheduledPost
   // shape handleSchedule does — no separate publishing path.
   async function handleAddToQueue() {
+    if (submittingRef.current) return
+    submittingRef.current = true
+    try { await submitAddToQueue() }
+    finally { submittingRef.current = false }
+  }
+
+  async function submitAddToQueue() {
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
     if (contentSource === "custom") {
@@ -1680,7 +1695,8 @@ export function ContentHubClient({
     if (removingId) return
     setRemovingId(item.id)
     try {
-      await fetch(`/api/content-hub/scheduled/${item.id}`, { method: "DELETE" })
+      const response = await fetch(`/api/content-hub/scheduled/${item.id}`, { method: "DELETE", signal: AbortSignal.timeout(30_000) })
+      if (!response.ok) throw new Error("Failed to remove")
       setScheduled((prev) => prev.filter((s) => s.id !== item.id))
       if (panel?.mode === "edit" && panel.item.id === item.id) closePanel()
     } catch {

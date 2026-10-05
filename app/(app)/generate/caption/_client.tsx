@@ -15,6 +15,9 @@ import { VersionHistory } from "@/components/generate/VersionHistory"
 import { trackHistory } from "@/lib/hooks/useHistory"
 import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
 import { friendlyGenerationError } from "@/lib/friendlyError"
+import { createDraftWriter } from "@/lib/postDraft"
+import { persistDraftValues, reconcileDraft } from "@/lib/draftRecovery"
+import { DraftRecoveryNotice } from "@/components/generate/DraftRecoveryNotice"
 import { useCreditStore } from "@/lib/store/creditStore"
 
 interface CaptionClientProps {
@@ -82,6 +85,9 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
   const [useVoiceGuidelines, setUseVoiceGuidelines] = useState(false)
   const bufferRef = useRef("")
   const didInit = useRef(false)
+  const [writer] = useState(() => createDraftWriter(ideaId, fetch, `captionDraft_${ideaId}`))
+  const restoreChecked = useRef(false)
+  const [browserRecovery, setBrowserRecovery] = useState<string | null>(null)
   // Guards against rapid double-clicks firing two simultaneous generations
   // (each of which would be charged server-side).
   const isChargingRef = useRef(false)
@@ -101,11 +107,24 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
 
   async function init() {
     try {
-      const res = await fetch(`/api/posts?ideaId=${ideaId}`)
+      let recovered: string | null = null
+      try { recovered = localStorage.getItem(`captionDraft_${ideaId}`) } catch { /* Browser storage can be unavailable. */ }
+      if (recovered !== null) {
+        setCaption(recovered)
+        setRestored(true)
+        setCaptionStep("generating")
+      }
+      const res = await fetch(`/api/posts?ideaId=${encodeURIComponent(ideaId)}&format=TEXT_ONLY`, { signal: AbortSignal.timeout(15_000) })
+      if (!res.ok) throw new Error("Saved posts could not be checked. Your browser draft is preserved; reload before saving or scheduling.")
       if (res.ok) {
         const data = await res.json()
-        if (data.post?.caption) {
-          setCaption(data.post.caption)
+        restoreChecked.current = true
+        if (data.post) {
+          writer.restore({ postId: data.post.id, caption: data.post.caption ?? "", updatedAt: data.post.updatedAt })
+          const selected = reconcileDraft(`captionDraft_${ideaId}`, recovered, data.post.caption ?? "", data.post.updatedAt)
+          setCaption(selected.draft)
+          setBrowserRecovery(selected.recovery)
+          persistBrowserDraft(selected.draft, data.post.updatedAt)
           setRestored(true)
           // A caption already exists — skip structure selection entirely.
           setCaptionStep("generating")
@@ -113,8 +132,9 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
           return
         }
       }
-    } catch {
-      // fall through — user generates manually below
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not restore the saved draft. Reload before saving or scheduling.")
+      setCaptionStep("generating")
     } finally {
       setInitializing(false)
     }
@@ -130,17 +150,27 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
     void init()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Persist the generated caption so it survives a page revisit.
-  async function saveCaption(text: string) {
-    try {
-      await fetch("/api/posts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId, caption: text }),
-      })
-    } catch {
-      // best-effort — user can still Save Draft manually
+  // Keep unfinished edits on this device; network persistence is explicit and
+  // serialized with generation saves, including saves initiated by scheduling.
+  useEffect(() => {
+    if (initializing || isGenerating || captionStep !== "generating") return
+    const persist = () => {
+      try { localStorage.setItem(`captionDraft_${ideaId}`, caption) }
+      catch { setError("Browser draft recovery is unavailable. Save Draft before leaving this page.") }
     }
+    const timer = setTimeout(persist, 150)
+    window.addEventListener("pagehide", persist)
+    return () => { clearTimeout(timer); window.removeEventListener("pagehide", persist) }
+  }, [caption, ideaId, initializing, isGenerating, captionStep])
+
+  function persistBrowserDraft(value: string, revision = writer.revision(), clearRecovery = false) {
+    try { persistDraftValues(`captionDraft_${ideaId}`, { [`captionDraft_${ideaId}`]: value }, revision, clearRecovery) }
+    catch { setError("Browser draft recovery is unavailable. Save Draft before leaving this page.") }
+  }
+
+  async function saveCaption(text: string): Promise<string> {
+    if (!restoreChecked.current) throw new Error("Reload to check the saved draft before saving. Your browser copy is preserved.")
+    return (await writer.save(text)).postId
   }
 
   async function generate(
@@ -153,6 +183,7 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
     isChargingRef.current = true
     setIsGenerating(true)
     setRestored(false)
+    const previousCaption = caption
     setCaption("")
     setHooks([])
     setError(null)
@@ -211,10 +242,12 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
       setCaption(parsed.captionText)
       setHooks(parsed.hooks)
       trackHistory(ideaId, "CAPTION_DONE")
-      saveCaption(parsed.captionText)
+      try { await saveCaption(parsed.captionText) }
+      catch (saveError) { setError(saveError instanceof Error ? saveError.message : "Caption generated, but saving failed. Use Save Draft to retry.") }
       // Credits were charged server-side — refresh the Topbar balance.
       void useCreditStore.getState().refresh()
     } catch (err) {
+      setCaption(previousCaption)
       setError(err instanceof Error ? err.message : "Something went wrong")
       throw err // let callers (handleRegenerate) know it failed
     } finally {
@@ -545,6 +578,11 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
 
   return (
     <div className="max-w-2xl mx-auto flex flex-col gap-8">
+      {browserRecovery !== null && <DraftRecoveryNotice onRestore={() => {
+        setCaption(browserRecovery)
+        persistBrowserDraft(browserRecovery, writer.revision(), true)
+        setBrowserRecovery(null)
+      }} />}
       {/* Back */}
       <Link
         href={`/idea/${ideaId}`}
@@ -658,7 +696,7 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
         caption={caption}
         onChange={setCaption}
         isGenerating={isGenerating}
-        ideaId={ideaId}
+        onSave={saveCaption}
         onRegenerate={() => handleRegenerate(tone)}
         regenerateDisabled={atLimit}
       />

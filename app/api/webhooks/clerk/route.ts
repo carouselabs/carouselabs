@@ -36,37 +36,50 @@ export async function POST(req: Request) {
     return new Response("Invalid signature", { status: 400 })
   }
 
-  if (event.type === "user.created") {
+  if (event.type === "user.created" || event.type === "user.updated") {
     const { id: clerkId, email_addresses, primary_email_address_id, first_name, last_name } =
       event.data
     const primary = email_addresses.find((e) => e.id === primary_email_address_id)
     if (!primary) {
       return new Response("No primary email", { status: 400 })
     }
+    if (primary.verification?.status !== "verified") {
+      return new Response("Awaiting verified primary email", { status: 200 })
+    }
     const email = primary.email_address
+    // The session bootstrap and webhook can race; the stable Clerk ID owns
+    // the account, never a matching address from another Clerk identity.
+    if (await db.user.findUnique({ where: { clerkId } })) {
+      return new Response("OK", { status: 200 })
+    }
 
-    // The email may already belong to a User row under a different clerkId
-    // (Clerk account deleted and re-created, or a new sign-in method). Creating
-    // would violate the unique email constraint (P2002) — re-link that row to
-    // the new clerkId instead of creating a duplicate. Same-clerkId hits are
-    // webhook retries: nothing to do.
+    // Conflicting identities require explicit account recovery. Never replace
+    // an account's Clerk ID automatically, including for a verified email.
     const existingByEmail = await db.user.findFirst({ where: { email } })
     if (existingByEmail) {
       if (existingByEmail.clerkId !== clerkId) {
-        await db.user.update({
-          where: { id: existingByEmail.id },
-          data: { clerkId },
-        })
+        return new Response("Account identity conflict; account recovery required", { status: 409 })
       }
     } else {
-      const newUser = await db.user.create({
-        data: {
-          clerkId,
-          email,
-          subscription: { create: {} },
-          usage: { create: {} },
-        },
-      })
+      let newUser
+      try {
+        newUser = await db.user.create({
+          data: {
+            clerkId,
+            email,
+            subscription: { create: {} },
+            usage: { create: {} },
+          },
+        })
+      } catch (err) {
+        if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
+          const concurrent = await db.user.findUnique({ where: { clerkId } })
+          // A competing bootstrap/delivery already persisted this identity.
+          // Only the winning insert sends welcome/referral/sequence effects.
+          return new Response(concurrent ? "OK" : "Account identity conflict", { status: concurrent ? 200 : 409 })
+        }
+        throw err
+      }
 
       // Admin pre-filled this person's onboarding profile before they signed
       // up (see /admin/prefill-user) — apply it now instead of sending them
@@ -75,8 +88,8 @@ export async function POST(req: Request) {
       // normal onboarding flow.
       try {
         await applyPendingPrefill(newUser.id, email)
-      } catch (err) {
-        console.error("[webhooks/clerk] pending prefill apply failed:", err)
+      } catch {
+      console.error("[webhooks/clerk] pending prefill apply failed:")
       }
 
       // Referral attribution — the code rode along on the SignUp attempt's
@@ -89,8 +102,8 @@ export async function POST(req: Request) {
       if (typeof referralCode === "string" && referralCode.trim()) {
         try {
           await createReferralForSignup(newUser.id, referralCode)
-        } catch (err) {
-          console.error("[webhooks/clerk] referral attribution failed:", err)
+        } catch {
+      console.error("[webhooks/clerk] referral attribution failed:")
         }
       }
 
@@ -99,8 +112,8 @@ export async function POST(req: Request) {
       const name = [first_name, last_name].filter(Boolean).join(" ")
       try {
         await sendWelcomeEmail(email, name)
-      } catch (err) {
-        console.error("[webhooks/clerk] welcome email failed:", err)
+      } catch {
+      console.error("[webhooks/clerk] welcome email failed:")
       }
 
       // Instant enrollment into any active sequence matching this brand-new
@@ -111,8 +124,8 @@ export async function POST(req: Request) {
       // changes later on. Best-effort, same reasoning as the two calls above.
       try {
         await enrollUserInMatchingSequences(newUser.id)
-      } catch (err) {
-        console.error("[webhooks/clerk] sequence enrollment failed:", err)
+      } catch {
+      console.error("[webhooks/clerk] sequence enrollment failed:")
       }
     }
   }

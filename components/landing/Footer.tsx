@@ -19,7 +19,7 @@ export function Footer() {
         <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
           <Link href="/" className="flex items-center gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/favicon.ico" alt="CarouseLabs" className="w-6 h-6 rounded-md object-cover" />
+            <img src="/icon.png" alt="CarouseLabs" className="w-6 h-6 rounded-md object-cover" />
             <span className="text-[14px] font-semibold text-[#0A0A0A]">CarouseLabs</span>
           </Link>
 

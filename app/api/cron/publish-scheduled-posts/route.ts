@@ -1,10 +1,7 @@
 // app/api/cron/publish-scheduled-posts/route.ts
 // Runs every 5 min (see vercel.json). Three jobs share this one tick:
-//   0. Reclaim stuck "publishing" rows — if the server crashed mid-request
-//      after a row was claimed but before it resolved to published/queued/
-//      failed, it would otherwise sit stuck forever. Anything still
-//      "publishing" after 10 minutes gets reset to "queued" so the normal
-//      retry path picks it back up.
+//   0. Quarantine stuck "publishing" rows for manual reconciliation. A crash
+//      after dispatch cannot prove that LinkedIn did not publish the post.
 //   1. Fulfill due RecurringSlots — a slot with no automation would be a
 //      dead setting (create a rule, nothing ever happens), so this is what
 //      actually turns "post automatically every Tue/Thu at 9am" into a real
@@ -23,9 +20,10 @@
 // ready for it.
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { postToLinkedIn } from "@/lib/linkedin"
+import { LinkedInPublishError, postToLinkedIn } from "@/lib/linkedin"
 import { sendScheduledPostFailedEmail, sendScheduledPostPublishedEmail } from "@/lib/email"
 import { isFunctionalPlatform, type Platform } from "@/lib/platforms"
+import { PUBLICATION_RECONCILIATION_REASON } from "@/lib/scheduledPostState"
 
 export const maxDuration = 300
 
@@ -36,12 +34,13 @@ const RETRY_DELAY_MS = 5 * 60 * 1000
 // Per-run safety cap — a 5-minute cadence should never realistically need
 // more than this many posts published in one invocation.
 const BATCH_LIMIT = 50
+// Leave room for the helper's 90-second timeout and database finalization.
+const CLAIM_BUDGET_MS = 150_000
 // A slot fires once fired within the last 20h — comfortably longer than the
 // 24h gap between two legitimate daily firings, so this is a safe re-fire
 // guard without needing exact "start of local day" math per timezone.
 const RECURRING_DEDUPE_MS = 20 * 60 * 60 * 1000
-// How long a row can sit claimed ("publishing") before we assume the worker
-// that claimed it crashed and it's safe to hand back to the normal retry path.
+// A lost worker needs reconciliation, never automatic re-publication.
 const STUCK_PUBLISHING_MS = 10 * 60 * 1000
 
 // Emails are best-effort — a Resend hiccup must never crash the publish run.
@@ -49,7 +48,7 @@ async function safeEmail(fn: () => Promise<unknown>) {
   try {
     await fn()
   } catch (err) {
-    console.error("[cron/publish-scheduled-posts] email failed:", err)
+    console.error("[cron/publish-scheduled-posts] email failed:", err instanceof Error ? err.name : "UnknownError")
   }
 }
 
@@ -84,12 +83,13 @@ function isDueNow(nowHHmm: string, targetHHmm: string): boolean {
 
 async function fulfillRecurringSlots(now: Date): Promise<number> {
   const slots = await db.recurringSlot.findMany({
-    where: { active: true },
+    where: { active: true, user: { deletedAt: null, suspendedAt: null } },
     include: { user: { include: { profile: true } } },
   })
 
   let created = 0
   for (const slot of slots) {
+    if (slot.user.deletedAt || slot.user.suspendedAt) continue
     const timeZone = slot.user.profile?.timezone || "UTC"
     let zoned: { dayOfWeek: number; hhmm: string }
     try {
@@ -100,41 +100,49 @@ async function fulfillRecurringSlots(now: Date): Promise<number> {
     if (!slot.daysOfWeek.includes(zoned.dayOfWeek)) continue
     if (!isDueNow(zoned.hhmm, slot.timeOfDay)) continue
 
-    const firedRecently = await db.scheduledPost.findFirst({
-      where: { recurringRuleId: slot.id, createdAt: { gte: new Date(now.getTime() - RECURRING_DEDUPE_MS) } },
-      select: { id: true },
-    })
-    if (firedRecently) continue
-
     // A recurring slot on a not-yet-connected platform is saved but simply
     // never fires until that platform goes live (see lib/platforms.ts's
     // `functional` flag) — same treatment as a queued ScheduledPost getting
     // downgraded to "pending_connection" instead of being rejected outright.
     if (!isFunctionalPlatform(slot.platform as Platform)) continue
 
-    // Most recent post that isn't already queued/published anywhere, so a
-    // recurring slot never reposts the same content on repeat.
-    const post = await db.post.findFirst({
-      where: {
-        userId: slot.userId,
-        scheduledPosts: { none: { status: { in: ["queued", "publishing", "published"] } } },
-      },
-      orderBy: { createdAt: "desc" },
-      select: { id: true },
-    })
-    if (!post) continue // nothing unscheduled to fill this slot with today
-
-    await db.scheduledPost.create({
-      data: {
-        userId: slot.userId,
-        postId: post.id,
-        platform: slot.platform,
-        scheduledFor: now,
-        status: "queued",
-        recurringRuleId: slot.id,
-      },
-    })
-    created++
+    // Read the dedupe key and reserve the content in one serializable
+    // transaction. Overlapping ticks cannot create two posts from one slot
+    // or select the same content for different slots. Retry only a rolled-back
+    // serialization conflict; no external operation takes place here.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const reserved = await db.$transaction(async tx => {
+          const firedRecently = await tx.scheduledPost.findFirst({
+            where: { recurringRuleId: slot.id, createdAt: { gte: new Date(now.getTime() - RECURRING_DEDUPE_MS) } },
+            select: { id: true },
+          })
+          if (firedRecently) return false
+          const post = await tx.post.findFirst({
+            where: {
+              userId: slot.userId,
+              user: { deletedAt: null, suspendedAt: null },
+              status: { not: "PUBLISHED" },
+              // A failed publish may already exist externally. Only an
+              // explicit manual resolution may reuse that content.
+              scheduledPosts: { none: { status: { in: ["queued", "publishing", "published", "failed"] } } },
+            },
+            orderBy: { createdAt: "desc" },
+            select: { id: true },
+          })
+          if (!post) return false
+          await tx.scheduledPost.create({
+            data: { userId: slot.userId, postId: post.id, platform: slot.platform, scheduledFor: now, status: "queued", recurringRuleId: slot.id },
+          })
+          return true
+        }, { isolationLevel: "Serializable", timeout: 10_000 })
+        if (reserved) created++
+        break
+      } catch (error) {
+        if (error && typeof error === "object" && "code" in error && error.code === "P2034" && attempt < 2) continue
+        throw error
+      }
+    }
   }
   return created
 }
@@ -152,12 +160,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  // Job #0 — reclaim anything stuck "publishing" from a crashed prior run
-  // before doing anything else, so it's eligible for job #2 below in this
-  // same tick rather than sitting stuck indefinitely.
-  const reclaimed = await db.scheduledPost.updateMany({
+  // Unknown outcomes must remain visible and must not be retried automatically.
+  const reconciliations = await db.scheduledPost.updateMany({
     where: { status: "publishing", updatedAt: { lt: new Date(now.getTime() - STUCK_PUBLISHING_MS) } },
-    data: { status: "queued" },
+    data: { status: "failed", failureReason: PUBLICATION_RECONCILIATION_REASON },
   })
 
   // Job #1, so anything it creates gets picked up by job #2 below in this
@@ -165,7 +171,7 @@ export async function GET(req: Request) {
   const recurringCreated = await fulfillRecurringSlots(now)
 
   const due = await db.scheduledPost.findMany({
-    where: { status: "queued", scheduledFor: { lte: now } },
+    where: { status: "queued", scheduledFor: { lte: now }, user: { deletedAt: null, suspendedAt: null } },
     orderBy: { scheduledFor: "asc" },
     take: BATCH_LIMIT,
     include: {
@@ -177,18 +183,23 @@ export async function GET(req: Request) {
   let published = 0
   let retried = 0
   let failed = 0
+  let reconciliationRequired = reconciliations.count
 
   for (const scheduled of due) {
+    if (Date.now() - now.getTime() > CLAIM_BUDGET_MS) break
+    if (scheduled.user.deletedAt || scheduled.user.suspendedAt) continue
     // Atomically claim the row before doing anything — guards against two
     // overlapping cron invocations both trying to publish the same post.
     const claim = await db.scheduledPost.updateMany({
-      where: { id: scheduled.id, status: "queued" },
+      where: { id: scheduled.id, status: "queued", scheduledFor: scheduled.scheduledFor, updatedAt: scheduled.updatedAt, user: { deletedAt: null, suspendedAt: null } },
       data: { status: "publishing" },
     })
     if (claim.count === 0) continue // another run already claimed it
 
     const { post, user } = scheduled
     const name = user.profile?.name ?? ""
+    let publicationStarted = false
+    let confirmedPostUrl: string | undefined
 
     try {
       if (scheduled.platform !== "linkedin") {
@@ -211,12 +222,14 @@ export async function GET(req: Request) {
       const metadata = post.metadata as { platformCaptions?: Record<string, string> } | null
       const caption = metadata?.platformCaptions?.linkedin ?? post.caption ?? ""
 
+      publicationStarted = true
       const { postUrl } = await postToLinkedIn(
         user.linkedIn.accessToken,
         user.linkedIn.linkedInId,
         caption,
         post.imageUrls,
       )
+      confirmedPostUrl = postUrl
 
       await db.$transaction([
         db.scheduledPost.update({
@@ -237,10 +250,13 @@ export async function GET(req: Request) {
         )
       }
     } catch (err) {
-      const reason = err instanceof Error ? err.message : "Failed to publish"
+      const uncertain = publicationStarted && !(err instanceof LinkedInPublishError && !err.publicationMayHaveSucceeded)
+      const reason = uncertain ? PUBLICATION_RECONCILIATION_REASON
+        : err instanceof LinkedInPublishError ? err.message
+        : publicationStarted ? "Could not prepare publication" : err instanceof Error ? err.message : "Failed to publish"
       const nextAttempt = scheduled.retryCount + 1
 
-      if (nextAttempt < MAX_ATTEMPTS) {
+      if (!uncertain && nextAttempt < MAX_ATTEMPTS) {
         await db.scheduledPost.update({
           where: { id: scheduled.id },
           data: {
@@ -254,9 +270,10 @@ export async function GET(req: Request) {
       } else {
         await db.scheduledPost.update({
           where: { id: scheduled.id },
-          data: { status: "failed", retryCount: nextAttempt, failureReason: reason },
+          data: { status: "failed", retryCount: nextAttempt, failureReason: reason, ...(confirmedPostUrl ? { publishedUrl: confirmedPostUrl } : {}) },
         })
         failed++
+        if (uncertain) reconciliationRequired++
         if (user.email && (user.profile?.notifyPostFailed ?? true)) {
           await safeEmail(() =>
             sendScheduledPostFailedEmail(user.email, name, post.title, scheduled.platform, reason),
@@ -268,11 +285,11 @@ export async function GET(req: Request) {
   }
 
   console.log(
-    `[cron/publish-scheduled-posts] reclaimed=${reclaimed.count} recurringCreated=${recurringCreated} due=${due.length} published=${published} retried=${retried} failed=${failed}`,
+    `[cron/publish-scheduled-posts] reconciliationRequired=${reconciliationRequired} recurringCreated=${recurringCreated} due=${due.length} published=${published} retried=${retried} failed=${failed}`,
   )
   return NextResponse.json({
     ok: true,
-    reclaimed: reclaimed.count,
+    reconciliationRequired,
     recurringCreated,
     due: due.length,
     published,

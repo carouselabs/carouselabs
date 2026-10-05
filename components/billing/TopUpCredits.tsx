@@ -26,7 +26,6 @@ function validate(credits: number): string | null {
 export function TopUpCredits({
   extraCredits,
   extraCreditsExpiry,
-  userId,
   plan,
 }: {
   extraCredits: number
@@ -102,24 +101,24 @@ export function TopUpCredits({
   const expiry = extraCreditsExpiry ? new Date(extraCreditsExpiry) : null
   const hasValidExtras = extraCredits > 0 && (!expiry || expiry.getTime() > Date.now())
 
-  function handleTopUp() {
-    if (!isValid) return
+  async function handleTopUp() {
+    if (!isValid || loading) return
     setCheckoutError(null)
-    const base = process.env.NEXT_PUBLIC_LEMONSQUEEZY_TOPUP_CHECKOUT_URL
-    if (!base) {
-      setCheckoutError("Payments are not configured")
-      return
-    }
-    const ls = window.LemonSqueezy
-    if (!ready || !ls) {
-      setCheckoutError("Checkout is still loading, try again")
-      return
-    }
-    const priceInCents = (credits / 100) * DOLLARS_PER_100 * 100
-    // embed=1 → overlay; media=0&logo=0 → minimal chrome.
-    const checkoutUrl = `${base}?embed=1&media=0&logo=0&checkout[custom][user_id]=${userId}&checkout[suggested_price]=${priceInCents}`
     setLoading(true)
-    ls.Url.Open(checkoutUrl)
+    try {
+      const ls = window.LemonSqueezy
+      if (!ready || !ls) throw new Error("Checkout is still loading, try again")
+      const response = await fetch("/api/billing/checkout", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "topup", credits }), signal: AbortSignal.timeout(15000),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Checkout unavailable")
+      ls.Url.Open(data.url)
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : "Checkout unavailable")
+      setLoading(false)
+    }
   }
 
   return (

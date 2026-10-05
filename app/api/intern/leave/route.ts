@@ -13,7 +13,9 @@ import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
+import { getOwnedInternId } from "@/lib/internAuth"
 import { getLeaveBalance } from "@/lib/internPoints"
+import { requestInternLeave } from "@/lib/internLeave"
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -24,10 +26,11 @@ export async function GET() {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const intern = await db.intern.findUnique({
-    where: { email: user.email },
+  const internId = await getOwnedInternId(user)
+  const intern = internId ? await db.intern.findUnique({
+    where: { id: internId },
     include: { leaveRequests: { orderBy: { date: "desc" } } },
-  })
+  }) : null
   if (!intern) return NextResponse.json({ intern: null })
 
   const approvedCount = intern.leaveRequests.filter((r) => r.status === "approved").length
@@ -39,21 +42,10 @@ export async function GET() {
 export async function POST(req: Request) {
   const { userId: clerkId } = await auth()
   if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-  const intern = await db.intern.findUnique({
-    where: { email: user.email },
-    include: { leaveRequests: { where: { status: "approved" }, select: { id: true } } },
-  })
-  if (!intern) return NextResponse.json({ error: "You don't have intern access" }, { status: 403 })
-  if (!intern.active || intern.status === "completed" || intern.status === "terminated") {
-    return NextResponse.json(
-      { error: "Your internship has ended — you can no longer apply for leave" },
-      { status: 403 },
-    )
-  }
+  const internId = await getOwnedInternId(user)
+  if (!internId) return NextResponse.json({ error: "You don't have intern access" }, { status: 403 })
 
   let date: string
   let reason: string | null
@@ -61,76 +53,23 @@ export async function POST(req: Request) {
     const body = await req.json()
     if (typeof body.date !== "string" || !DATE_RE.test(body.date)) throw new Error()
     date = body.date
+    if (body.reason != null && (typeof body.reason !== "string" || body.reason.length > 2000)) throw new Error()
     reason = typeof body.reason === "string" && body.reason.trim() ? body.reason.trim() : null
   } catch {
-    return NextResponse.json({ error: "date (YYYY-MM-DD) is required" }, { status: 400 })
+    return NextResponse.json({ error: "A valid date (YYYY-MM-DD) and a reason of at most 2000 characters are required" }, { status: 400 })
   }
 
-  const requestedDate = new Date(`${date}T00:00:00.000Z`)
+  const requestedDate = new Date(date + "T00:00:00.000Z")
+  if (!Number.isFinite(requestedDate.getTime()) || requestedDate.toISOString().slice(0, 10) !== date) {
+    return NextResponse.json({ error: "Invalid date" }, { status: 400 })
+  }
   const today = new Date()
   today.setUTCHours(0, 0, 0, 0)
   if (requestedDate < today) {
     return NextResponse.json({ error: "Cannot apply for leave on a past date" }, { status: 400 })
   }
 
-  const balance = getLeaveBalance(intern, intern.leaveRequests.length)
-  const balanceExhausted = balance.remaining <= 0
-
-  const [existingAttendance, existingLeave] = await Promise.all([
-    db.internAttendance.findUnique({
-      where: { internId_date: { internId: intern.id, date: requestedDate } },
-    }),
-    db.internLeaveRequest.findUnique({
-      where: { internId_date: { internId: intern.id, date: requestedDate } },
-    }),
-  ])
-  if (existingAttendance || existingLeave) {
-    return NextResponse.json({ error: "This date already has an attendance or leave record" }, { status: 400 })
-  }
-
-  try {
-    if (balanceExhausted) {
-      // No balance left to consume — mark absent instead of rejecting the
-      // request outright. No InternLeaveRequest is created.
-      const attendance = await db.internAttendance.create({
-        data: {
-          internId: intern.id,
-          date: requestedDate,
-          status: "absent",
-          note: "Leave requested but balance exhausted — auto-marked absent",
-          markedBy: "self",
-        },
-      })
-      return NextResponse.json({
-        ok: true,
-        status: "absent",
-        message: "Marked as Absent — no leave days remaining",
-        attendance,
-      })
-    }
-
-    const [leaveRequest, attendance] = await db.$transaction([
-      db.internLeaveRequest.create({
-        data: { internId: intern.id, date: requestedDate, reason, status: "approved" },
-      }),
-      db.internAttendance.create({
-        data: { internId: intern.id, date: requestedDate, status: "leave", note: reason, markedBy: "self" },
-      }),
-    ])
-    return NextResponse.json({
-      ok: true,
-      status: "leave",
-      message: "Leave approved",
-      leaveRequest,
-      attendance,
-    })
-  } catch (e: unknown) {
-    if (typeof e === "object" && e !== null && "code" in e && e.code === "P2002") {
-      return NextResponse.json(
-        { error: "This date already has an attendance or leave record" },
-        { status: 400 },
-      )
-    }
-    throw e
-  }
+  const result = await requestInternLeave(internId, user.clerkId, requestedDate, reason)
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.httpStatus })
+  return NextResponse.json(result)
 }

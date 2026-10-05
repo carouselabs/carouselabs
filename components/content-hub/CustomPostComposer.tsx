@@ -80,6 +80,8 @@ export function CustomPostComposer({
       await onSaveTemplate(templateNameInput.trim(), caption.trim())
       setShowSaveTemplate(false)
       setTemplateNameInput("")
+    } catch (err) {
+      setShortenError(err instanceof Error ? err.message : "Could not save the template. Please try again.")
     } finally {
       setSavingTemplate(false)
     }
@@ -100,9 +102,10 @@ export function CustomPostComposer({
       onCaptionChange(caption ? `${caption} ${text}` : text)
       return
     }
-    const start = el.selectionStart ?? caption.length
-    const end = el.selectionEnd ?? caption.length
-    onCaptionChange(caption.slice(0, start) + text + caption.slice(end))
+    const current = el.value
+    const start = el.selectionStart ?? current.length
+    const end = el.selectionEnd ?? current.length
+    onCaptionChange(current.slice(0, start) + text + current.slice(end))
     // Restore focus + cursor right after the inserted text, next tick (after
     // the value prop has actually updated the DOM).
     const cursor = start + text.length
@@ -116,14 +119,19 @@ export function CustomPostComposer({
     const pasted = e.clipboardData.getData("text")
     if (!BARE_URL_RE.test(pasted.trim())) return // let the normal paste happen
     e.preventDefault()
+    const el = e.currentTarget
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    const original = pasted.trim()
+    const inserted = el.value.slice(0, start) + original + el.value.slice(end)
+    // Paste immediately. A delayed shortener must never overwrite subsequent typing.
+    onCaptionChange(inserted)
     try {
-      const shortUrl = await onShortenUrl(pasted.trim(), {})
-      insertAtCursor(shortUrl)
-    } catch {
-      // Shortening failed — fall back to inserting the original URL so the
-      // paste isn't silently swallowed.
-      insertAtCursor(pasted.trim())
-    }
+      const shortUrl = await onShortenUrl(original, {})
+      if (textareaRef.current?.value === inserted) {
+        onCaptionChange(inserted.slice(0, start) + shortUrl + inserted.slice(start + original.length))
+      }
+    } catch { /* Keep the original, valid URL already pasted into the editor. */ }
   }
 
   async function handleShortenAndInsert() {
@@ -167,6 +175,7 @@ export function CustomPostComposer({
 
   return (
     <div className="flex flex-col gap-4">
+      {shortenError && <p role="alert" className="text-[12px] text-red-600">{shortenError}</p>}
       <button
         onClick={onBack}
         className="self-start text-[11px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
@@ -179,7 +188,7 @@ export function CustomPostComposer({
 
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">
-          <label className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">Caption</label>
+          <label htmlFor="custom-post-caption" className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">Caption</label>
           <div className="flex items-center gap-1.5">
             {templates.length > 0 && (
               <div className="relative">
@@ -260,6 +269,7 @@ export function CustomPostComposer({
           </div>
         </div>
         <textarea
+          id="custom-post-caption"
           ref={textareaRef}
           value={caption}
           onChange={(e) => onCaptionChange(e.target.value)}

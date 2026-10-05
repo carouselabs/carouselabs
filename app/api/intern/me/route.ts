@@ -6,6 +6,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
+import { getOwnedInternId } from "@/lib/internAuth"
 import { summarizeEntries, predefinedTaskNames, calculateEndDate } from "@/lib/internPoints"
 
 export async function GET() {
@@ -15,26 +16,16 @@ export async function GET() {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  let intern = await db.intern.findUnique({
-    where: { email: user.email },
+  const internId = await getOwnedInternId(user)
+  const intern = internId ? await db.intern.findUnique({
+    where: { id: internId },
     include: {
       entries: { orderBy: { date: "desc" } },
       extensions: { orderBy: { createdAt: "desc" } },
     },
-  })
+  }) : null
 
   if (!intern) return NextResponse.json({ intern: null })
-
-  if (!intern.clerkId) {
-    intern = await db.intern.update({
-      where: { id: intern.id },
-      data: { clerkId },
-      include: {
-        entries: { orderBy: { date: "desc" } },
-        extensions: { orderBy: { createdAt: "desc" } },
-      },
-    })
-  }
 
   const { total, pointsToday, pointsThisWeek } = summarizeEntries(intern.entries)
   const taskNames = await predefinedTaskNames()

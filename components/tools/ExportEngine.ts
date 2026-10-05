@@ -1,4 +1,4 @@
-import * as UPNG from "upng-js"
+import { encodePngInWorker } from "./pngEncoder"
 
 export type ExportFormat = "png" | "webp"
 
@@ -12,7 +12,8 @@ function download(blob: Blob, filename: string) {
 }
 
 /** Best-effort Kakushie PNG-8 encoder. X's private compression behavior can change. */
-export async function exportTapHoldImage(base: CanvasImageSource, mask: CanvasImageSource, width: number, height: number, format: ExportFormat) {
+export async function exportTapHoldImage(base: CanvasImageSource, mask: CanvasImageSource, width: number, height: number, format: ExportFormat, signal?: AbortSignal) {
+  if (signal?.aborted) throw new DOMException("Export canceled", "AbortError")
   const outputWidth = 2432
   const outputHeight = Math.round((height / width) * outputWidth)
   const output = document.createElement("canvas")
@@ -38,11 +39,13 @@ export async function exportTapHoldImage(base: CanvasImageSource, mask: CanvasIm
 
   const timestamp = Date.now()
   if (format === "png") {
-    const encoded = UPNG.encode([pixels.data.buffer as ArrayBuffer], outputWidth, outputHeight, 256)
+    const encoded = await encodePngInWorker(pixels.data.buffer as ArrayBuffer, outputWidth, outputHeight, signal)
+    if (signal?.aborted) throw new DOMException("Export canceled", "AbortError")
     download(new Blob([encoded], { type: "image/png" }), `tap-hold-image-${timestamp}.png`)
     return
   }
   const blob = await new Promise<Blob | null>((resolve) => output.toBlob(resolve, "image/webp", 0.92))
+  if (signal?.aborted) throw new DOMException("Export canceled", "AbortError")
   if (!blob) throw new Error("WebP export failed")
   download(blob, `tap-hold-image-${timestamp}.webp`)
 }

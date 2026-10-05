@@ -22,39 +22,15 @@ export const GROWTH_MONTHLY_PRICE_CENTS = 4599
 // this is how we tell a Pro checkout from a Growth checkout apart (both are
 // "subscription_created" with no other plan signal in the payload).
 //
-// Unknown/missing variants still resolve to PRO so a webhook never crashes a
-// paying customer's upgrade, but every fall-through path logs loudly — a
-// silent default here once meant a misconfigured env var would misclassify
-// ALL Growth purchases as Pro with no trace anywhere.
+// Unknown products must never grant paid web-plan permissions.
 export function planForVariantId(variantId: number | undefined): "PRO" | "GROWTH" {
   const growthVariantId = parseInt(process.env.LEMONSQUEEZY_GROWTH_VARIANT_ID ?? "0", 10)
   const proVariantId = parseInt(process.env.LEMONSQUEEZY_VARIANT_ID ?? "0", 10)
 
-  // Validate env vars at runtime
-  if (!growthVariantId || growthVariantId === 0) {
-    console.error(
-      "[lemonsqueezy] CRITICAL: LEMONSQUEEZY_GROWTH_VARIANT_ID is not set or invalid — Growth purchases will be misclassified as Pro!",
-    )
-  }
+  if (growthVariantId > 0 && variantId === growthVariantId) return "GROWTH"
+  if (proVariantId > 0 && variantId === proVariantId) return "PRO"
+  throw new Error("Unrecognized Lemon Squeezy web-plan variant")
 
-  if (variantId === undefined || variantId === null) {
-    console.error("[lemonsqueezy] WARNING: variant_id missing from webhook payload — defaulting to PRO")
-    return "PRO"
-  }
-
-  if (growthVariantId > 0 && variantId === growthVariantId) {
-    return "GROWTH"
-  }
-
-  if (proVariantId > 0 && variantId === proVariantId) {
-    return "PRO"
-  }
-
-  // Unknown variant — log loudly but don't crash
-  console.error(
-    `[lemonsqueezy] UNKNOWN variant_id: ${variantId} — not mapped to any plan! Defaulting to PRO. Add this variant to planForVariantId().`,
-  )
-  return "PRO"
 }
 
 export function creditsForPlan(plan: "PRO" | "GROWTH"): number {
@@ -76,6 +52,7 @@ export async function scheduleSubscriptionUpgrade(
       `https://api.lemonsqueezy.com/v1/subscriptions/${lsSubscriptionId}`,
       {
         method: "PATCH",
+        signal: AbortSignal.timeout(15000),
         headers: {
           Authorization: `Bearer ${process.env.LEMONSQUEEZY_API_KEY}`,
           "Content-Type": "application/vnd.api+json",

@@ -3,6 +3,7 @@
 // so future matches don't depend on email staying in sync.
 import { ShieldOff } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
+import { getOwnedInternId } from "@/lib/internAuth"
 import { db } from "@/lib/db"
 import {
   summarizeEntries,
@@ -65,15 +66,16 @@ export default async function InternPage() {
   const user = await getCurrentUser()
   if (!user) return null // AppLayout already redirects unauthenticated visitors
 
-  let intern = await db.intern.findUnique({
-    where: { email: user.email },
+  const internId = await getOwnedInternId(user)
+  const intern = internId ? await db.intern.findUnique({
+    where: { id: internId },
     include: {
       entries: { orderBy: { date: "desc" } },
       attendance: { orderBy: { date: "desc" } },
       leaveRequests: { orderBy: { date: "desc" } },
       extensions: { orderBy: { createdAt: "desc" } },
     },
-  })
+  }) : null
 
   if (!intern) {
     return (
@@ -89,19 +91,6 @@ export default async function InternPage() {
         </div>
       </div>
     )
-  }
-
-  if (!intern.clerkId) {
-    intern = await db.intern.update({
-      where: { id: intern.id },
-      data: { clerkId: user.clerkId },
-      include: {
-        entries: { orderBy: { date: "desc" } },
-        attendance: { orderBy: { date: "desc" } },
-        leaveRequests: { orderBy: { date: "desc" } },
-        extensions: { orderBy: { createdAt: "desc" } },
-      },
-    })
   }
 
   const { total, pointsToday, pointsThisWeek } = summarizeEntries(intern.entries)

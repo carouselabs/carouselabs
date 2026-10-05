@@ -99,7 +99,7 @@ export default function VoicePage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-[#0A0A0A] mb-1">What's your content voice?</h1>
+      <h1 className="text-2xl font-semibold text-[#0A0A0A] mb-1">What&apos;s your content voice?</h1>
       <p className="text-sm text-[#6B7280] mb-8">
         Choose up to 2 tones that feel most like you.
       </p>

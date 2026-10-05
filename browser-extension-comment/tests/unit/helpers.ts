@@ -43,8 +43,8 @@ export function loadFixtureInMessagingFrame(frameFixture: string, urlPath: strin
   Object.defineProperty(proto, "offsetParent", {
     configurable: true,
     get(this: HTMLElement) {
-      if (!this.isConnected) return null;
-      for (let el: Element | null = this; el; el = el.parentElement) {
+      if (!this.isConnected || this.hidden || this.style.display === "none") return null;
+      for (let el: Element | null = this.parentElement; el; el = el.parentElement) {
         const h = el as HTMLElement;
         if (h.hidden || h.style?.display === "none") return null;
       }
@@ -116,7 +116,7 @@ export function sendToContentScript(message: unknown) {
 
 export async function storedPost() {
   return (await chromeMock().storage.local.get("lastSelectedPost")).lastSelectedPost as
-    | Record<string, any>
+    | Record<string, unknown>
     | undefined;
 }
 

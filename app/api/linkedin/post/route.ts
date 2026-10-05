@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     where: { clerkId: userId },
     include: { linkedIn: true },
   })
-  if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 })
+  if (!user || user.deletedAt || user.suspendedAt) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
   const body = (await req.json().catch(() => ({}))) as {
     caption?: string

@@ -169,8 +169,8 @@ export async function createCommissionForPayment(params: {
   sourceOrderId: string
   subtotalCents: number
   sourceEvent: string
-}): Promise<"created" | "duplicate" | "no_referral"> {
-  const referral = await db.referral.findUnique({
+}, client: Prisma.TransactionClient = db): Promise<"created" | "duplicate" | "no_referral"> {
+  const referral = await client.referral.findUnique({
     where: { referredUserId: params.referredUserId },
     select: { referrerId: true },
   })
@@ -178,17 +178,10 @@ export async function createCommissionForPayment(params: {
 
   const amount = Math.round(params.subtotalCents * REFERRAL_COMMISSION_RATE) / 100
 
-  const data: Prisma.ReferralCommissionCreateInput = {
-    referrer: { connect: { id: referral.referrerId } },
-    referredUserId: params.referredUserId,
-    sourceOrderId: params.sourceOrderId,
-    amount,
-    sourceEvent: params.sourceEvent,
-  }
 
   try {
-    await db.referralCommission.create({ data })
-    return "created"
+    const result = await client.referralCommission.createMany({ data: { referrerId: referral.referrerId, referredUserId: params.referredUserId, sourceOrderId: params.sourceOrderId, amount, sourceEvent: params.sourceEvent }, skipDuplicates: true })
+    return result.count ? "created" : "duplicate"
   } catch (err) {
     // @unique(sourceOrderId) violation = Lemon Squeezy redelivered this
     // exact payment event (known to happen) — already processed, not an error.

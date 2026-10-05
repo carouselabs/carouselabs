@@ -1,7 +1,7 @@
 // lib/chargeCredits.ts — SERVER-ONLY charge helper for generation routes.
 // Wraps the atomic consumeCredits with the PRO/GROWTH low-balance / exhausted
 // email notifications (fired on threshold crossings, best-effort).
-import { consumeCredits } from "@/lib/credits"
+import { consumeCredits, type CreditReceipt } from "@/lib/credits"
 import { CREDIT_COSTS, type CreditAction } from "@/lib/creditActions"
 import { sendCreditsLowEmail, sendCreditsExhaustedEmail } from "@/lib/email"
 
@@ -17,7 +17,7 @@ interface ChargeUser {
 export async function chargeCreditsForAction(
   user: ChargeUser,
   action: CreditAction,
-): Promise<{ ok: boolean; remaining: number; requiresUpgrade: boolean }> {
+): Promise<{ ok: boolean; remaining: number; requiresUpgrade: boolean; receipt?: CreditReceipt }> {
   const cost = CREDIT_COSTS[action]
   const result = await consumeCredits(user.id, cost)
   if (!result.ok) {
@@ -38,5 +38,5 @@ export async function chargeCreditsForAction(
     }
   }
 
-  return { ok: true, remaining: result.remaining, requiresUpgrade: false }
+  return { ok: true, remaining: result.remaining, requiresUpgrade: false, receipt: result.receipt }
 }

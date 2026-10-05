@@ -27,4 +27,4 @@
 // To bypass locally: add COMMENT_CREDITS_ENFORCED=false to .env.local
 // (gitignored, never committed). Never set this in Vercel's Production
 // environment.
-export const COMMENT_CREDITS_ENFORCED = process.env.COMMENT_CREDITS_ENFORCED !== "false"
+export const COMMENT_CREDITS_ENFORCED = process.env.NODE_ENV === "production" || process.env.COMMENT_CREDITS_ENFORCED !== "false"

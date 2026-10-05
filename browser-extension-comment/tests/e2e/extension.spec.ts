@@ -45,7 +45,7 @@ test("Insert keeps a comment the user already typed", async ({ harness }) => {
 
 test("Read conversation in real Chromium: right contact, only the open thread, right senders", async ({ harness }) => {
   await harness.open("/messaging/thread/2-bharti/", "messaging-thread.html");
-  const res = await harness.sendToLinkedInTab<{ ok: boolean; conversation: any }>({ type: READ });
+  const res = await harness.sendToLinkedInTab<{ ok: boolean; conversation: { contact: { name: string }; thread: Array<{ sender: string; text: string }> } }>({ type: READ });
   expect(res.ok).toBe(true);
   expect(res.conversation.contact.name).toBe("Bharti Agrawal");
   const thread = res.conversation.thread as Array<{ sender: string; text: string }>;
@@ -72,7 +72,7 @@ test("New LinkedIn design: reads the conversation inside the Messaging frame", a
   harness.pages.set("/preload/", "messaging-thread.html");
   const page = await harness.open("/messaging/thread/2-bharti/", "messaging-new-shell.html");
   await page.frameLocator('iframe[data-testid="interop-iframe"]').locator(".msg-entity-lockup__entity-title").first().waitFor();
-  const res = await harness.sendToLinkedInTab<{ ok: boolean; conversation: any; error?: string }>({ type: READ });
+  const res = await harness.sendToLinkedInTab<{ ok: boolean; conversation: { contact: { name: string }; thread: Array<{ sender: string; text: string }> }; error?: string }>({ type: READ });
   expect(res.error).toBeUndefined();
   expect(res.conversation.contact.name).toBe("Bharti Agrawal");
   const thread = res.conversation.thread as Array<{ sender: string; text: string }>;
@@ -231,6 +231,47 @@ test("injecting into a tab that already has the script leaves one working copy",
   const box = page.locator("[data-fixture='post-2-comment-box']");
   await expect(box).toContainText("Only once please");
   expect((await box.innerText()).match(/Only once please/g)).toHaveLength(1);
+});
+
+// The whole path a user sees: signed in, the panel open, a Comment click on
+// LinkedIn turns Generate on. (The panel is opened as a tab here; Playwright
+// can't open Chrome's side panel itself.)
+test("signed in: a Comment click on LinkedIn turns the panel's Generate button on", async ({ harness }) => {
+  const profile = {
+    id: "p1", userId: null, name: "Founder voice", whoIAm: "", goal: "", tone: "Friendly", length: "medium",
+    emoji: "none", language: "English", alwaysDo: null, neverDo: null, samples: [], isDefault: true,
+    isSystem: true, isRecommended: false, testsUsed: 0, createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z",
+  };
+  const me = {
+    email: "user@example.com", plan: "FREE", commentsThisMonth: 0, commentsToday: 0,
+    defaultCommentProfileId: "p1", defaultLanguage: null, insertWarningHidden: false,
+    extension: { access: "free", freeUsed: 0, freeLimit: 10, status: null, renewsAt: null, endsAt: null, manageUrl: null },
+  };
+  harness.apiResponses.set("/api/ext/profiles", { status: 200, body: { profiles: [profile] } });
+  harness.apiResponses.set("/api/ext/me", { status: 200, body: me });
+  harness.apiResponses.set("/api/ext/settings", { status: 200, body: {} });
+  harness.apiResponses.set("/api/ext/contacts", { status: 200, body: { contacts: [] } });
+  await harness.worker.evaluate(() =>
+    chrome.storage.local.set({ extensionToken: "cl_cmt_e2e", onboardingComplete: true }),
+  );
+
+  const page = await harness.open("/feed/", "feed.html");
+  const panel = await harness.context.newPage();
+  // Playwright opens the side panel as a tab; model the LinkedIn tab that is
+  // active when a real Chrome side panel is open beside it.
+  await panel.addInitScript(() => {
+    const query = chrome.tabs.query.bind(chrome.tabs);
+    chrome.tabs.query = ((info: chrome.tabs.QueryInfo) =>
+      info.active ? query({ url: "https://www.linkedin.com/*" }) : query(info)) as typeof chrome.tabs.query;
+  });
+  await panel.goto(`chrome-extension://${harness.extensionId}/src/sidepanel/index.html`);
+  await expect(panel.getByRole("combobox")).toContainText("Founder voice");
+  const generate = panel.getByRole("button", { name: "Generate", exact: true });
+  await expect(generate).toBeDisabled(); // no post yet
+
+  await page.locator("[data-fixture='post-1'] button[aria-label^='Comment']").click();
+  await expect(generate).toBeEnabled();
+  await expect(panel.getByText("Jane Doe").first()).toBeVisible();
 });
 
 test("side panel shows Sign in when there is no token", async ({ harness }) => {

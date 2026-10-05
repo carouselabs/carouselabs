@@ -1,3 +1,4 @@
+import animate from "tailwindcss-animate";
 /** @type {import('tailwindcss').Config} */
 export default {
   // Dark mode follows the OS through the CSS variables in
@@ -101,5 +102,5 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [animate],
 };

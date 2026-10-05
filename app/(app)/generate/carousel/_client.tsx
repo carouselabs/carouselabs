@@ -23,6 +23,9 @@ import { trackHistory } from "@/lib/hooks/useHistory"
 import { useRegenerationStore, MAX_REGENERATIONS } from "@/lib/store/regenerationStore"
 import { friendlyGenerationError } from "@/lib/friendlyError"
 import { countWords } from "@/lib/wordCount"
+import { createDraftWriter } from "@/lib/postDraft"
+import { persistDraftValues, reconcileDraft } from "@/lib/draftRecovery"
+import { DraftRecoveryNotice } from "@/components/generate/DraftRecoveryNotice"
 import { useCreditStore } from "@/lib/store/creditStore"
 import { CAPTION_PLATFORMS } from "@/lib/captionPlatforms"
 import { isValidPlatform, validatePostForPlatform } from "@/lib/platforms"
@@ -38,6 +41,8 @@ import {
 // prompts can be sanity-checked in ChatGPT first. Flip to false to restore
 // normal image generation.
 const DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION = false
+
+type BrowserDraft = { caption: string | null; slides: Slide[] | null; images: SlideImage[] | null; size: ImageSize | null }
 
 interface CarouselClientProps {
   ideaId: string
@@ -135,6 +140,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   // Set once the whole carousel is persisted (see persistImages) — powers
   // ScheduleForLaterButton's deep-link into Content Hub.
   const [postId, setPostId] = useState<string | null>(null)
+  const [savingDraft, setSavingDraft] = useState(false)
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null)
   const [regeneratingSlide, setRegeneratingSlide] = useState<number | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState("")
@@ -167,9 +174,14 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
 
   const abortRef = useRef<AbortController | null>(null)
   const didInit = useRef(false)
+  const [writer] = useState(() => createDraftWriter(ideaId, fetch, `carouselDraft_${ideaId}`))
+  const restoreChecked = useRef(false)
+  const [browserRecovery, setBrowserRecovery] = useState<BrowserDraft | null>(null)
   // Guards against rapid double-clicks firing two simultaneous generations
   // (each of which would be charged server-side).
   const isChargingRef = useRef(false)
+  const generatingCarouselRef = useRef(false)
+  const generatingSlideRef = useRef(false)
 
   // Regeneration limit + version history (per idea, per session).
   // Select the stable parent objects and derive per-idea values outside the
@@ -221,18 +233,33 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
       // corrupt/unavailable — fall through
     }
 
-    // Legacy fallback: caption may live in the Post table from before this
-    // localStorage scheme existed.
-    if (!savedCaption) {
-      try {
-        const res = await fetch(`/api/posts?ideaId=${ideaId}`)
-        if (res.ok) {
-          const data = await res.json()
-          if (data.post?.caption) savedCaption = data.post.caption
+    // Always restore the server record, including its identity and revision.
+    // Local unsaved text takes precedence, while server assets recover another device.
+    try {
+      const res = await fetch(`/api/posts?ideaId=${encodeURIComponent(ideaId)}&format=CAROUSEL`, { signal: AbortSignal.timeout(15_000) })
+      if (!res.ok) throw new Error("Saved posts could not be checked. Your local draft is still available; reload before scheduling.")
+      const { post } = await res.json()
+      restoreChecked.current = true
+      if (post) {
+        setPostId(post.id)
+        writer.restore({ postId: post.id, caption: post.caption ?? "", updatedAt: post.updatedAt })
+        const local: BrowserDraft | null = savedCaption !== null || savedSlides || savedImages || savedSize
+          ? { caption: savedCaption, slides: savedSlides, images: savedImages, size: savedSize } : null
+        const remote: BrowserDraft = {
+          caption: post.caption ?? "", size: post.metadata?.size === "1:1" ? "1:1" : "4:5",
+          slides: post.slides?.map((s: { order: number; role: string; headline: string | null; metadata: { prompt?: string } | null }) => ({ slideNumber: s.order, role: s.role === "COVER" ? "hook" : s.role === "CTA" ? "cta" : "body", headline: s.headline ?? "", prompt: s.metadata?.prompt ?? "" })) ?? null,
+          images: post.slides?.filter((s: { imageUrl: string | null }) => s.imageUrl).map((s: { order: number; role: string; headline: string | null; imageUrl: string }) => ({ slideNumber: s.order, role: s.role === "COVER" ? "hook" : s.role === "CTA" ? "cta" : "body", headline: s.headline ?? "", imageUrl: s.imageUrl })) ?? null,
         }
-      } catch {
-        // ignore — treated as no saved caption
+        const selected = reconcileDraft(`carouselDraft_${ideaId}`, local, remote, post.updatedAt)
+        savedCaption = selected.draft.caption
+        savedSlides = selected.draft.slides
+        savedImages = selected.draft.images
+        savedSize = selected.draft.size
+        setBrowserRecovery(selected.recovery)
+        persistBrowserDraft(selected.draft, post.updatedAt)
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not restore the saved post. Reload before scheduling.")
     }
 
     if (savedSize) setSize(savedSize)
@@ -242,6 +269,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     }
     if (savedSlides) setSlides(savedSlides)
     if (savedImages) setSlideImages(savedImages)
+    if (savedSlides && savedImages) setFailedSlideNumbers(savedSlides.filter((s) => !savedImages!.some((img) => img.slideNumber === s.slideNumber)).map((s) => s.slideNumber))
 
     const hasAnySaved = !!(savedCaption || savedSlides || savedImages || savedSize)
     if (hasAnySaved) {
@@ -275,6 +303,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     if (isChargingRef.current) return
     isChargingRef.current = true
     setIsStreamingCaption(true)
+    const previousCaption = caption
     setCaptionReady(false)
     setCaption("")
     setError(null)
@@ -336,6 +365,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
       // Credits were charged server-side — refresh the Topbar balance.
       void useCreditStore.getState().refresh()
     } catch (err) {
+      setCaption(previousCaption)
+      setCaptionReady(Boolean(previousCaption))
       if ((err as Error).name === "AbortError") return
       setError(err instanceof Error ? err.message : "Something went wrong")
     } finally {
@@ -345,11 +376,21 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   }
 
   // ── localStorage persistence helpers (keyed per ideaId) ──
+  function persistBrowserDraft(draft: BrowserDraft, revision = writer.revision(), clearRecovery = false) {
+    try {
+      persistDraftValues(`carouselDraft_${ideaId}`, {
+        [`carouselCaption_${ideaId}`]: draft.caption, [`carouselSize_${ideaId}`]: draft.size,
+        [`carouselSlides_${ideaId}`]: draft.slides ? JSON.stringify(draft.slides) : null,
+        [`carouselImages_${ideaId}`]: draft.images ? JSON.stringify(draft.images) : null,
+      }, revision, clearRecovery)
+    } catch { setError("Browser draft recovery is unavailable. Save Draft before leaving this page.") }
+  }
+
   function persistCaption(value: string) {
     try {
       localStorage.setItem(`carouselCaption_${ideaId}`, value)
     } catch {
-      // best-effort
+      setError("Browser draft recovery is unavailable. Save Draft before leaving this page.")
     }
   }
 
@@ -450,8 +491,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   // second attempt frequently just works. Only a slide that fails TWICE
   // counts as a real failure.
   async function requestOneSlideImageWithRetry(slide: Slide): Promise<SlideImage | null> {
-    const first = await requestOneSlideImage(slide)
-    if (first) return first
+    // A lost response may still have consumed a paid generation. Retry only
+    // on an explicit user action; never automatically repeat this mutation.
     return requestOneSlideImage(slide)
   }
 
@@ -460,6 +501,13 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   // moment it's ready and progress is shown live. Slides are kept in state +
   // localStorage so per-slide Regenerate keeps working.
   async function generateCarouselFlow() {
+    if (generatingCarouselRef.current) return
+    generatingCarouselRef.current = true
+    try { await runGenerateCarouselFlow() }
+    finally { generatingCarouselRef.current = false }
+  }
+
+  async function runGenerateCarouselFlow() {
     setError(null)
     setReferenceNotice(null)
     setSlideImages([])
@@ -602,26 +650,9 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     // The carousel_prompts charge landed during this flow — refresh the balance.
     void useCreditStore.getState().refresh()
 
-    // After ALL slides are generated, persist the whole carousel to the DB in one
-    // call. generatedImages already carry slideNumber/role/headline/imageUrl, so
-    // we send them directly (no fragile index-merge with the prompt slides).
-    if (generatedImages.length > 0) {
-      try {
-        const persistRes = await fetch("/api/generate/carousel-images", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            slides: generatedImages,
-            size: size ?? "4:5",
-            ideaId,
-            persistOnly: true, // just save to DB, no image generation
-          }),
-        })
-        const persistData = await persistRes.json()
-        if (typeof persistData.postId === "string") setPostId(persistData.postId)
-      } catch (err) {
-        console.error("[carousel] DB persist failed:", err)
-      }
+    if (generatedImages.length > 0 && failed.length === 0) {
+      try { await saveCarousel(generatedImages) }
+      catch (err) { setError(err instanceof Error ? err.message : "Carousel generated, but saving failed. Use Save Draft to retry.") }
     }
   }
 
@@ -657,9 +688,13 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   }
 
   async function handleCopyCaption() {
-    await navigator.clipboard.writeText(caption)
-    setCaptionCopied(true)
-    setTimeout(() => setCaptionCopied(false), 2000)
+    try {
+      await navigator.clipboard.writeText(caption)
+      setCaptionCopied(true)
+      setTimeout(() => setCaptionCopied(false), 2000)
+    } catch {
+      setError("Could not copy. Select the caption and copy it manually.")
+    }
   }
 
   // Gate passed to PostToLinkedInButton: open the "separate images, not swipeable
@@ -678,22 +713,30 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     linkedInResolve.current = null
   }
 
-  // ScheduleForLaterButton's getPostId — the persisted Post is created with
-  // an empty caption (see persistOnly above), so this syncs the caption the
-  // user actually edited before handing back the id, same treatment as the
-  // image flow's getPostIdSynced.
+  async function saveCarousel(images = slideImages): Promise<string> {
+    if (!restoreChecked.current) throw new Error("Reload to check the saved draft before saving. Your browser copy is preserved.")
+    if (!images.length) throw new Error("Generate slides before saving.")
+    const savedSlides = images.map((image) => ({ ...image, prompt: slides?.find((slide) => slide.slideNumber === image.slideNumber)?.prompt }))
+    const result = await writer.save(caption, postId, savedSlides, size ?? "4:5")
+    setPostId(result.postId)
+    setSavedSnapshot(JSON.stringify({ caption, images, size }))
+    return result.postId
+  }
+
+  async function handleSaveDraft() {
+    if (savingDraft || failedSlideNumbers.length) return
+    setSavingDraft(true)
+    setError(null)
+    try { await saveCarousel() }
+    catch (err) { setError(err instanceof Error ? err.message : "Saving failed. Your slides are still here.") }
+    finally { setSavingDraft(false) }
+  }
+
   async function getPostIdSynced(): Promise<string | null> {
-    if (!postId) return null
-    try {
-      await fetch(`/api/posts/${postId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caption }),
-      })
-    } catch {
-      // best-effort — worst case Content Hub shows the last-saved caption
+    if (failedSlideNumbers.length || isGeneratingImages || regeneratingSlide !== null) {
+      throw new Error("Finish generating all slides before scheduling.")
     }
-    return postId
+    return saveCarousel()
   }
 
   // Regenerate a single slide's image. Sends persist:false so a regeneration
@@ -725,11 +768,11 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
       if (!res.ok) throw new Error((data as { error?: string }).error ?? "Image generation failed")
 
       const image = data.slides[0] as SlideImage
-      setSlideImages((prev) => {
-        const next = prev.map((img) => (img.slideNumber === slideNumber ? image : img))
-        persistImages(next)
-        return next
-      })
+      const next = slideImages.map((img) => img.slideNumber === slideNumber ? image : img)
+      setSlideImages(next)
+      persistImages(next)
+      try { await saveCarousel(next) }
+      catch (err) { setError(err instanceof Error ? err.message : "Slide generated, but saving failed. Use Save Draft to retry.") }
       // Clear this slide's instruction box on success.
       setSlideInstructions((prev) => {
         const next = { ...prev }
@@ -747,6 +790,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   // "Regenerate Slide X" — gated by the same 2-per-idea regeneration budget as
   // the caption/slide-prompt regenerations.
   async function regenerateSlideImage(slideNumber: number) {
+    if (generatingSlideRef.current || generatingCarouselRef.current) return
     console.log("[REGEN-CHECK] ideaId:", ideaId, "count:", useRegenerationStore.getState().regenerationCount[ideaId] ?? 0)
     const currentCount = useRegenerationStore.getState().regenerationCount[ideaId] ?? 0
     if (currentCount >= MAX_REGENERATIONS) {
@@ -754,6 +798,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
       setTimeout(() => setToastMsg(null), 5000)
       return
     }
+    generatingSlideRef.current = true
     increment(ideaId)
     try {
       await generateOneSlideImage(slideNumber)
@@ -766,7 +811,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
       }
     } catch {
       decrement(ideaId)
-    }
+    } finally { generatingSlideRef.current = false }
   }
 
   // Retry a slide that never generated an image in the first place — distinct
@@ -778,7 +823,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   // already refunded server-side, so this draws from the same grant).
   async function retryFailedSlide(slideNumber: number) {
     const slide = slides?.find((s) => s.slideNumber === slideNumber)
-    if (!slide) return
+    if (!slide || generatingSlideRef.current || generatingCarouselRef.current) return
+    generatingSlideRef.current = true
     setRetryingFailedSlide(slideNumber)
     setError(null)
     try {
@@ -787,13 +833,16 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
         setError(`Slide ${slideNumber} failed to generate again. Please try once more.`)
         return
       }
-      setSlideImages((prev) => {
-        const next = [...prev, image].sort((a, b) => a.slideNumber - b.slideNumber)
-        persistImages(next)
-        return next
-      })
+      const next = [...slideImages.filter((s) => s.slideNumber !== slideNumber), image].sort((a, b) => a.slideNumber - b.slideNumber)
+      setSlideImages(next)
+      persistImages(next)
+      if (failedSlideNumbers.length === 1) {
+        try { await saveCarousel(next) }
+        catch (err) { setError(err instanceof Error ? err.message : "Slides generated, but saving failed. Use Save Draft to retry.") }
+      }
       setFailedSlideNumbers((prev) => prev.filter((n) => n !== slideNumber))
     } finally {
+      generatingSlideRef.current = false
       setRetryingFailedSlide(null)
     }
   }
@@ -953,12 +1002,17 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
               imageUrls={slideImages
                 .map((s) => s.imageUrl)
                 .filter((u): u is string => !!u)}
-              disabled={isGeneratingImages}
+              disabled={isGeneratingImages || failedSlideNumbers.length > 0 || regeneratingSlide !== null}
               beforePost={confirmLinkedInPost}
             />
           )}
           {slideImages.length > 0 && !isGeneratingImages && (
-            <ScheduleForLaterButton getPostId={getPostIdSynced} disabled={!postId} />
+            <>
+              <button onClick={() => void handleSaveDraft()} disabled={savingDraft || failedSlideNumbers.length > 0 || regeneratingSlide !== null} className="px-3 py-2 rounded-lg border border-[#E5E3DE] text-[12px] disabled:opacity-50">
+                {savingDraft ? "Saving?" : savedSnapshot === JSON.stringify({ caption, images: slideImages, size }) ? "Saved" : "Save Draft"}
+              </button>
+              <ScheduleForLaterButton getPostId={getPostIdSynced} disabled={savingDraft || failedSlideNumbers.length > 0 || regeneratingSlide !== null} />
+            </>
           )}
         </div>
       </div>
@@ -991,6 +1045,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
             ideaId={ideaId}
             onRegenerate={regenerateSlideImage}
             regeneratingSlide={regeneratingSlide}
+            busy={isGeneratingImages || isGeneratingSlides || retryingFailedSlide !== null}
+            complete={failedSlideNumbers.length === 0 && !isGeneratingImages && (!slides || slideImages.length === slides.length)}
             instructions={slideInstructions}
             onInstructionChange={(slideNumber, value) =>
               setSlideInstructions((prev) => ({ ...prev, [slideNumber]: value }))
@@ -1241,6 +1297,16 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
 
   return (
     <div className="max-w-4xl mx-auto flex flex-col gap-8">
+      {browserRecovery !== null && <DraftRecoveryNotice onRestore={() => {
+        setCaption(browserRecovery.caption ?? "")
+        setCaptionReady(Boolean(browserRecovery.caption))
+        setSlides(browserRecovery.slides)
+        setSlideImages(browserRecovery.images ?? [])
+        setSize(browserRecovery.size)
+        persistBrowserDraft(browserRecovery, writer.revision(), true)
+        setFailedSlideNumbers(browserRecovery.slides?.filter((slide) => !browserRecovery.images?.some((image) => image.slideNumber === slide.slideNumber)).map((slide) => slide.slideNumber) ?? [])
+        setBrowserRecovery(null)
+      }} />}
       <Link
         href={`/idea/${ideaId}`}
         className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"

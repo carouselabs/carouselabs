@@ -56,8 +56,7 @@ export function ExtensionConnectClient() {
         console.log(
           "[ExtensionConnectClient] posting token to self, origin:",
           window.location.origin,
-          "token starts with:",
-          token.slice(0, 8) + "…",
+          "token received",
         )
         window.postMessage({ type: MESSAGE_TYPES[asking], token }, window.location.origin)
         setStatus("connected")

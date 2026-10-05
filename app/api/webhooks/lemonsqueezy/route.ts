@@ -1,5 +1,9 @@
 // app/api/webhooks/lemonsqueezy/route.ts
 import crypto from "node:crypto"
+import { verifyBillingIdentity } from "@/lib/billingIdentity"
+import type { Prisma } from "@prisma/client"
+import { FREE_LIFETIME_CREDITS } from "@/lib/credits"
+import { subscriptionIdOf } from "@/lib/extensionAccessRules"
 import { db } from "@/lib/db"
 import { planForVariantId, creditsForPlan } from "@/lib/lemonsqueezy"
 import {
@@ -22,7 +26,17 @@ type LsWebhook = {
   meta: { event_name: string; webhook_id?: string; custom_data?: Record<string, unknown> }
   data: {
     id: string
+    type?: string
     attributes: {
+      subscription_id?: number
+      billing_reason?: string
+      created_at?: string
+      updated_at?: string
+      test_mode?: boolean
+      subtotal_usd?: number
+      discount_total_usd?: number
+      discount_total?: number
+      currency?: string
       user_email?: string
       customer_id?: number
       variant_id?: number
@@ -57,6 +71,7 @@ export async function POST(req: Request) {
   }
 
   const rawBody = await req.text()
+  if (Buffer.byteLength(rawBody, "utf8") > 1024 * 1024) return new Response("Payload too large", { status: 413 })
   const signature = req.headers.get("x-signature") ?? ""
 
   if (!verifySignature(rawBody, signature)) {
@@ -70,25 +85,52 @@ export async function POST(req: Request) {
     return new Response("Invalid JSON", { status: 400 })
   }
 
-  // ── Idempotency ──
-  // Lemon Squeezy redelivers on timeout/non-2xx. Record each unique delivery and
-  // skip anything we've already processed, so a redelivery can't resend emails
-  // or re-reset credits. A true redelivery is byte-identical, so a hash of the
-  // raw body is a stable per-delivery key; prefer an explicit id if present.
-  const eventId =
-    payload.meta?.webhook_id ??
-    crypto.createHash("sha256").update(rawBody).digest("hex")
-
-  try {
-    await db.processedWebhookEvent.create({
-      data: { eventId, source: "lemonsqueezy" },
-    })
-  } catch {
-    // Unique-constraint violation = we've already handled this exact delivery.
-    console.log("[webhooks/lemonsqueezy] duplicate event, skipping:", eventId)
-    return new Response("OK (duplicate, skipped)", { status: 200 })
+  if (!payload?.meta || typeof payload.meta.event_name !== "string" ||
+      !payload.data || typeof payload.data.id !== "string" ||
+      !payload.data.attributes || typeof payload.data.attributes !== "object") {
+    return new Response("Invalid payload", { status: 400 })
   }
+  if (process.env.NODE_ENV === "production" && payload.data.attributes.test_mode === true) {
+    return new Response("Test events are disabled", { status: 400 })
+  }
+  // webhook_id identifies a configured webhook, not an invoice. Monetary
+  // events use the immutable resource ID; state events use their timestamp.
+  const name = payload.meta.event_name
+  const immutable = name === "order_created" || name === "subscription_created" || name.startsWith("subscription_payment_")
+  const identity = immutable
+    ? [name, payload.data.id].join(":")
+    : [name, payload.data.id, payload.data.attributes.updated_at ?? crypto.createHash("sha256").update(rawBody).digest("hex")].join(":")
+  const eventId = "ls:" + identity
+  const legacyId = crypto.createHash("sha256").update(rawBody).digest("hex")
+  const emails: Array<() => Promise<unknown>> = []
+  try {
+    const duplicate = await db.$transaction(async (tx) => {
+      const existing = await tx.processedWebhookEvent.findFirst({ where: { eventId: { in: [eventId, legacyId] } } })
+      if (existing) return true
+      await tx.processedWebhookEvent.create({ data: { eventId, source: "lemonsqueezy" } })
+      await processWebhook(payload, tx, async (fn) => { emails.push(fn) })
+      return false
+    }, { isolationLevel: "Serializable", timeout: 15000 })
+    if (!duplicate) for (const email of emails) await safeEmail(email)
+    return new Response(duplicate ? "OK (duplicate)" : "OK", { status: 200 })
+  } catch (error) {
+    // Only an actually committed ledger entry proves a duplicate. Connection
+    // failures and transaction conflicts must remain retryable provider errors.
+    const code = error && typeof error === "object" && "code" in error ? error.code : null
+    if (code === "P2002") {
+      const committed = await db.processedWebhookEvent.findUnique({ where: { eventId } }).catch(() => null)
+      if (committed) return new Response("OK (duplicate)", { status: 200 })
+    }
+    console.error("[webhooks/lemonsqueezy] transaction failed", { event: name, code })
+    return new Response("Webhook processing unavailable", { status: 503 })
+  }
+}
 
+async function processWebhook(
+  payload: LsWebhook,
+  db: Prisma.TransactionClient,
+  safeEmail: (fn: () => Promise<unknown>) => Promise<void>,
+) {
   const eventName = payload.meta?.event_name
   const attrs = payload.data?.attributes ?? {}
 
@@ -98,8 +140,8 @@ export async function POST(req: Request) {
     // before everything below: the web-plan code finds the buyer by email and
     // maps unknown variants to Pro, so an extension purchase would grant web
     // Pro, and its later expiry would downgrade the buyer's web plan to Free.
-    if (await isExtensionWebhook(payload)) {
-      await handleExtensionWebhook(payload)
+    if (await isExtensionWebhook(payload, db)) {
+      await handleExtensionWebhook(payload, db)
       return new Response("OK", { status: 200 })
     }
 
@@ -111,24 +153,31 @@ export async function POST(req: Request) {
     // email-keyed subscription flow below so that flow's guards can't
     // short-circuit it.
     if (eventName === "order_created") {
-      await handleTopUpOrder(payload, attrs)
+      await handleTopUpOrder(payload, attrs, db, safeEmail)
       return new Response("OK", { status: 200 })
     }
 
-    const customerEmail = attrs.user_email
-    if (!customerEmail) {
-      console.error("[webhooks/lemonsqueezy] no user_email on event:", eventName)
-      return new Response("OK", { status: 200 })
-    }
-
-    const user = await db.user.findFirst({
-      where: { email: customerEmail },
-      include: { profile: true },
-    })
-    if (!user) {
-      // Unknown email (e.g. test purchase) — ack so Lemon Squeezy stops retrying.
-      console.error("[webhooks/lemonsqueezy] no user for email:", customerEmail)
-      return new Response("OK", { status: 200 })
+    const events = ["subscription_created", "subscription_updated", "subscription_cancelled", "subscription_expired", "subscription_resumed", "subscription_paused", "subscription_unpaused", "subscription_payment_success", "subscription_payment_failed"]
+    if (!events.includes(eventName)) return
+    const subId = subscriptionIdOf(payload)
+    if (!subId) throw new Error("Missing subscription ID")
+    // Existing subscriptions resolve by provider ID. New subscriptions must
+    // carry authenticated checkout identity; buyer-editable email is not proof.
+    const stored = await db.subscription.findFirst({ where: { lsSubscriptionId: subId } })
+    const customId = payload.meta.custom_data?.user_id
+    const identitySignature = payload.meta.custom_data?.identity_signature
+    if (!stored && !verifyBillingIdentity(customId, String(attrs.variant_id), identitySignature)) throw new Error("Invalid checkout identity")
+    const user = stored
+      ? await db.user.findUnique({ where: { id: stored.userId }, include: { profile: true } })
+      : eventName === "subscription_created"
+        ? typeof customId === "string"
+          ? await db.user.findUnique({ where: { id: customId }, include: { profile: true } })
+          : null
+        : null
+    if (!user) throw new Error("Subscription owner not yet available; retry after creation")
+    const current = await db.subscription.findUnique({ where: { userId: user.id } })
+    if (current?.lsSubscriptionId && current.lsSubscriptionId !== subId && eventName !== "subscription_created") {
+      return new Response("OK (old subscription)", { status: 200 })
     }
 
     // User.name lives on Profile in this schema.
@@ -154,11 +203,11 @@ export async function POST(req: Request) {
         await db.subscription.update({
           where: { userId: user.id },
           data: {
-            plan,
+            plan: isPaid ? plan : "FREE",
             status: mapStatus(attrs.status),
             cancelAtPeriodEnd: false,
             upgradeScheduled: false,
-            ...(isPaid ? { creditsUsed: 0, creditsTotal: credits } : {}),
+            ...(isPaid ? { creditsUsed: 0, creditsTotal: credits } : { creditsTotal: 0 }),
             lsSubscriptionId: payload.data.id,
             lsCustomerId: attrs.customer_id != null ? String(attrs.customer_id) : null,
             lsVariantId: attrs.variant_id != null ? String(attrs.variant_id) : null,
@@ -181,6 +230,9 @@ export async function POST(req: Request) {
         break
       }
 
+      case "subscription_resumed":
+      case "subscription_paused":
+      case "subscription_unpaused":
       case "subscription_updated": {
         // Lemon Squeezy fires this for in-place plan swaps (Pro ↔ Growth via
         // the customer portal / Update Subscription API), not just status
@@ -230,9 +282,9 @@ export async function POST(req: Request) {
             // change reflects a real paid status and isn't a deferred upgrade)
             ...(planChanged
               ? {
-                  plan,
+                  ...(isPaid ? { plan } : {}),
                   lsVariantId: attrs.variant_id != null ? String(attrs.variant_id) : null,
-                  ...(shouldResetCredits ? { creditsUsed: 0, creditsTotal: credits } : {}),
+                  ...(shouldResetCredits ? { creditsUsed: 0, creditsTotal: credits, currentPeriodStart: new Date() } : {}),
                 }
               : {}),
           },
@@ -296,8 +348,9 @@ export async function POST(req: Request) {
           data: {
             status: "EXPIRED",
             plan: "FREE",
-            creditsUsed: 0,
+            creditsUsed: FREE_LIFETIME_CREDITS,
             creditsTotal: 0,
+            currentPeriodStart: new Date(),
             cancelAtPeriodEnd: false,
             upgradeScheduled: false,
           },
@@ -310,20 +363,25 @@ export async function POST(req: Request) {
         // Monthly renewal succeeded — reset the credit allowance. Re-derive
         // the plan from the variant on this event (not the stored row) so a
         // renewal always resets to the correct tier's allowance.
-        const plan = planForVariantId(attrs.variant_id)
+        const plan = planForVariantId(attrs.variant_id ?? (current?.lsVariantId ? Number(current.lsVariantId) : undefined))
         const credits = creditsForPlan(plan)
-        await db.subscription.update({
+        const initialAlreadyGranted = attrs.billing_reason === "initial" && current?.status === "ACTIVE" && current.creditsTotal === credits
+        const olderInvoice = !!(attrs.created_at && current?.currentPeriodStart && new Date(attrs.created_at) <= current.currentPeriodStart)
+        const resetAllowance = !initialAlreadyGranted && !olderInvoice
+        // A delayed historical invoice must not revive an expired plan or
+        // undo a newer billing state. Its referral ledger still applies below.
+        if (!olderInvoice) await db.subscription.update({
           where: { userId: user.id },
           data: {
             plan,
-            creditsUsed: 0,
-            creditsTotal: credits,
+            status: "ACTIVE",
+            ...(resetAllowance ? { creditsUsed: 0, creditsTotal: credits, currentPeriodStart: attrs.created_at ? new Date(attrs.created_at) : new Date() } : {}),
             currentPeriodEnd: attrs.renews_at ? new Date(attrs.renews_at) : undefined,
             // A pending Pro → Growth upgrade activates with this payment.
             upgradeScheduled: false,
           },
         })
-        await safeEmail(() => sendMonthlyResetEmail(user.email, name, credits))
+        if (resetAllowance) await safeEmail(() => sendMonthlyResetEmail(user.email, name, credits))
 
         // Referral commission — recurring, 8% of this invoice's pre-tax
         // subtotal, only if the paying user was themselves referred.
@@ -344,13 +402,13 @@ export async function POST(req: Request) {
         // that's the sourceOrderId whose @unique constraint makes a
         // redelivery a clean no-op instead of a double payout.
         try {
-          const subtotalCents = attrs.subtotal ?? attrs.total ?? 0
+          const subtotalCents = attrs.subtotal_usd ?? attrs.subtotal ?? attrs.total ?? 0
           const result = await createCommissionForPayment({
             referredUserId: user.id,
             sourceOrderId: payload.data.id,
             subtotalCents,
             sourceEvent: eventName,
-          })
+          }, db)
           if (result === "created") {
             console.log(`[webhooks/lemonsqueezy] referral commission created for user ${user.id}`)
           } else if (result === "duplicate") {
@@ -374,7 +432,7 @@ export async function POST(req: Request) {
         })
         // No dedicated "payment failed" email template exists yet — surface it
         // in logs so it can be followed up / a template added later.
-        console.error("[webhooks/lemonsqueezy] payment failed for:", user.email)
+        console.error("[webhooks/lemonsqueezy] payment failed", { userId: user.id })
         break
       }
 
@@ -397,11 +455,10 @@ export async function POST(req: Request) {
         console.log("[webhooks/lemonsqueezy] unhandled event:", eventName)
     }
   } catch (err) {
-    console.error("[webhooks/lemonsqueezy] handler error:", eventName, err)
+    console.error("[webhooks/lemonsqueezy] handler failed", { event: eventName })
     // Roll back the idempotency record so Lemon Squeezy's retry can reprocess
     // this event, instead of it being permanently skipped as a "duplicate".
-    await db.processedWebhookEvent.delete({ where: { eventId } }).catch(() => {})
-    return new Response("Handler error", { status: 500 })
+    throw err
   }
 
   return new Response("OK", { status: 200 })
@@ -423,8 +480,10 @@ function mapStatus(
       return "EXPIRED"
     case "paused":
       return "PAUSED"
-    default:
+    case "active":
       return "ACTIVE"
+    default:
+      throw new Error("Unknown subscription status")
   }
 }
 
@@ -442,7 +501,7 @@ async function safeEmail(fn: () => Promise<unknown>) {
 // by meta.custom_data.user_id, never by the order's email (see caller).
 // Returning without granting acks the event so Lemon Squeezy stops retrying;
 // anything flagged "needs manual review" is unrecoverable by retry.
-async function handleTopUpOrder(payload: LsWebhook, attrs: LsWebhook["data"]["attributes"]) {
+async function handleTopUpOrder(payload: LsWebhook, attrs: LsWebhook["data"]["attributes"], db: Prisma.TransactionClient, safeEmail: (fn: () => Promise<unknown>) => Promise<void>) {
   const topupVariantId = parseInt(process.env.LEMONSQUEEZY_TOPUP_VARIANT_ID ?? "0", 10)
   const orderVariantId = attrs.first_order_item?.variant_id
 
@@ -455,11 +514,11 @@ async function handleTopUpOrder(payload: LsWebhook, attrs: LsWebhook["data"]["at
   }
 
   const customUserId = payload.meta?.custom_data?.user_id
-  if (typeof customUserId !== "string" || customUserId === "") {
+  if (!verifyBillingIdentity(customUserId, String(orderVariantId), payload.meta.custom_data?.identity_signature)) {
     console.error(
       `[webhooks/lemonsqueezy] top-up: no custom user_id on order ${payload.data.id} — cannot identify buyer, needs manual review`,
     )
-    return
+    throw new Error("Missing or invalid top-up checkout identity")
   }
 
   const user = await db.user.findUnique({
@@ -470,27 +529,34 @@ async function handleTopUpOrder(payload: LsWebhook, attrs: LsWebhook["data"]["at
     console.error(
       `[webhooks/lemonsqueezy] top-up: no user for custom user_id ${customUserId} (order ${payload.data.id}) — needs manual review`,
     )
-    return
+    throw new Error("Top-up owner unavailable; manual reconciliation required")
   }
 
   // $2 per 100 credits, exact multiples of 100 only. Use the pre-tax
   // subtotal — `total` includes sales tax where Lemon Squeezy collects
   // it, which would inflate (or push out of range) the credit count.
-  const amountPaidCents = attrs.subtotal ?? attrs.total ?? 0
+  if (attrs.status !== "paid") throw new Error("Top-up order is not paid")
+  if (attrs.subtotal_usd == null && attrs.currency !== "USD") throw new Error("Missing USD price")
+  const amountPaidCents = attrs.subtotal_usd != null
+    ? attrs.subtotal_usd - (attrs.discount_total_usd ?? 0)
+    : (attrs.subtotal ?? 0) - (attrs.discount_total ?? 0)
   const amountPaidDollars = amountPaidCents / 100
   const creditsToGrant = Math.floor(amountPaidDollars / 2) * 100
 
-  if (creditsToGrant < 100 || creditsToGrant > 5000 || creditsToGrant % 100 !== 0) {
+  if (!Number.isSafeInteger(amountPaidCents) || amountPaidCents % 200 !== 0 || creditsToGrant < 100 || creditsToGrant > 5000) {
     console.error(
       `[webhooks/lemonsqueezy] top-up: invalid credit amount ${creditsToGrant} from $${amountPaidDollars} (order ${payload.data.id}, user ${user.id}) — needs manual review`,
     )
-    return
+    throw new Error("Invalid top-up price; manual reconciliation required")
   }
 
   // Extra credits expire 2 months from purchase. Stacking a new top-up
   // onto unexpired extras extends the whole balance to the new expiry.
   const expiry = new Date()
   expiry.setMonth(expiry.getMonth() + 2)
+
+  const existingSub = await db.subscription.findUnique({ where: { userId: user.id } })
+  const validExtras = existingSub && (!existingSub.extraCreditsExpiry || existingSub.extraCreditsExpiry > new Date()) ? existingSub.extraCredits : 0
 
   // Upsert: a user without a Subscription row (pre-backfill account)
   // gets one created so their paid credits are never dropped.
@@ -506,7 +572,7 @@ async function handleTopUpOrder(payload: LsWebhook, attrs: LsWebhook["data"]["at
       extraCreditsExpiry: expiry,
     },
     update: {
-      extraCredits: { increment: creditsToGrant },
+      extraCredits: validExtras + creditsToGrant,
       extraCreditsExpiry: expiry,
     },
   })

@@ -47,7 +47,7 @@ export async function POST(req: Request) {
       const url = await reuploadExternalImage(sourceUrl, user.id, "custom-posts")
       return NextResponse.json({ url })
     } catch (err) {
-      console.error("[content-hub/custom-post/upload] sourceUrl re-host failed:", err)
+      console.error("[content-hub/custom-post/upload] sourceUrl re-host failed:", { name: err instanceof Error ? err.name : "UnknownError" })
       return NextResponse.json(
         { error: err instanceof Error ? err.message : "Failed to fetch that image" },
         { status: 400 },
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
   try {
     url = await uploadToR2(check.data, filename, check.mediaType)
   } catch (err) {
-    console.error("[content-hub/custom-post/upload] R2 upload failed:", err)
+    console.error("[content-hub/custom-post/upload] R2 upload failed:", { name: err instanceof Error ? err.name : "UnknownError" })
     return NextResponse.json({ error: "Failed to upload image" }, { status: 502 })
   }
 

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import { Ratelimit } from "@upstash/ratelimit"
@@ -8,7 +9,7 @@ import sharp from "sharp"
 import { db } from "@/lib/db"
 import { uploadToR2 } from "@/lib/r2"
 import { notifyFirstPostIfFirst } from "@/lib/email"
-import { hasGenerationBalance } from "@/lib/credits"
+import { type CreditReceipt } from "@/lib/credits"
 import { chargeCreditsForAction } from "@/lib/chargeCredits"
 import { refundCreditsForAction } from "@/lib/refundCredits"
 import { validateReferenceImage } from "@/lib/validateImage"
@@ -16,7 +17,7 @@ import type { Prisma } from "@prisma/client"
 
 export const maxDuration = 300
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 120000, maxRetries: 0 })
 
 const redis = Redis.fromEnv()
 
@@ -53,12 +54,6 @@ export async function POST(req: Request) {
     )
   }
 
-  // Defense-in-depth: credits are consumed via /api/credits/consume before the
-  // client calls this route — but a drained PRO balance is still blocked here.
-  if (!(await hasGenerationBalance(user.id))) {
-    return NextResponse.json({ error: "You're out of credits." }, { status: 402 })
-  }
-
   let ideaId: string
   let imagePrompt: string
   let caption: string
@@ -82,7 +77,7 @@ export async function POST(req: Request) {
       typeof body.referenceImage === "string" ? body.referenceImage : undefined
     referenceMediaType =
       typeof body.referenceMediaType === "string" ? body.referenceMediaType : "image/jpeg"
-    if (!ideaId || !imagePrompt) throw new Error("Missing ideaId or imagePrompt")
+    if (typeof ideaId !== "string" || !ideaId || ideaId.length > 128 || typeof imagePrompt !== "string" || !imagePrompt.trim() || imagePrompt.length > 30000 || typeof caption !== "string" || caption.length > 30000) throw new Error("Invalid image input")
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
   }
@@ -112,6 +107,15 @@ export async function POST(req: Request) {
   // first image already happened, so this is a regen no matter what the
   // request says. Charging here means forged flags at the caption route can't
   // dodge the image cost.
+  const lockKey = `image_generation_lock:${user.id}:${ideaId}`
+  const lockToken = randomUUID()
+  try {
+    const acquired = await redis.set(lockKey, lockToken, { nx: true, ex: 360 })
+    if (!acquired) return NextResponse.json({ error: "An image is already being generated for this idea. Please wait." }, { status: 409 })
+  } catch {
+    return NextResponse.json({ error: "Generation is temporarily unavailable. Please retry." }, { status: 503 })
+  }
+  try {
   const priorPost = await db.post.findFirst({
     where: { userId: user.id, ideaId, format: "SINGLE_IMAGE" },
     select: { id: true },
@@ -131,6 +135,7 @@ export async function POST(req: Request) {
   // yet" and charge another 10 — the double-charge bug. With the marker, a
   // repeat pre-Post call is a free retry of an already-paid first image.
   const firstChargeKey = `image_first_charged:${user.id}:${ideaId}`
+  let chargeReceipt: CreditReceipt | undefined
   let chargedAction: "image_first" | "image_regen" | null = null
   if (isRegenEffective) {
     const charge = await chargeCreditsForAction(user, "image_regen")
@@ -141,6 +146,7 @@ export async function POST(req: Request) {
       )
     }
     chargedAction = "image_regen"
+    chargeReceipt = charge.receipt
   } else {
     let alreadyPaid = false
     try {
@@ -157,10 +163,13 @@ export async function POST(req: Request) {
         )
       }
       chargedAction = "image_first"
+      chargeReceipt = charge.receipt
       try {
         await redis.set(firstChargeKey, 1, { ex: 86400 })
       } catch (err) {
         console.error("[generate/image] first-charge marker set failed:", err)
+        await refundCreditsForAction(chargeReceipt)
+        return NextResponse.json({ error: "Generation is temporarily unavailable. Please retry." }, { status: 503 })
       }
     }
     // alreadyPaid → free retry of an already-charged first image
@@ -212,7 +221,7 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error("[generate/image] OpenAI error:", err)
     if (chargedAction) {
-      await refundCreditsForAction(user.id, chargedAction)
+      await refundCreditsForAction(chargeReceipt)
       // A refunded first-image charge must clear the paid marker, or the next
       // attempt would ride the marker for free.
       if (chargedAction === "image_first") {
@@ -239,7 +248,7 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error("[generate/image] sharp re-encode error:", err)
     if (chargedAction) {
-      await refundCreditsForAction(user.id, chargedAction)
+      await refundCreditsForAction(chargeReceipt)
       // A refunded first-image charge must clear the paid marker, or the next
       // attempt would ride the marker for free.
       if (chargedAction === "image_first") {
@@ -261,7 +270,7 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error("[generate/image] R2 upload error:", err)
     if (chargedAction) {
-      await refundCreditsForAction(user.id, chargedAction)
+      await refundCreditsForAction(chargeReceipt)
       // A refunded first-image charge must clear the paid marker, or the next
       // attempt would ride the marker for free.
       if (chargedAction === "image_first") {
@@ -308,4 +317,9 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ imageUrl, postId: post.id })
+  } finally {
+    // An expired owner's cleanup must not release a newer request's lock.
+    await redis.eval("if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end", [lockKey], [lockToken]).catch(() => {})
+  }
+
 }

@@ -281,6 +281,17 @@ describe("the generation gate", () => {
     expect(counter("messages", "day")).toBe(0);
   });
 
+  it("gives them back once, however many times a cancelled request reports it", async () => {
+    state.user!.extensionTrialUsed = 3;
+    const gate = await reserveEngageGeneration("u1", "comments");
+    expect(state.user!.extensionTrialUsed).toBe(4);
+    if (gate.ok) await Promise.all([gate.release(), gate.release()]);
+    if (gate.ok) await gate.release();
+    expect(state.user!.extensionTrialUsed).toBe(3);
+    expect(counter("comments", "day")).toBe(0);
+    expect(counter("comments", "month")).toBe(0);
+  });
+
   it("preflight: suspension and a switched-off feature answer 403 before any work", async () => {
     state.user!.engageControl = control({ features: { connection_notes: "off" } });
     const off = await engagePreflight("u1", "connection_notes", REQ);

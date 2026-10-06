@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ExternalLink, Minus, MousePointerClick, Plus, RotateCcw, Sparkles, Timer, X } from "lucide-react";
-import { ensureContentScript, isSiteTab, noContentScriptMessage, sendToTab } from "@/lib/tabs";
-import { insertFailureCode, reportClientError, tabFailureCode, type ReportFeature } from "@/lib/errorReport";
+import { ensureContentScript } from "@/lib/tabs";
+import { type ReportFeature } from "@/lib/errorReport";
+import { useInsert } from "../../useInsert";
 import { markHistoryAction } from "@/lib/history";
 import { loadCachedCommentProfiles, saveCachedCommentProfiles } from "@/lib/profileCache";
 import { loadShowInsert } from "@/lib/syncedSettings";
@@ -31,6 +32,7 @@ import {
   type GenerateResponse,
   type MeResponse,
   type RewriteResponse,
+  userFacingError,
 } from "@/lib/api";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -105,6 +107,10 @@ interface SelectedPost {
   reply?: ReplySelection;
   // Connection Note mode: the person whose Connect button was clicked.
   connect?: { target: LinkedInProfileInfo };
+  // Comment and reply modes: which post or comment Insert must fill. Opaque
+  // here; sent back to the content script unchanged (src/content-script.ts's
+  // InsertTarget). Absent from captures stored by older builds.
+  target?: unknown;
 }
 
 type InsertMode = "comment" | "reply" | "connect";
@@ -126,14 +132,6 @@ const POST_TYPE_LABEL: Record<SelectedPost["type"], string | null> = {
 
 type LoadState = "loading" | "ready" | "error";
 
-// 4xx messages are written for the user and say something actionable ("out of
-// credits", "no post text was captured"). Replacing them with generic copy was
-// hiding the only clue the panel had. 5xx stays generic: those messages
-// describe server internals and are not the user's problem to read.
-function userFacingError(err: unknown): string {
-  if (err instanceof ApiError && err.status >= 400 && err.status < 500) return err.message;
-  return "Something went wrong, try again";
-}
 
 interface Props {
   // Opens the builder for that kind of profile on the Profiles screen. Owned
@@ -200,9 +198,12 @@ export function HomeScreen({ onCreateProfile }: Props) {
   // separate things.
   const [insertEnabled, setInsertEnabled] = useState(false);
   const [showInsertPref, setShowInsertPref] = useState(true);
-  const [inserting, setInserting] = useState(false);
-  // Insert failures in Connection Note mode, shown inside that panel.
+  const insertion = useInsert();
+  // Insert failures in Connection Note mode, shown inside that panel; and,
+  // when LinkedIn's note box already holds the person's own text, the note
+  // waiting for them to choose to replace it.
   const [connectInsertError, setConnectInsertError] = useState<string | null>(null);
+  const [connectReplaceOffer, setConnectReplaceOffer] = useState<{ text: string; historyId: string | null } | null>(null);
 
   // null while unknown, and live as tabs change (src/sidepanel/useOnSite.ts).
   // Chrome reveals tab.url only for hosts the extension has permission for,
@@ -240,6 +241,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
       setCopied(false);
       setGenerateError(null);
       setConnectInsertError(null);
+      setConnectReplaceOffer(null);
     }
 
     // Instant path — only lands if the panel is open AND this screen is
@@ -436,9 +438,11 @@ export function HomeScreen({ onCreateProfile }: Props) {
     };
   }, [postKey]);
 
-  // When streamed text first reaches the DOM — "first visible text" in the
-  // [perf] line (src/lib/generationPerf.ts).
+  // When the loading state, then the streamed text, first reach the DOM —
+  // "loading shown" and "first visible text" in the [perf] line
+  // (src/lib/generationPerf.ts).
   useLayoutEffect(() => {
+    if (generating) perfRef.current?.mark("feedback");
     if (generating && comment) perfRef.current?.mark("shown");
   }, [generating, comment]);
 
@@ -525,7 +529,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
     // on (`generating`), with a skeleton until the first words arrive.
     let scrolled = false;
     const handlers = {
-      onRequest: () => perf.mark("request"),
+      onRequest: (requestId: string) => perf.request(requestId),
       onStart: () => perf.mark("start"),
       onText: (text: string) => {
         if (!current()) return;
@@ -650,20 +654,10 @@ export function HomeScreen({ onCreateProfile }: Props) {
 
   // noteHistoryId is only set for a connection note, whose row the note panel
   // owns; comments and replies use this screen's own historyId.
-  async function performInsert(text: string, mode: InsertMode, noteHistoryId?: string | null) {
+  async function performInsert(text: string, mode: InsertMode, noteHistoryId?: string | null, replace = false) {
     const setError = mode === "connect" ? setConnectInsertError : setGenerateError;
-    setInserting(true);
-    setError(null);
-
-    let tab: chrome.tabs.Tab | undefined;
-    try {
-      // tabs.query returns the tab id without needing the "tabs" permission;
-      // only sensitive fields like url are withheld. Messaging the tab itself
-      // is covered by the linkedin.com host permission.
-      [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id === undefined) throw new Error("no active tab");
-
-      const res = await sendToTab<{ ok: boolean; error?: string } | undefined>(tab, {
+    const outcome = await insertion.insert({
+      message: {
         type: INSERT_MESSAGE_TYPE,
         text,
         // Reply mode targets the captured comment's reply box, never the
@@ -671,31 +665,28 @@ export function HomeScreen({ onCreateProfile }: Props) {
         mode,
         // A note is only inserted on the profile it was written for.
         expect: mode === "connect" ? { profileUrl: selectedPost?.connect?.target.url ?? "" } : undefined,
-      });
-
-      if (!res?.ok) {
-        setError(res?.error ?? "Couldn't insert into LinkedIn. Try Copy instead.");
-        reportClientError(INSERT_FEATURE[mode], insertFailureCode(res?.error));
-        return;
-      }
-
-      if (mode === "connect") markHistoryAction(noteHistoryId, "INSERTED", text);
-      else markHistory("INSERTED");
-    } catch (err) {
-      // The active tab has no content script (not LinkedIn, or a LinkedIn
-      // tab opened before the extension was updated), or it didn't answer.
-      if (isSiteTab(tab)) reportClientError(INSERT_FEATURE[mode], tabFailureCode(err));
-      setError(
-        noContentScriptMessage(
-          tab,
-          mode === "connect"
-            ? "Open the LinkedIn profile in the active tab, then try again."
-            : "Open the LinkedIn post in the active tab, then try again.",
-        ),
-      );
-    } finally {
-      setInserting(false);
+        // A comment or reply only into the post or comment it was written for.
+        target: mode === "connect" ? undefined : selectedPost?.target,
+        // The person chose to replace their own text in the note box.
+        replace: replace || undefined,
+      },
+      feature: INSERT_FEATURE[mode],
+      failed: "Couldn't insert into LinkedIn. Try Copy instead.",
+      notOnSite:
+        mode === "connect"
+          ? "Open the LinkedIn profile in the active tab, then try again."
+          : "Open the LinkedIn post in the active tab, then try again.",
+    });
+    // Ignored: an Insert is already running, or just landed.
+    if (!outcome) return;
+    setError(outcome.ok ? null : outcome.error);
+    if (mode === "connect") {
+      setConnectReplaceOffer(!outcome.ok && outcome.hasText ? { text, historyId: noteHistoryId ?? null } : null);
     }
+    if (!outcome.ok) return;
+
+    if (mode === "connect") markHistoryAction(noteHistoryId, "INSERTED", text);
+    else markHistory("INSERTED");
   }
 
   async function handleCopy() {
@@ -730,8 +721,15 @@ export function HomeScreen({ onCreateProfile }: Props) {
           paywalled={paywalled}
           offSite={offLinkedIn}
           showInsert={insertEnabled && showInsertPref && !offLinkedIn}
-          inserting={inserting}
+          inserting={insertion.inserting}
+          inserted={insertion.inserted}
           insertError={connectInsertError}
+          // Replaces the person's own text only because they chose to.
+          onReplace={
+            connectReplaceOffer
+              ? () => void performInsert(connectReplaceOffer.text, "connect", connectReplaceOffer.historyId, true)
+              : undefined
+          }
           onInsert={(text, noteHistoryId) => void performInsert(text, "connect", noteHistoryId)}
           onCreateProfile={() => onCreateProfile("connection")}
         />
@@ -772,7 +770,11 @@ export function HomeScreen({ onCreateProfile }: Props) {
       onCopy={handleCopy}
       // Hidden entirely when the server kill switch is off, regardless of the
       // per-install preference.
-      insert={showInsert ? { disabled: actionsDisabled, inserting, onClick: handleInsertClick } : null}
+      insert={
+        showInsert
+          ? { disabled: actionsDisabled, inserting: insertion.inserting, inserted: insertion.inserted, onClick: handleInsertClick }
+          : null
+      }
       tools={
         <>
           <Button

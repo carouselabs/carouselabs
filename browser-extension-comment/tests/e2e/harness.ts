@@ -54,7 +54,7 @@ export interface Harness {
 
 export const test = base.extend<{ harness: Harness }>({
   // eslint-disable-next-line no-empty-pattern
-  harness: async ({}, runFixture) => {
+  harness: async ({}, runFixture, testInfo) => {
     if (!fs.existsSync(path.join(DIST, "manifest.json"))) {
       throw new Error("dist/ is missing — run `npm run build:dev` first (npm run test:e2e does this).");
     }
@@ -64,6 +64,8 @@ export const test = base.extend<{ harness: Harness }>({
       headless: true,
       args: [`--disable-extensions-except=${DIST}`, `--load-extension=${DIST}`],
     });
+
+    await context.tracing.start({ snapshots: true, screenshots: true });
 
     const pages = new Map<string, string>();
     const xPages = new Map<string, string>();
@@ -173,6 +175,12 @@ export const test = base.extend<{ harness: Harness }>({
     };
 
     await runFixture(harness);
+    // A failure keeps a trace (actions, page console, network) in the test's
+    // output folder: open it with `npx playwright show-trace <path>`. The
+    // --trace option can't do this here, as it only covers browsers
+    // Playwright launches itself.
+    const failed = testInfo.status !== testInfo.expectedStatus;
+    await context.tracing.stop(failed ? { path: testInfo.outputPath("trace.zip") } : undefined).catch(() => {});
     await context.close();
     fs.rmSync(profileDir, { recursive: true, force: true });
   },

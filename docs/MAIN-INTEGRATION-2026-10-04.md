@@ -30,7 +30,7 @@ A Git commit does not update an installed extension or a Chrome Web Store listin
 
 ## Deployment prerequisites and rollback
 
-The original [audit report](AUDIT-2026-09-30.md) and [dependency notes](audit-dependency-notes.md) still apply. The unresolved high braces advisory leaves the dependency CI gates failing. Real Clerk A/B access, provider billing/webhooks, PostgreSQL concurrency, storage privacy and durable paid-operation recovery remain unverified or unresolved. No production-readiness claim is made.
+The original [audit report](AUDIT-2026-09-30.md) and [dependency notes](audit-dependency-notes.md) still apply. The unresolved high braces advisory is dev-tooling only; since 2026-10-05 CI blocks on shipped dependencies (0 found) and only reports dev ones (see [STABILITY.md](../STABILITY.md)). Real Clerk A/B access, provider billing/webhooks, PostgreSQL concurrency, storage privacy and durable paid-operation recovery remain unverified or unresolved. No production-readiness claim is made.
 
 The audit itself introduced no database migration. Newer main already contains additional Engage/X schema requirements. Before any approved deployment, the database owner must compare the actual schema with `prisma/schema.prisma` and review `scripts/engage-admin-schema.sql`, `scripts/engage-admin-phase-b.sql`, `scripts/engage-admin-phase-c.sql`, `scripts/x-extension-schema.sql` and, for separate X billing, `scripts/x-billing.sql`. Their presence is not evidence they were applied. The repository does not have a complete Prisma migration history. Do not run resets/seeds or destructive rollback SQL as part of routine setup.
 

@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { apiFetch, ApiError, getApiBaseUrl } from "@/lib/api";
+import {
+  apiFetch,
+  ApiError,
+  getApiBaseUrl,
+  onSignedOut,
+  OFFLINE_MESSAGE,
+  SIGNED_OUT_MESSAGE,
+  UNREACHABLE_MESSAGE,
+  userFacingError,
+} from "@/lib/api";
 import { chromeMock } from "../setup/chrome";
 
 function respond(status: number, body: unknown, asJson = true) {
@@ -78,5 +87,45 @@ describe("apiFetch", () => {
     const err = await pending;
     expect(err).toBeInstanceOf(ApiError);
     expect(String((err as ApiError).message)).toMatch(/took too long|timed out/i);
+  });
+});
+
+describe("what a failed request tells the person", () => {
+  afterEach(() => {
+    onSignedOut(null);
+    vi.unstubAllGlobals();
+  });
+
+  it("a refusal the server explains is shown as written; its own trouble is a plain try again", () => {
+    expect(userFacingError(new ApiError(429, "You've reached your limit of 50 comments today."))).toBe(
+      "You've reached your limit of 50 comments today.",
+    );
+    expect(userFacingError(new ApiError(502, "upstream exploded at line 4"))).toBe("Something went wrong, try again");
+  });
+
+  it("no connection says so, offline or not", () => {
+    vi.stubGlobal("navigator", { onLine: false });
+    expect(userFacingError(new TypeError("Failed to fetch"))).toBe(OFFLINE_MESSAGE);
+    vi.stubGlobal("navigator", { onLine: true });
+    expect(userFacingError(new TypeError("Failed to fetch"))).toBe(UNREACHABLE_MESSAGE);
+  });
+
+  it("a token the server no longer accepts signs this browser out, and says so in plain words", async () => {
+    chromeMock().__store.extensionToken = "cl_cmt_revoked";
+    const signedOut = vi.fn();
+    onSignedOut(signedOut);
+    respond(401, { error: "Invalid or missing extension token" });
+    const err = await apiFetch("/api/ext/me").catch((e) => e);
+    expect(signedOut).toHaveBeenCalledOnce();
+    expect(userFacingError(err)).toBe(SIGNED_OUT_MESSAGE);
+  });
+
+  it("any other refusal leaves the sign-in alone", async () => {
+    chromeMock().__store.extensionToken = "cl_cmt_ok";
+    const signedOut = vi.fn();
+    onSignedOut(signedOut);
+    respond(403, { error: "Engage is paused for this account." });
+    await apiFetch("/api/ext/generate").catch(() => {});
+    expect(signedOut).not.toHaveBeenCalled();
   });
 });

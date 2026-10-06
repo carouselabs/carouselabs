@@ -18,6 +18,10 @@ export default defineManifest(({ mode }) => {
   manifest_version: 3,
   name: "CarouseLabs Engage",
   version: pkg.version,
+  // Development builds only: when it was built, shown on chrome://extensions,
+  // to confirm Chrome is running the files just built. Store builds show the
+  // plain version.
+  ...(isDev ? { version_name: `${pkg.version} dev ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC` } : {}),
   description:
     "Write LinkedIn comments, replies, connection notes and messages in your own voice. You review and post every one yourself.",
   icons: {

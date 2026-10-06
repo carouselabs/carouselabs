@@ -51,6 +51,10 @@ export function loadFixtureInMessagingFrame(frameFixture: string, urlPath: strin
       return this.parentElement ?? doc.body;
     },
   });
+  // The page's typing stand-in for execCommand (tests/setup/dom.ts).
+  (win.Document.prototype as unknown as { execCommand: unknown }).execCommand = (
+    Document.prototype as unknown as { execCommand: unknown }
+  ).execCommand;
   return doc;
 }
 

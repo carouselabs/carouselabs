@@ -160,7 +160,22 @@ const handler = clerkMiddleware(
     // evaluates against the rewritten path above — /admin and /intern
     // routes are protected exactly as they already were pre-subdomain.
     if (!isPublicRoute(req)) {
-      await auth.protect()
+      // A signed-out call to a private API is almost always a session the
+      // page couldn't renew (e.g. Clerk's servers unreachable from the
+      // user's network for a while). auth.protect() answers those with a
+      // bare 404, which reads as a broken feature; a 401 the page can show
+      // says what to do. Pages still go to sign-in through auth.protect().
+      if (req.nextUrl.pathname.startsWith("/api/")) {
+        const { userId } = await auth()
+        if (!userId) {
+          return NextResponse.json(
+            { error: "Your session has expired. Reload the page and sign in again.", code: "session_expired" },
+            { status: 401 },
+          )
+        }
+      } else {
+        await auth.protect()
+      }
     }
 
     if (req.nextUrl.pathname !== originalPathname) {

@@ -157,7 +157,13 @@ describe("X Reply screen", () => {
     await waitFor(() => expect(replyBox().value).toBe(REPLY));
     fireEvent.click(screen.getByRole("button", { name: "Insert" }));
     await waitFor(() =>
-      expect(chromeMock().tabs.sendMessage).toHaveBeenCalledWith(4, { type: X_INSERT_MESSAGE_TYPE, text: REPLY, expect: { postUrl: POST_URL } }),
+      expect(chromeMock().tabs.sendMessage).toHaveBeenCalledWith(4, {
+        type: X_INSERT_MESSAGE_TYPE,
+        text: REPLY,
+        expect: { postUrl: POST_URL },
+        // One id per click: the page types it at most once (src/lib/insertOnce.ts).
+        insertId: expect.any(String),
+      }),
     );
     await waitFor(() => expect(calls.some((c) => c.url.endsWith("/api/ext/history/h1") && c.body?.action === "INSERTED")).toBe(true));
   });

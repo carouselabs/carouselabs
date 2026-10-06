@@ -100,3 +100,20 @@ describe("apiStream", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("request id", () => {
+  it("sends each Generate a fresh random id, the one the panel's timing line prints", async () => {
+    chromeMock().__store.extensionToken = "cl_cmt_abc";
+    const fetchMock = vi.fn(async () => sseResponse(frame("start", {}) + frame("final", { comment: "Done" }), 50));
+    vi.stubGlobal("fetch", fetchMock);
+    const ids: string[] = [];
+    await apiStream("/api/ext/generate", {}, { onRequest: (id) => ids.push(id) });
+    await apiStream("/api/ext/generate", {}, { onRequest: (id) => ids.push(id) });
+    const sent = fetchMock.mock.calls.map(
+      (call) => ((call as unknown as [string, RequestInit])[1].headers as Record<string, string>)["X-Engage-Request-Id"],
+    );
+    expect(sent).toEqual(ids);
+    expect(ids[0]).toMatch(/^[A-Za-z0-9-]{8,64}$/);
+    expect(ids[0]).not.toBe(ids[1]);
+  });
+});

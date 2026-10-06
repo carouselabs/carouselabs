@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   lunaDown: false,
+  // Luna never answers (until the call is given up on).
+  lunaHangs: false,
   // Luna fails only this many times, then answers.
   lunaFailures: 0,
   // What both models write (a note too long for the range, to test the fallback).
@@ -19,7 +21,12 @@ vi.mock("openai", () => ({
   default: class {
     chat = {
       completions: {
-        create: async () => {
+        create: async (_body: unknown, opts?: { signal?: AbortSignal }) => {
+          if (state.lunaHangs) {
+            return new Promise((_, reject) => {
+              opts?.signal?.addEventListener("abort", () => reject(Object.assign(new Error("Request was aborted."), { name: "AbortError" })), { once: true });
+            });
+          }
           if (state.lunaDown) throw new Error("Luna is down");
           if (state.lunaFailures > 0) {
             state.lunaFailures -= 1;
@@ -81,6 +88,7 @@ const request = () =>
 
 beforeEach(() => {
   state.lunaDown = false;
+  state.lunaHangs = false;
   state.lunaFailures = 0;
   state.text = "";
   state.history = [];
@@ -102,6 +110,22 @@ describe("connection note: the model that wrote it", () => {
     state.lunaDown = true;
     expect((await POST(request())).status).toBe(200);
     expect(state.history[0]).toMatchObject({ model: "claude-haiku-4-5-20251001" });
+  });
+
+  it("a Luna that never answers is handed to Haiku after 8s, not 15s", async () => {
+    vi.useFakeTimers();
+    try {
+      state.lunaHangs = true;
+      let status: number | null = null;
+      const start = Date.now();
+      void POST(request()).then((res) => (status = res.status));
+      while (status === null && Date.now() - start < 60_000) await vi.advanceTimersByTimeAsync(500);
+      expect(status).toBe(200);
+      expect(state.history[0]).toMatchObject({ model: "claude-haiku-4-5-20251001" });
+      expect(Date.now() - start).toBeLessThanOrEqual(9_000);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("the model of the earlier attempt whose text is kept when no attempt fits", async () => {

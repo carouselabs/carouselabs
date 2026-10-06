@@ -11,7 +11,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import { engagePreflight, reserveEngageGeneration } from "@/lib/engage/gate"
-import { stageTimer, streamGeneration, type GenerationInput, type GenerationResult } from "@/lib/engage/commentEngine"
+import { requestIdOf, stageTimer, streamGeneration, type GenerationInput, type GenerationResult } from "@/lib/engage/commentEngine"
 import { targetLengthRange, WEAK_COMMENT_PATTERNS } from "@/lib/ai/prompts/commentPrompt"
 import { buildXReplySystemMessage, buildXReplyUserMessage, xNumberSources, X_AI_TELLS } from "@/lib/ai/prompts/xReplyPrompt"
 import { parseReplyBody } from "@/lib/xReply"
@@ -24,6 +24,7 @@ export const maxDuration = 60
 
 export async function POST(req: Request) {
   const timer = stageTimer()
+  const requestId = requestIdOf(req)
 
   const user = await getUserFromCommentExtensionToken(req)
   timer.mark("auth")
@@ -93,7 +94,8 @@ export async function POST(req: Request) {
   const logTiming = (result: GenerationResult) => {
     const s = timer.stages
     console.log(
-      `[ext/x/reply] timing model=${result.model || "none"} attempts=${result.attempts}` +
+      `[ext/x/reply] timing req=${requestId ?? "-"} model=${result.model || "none"} attempts=${result.attempts}` +
+        ` cancelled=${result.cancelled ? 1 : 0}` +
         ` auth=${s.auth} limit=${s.limit} profile=${s.profile} reserve=${s.reserve}` +
         ` ttft=${Math.round(result.ttftMs ?? -1)} generate=${s.generate ?? -1} total=${timer.elapsed()}`,
     )
@@ -102,6 +104,7 @@ export async function POST(req: Request) {
   return streamGeneration({
     input,
     beforeModelMs,
+    signal: req.signal,
     onGenerated: () => timer.mark("generate"),
     onEmpty: async (result) => {
       logTiming(result)

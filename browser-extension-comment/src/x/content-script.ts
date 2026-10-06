@@ -12,10 +12,14 @@
 // written against saved copies of real X pages (tests/fixtures/x).
 import { getApiBaseUrl } from "@/lib/api";
 import { PING_MESSAGE_TYPE } from "@/lib/tabs";
+import { insertSwitch as readInsertSwitch, readInsertEnabled } from "@/lib/insertSwitch";
 import { X_INSERT_CHAT_MESSAGE_TYPE, X_INSERT_MESSAGE_TYPE, X_LAST_POST_STORAGE_KEY, X_READ_CHAT_MESSAGE_TYPE } from "@/x/lib/xPost";
 import { insertIntoChat, readChat } from "@/x/content/xChat";
-import { captureArticle, findReplyBox, postedAt, replyTargetOfClick, statusPath } from "@/x/content/xPage";
+import { captureArticle, findReplyBox, postedAt, replyTargetOfClick, statusPath, type ComposerResult } from "@/x/content/xPage";
 import { insertIntoDraft } from "@/x/content/xEditor";
+import { waitFor } from "@/content/waitFor";
+import { usableEditor } from "@/content/editor";
+import { insertOnce, type InsertAnswer } from "@/lib/insertOnce";
 
 const DEV = import.meta.env.MODE !== "production";
 if (DEV) console.log("[x-content-script] loaded on", window.location.href);
@@ -55,43 +59,71 @@ function onDocumentClick(event: MouseEvent) {
   });
 }
 
-// The server's Insert switch (/api/ext/config), checked at the moment of
-// Insert. If it can't be read, nothing is inserted and the person is told it
-// was the connection.
-const CONFIG_TIMEOUT_MS = 8_000;
+// The server's Insert switch (/api/ext/config), from a recent reading or read
+// again (lib/insertSwitch.ts). With no usable reading, nothing is inserted
+// and the person is told it was the connection.
 async function insertSwitch(): Promise<"on" | "off" | "unknown"> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), CONFIG_TIMEOUT_MS);
-  try {
-    const res = await fetch(`${await getApiBaseUrl()}/api/ext/config`, { signal: controller.signal });
-    if (!res.ok) return "unknown";
-    const config = (await res.json()) as { insertEnabled?: boolean };
-    return config.insertEnabled === false ? "off" : "on";
-  } catch {
-    return "unknown";
-  } finally {
-    clearTimeout(timer);
-  }
+  const baseUrl = await getApiBaseUrl();
+  return readInsertSwitch((signal) => readInsertEnabled(baseUrl, signal));
 }
 
-type InsertRequest = { text: string; expect?: { postUrl?: string; threadPath?: string; handle?: string } };
+// Read once when the page opens, so the first Insert doesn't wait for it.
+void insertSwitch();
 
-async function handleInsert(message: InsertRequest): Promise<{ ok: boolean; error?: string }> {
+type InsertRequest = {
+  text: string;
+  expect?: { postUrl?: string; threadPath?: string; handle?: string };
+  // One per Insert click (src/lib/insertOnce.ts). Absent from older panels.
+  insertId?: string;
+};
+
+// How long Insert waits for a reply box X is still opening.
+const BOX_WAIT_MS = 2_000;
+
+// The post a reply is for: this page's last Reply click, and only if it is
+// the post the panel names. Never a guess from the panel's post alone: X's
+// reply pop-up shows no link to its post, so only the click can say which
+// post it is for.
+function replyTargetFor(expected: string | null): typeof lastTarget {
+  if (!lastTarget || (expected && lastTarget.statusPath && expected !== lastTarget.statusPath)) return null;
+  return lastTarget;
+}
+
+function handleInsert(message: InsertRequest): Promise<InsertAnswer> {
+  return insertOnce(message.insertId, (wrote) => insertNow(message, wrote));
+}
+
+async function insertNow(message: InsertRequest, wrote: () => void): Promise<InsertAnswer> {
   const insert = await insertSwitch();
   if (insert === "off") return { ok: false, error: "Insert is turned off right now. Use Copy instead." };
   if (insert === "unknown") {
     return { ok: false, error: "Couldn't reach CarouseLabs to insert. Check your connection, then try again, or use Copy." };
   }
 
-  const expected = statusPath(message.expect?.postUrl);
-  if (!lastTarget || (expected && lastTarget.statusPath && expected !== lastTarget.statusPath)) {
-    return { ok: false, error: "Click Reply on the post again, then Insert." };
-  }
+  const target = replyTargetFor(statusPath(message.expect?.postUrl));
+  if (!target) return { ok: false, error: "Click Reply on the post again, then Insert." };
 
-  const found = findReplyBox(lastTarget);
+  // A pop-up for a different post is a refusal straight away; no box yet is
+  // waited for, briefly.
+  const box = (): ComposerResult | null => {
+    const found = findReplyBox(target);
+    if (!found.ok) return found.error.includes("different post") ? found : null;
+    return usableEditor(found.box) ? found : null;
+  };
+  const found = await waitFor(box, BOX_WAIT_MS);
+  if (!found) {
+    // Still no box after the wait, or one that can't be typed in (hidden).
+    const now = findReplyBox(target);
+    return now.ok ? { ok: false, error: "X's reply box isn't ready to type in. Click into it, then Insert." } : now;
+  }
   if (!found.ok) return found;
-  const inserted = await insertIntoDraft(found.box, message.text);
-  return inserted ? { ok: true } : { ok: false, error: "Couldn't type into X's reply box. Use Copy instead." };
+  return insertIntoDraft(found.box, message.text, {
+    refind: () => {
+      const again = findReplyBox(target);
+      return again.ok ? again.box : null;
+    },
+    onWrite: wrote,
+  });
 }
 
 function onRuntimeMessage(
@@ -109,10 +141,10 @@ function onRuntimeMessage(
   }
   if (message?.type === X_INSERT_CHAT_MESSAGE_TYPE && typeof message.text === "string") {
     const text = message.text;
-    insertSwitch()
-      .then((insert) =>
+    insertOnce(message.insertId, (wrote) =>
+      insertSwitch().then((insert) =>
         insert === "on"
-          ? insertIntoChat(text, (message as InsertRequest).expect)
+          ? insertIntoChat(text, (message as InsertRequest).expect, document, wrote)
           : {
               ok: false,
               error:
@@ -120,7 +152,8 @@ function onRuntimeMessage(
                   ? "Insert is turned off right now. Use Copy instead."
                   : "Couldn't reach CarouseLabs to insert. Check your connection, then try again, or use Copy.",
             },
-      )
+      ),
+    )
       .then(sendResponse)
       .catch((err) => sendResponse({ ok: false, error: String(err) }));
     return true;

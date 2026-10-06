@@ -11,6 +11,8 @@
 //   textarea[data-testid="dm-composer-textarea"]       the message box
 // Nothing is read until the person clicks Read in the panel.
 
+import { typeInto, usableEditor } from "@/content/editor";
+
 export interface XChatMessage {
   sender: "me" | "them" | "unknown";
   text: string;
@@ -89,15 +91,15 @@ export function readChat(doc: Document = document): ReadResult {
   return { ok: true, conversation: { contact, threadPath: doc.location.pathname.replace(/\/$/, ""), thread } };
 }
 
-const nextTick = () => new Promise((resolve) => setTimeout(resolve, 0));
-
 // Puts `text` in the chat's message box, after anything already typed, the
-// way typing would (so X's own code sees it). Only in the chat it was
-// written for; never sends.
+// way typing would (so X's own code sees it), and confirms the box kept it.
+// Only in the chat it was written for; never sends. `wrote` is called just
+// before the box changes (src/lib/insertOnce.ts).
 export async function insertIntoChat(
   text: string,
   expected: { threadPath?: string; handle?: string } | undefined,
   doc: Document = document,
+  wrote: () => void = () => {},
 ): Promise<{ ok: boolean; error?: string }> {
   if (!expected?.threadPath) return { ok: false, error: 'Click "Re-read this conversation", then Insert.' };
   const here = doc.location.pathname.replace(/\/$/, "");
@@ -109,24 +111,14 @@ export async function insertIntoChat(
       error: "This was written for another chat. Go back to that chat, or re-read this one.",
     };
   }
-  const box = root?.querySelector<HTMLTextAreaElement>('textarea[data-testid="dm-composer-textarea"]');
-  if (!box) return { ok: false, error: "Couldn't find the message box in this chat. Click into it, then try Insert." };
-
-  const existing = box.value;
-  const toInsert = existing.trim() ? `${/\s$/.test(existing) ? "" : " "}${text}` : text;
-  box.focus();
-  box.setSelectionRange(existing.length, existing.length);
-  const typed = typeof doc.execCommand === "function" && doc.execCommand("insertText", false, toInsert);
-  await nextTick();
-  if (typed && box.value.includes(text.trim().slice(0, 24))) return { ok: true };
-
-  // X's box is a React-controlled textarea: set the value through the
-  // element's own setter, then tell React it changed.
-  const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(box), "value")?.set;
-  setter?.call(box, existing + toInsert);
-  box.dispatchEvent(new Event("input", { bubbles: true }));
-  await nextTick();
-  return box.value.includes(text.trim().slice(0, 24))
-    ? { ok: true }
-    : { ok: false, error: "Couldn't type into X's message box. Use Copy instead." };
+  const findBox = () => chatRoot(doc)?.querySelector<HTMLTextAreaElement>('textarea[data-testid="dm-composer-textarea"]') ?? null;
+  const box = findBox();
+  if (!box || !usableEditor(box)) {
+    return { ok: false, error: "Couldn't find the message box in this chat. Click into it, then try Insert." };
+  }
+  return typeInto(box, text, {
+    refind: findBox,
+    failure: "X's message box didn't keep the text. It's still here in the panel: use Copy, then paste it in.",
+    onWrite: wrote,
+  });
 }

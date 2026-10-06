@@ -20,7 +20,7 @@ import { Initials } from "@/sidepanel/components/Initials";
 import { FreeGenerationsNote, UnlockCard } from "@/sidepanel/components/UnlockCard";
 import { GoToSiteCard, goToSite } from "@/sidepanel/components/GoToSiteCard";
 import { useOnSite } from "@/sidepanel/useOnSite";
-import { apiFetch, apiStream, ApiError, fetchExtConfig, isCancelled, type MeResponse, type RewriteResponse } from "@/lib/api";
+import { apiFetch, apiStream, ApiError, fetchExtConfig, isCancelled, userFacingError, type MeResponse, type RewriteResponse } from "@/lib/api";
 import {
   isPaywalled,
   noteFreeRemaining,
@@ -29,8 +29,8 @@ import {
   useExtensionAccess,
 } from "@/lib/extensionAccess";
 import { markHistoryAction } from "@/lib/history";
-import { ensureContentScript, isSiteTab, noContentScriptMessage, sendToTab } from "@/lib/tabs";
-import { insertFailureCode, reportClientError, tabFailureCode } from "@/lib/errorReport";
+import { ensureContentScript } from "@/lib/tabs";
+import { useInsert } from "@/sidepanel/useInsert";
 import { X_INSERT_MESSAGE_TYPE, X_LAST_POST_STORAGE_KEY, type XCapturedPost } from "@/x/lib/xPost";
 import { xLength, X_MAX_LENGTH } from "@/x/lib/xText";
 
@@ -63,10 +63,6 @@ const MEDIA_LABEL: Record<string, string> = {
   link: "Link",
 };
 
-function userFacingError(err: unknown): string {
-  if (err instanceof ApiError && err.status >= 400 && err.status < 500) return err.message;
-  return "Something went wrong, try again";
-}
 
 interface Props {
   // Opens the X profile builder (the Profiles screen).
@@ -97,7 +93,8 @@ export function XHomeScreen({ onCreateProfile }: Props) {
 
   const [insertEnabled, setInsertEnabled] = useState(false);
   const [insertHidden, setInsertHidden] = useState(false);
-  const [inserting, setInserting] = useState(false);
+  const insertion = useInsert();
+  const inserting = insertion.inserting;
   // Whether the active tab is on X, live: writing and Insert happen on X, so
   // on any other site Home points back to X instead (what was written stays
   // for Copy).
@@ -340,30 +337,18 @@ export function XHomeScreen({ onCreateProfile }: Props) {
 
   async function handleInsert() {
     if (!hasReply || !target) return;
-    setInserting(true);
-    setGenerateError(null);
-    let tab: chrome.tabs.Tab | undefined;
-    try {
-      [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id === undefined) throw new Error("no active tab");
+    const text = reply;
+    const outcome = await insertion.insert({
       // The page refuses unless the reply box open is for this post.
-      const res = await sendToTab<{ ok: boolean; error?: string } | undefined>(tab, {
-        type: X_INSERT_MESSAGE_TYPE,
-        text: reply,
-        expect: { postUrl: target.post.url },
-      });
-      if (!res?.ok) {
-        setGenerateError(res?.error ?? "Couldn't insert into X. Try Copy instead.");
-        reportClientError("x_replies", insertFailureCode(res?.error));
-        return;
-      }
-      markHistoryAction(historyId, "INSERTED", reply);
-    } catch (err) {
-      if (isSiteTab(tab)) reportClientError("x_replies", tabFailureCode(err));
-      setGenerateError(noContentScriptMessage(tab, "Open the post on X in the active tab, then try again."));
-    } finally {
-      setInserting(false);
-    }
+      message: { type: X_INSERT_MESSAGE_TYPE, text, expect: { postUrl: target.post.url } },
+      feature: "x_replies",
+      failed: "Couldn't insert into X. Try Copy instead.",
+      notOnSite: "Open the post on X in the active tab, then try again.",
+    });
+    // Ignored: an Insert is already running, or just landed.
+    if (!outcome) return;
+    setGenerateError(outcome.ok ? null : outcome.error);
+    if (outcome.ok) markHistoryAction(historyId, "INSERTED", text);
   }
 
   function handleProfileChange(value: string) {
@@ -552,7 +537,11 @@ export function XHomeScreen({ onCreateProfile }: Props) {
             copied={copied}
             copyDisabled={!hasReply || busy}
             onCopy={handleCopy}
-            insert={showInsert ? { disabled: !hasReply || busy || overLimit, inserting, onClick: handleInsert } : null}
+            insert={
+              showInsert
+                ? { disabled: !hasReply || busy || overLimit, inserting, inserted: insertion.inserted, onClick: handleInsert }
+                : null
+            }
             tools={
               <>
                 <Button

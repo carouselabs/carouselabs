@@ -17,7 +17,7 @@
 // "start here".
 
 import { getSelfName, normalizeName } from "@/content/replyThread";
-import { insertTextAtEnd } from "@/content/editor";
+import { typeInto, usableEditor } from "@/content/editor";
 import type {
   CapturedConversation,
   ConversationContact,
@@ -408,18 +408,21 @@ const COMPOSE_BOX_SELECTORS = [
 
 function findComposeBox(doc: Document): HTMLElement | null {
   for (const selector of COMPOSE_BOX_SELECTORS) {
-    const box = Array.from(doc.querySelectorAll<HTMLElement>(selector)).find(isLive);
+    const box = Array.from(doc.querySelectorAll<HTMLElement>(selector)).find((el) => isLive(el) && usableEditor(el));
     if (box) return box;
   }
   return null;
 }
 
 // Fills the open conversation's message box — only if it is still the
-// conversation the text was written for. Never clicks Send.
-export function insertIntoComposeBox(
+// conversation the text was written for — and confirms LinkedIn's editor kept
+// the text. Never clicks Send. `wrote` is called just before the box changes
+// (src/lib/insertOnce.ts).
+export async function insertIntoComposeBox(
   text: string,
   expected: MessageInsertExpectation | undefined,
-): { ok: boolean; error?: string } {
+  wrote: () => void = () => {},
+): Promise<{ ok: boolean; error?: string }> {
   if (!expected?.threadPath || !expected.contactName) {
     return { ok: false, error: "Click \"Re-read this conversation\", then Insert." };
   }
@@ -436,8 +439,11 @@ export function insertIntoComposeBox(
   if (!box) {
     return { ok: false, error: "Couldn't find the message box in this conversation. Click into it, then try Insert." };
   }
-  insertTextAtEnd(box, text);
-  return { ok: true };
+  return typeInto(box, text, {
+    refind: () => findComposeBox(messagingDocument()),
+    failure: "LinkedIn's message box didn't keep the text. It's still here in the panel: use Copy, then paste it in.",
+    onWrite: wrote,
+  });
 }
 
 // ── Development diagnostics (never runs in production builds) ──

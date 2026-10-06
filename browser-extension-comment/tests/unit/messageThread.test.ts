@@ -83,7 +83,7 @@ describe("reading a group conversation", () => {
 describe("inserting into the message box", () => {
   it("fills the open thread's compose box and nothing else", async () => {
     loadFixture("messaging-thread.html", BHARTI_PATH);
-    const result = insertIntoComposeBox("Hello Bharti", EXPECT_BHARTI);
+    const result = await insertIntoComposeBox("Hello Bharti", EXPECT_BHARTI);
     expect(result.ok).toBe(true);
     expect(byFixture("main-compose").textContent).toContain("Hello Bharti");
     expect(byFixture("overlay-compose").textContent).toBe("");
@@ -93,7 +93,7 @@ describe("inserting into the message box", () => {
   it("refuses when a different conversation is now open than the one that was read", async () => {
     loadFixture("messaging-thread.html", BHARTI_PATH);
     history.replaceState(null, "", "/messaging/thread/2-emma/");
-    const result = insertIntoComposeBox("Hello Bharti", EXPECT_BHARTI);
+    const result = await insertIntoComposeBox("Hello Bharti", EXPECT_BHARTI);
     expect(result.ok).toBe(false);
     expect(byFixture("main-compose").textContent).toBe("");
   });
@@ -101,14 +101,14 @@ describe("inserting into the message box", () => {
   it("refuses when the open conversation's name no longer matches the one that was read", async () => {
     loadFixture("messaging-thread.html", BHARTI_PATH);
     document.querySelector("[data-fixture='open-thread'] .msg-entity-lockup__entity-title")!.textContent = "Emma Atkins 🖤";
-    const result = insertIntoComposeBox("Hello Bharti", EXPECT_BHARTI);
+    const result = await insertIntoComposeBox("Hello Bharti", EXPECT_BHARTI);
     expect(result.ok).toBe(false);
   });
 
   it("never falls back to a chat pop-up's or a hidden thread's compose box", async () => {
     loadFixture("messaging-thread.html", BHARTI_PATH);
     byFixture("main-compose").remove();
-    const result = insertIntoComposeBox("Hello Bharti", EXPECT_BHARTI);
+    const result = await insertIntoComposeBox("Hello Bharti", EXPECT_BHARTI);
     expect(result.ok).toBe(false);
     expect(byFixture("overlay-compose").textContent).toBe("");
     expect(byFixture("stale-compose").textContent).toBe("");
@@ -117,7 +117,7 @@ describe("inserting into the message box", () => {
   it("keeps a draft the user already typed, adding the new text after it", async () => {
     loadFixture("messaging-thread.html", BHARTI_PATH);
     byFixture("main-compose").innerHTML = "<p>Quick note first.</p>";
-    insertIntoComposeBox("Hello Bharti", EXPECT_BHARTI);
+    await insertIntoComposeBox("Hello Bharti", EXPECT_BHARTI);
     const text = byFixture("main-compose").textContent ?? "";
     expect(text).toContain("Quick note first.");
     expect(text.indexOf("Quick note first.")).toBeLessThan(text.indexOf("Hello Bharti"));
@@ -141,19 +141,19 @@ describe("LinkedIn's newer design, with Messaging in a frame", () => {
     expect(JSON.stringify(thread)).not.toMatch(/Emma|Thursday/);
   });
 
-  it("inserts into the frame's message box, never the hidden feed's comment box", () => {
+  it("inserts into the frame's message box, never the hidden feed's comment box", async () => {
     const frameDoc = loadFixtureInMessagingFrame("messaging-thread.html", BHARTI_PATH);
-    const result = insertIntoComposeBox("Hello Bharti", EXPECT_BHARTI);
+    const result = await insertIntoComposeBox("Hello Bharti", EXPECT_BHARTI);
     expect(result.ok).toBe(true);
     expect(frameDoc.querySelector('[data-fixture="main-compose"]')?.textContent).toContain("Hello Bharti");
     expect(frameDoc.querySelector('[data-fixture="overlay-compose"]')?.textContent).toBe("");
     expect(byFixture("feed-comment-box").textContent).toBe("");
   });
 
-  it("still refuses an Insert after switching to another conversation", () => {
+  it("still refuses an Insert after switching to another conversation", async () => {
     loadFixtureInMessagingFrame("messaging-thread.html", BHARTI_PATH);
     history.replaceState(null, "", "/messaging/thread/2-emma/");
-    expect(insertIntoComposeBox("Hello Bharti", EXPECT_BHARTI).ok).toBe(false);
+    expect((await insertIntoComposeBox("Hello Bharti", EXPECT_BHARTI)).ok).toBe(false);
   });
 
   it("says the conversation is hidden, not missing, when LinkedIn shows only the chat list", async () => {

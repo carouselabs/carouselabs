@@ -121,13 +121,13 @@ afterEach(() => {
 });
 
 describe("one-shot calls (rewrite, notes, messages, profile test)", () => {
-  it("gives up on a Luna that never answers after 15s and asks Haiku", async () => {
+  it("gives up on a Luna that never answers after 8s (not 15s) and asks Haiku", async () => {
     sdk.luna = ["hang"];
     sdk.haiku = [{ text: OK }];
     const result = await timed(callCommentModel("s", "u", "test", { deadline: generationDeadline() }));
     expect(result.value).toBe(OK);
-    expect(result.ms).toBeGreaterThanOrEqual(15_000);
-    expect(result.ms).toBeLessThanOrEqual(16_000);
+    expect(result.ms).toBeGreaterThanOrEqual(8_000);
+    expect(result.ms).toBeLessThanOrEqual(9_000);
   });
 
   it("fails, rather than waits, when both models hang", async () => {
@@ -150,11 +150,12 @@ describe("one-shot calls (rewrite, notes, messages, profile test)", () => {
     vi.setSystemTime(Date.now() + GENERATION_BUDGET_MS - 12_000);
     sdk.luna = ["hang"];
     sdk.haiku = ["hang"];
-    // Luna gets the 12s left, then nothing is left for Haiku.
+    // Luna gets its 8s, then Haiku only the 4s left (not its usual 20s).
     const result = await timed(callCommentModel("s", "u", "test", { deadline }));
-    expect(result.error).toBeInstanceOf(GenerationTimeout);
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.ms).toBeGreaterThanOrEqual(12_000);
     expect(result.ms).toBeLessThanOrEqual(13_000);
-    expect(sdk.haikuCalls).toBe(0);
+    expect(sdk.haikuCalls).toBe(1);
   });
 });
 

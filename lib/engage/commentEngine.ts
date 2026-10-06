@@ -12,9 +12,27 @@ import type { AiCaller } from "@/lib/engage/aiUsage"
 import { extractPartialComment, visibleCommentText } from "@/lib/ai/commentText"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
 import { ANTI_FABRICATION_REMINDER, WEAK_COMMENT_PATTERNS } from "@/lib/ai/prompts/commentPrompt"
+import { after } from "next/server"
 
 // How often a quiet stream says it is still alive (see streamGeneration).
 const KEEP_ALIVE_MS = 8_000
+
+// Keeps the function running until the returned callback is called. When the
+// client leaves, Vercel ends the function at once (vercel.json:
+// supportsCancellation on the generation routes), and only work registered
+// with after() / waitUntil may finish — here, stopping the model call and
+// giving the free use back, or saving a comment. Outside a Next.js request
+// (unit tests, the benchmark) there is nothing to keep alive.
+export function holdOpen(): () => void {
+  let done!: () => void
+  const settled = new Promise<void>((resolve) => (done = resolve))
+  try {
+    after(() => settled)
+  } catch {
+    // not inside a request
+  }
+  return done
+}
 
 // Milliseconds spent in each stage of one request, for the Server-Timing
 // header, the stream's final event and one log line. Durations only: no
@@ -34,6 +52,16 @@ export function stageTimer() {
   }
 }
 
+// The panel's id for one Generate (X-Engage-Request-Id, src/lib/api.ts), so
+// its "[perf]" line and the server's timing line can be matched up. Random,
+// so it says nothing about who asked.
+export const REQUEST_ID_HEADER = "x-engage-request-id"
+
+export function requestIdOf(req: Request): string | null {
+  const id = req.headers.get(REQUEST_ID_HEADER)?.trim() ?? ""
+  return /^[A-Za-z0-9-]{8,64}$/.test(id) ? id : null
+}
+
 export interface GenerationInput {
   systemMessage: string
   userMessage: string
@@ -46,6 +74,11 @@ export interface GenerationInput {
   // How long the text is for min/max: plain characters on LinkedIn, X's own
   // weighted count on X (lib/xText.ts).
   measure?: (text: string) => number
+  // How far outside min-max (a share of each end) a clean comment may land
+  // and still be kept instead of written again (lengthSlack in
+  // lib/ai/prompts/commentPrompt.ts). 0, the default, for hard limits such as
+  // X's.
+  lengthSlack?: number
   // Who asked and for what: picks the feature's AI model and records each
   // call (lib/ai/commentModel.ts).
   engage?: AiCaller
@@ -71,9 +104,20 @@ export interface GenerationResult {
   // first moment any comment text could be shown.
   ttftMs: number | null
   firstTextMs: number | null
+  // Stopped because whoever asked went away (signal): no comment, and the
+  // model call was cut off rather than paid for in full.
+  cancelled?: boolean
 }
 
-export async function generateComment(input: GenerationInput, hooks: GenerationHooks = {}): Promise<GenerationResult> {
+// `signal`: whoever asked has gone (the panel's Stop, Regenerate, a new post,
+// or the panel closing). The model call in progress is stopped and no new
+// attempt starts; the result then has no comment, so the caller gives the
+// free use back and writes no history row.
+export async function generateComment(
+  input: GenerationInput,
+  hooks: GenerationHooks = {},
+  signal?: AbortSignal,
+): Promise<GenerationResult> {
   const label = input.label ?? "ext/generate"
   const measure = input.measure ?? ((text: string) => text.length)
   const start = performance.now()
@@ -97,6 +141,7 @@ export async function generateComment(input: GenerationInput, hooks: GenerationH
   // before giving up. Both share one time budget.
   const deadline = generationDeadline()
   for (let attempt = 1; attempt <= 2; attempt += 1) {
+    if (signal?.aborted) break
     attempts = attempt
     if (attempt > 1) hooks.onRetry?.(attempt)
 
@@ -111,6 +156,8 @@ export async function generateComment(input: GenerationInput, hooks: GenerationH
     // there — this attempt would be discarded anyway — rather than paying for
     // the rest of it.
     const controller = new AbortController()
+    const stop = () => controller.abort()
+    signal?.addEventListener("abort", stop, { once: true })
     let invented: string[] = []
     let shown = ""
     const show = (text: string) => {
@@ -145,6 +192,10 @@ export async function generateComment(input: GenerationInput, hooks: GenerationH
       model = result.model
       if (attempt === 1 && result.ttftMs !== null) ttftMs = result.ttftMs
     } catch (err) {
+      if (signal?.aborted) {
+        console.warn(`[${label}] attempt ${attempt}: the caller went away, stopped`)
+        break
+      }
       if (err instanceof GenerationTimeout) {
         console.error(`[${label}] attempt ${attempt}: out of time, giving up`)
         break
@@ -158,6 +209,8 @@ export async function generateComment(input: GenerationInput, hooks: GenerationH
       }
       console.error(`[${label}] attempt ${attempt}: both models failed:`, err)
       continue
+    } finally {
+      signal?.removeEventListener("abort", stop)
     }
 
     const parsed = parseComment(raw)
@@ -203,8 +256,10 @@ export async function generateComment(input: GenerationInput, hooks: GenerationH
     }
 
     const length = measure(cleaned)
-    if (length < input.min || length > input.max) {
-      console.warn(`[${label}] attempt ${attempt}: length ${length} outside ${input.min}-${input.max}, retrying`)
+    const slack = input.lengthSlack ?? 0
+    const [low, high] = [Math.floor(input.min * (1 - slack)), Math.ceil(input.max * (1 + slack))]
+    if (length < low || length > high) {
+      console.warn(`[${label}] attempt ${attempt}: length ${length} outside ${low}-${high}, retrying`)
       offLengthFallback ??= { text: cleaned, model }
       continue
     }
@@ -214,12 +269,13 @@ export async function generateComment(input: GenerationInput, hooks: GenerationH
     break
   }
 
-  if (!comment && offLengthFallback) {
+  const cancelled = signal?.aborted === true && !comment
+  if (!comment && offLengthFallback && !cancelled) {
     comment = offLengthFallback.text
     commentModel = offLengthFallback.model
   }
 
-  return { comment, model: commentModel, attempts, ttftMs, firstTextMs }
+  return { comment, model: commentModel, attempts, ttftMs, firstTextMs, ...(cancelled ? { cancelled } : {}) }
 }
 
 export const GENERIC_FAILURE = "Something went wrong, try again"
@@ -238,16 +294,36 @@ export interface StreamOptions {
   onEmpty: (result: GenerationResult) => Promise<void>
   // Text: save it, log, and return the final event's payload.
   onDone: (result: GenerationResult) => Promise<Record<string, unknown>>
+  // The client's request signal, which aborts when it disconnects (Vercel
+  // with supportsCancellation; Next's own server too).
+  signal?: AbortSignal
 }
 
 // The streamed response: start, the text as it is written (retries clear it),
 // a keep-alive while the model is quiet, and a final or error event.
 export function streamGeneration(options: StreamOptions): Response {
   const encoder = new TextEncoder()
-  // Set once the client has gone (closed the panel mid-generation). Generation
-  // still finishes and is saved, exactly as a JSON request whose caller left
-  // would be; there's just nobody to send it to.
+  // Set once the client has gone: the panel's Stop or Regenerate, a new post,
+  // or the panel closing all end its request. Any of three signals says so:
+  // the request's own abort signal, the response stream being cancelled, or
+  // a write to it failing. Generation stops there — the model call is cut
+  // off, no history row is written, and the free use is given back (onEmpty,
+  // at most once) — instead of finishing a comment nobody will see. (It used
+  // to finish and be saved, using up a free generation.)
+  //
+  // Charged only when delivered: a comment counts once its final event has
+  // gone to a client still listening. The streamed draft before it is
+  // read-only in the panel (no Copy, no Insert; Stop puts back what was
+  // there), so a request stopped mid-draft is treated like a failed one.
   let gone = false
+  const stop = new AbortController()
+  const leave = () => {
+    gone = true
+    stop.abort()
+  }
+  const finished = holdOpen()
+  if (options.signal?.aborted) leave()
+  else options.signal?.addEventListener("abort", leave, { once: true })
 
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -256,7 +332,7 @@ export function streamGeneration(options: StreamOptions): Response {
         try {
           controller.enqueue(encoder.encode(sse(event, data)))
         } catch {
-          gone = true
+          leave()
         }
       }
 
@@ -274,19 +350,25 @@ export function streamGeneration(options: StreamOptions): Response {
         try {
           controller.enqueue(encoder.encode(": keep-alive\n\n"))
         } catch {
-          gone = true
+          leave()
         }
       }, KEEP_ALIVE_MS)
 
       try {
-        const result = await generateComment(options.input, {
-          onText: (text) => send("text", { text }),
-          onRetry: (attempt) => send("retry", { attempt }),
-        })
+        const result = await generateComment(
+          options.input,
+          {
+            onText: (text) => send("text", { text }),
+            onRetry: (attempt) => send("retry", { attempt }),
+          },
+          stop.signal,
+        )
         options.onGenerated?.()
 
-        if (!result.comment) {
-          await options.onEmpty(result)
+        // Nothing usable, or the client left just as it finished: not
+        // delivered, so not saved and not charged.
+        if (!result.comment || gone) {
+          await options.onEmpty(result.comment ? { ...result, comment: "", cancelled: true } : result)
           send("error", { error: GENERIC_FAILURE, status: 502 })
           return
         }
@@ -300,16 +382,18 @@ export function streamGeneration(options: StreamOptions): Response {
         send("error", { error: GENERIC_FAILURE, status: 500 })
       } finally {
         clearInterval(keepAlive)
+        options.signal?.removeEventListener("abort", leave)
         gone = true
         try {
           controller.close()
         } catch {
           // already closed by the client going away
         }
+        finished()
       }
     },
     cancel() {
-      gone = true
+      leave()
     },
   })
 

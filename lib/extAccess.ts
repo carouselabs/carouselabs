@@ -123,6 +123,15 @@ export type ExtGenerationGate =
 
 const noop = async () => {}
 
+// A release that gives back at most once, however many times it is called: a
+// cancelled request can be reported more than once (the client's abort, the
+// stream's cancel, a failed write), and a second decrement would hand the
+// user a free generation they never had.
+export function onlyOnce(release: () => Promise<void>): () => Promise<void> {
+  let done: Promise<void> | null = null
+  return () => (done ??= release())
+}
+
 const PRODUCT_NAMES: Record<EngagePlatform, string> = {
   linkedin: "CarouseLabs Engage for LinkedIn",
   x: "CarouseLabs Engage for X",
@@ -155,11 +164,11 @@ export async function reserveFreeGeneration(
     return {
       ok: true,
       freeRemaining: Math.max(0, freeLimit - (after?.xTrialUsed ?? freeLimit)),
-      release: async () => {
+      release: onlyOnce(async () => {
         await db.user
           .updateMany({ where: { id: userId, xTrialUsed: { gt: 0 } }, data: { xTrialUsed: { decrement: 1 } } })
           .catch((err) => console.error("[extAccess] failed to give back a free X generation:", err))
-      },
+      }),
     }
   }
 
@@ -173,11 +182,11 @@ export async function reserveFreeGeneration(
   return {
     ok: true,
     freeRemaining: Math.max(0, freeLimit - (after?.extensionTrialUsed ?? freeLimit)),
-    release: async () => {
+    release: onlyOnce(async () => {
       await db.user
         .updateMany({ where: { id: userId, extensionTrialUsed: { gt: 0 } }, data: { extensionTrialUsed: { decrement: 1 } } })
         .catch((err) => console.error("[extAccess] failed to give back a free generation:", err))
-    },
+    }),
   }
 }
 

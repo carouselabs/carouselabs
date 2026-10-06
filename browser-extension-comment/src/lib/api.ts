@@ -335,6 +335,39 @@ function requestControl(outer: AbortSignal | null | undefined) {
   };
 }
 
+// What a person is told when a request fails. A refusal the server explains
+// (4xx: out of free generations, a limit, no post text) is shown as written;
+// a dropped connection and a signed-out browser get their own words; anything
+// else (5xx: the server's own trouble) a plain "try again". Shared by every
+// screen that generates.
+export const OFFLINE_MESSAGE = "You're offline. Check your internet connection, then try again.";
+export const UNREACHABLE_MESSAGE = "Couldn't reach CarouseLabs. Check your connection, then try again.";
+export const SIGNED_OUT_MESSAGE = "You've been signed out of CarouseLabs. Sign in again to keep writing.";
+export const GENERIC_FAILURE_MESSAGE = "Something went wrong, try again";
+
+export function userFacingError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 401) return SIGNED_OUT_MESSAGE;
+    if (err.status >= 400 && err.status < 500) return err.message;
+    return GENERIC_FAILURE_MESSAGE;
+  }
+  // fetch() rejects with a TypeError when there's no connection at all.
+  if (err instanceof TypeError) {
+    return typeof navigator !== "undefined" && navigator.onLine === false ? OFFLINE_MESSAGE : UNREACHABLE_MESSAGE;
+  }
+  return GENERIC_FAILURE_MESSAGE;
+}
+
+// The server no longer accepts this browser's token (signed out from the
+// website or by an admin, the account removed): the panel registers what to
+// do then (sign out here too, so it shows Sign in rather than failing every
+// request). Not set in content scripts, which never send the token.
+let signedOutHandler: (() => void) | null = null;
+
+export function onSignedOut(handler: (() => void) | null): void {
+  signedOutHandler = handler;
+}
+
 // Every request says which version of the extension sent it, so the admin can
 // see who runs what (and the server could treat old versions differently).
 function versionHeader(): Record<string, string> {
@@ -347,6 +380,7 @@ function versionHeader(): Record<string, string> {
 }
 
 async function errorFrom(res: Response): Promise<ApiError> {
+  if (res.status === 401) signedOutHandler?.();
   const parsed: unknown = await res.json().catch(() => ({}));
   const body = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
   const message = typeof body.error === "string" ? body.error : `Request failed (${res.status})`;
@@ -385,14 +419,20 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 }
 
 export interface StreamHandlers {
-  // Just before the request is sent (after the token/base URL are read).
-  onRequest?: () => void;
+  // Just before the request is sent (after the token/base URL are read), with
+  // the request's id: random, sent as X-Engage-Request-Id, and printed in the
+  // server's timing line, so the two can be matched (src/lib/generationPerf.ts).
+  onRequest?: (requestId: string) => void;
   // The server accepted the request and is calling the model.
   onStart?: () => void;
   // The comment so far. "" means clear what's shown (a discarded attempt).
   onText?: (text: string) => void;
   // A draft was discarded and a new attempt is starting.
   onRetry?: (attempt: number) => void;
+}
+
+function newRequestId(): string {
+  return typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 // One server-sent event, as app/api/ext/generate writes them.
@@ -432,13 +472,15 @@ export async function apiStream<T>(path: string, init: RequestInit, handlers: St
   };
   try {
     if (control.signal.aborted) throw new RequestCancelled();
-    handlers.onRequest?.();
+    const requestId = newRequestId();
+    handlers.onRequest?.(requestId);
     const res = await fetch(`${baseUrl}${path}`, {
       ...init,
       signal: control.signal,
       headers: {
         ...init.headers,
         ...versionHeader(),
+        "X-Engage-Request-Id": requestId,
         Accept: "text/event-stream",
         Authorization: `Bearer ${token}`,
       },

@@ -38,6 +38,21 @@ const CALL_MS: Record<AiModelKey, number> = { luna: 15_000, haiku: 20_000 }
 // pieces) has stalled: the SDK's own timeout stops at the first byte, so
 // without this a stall mid-answer would wait forever.
 export const STREAM_IDLE_MS = 10_000
+// When a backup model is left: a streamed answer with no words this long
+// after the request (normal is about a second) is handed to the backup
+// rather than waited for, and a whole non-streamed answer gets this long.
+// The last model left keeps the full limits: waiting beats failing.
+export const FIRST_TEXT_MS = 4_000
+export const PRIMARY_COMPLETE_MS = 8_000
+
+// FIRST_TEXT_MS can be tuned from measurements (admin → Engage → AI shows
+// each model's first-token times) without a code change: ENGAGE_FIRST_TEXT_MS,
+// whole milliseconds from 1000 to 15000; anything else is ignored. Read on
+// every call, so a new value applies from the next deployment that has it.
+export function firstTextMs(): number {
+  const raw = Number(process.env.ENGAGE_FIRST_TEXT_MS)
+  return Number.isInteger(raw) && raw >= 1_000 && raw <= 15_000 ? raw : FIRST_TEXT_MS
+}
 // With less than this left, no new model call is started.
 const MIN_CALL_MS = 3_000
 
@@ -72,16 +87,24 @@ class CallStopped extends Error {
 // Runs one model call under its limit: it is aborted when the limit passes,
 // when a stream goes quiet for STREAM_IDLE_MS (each `alive()` restarts that
 // clock; calls that don't stream never call it, so it is only armed for
-// streams), or when the caller's own signal aborts.
+// streams), when `firstTextMs` passes before `sawText()` (the first words),
+// or when the caller's own signal aborts.
 async function limited<T>(
   limitMs: number,
   outer: AbortSignal | undefined,
   streaming: boolean,
-  run: (signal: AbortSignal, alive: () => void) => Promise<T>,
+  run: (signal: AbortSignal, alive: () => void, sawText: () => void) => Promise<T>,
+  firstTextMs?: number,
 ): Promise<T> {
   const controller = new AbortController()
   const stop = (reason: string) => () => controller.abort(new CallStopped(reason))
   const limit = setTimeout(stop(`no answer within ${Math.round(limitMs / 1000)}s`), limitMs)
+  let firstText: ReturnType<typeof setTimeout> | undefined =
+    firstTextMs === undefined ? undefined : setTimeout(stop(`no words within ${firstTextMs / 1000}s`), firstTextMs)
+  const sawText = () => {
+    clearTimeout(firstText)
+    firstText = undefined
+  }
   let idle: ReturnType<typeof setTimeout> | undefined
   const alive = () => {
     if (!streaming) return
@@ -93,7 +116,7 @@ async function limited<T>(
   if (outer?.aborted) forward()
   else outer?.addEventListener("abort", forward, { once: true })
   try {
-    return await run(controller.signal, alive)
+    return await run(controller.signal, alive, sawText)
   } catch (err) {
     // Report a limit by name rather than as the SDK's generic abort error.
     const reason = controller.signal.reason
@@ -102,6 +125,7 @@ async function limited<T>(
   } finally {
     clearTimeout(limit)
     clearTimeout(idle)
+    clearTimeout(firstText)
     outer?.removeEventListener("abort", forward)
   }
 }
@@ -262,7 +286,8 @@ export async function callCommentModelWithInfo(
   for (let i = 0; i < order.length; i += 1) {
     const key = order[i]
     const last = i === order.length - 1
-    const limitMs = callLimit(CALL_MS[key], deadline)
+    // While a backup is left, a stuck first model is cut off sooner.
+    const limitMs = callLimit(last ? CALL_MS[key] : Math.min(CALL_MS[key], PRIMARY_COMPLETE_MS), deadline)
     const usage = { input: null as number | null, output: null as number | null }
     const start = performance.now()
     const note = (outcome: AiOutcome) => {
@@ -402,13 +427,20 @@ export async function streamCommentModel(
       })
     }
     try {
-      await limited(limitMs, signal, true, (callSignal, alive) =>
-        streamOne(key, systemMessage, userMessage, callSignal, alive, (text) => {
-          firstTokenMs ??= performance.now() - callStart
-          ttftMs ??= performance.now() - start
-          raw += text
-          onRaw?.(raw)
-        }, usage),
+      await limited(
+        limitMs,
+        signal,
+        true,
+        (callSignal, alive, sawText) =>
+          streamOne(key, systemMessage, userMessage, callSignal, alive, (text) => {
+            if (text) sawText()
+            firstTokenMs ??= performance.now() - callStart
+            ttftMs ??= performance.now() - start
+            raw += text
+            onRaw?.(raw)
+          }, usage),
+        // A slow start hands over to the backup while one is left.
+        last ? undefined : firstTextMs(),
       )
       const outcome = answerOutcome(raw)
       note(outcome)

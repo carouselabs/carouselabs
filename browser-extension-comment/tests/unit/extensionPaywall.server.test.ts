@@ -142,6 +142,14 @@ describe("free generations", () => {
     expect(state.users.get("u1")!.extensionTrialUsed).toBe(0);
   });
 
+  it("gives it back once, however many times a cancelled request reports it (no free use out of thin air)", async () => {
+    state.users.get("u1")!.extensionTrialUsed = 4;
+    const gate = await reserveExtGeneration("u1");
+    expect(state.users.get("u1")!.extensionTrialUsed).toBe(5);
+    if (gate.ok) await Promise.all([gate.release(), gate.release(), gate.release()]);
+    expect(state.users.get("u1")!.extensionTrialUsed).toBe(4);
+  });
+
   it("never lets two racing requests share the last free use", async () => {
     state.users.get("u1")!.extensionTrialUsed = 9;
     const [a, b] = await Promise.all([reserveExtGeneration("u1"), reserveExtGeneration("u1")]);

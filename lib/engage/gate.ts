@@ -16,7 +16,7 @@
 // sends or stores can unlock a feature or lift a limit.
 import { NextResponse } from "next/server"
 import { extDailyLimitResponse } from "@/lib/extDailyLimit"
-import { reserveExtGeneration, reserveFreeGeneration, type ExtGenerationGate } from "@/lib/extAccess"
+import { onlyOnce, reserveExtGeneration, reserveFreeGeneration, type ExtGenerationGate } from "@/lib/extAccess"
 import { isEngageSchemaMissing, loadEngageAccess } from "@/lib/engage/access"
 import { blockedReason, featureLimitsFor, type EngageAccess } from "@/lib/engage/accessRules"
 import { platformOfUsageKind, USAGE_KIND_NOUNS, type EngageUsageKind } from "@/lib/engage/features"
@@ -114,8 +114,9 @@ export async function reserveEngageGeneration(
   return {
     ok: true,
     freeRemaining: free.freeRemaining,
-    release: async () => {
+    // At most once, like each part (a cancellation can be reported twice).
+    release: onlyOnce(async () => {
       await Promise.all([free.release(), usage.release()])
-    },
+    }),
   }
 }

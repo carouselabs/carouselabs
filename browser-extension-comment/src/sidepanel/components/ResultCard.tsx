@@ -26,8 +26,10 @@ interface Props {
   copied: boolean;
   copyDisabled: boolean;
   onCopy: () => void;
-  /** Absent when Insert is switched off (server kill switch or setting). */
-  insert?: { disabled: boolean; inserting: boolean; onClick: () => void } | null;
+  /** Absent when Insert is switched off (server kill switch or setting).
+   *  `inserted`: it just landed — the button says so for a moment and can't
+   *  be clicked (src/sidepanel/useInsert.ts). */
+  insert?: { disabled: boolean; inserting: boolean; inserted?: boolean; onClick: () => void } | null;
   /** Quiet extra actions left of Regenerate (Shorter / Longer). */
   tools?: ReactNode;
   onRegenerate?: () => void;
@@ -129,12 +131,12 @@ export function ResultCard({
               size="sm"
               variant="outline"
               className="flex-1"
-              disabled={insert.disabled}
+              disabled={insert.disabled || insert.inserted}
               loading={insert.inserting}
               onClick={insert.onClick}
             >
-              {!insert.inserting && <ArrowDownToLine aria-hidden />}
-              {insert.inserting ? "Inserting…" : "Insert"}
+              {!insert.inserting && (insert.inserted ? <Check aria-hidden className="animate-pop" /> : <ArrowDownToLine aria-hidden />)}
+              {insert.inserting ? "Inserting…" : insert.inserted ? "Inserted" : "Insert"}
             </Button>
           )}
           {/* With no other tools, Regenerate sits beside Copy rather than
@@ -150,7 +152,13 @@ export function ResultCard({
       </div>
 
       <p aria-live="polite" className="sr-only">
-        {copied ? "Copied to clipboard" : !busy && !generating && value.trim() ? `${label} is ready` : ""}
+        {copied
+          ? "Copied to clipboard"
+          : insert?.inserted
+            ? "Inserted"
+            : !busy && !generating && value.trim()
+              ? `${label} is ready`
+              : ""}
       </p>
     </section>
   );

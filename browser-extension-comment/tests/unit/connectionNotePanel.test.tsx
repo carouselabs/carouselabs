@@ -161,6 +161,26 @@ describe("Connection note panel", () => {
     expect(noteBox().value).toBe(NOTE);
   });
 
+  it("offers to replace the person's own note, and only replaces it when they click", async () => {
+    server();
+    const { rerender, props } = renderPanel();
+    await generate();
+    const onReplace = vi.fn();
+    rerender(
+      <ConnectionNotePanel
+        {...props}
+        insertError="LinkedIn's note box already has text you wrote. Replace it with this note, or use Copy and combine them yourself."
+        onReplace={onReplace}
+      />,
+    );
+    expect(screen.queryByText(/Your note is ready above/)).toBeNull();
+    expect(onReplace).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Replace it with this note" }));
+    expect(onReplace).toHaveBeenCalledOnce();
+    // Never a promise the panel can't keep.
+    expect(screen.queryByText(/Ctrl\+Z/)).toBeNull();
+  });
+
   it("points at the ready note when Insert can't reach LinkedIn", async () => {
     server();
     const { rerender, props } = renderPanel();

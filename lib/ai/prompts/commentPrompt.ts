@@ -76,6 +76,19 @@ export function targetLengthRange(length: string): { min: number; max: number } 
   return { min: 110, max: 460 }
 }
 
+// How far outside targetLengthRange a clean comment may land and still be
+// kept, as a share of each end, rather than written again from scratch. The
+// keyword buckets are rough ("Short (1-2 lines)" is 40-220), so a comment a
+// few characters past an end isn't "far enough off target": measured, one
+// 221-character comment for a 220 cap cost a whole second generation (about
+// 1.3s, longer with nothing shown on 1.2.x). An explicit range is a limit the
+// profile states, so it stays exact.
+export const BUCKET_LENGTH_SLACK = 0.1
+
+export function lengthSlack(length: string): number {
+  return EXPLICIT_RANGE.test(length.toLowerCase()) ? 0 : BUCKET_LENGTH_SLACK
+}
+
 // Values are interpolated into pseudo-XML attributes, so a stray quote would
 // break out of the attribute and blur the data/instruction boundary.
 function escapeAttribute(value: string): string {

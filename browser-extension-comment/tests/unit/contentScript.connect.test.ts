@@ -68,6 +68,30 @@ describe("Insert into the 'Add a note' box", () => {
     expect(box.value).toMatch(/^Hi Jane/);
   });
 
+  it("never replaces a note the person typed unless they chose to (replace: true)", async () => {
+    await janeProfile();
+    await click(byFixture("topcard-connect"));
+    const box = openNoteDialog(300);
+    box.value = "My own note";
+    const asked = (await sendToContentScript(noteFor(JANE_URL))) as { ok: boolean; hasText?: boolean };
+    expect(asked).toMatchObject({ ok: false, hasText: true });
+    expect(box.value).toBe("My own note");
+
+    const chosen = (await sendToContentScript({ ...noteFor(JANE_URL), replace: true })) as { ok: boolean };
+    expect(chosen.ok).toBe(true);
+    expect(box.value).toMatch(/^Hi Jane/);
+
+    // Its own note, untouched since (a regenerated note): replaced without asking.
+    const again = (await sendToContentScript({ ...noteFor(JANE_URL), text: "Hi Jane, a second version." })) as { ok: boolean };
+    expect(again.ok).toBe(true);
+    expect(box.value).toBe("Hi Jane, a second version.");
+
+    // Once the person edits it, it is theirs again.
+    box.value = "Hi Jane, a second version. Edited by me.";
+    expect(((await sendToContentScript(noteFor(JANE_URL))) as { ok: boolean }).ok).toBe(false);
+    expect(box.value).toBe("Hi Jane, a second version. Edited by me.");
+  });
+
   it("refuses after a Connect for someone else was clicked since (their dialog is the one open)", async () => {
     await janeProfile();
     await click(byFixture("topcard-connect"));

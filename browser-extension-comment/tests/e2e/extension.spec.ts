@@ -113,7 +113,7 @@ test("Connection note: a note over the account's limit is refused, not silently 
   expect(value).toBe("");
 });
 
-test("Connection note Insert replaces a typed note, and Ctrl+Z brings the typed note back", async ({ harness }) => {
+test("Connection note: a note the person typed is never replaced unless they choose to", async ({ harness }) => {
   const page = await harness.open("/in/jane-doe/", "profile.html");
   await page.locator("[data-fixture='topcard-connect']").click();
   await page.evaluate(() => {
@@ -127,18 +127,28 @@ test("Connection note Insert replaces a typed note, and Ctrl+Z brings the typed 
   await page.keyboard.type("My own note");
 
   const note = "Hi Jane — loved your post on shipping small. Would be great to connect.";
-  const res = await harness.sendToLinkedInTab<{ ok: boolean }>({
-    type: INSERT,
-    mode: "connect",
-    text: note,
-    expect: { profileUrl: "https://www.linkedin.com/in/jane-doe/" },
-  });
-  expect(res.ok).toBe(true);
+  const insert = (replace?: boolean) =>
+    harness.sendToLinkedInTab<{ ok: boolean; hasText?: boolean; error?: string }>({
+      type: INSERT,
+      mode: "connect",
+      text: note,
+      expect: { profileUrl: "https://www.linkedin.com/in/jane-doe/" },
+      ...(replace ? { replace: true } : {}),
+    });
+
+  // Without the person's say-so: refused, their text untouched.
+  const asked = await insert();
+  expect(asked).toMatchObject({ ok: false, hasText: true });
+  await expect(box).toHaveValue("My own note");
+
+  // Their choice ("Replace it" in the panel): replaced.
+  expect(await insert(true)).toEqual({ ok: true });
   await expect(box).toHaveValue(note);
 
-  await box.focus();
-  await page.keyboard.press("Control+z");
-  await expect(box).toHaveValue("My own note");
+  // The extension's own note, untouched since, may be replaced (a regenerated
+  // note) without asking again.
+  expect(await insert()).toEqual({ ok: true });
+  await expect(box).toHaveValue(note);
 });
 
 // A Web Store update restarts the extension under an open LinkedIn tab, and

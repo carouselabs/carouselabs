@@ -98,9 +98,10 @@ function importFresh(url: string) {
 }
 
 // How long the panel waits for a LinkedIn tab to answer. Reading a
-// conversation or inserting takes well under a second (Insert also checks the
-// server's switch, which gives up after 8s); a tab that hasn't answered by
-// then never will, and the panel says so instead of spinning.
+// conversation or inserting takes well under a second; at worst Insert reads
+// the server's switch (gives up after 4s, src/lib/insertSwitch.ts) and waits
+// for a box that is still opening (2s). A tab that hasn't answered by then
+// never will, and the panel says so instead of spinning.
 export const TAB_ANSWER_TIMEOUT_MS = 12_000;
 const PING_TIMEOUT_MS = 1_000;
 

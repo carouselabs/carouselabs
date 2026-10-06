@@ -111,7 +111,9 @@ describe("streaming Generate in the side panel", () => {
     await waitFor(() => expect(box().value).toBe("Moving from 14 steps to 5 is the real story."));
     await waitFor(() => expect(copy().disabled).toBe(false));
     expect(box().readOnly).toBe(false);
-    expect(info.mock.calls.flat().join(" ")).toMatch(/\[perf\] generate: FIRST VISIBLE TEXT \d+ ms \| TOTAL \d+ ms/);
+    // With the request's id, the same one sent to the server
+    // (X-Engage-Request-Id), so the two timing lines can be matched.
+    expect(info.mock.calls.flat().join(" ")).toMatch(/\[perf\] generate req=[\w-]{8,}: FIRST VISIBLE TEXT \d+ ms \| TOTAL \d+ ms \| loading shown \d+ ms/);
   });
 
   it("goes back to the skeleton when a draft is discarded for a retry", async () => {

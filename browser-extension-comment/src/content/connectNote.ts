@@ -17,6 +17,7 @@
 // find the note box, that is the first thing to check — see NOTE_BOX_SELECTORS.
 
 import type { LinkedInProfileInfo } from "@/lib/connectionNote";
+import { boxText, comparable, settle, typeReplacing, usableEditor } from "@/content/editor";
 
 // "Invite Jane Doe to connect" is the classic aria-label on both the top-card
 // button and the item in the "More" menu; plain text "Connect" is the fallback.
@@ -498,14 +499,37 @@ const NOTE_BOX_SELECTORS = [
 
 export function findNoteBox(): HTMLElement | null {
   for (const selector of NOTE_BOX_SELECTORS) {
-    const el = document.querySelector<HTMLElement>(selector);
+    const el = Array.from(document.querySelectorAll<HTMLElement>(selector)).find((box) => usableEditor(box));
     if (el) return el;
   }
   return null;
 }
 
-// Fills LinkedIn's note box. Never clicks Send: the user reviews and sends.
-export function insertIntoNoteBox(text: string): { ok: boolean; error?: string } {
+// The note this page's Insert last put in the box, so Insert can tell its own
+// earlier note (safe to replace, e.g. after Regenerate) from one the person
+// typed or edited (never replaced without asking).
+let lastInsertedNote: string | null = null;
+
+// The panel's answer when the box already holds the person's own text: it
+// offers "Replace it", which sends the Insert again with replace: true.
+export const NOTE_HAS_TEXT =
+  "LinkedIn's note box already has text you wrote. Replace it with this note, or use Copy and combine them yourself.";
+
+// Fills LinkedIn's note box with the note, and confirms LinkedIn kept it.
+// Never clicks Send: the user reviews and sends.
+//
+// A note is a whole invitation (with a character limit), so it goes in place
+// of what is there, not after it. That is only done without asking when the
+// box is empty or still holds the note this page inserted last. Anything else
+// is the person's own writing: the Insert stops, leaves the box untouched and
+// answers `hasText`, and the panel lets them choose to replace it
+// (`replace: true`). `wrote` is called just before the box changes
+// (src/lib/insertOnce.ts).
+export async function insertIntoNoteBox(
+  text: string,
+  wrote: () => void = () => {},
+  options: { replace?: boolean } = {},
+): Promise<{ ok: boolean; error?: string; hasText?: boolean }> {
   const box = findNoteBox();
   if (!box) {
     return {
@@ -526,23 +550,32 @@ export function insertIntoNoteBox(text: string): { ok: boolean; error?: string }
     };
   }
 
-  box.focus();
-  if (box instanceof HTMLTextAreaElement) {
-    // Selecting first makes insertText replace any earlier draft. It fires the
-    // same input events as typing, so LinkedIn's character counter updates.
-    box.select();
-    if (!document.execCommand("insertText", false, text)) {
-      // React tracks a textarea's value through its prototype setter; setting
-      // .value directly would be overwritten on the next render.
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(box, text);
-      box.dispatchEvent(new Event("input", { bubbles: true }));
-    }
-  } else {
-    if (!document.execCommand("insertText", false, text)) {
-      box.textContent = text;
-      box.dispatchEvent(new InputEvent("input", { bubbles: true, data: text, inputType: "insertText" }));
-    }
+  const previous = boxText(box);
+  const ownEarlierNote = lastInsertedNote !== null && comparable(previous) === comparable(lastInsertedNote);
+  if (previous.trim() !== "" && !ownEarlierNote && !options.replace) {
+    return { ok: false, hasText: true, error: NOTE_HAS_TEXT };
   }
+
+  wrote();
+  // Selecting first makes insertText replace what is there. It fires the
+  // same input events as typing, so LinkedIn's character counter updates.
+  const typed = typeReplacing(box, text);
+  if (box.tagName === "TEXTAREA" && (!typed || (box as HTMLTextAreaElement).value !== text)) {
+    // React tracks a textarea's value through its prototype setter; setting
+    // .value directly would be overwritten on the next render. This is the
+    // change React itself recognises as input.
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(box, text);
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  await settle(box);
+  if (!box.isConnected || comparable(boxText(box)) !== comparable(text)) {
+    return {
+      ok: false,
+      error: "LinkedIn's note box didn't keep the note. It's still here in the panel: use Copy, then paste it in.",
+    };
+  }
+  lastInsertedNote = text;
   return { ok: true };
 }
 

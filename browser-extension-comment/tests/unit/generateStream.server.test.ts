@@ -18,6 +18,9 @@ type Step = {
   failAfter?: number;
   stallAfter?: number;
   dripMs?: number;
+  // Runs just after the last piece is sent: something happening at the very
+  // moment the model finishes.
+  afterLast?: () => void;
 };
 
 const script = vi.hoisted(() => ({
@@ -76,6 +79,7 @@ function play(
       await Promise.resolve();
     }
     if (step.stallAfter !== undefined && step.stallAfter >= chunks.length) await stall();
+    step.afterLast?.();
   })();
 }
 
@@ -167,9 +171,10 @@ const tokens = (comment: string, size = 5) => {
 const GOOD = "Moving from 14 steps to 5 is the real story. Order beats count when people need a first win.";
 const GOOD_2 = "The invite prompt after the first result is the detail worth copying here.";
 
-function request(stream: boolean) {
+function request(stream: boolean, signal?: AbortSignal) {
   return new Request("https://carouselabs.com/api/ext/generate", {
     method: "POST",
+    signal,
     headers: {
       "Content-Type": "application/json",
       Authorization: "Bearer cl_cmt_test",
@@ -238,6 +243,65 @@ describe("streaming Generate when a model stalls", () => {
     // What Luna showed was cleared before Haiku's text.
     expect(texts(list)).toContain("");
     expect(ms).toBeLessThanOrEqual(12_000);
+  });
+
+  it("hands a Luna that hasn't written a word in 4s to Haiku, instead of waiting 10s", async () => {
+    vi.useFakeTimers();
+    script.luna = [{ stallAfter: 0 }];
+    script.haiku = [{ chunks: tokens(GOOD) }];
+    const { text, ms } = await readStalled(await POST(request(true)));
+    expect(parseEvents(text).at(-1)).toMatchObject({ event: "final", data: { comment: GOOD } });
+    expect(parseEvents(text).at(-1)!.data.timing).toMatchObject({ model: "claude-haiku-4-5-20251001" });
+    expect(ms).toBeLessThanOrEqual(6_000);
+  });
+
+  it("controlled comparison: a Luna that says nothing costs over 10s under the old rule, under 6s now", async () => {
+    vi.useFakeTimers();
+    const silentLuna = async () => {
+      script.luna = [{ stallAfter: 0 }];
+      script.haiku = [{ chunks: tokens(GOOD) }];
+      return readStalled(await POST(request(true)));
+    };
+    vi.stubEnv("ENGAGE_FIRST_TEXT_MS", "10000"); // the old 10s stream-idle hand-over
+    const before = await silentLuna();
+    vi.unstubAllEnvs();
+    const after = await silentLuna();
+    for (const run of [before, after]) {
+      expect(parseEvents(run.text).at(-1)).toMatchObject({ event: "final", data: { comment: GOOD } });
+    }
+    expect(before.ms).toBeGreaterThanOrEqual(10_000);
+    expect(after.ms).toBeGreaterThanOrEqual(4_000);
+    expect(after.ms).toBeLessThan(6_000);
+    process.stdout.write(`[controlled] silent Luna -> Haiku: old rule ${before.ms} ms, now ${after.ms} ms (simulated clock, 1s steps)
+`);
+  });
+
+  it("the hand-over time can be set (ENGAGE_FIRST_TEXT_MS); a value out of range is ignored", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("ENGAGE_FIRST_TEXT_MS", "6000");
+    script.luna = [{ stallAfter: 0 }];
+    script.haiku = [{ chunks: tokens(GOOD) }];
+    const slower = await readStalled(await POST(request(true)));
+    expect(parseEvents(slower.text).at(-1)!.data.timing).toMatchObject({ model: "claude-haiku-4-5-20251001" });
+    expect(slower.ms).toBeGreaterThanOrEqual(6_000);
+    expect(slower.ms).toBeLessThanOrEqual(8_000);
+
+    vi.stubEnv("ENGAGE_FIRST_TEXT_MS", "50");
+    script.luna = [{ stallAfter: 0 }];
+    script.haiku = [{ chunks: tokens(GOOD) }];
+    const ignored = await readStalled(await POST(request(true)));
+    expect(ignored.ms).toBeGreaterThanOrEqual(4_000);
+    expect(ignored.ms).toBeLessThanOrEqual(6_000);
+    vi.unstubAllEnvs();
+  });
+
+  it("an empty first piece (no words yet) doesn't count as Luna having started", async () => {
+    vi.useFakeTimers();
+    script.luna = [{ chunks: ["", ...tokens(GOOD)], stallAfter: 1 }];
+    script.haiku = [{ chunks: tokens(GOOD) }];
+    const { text, ms } = await readStalled(await POST(request(true)));
+    expect(parseEvents(text).at(-1)!.data.timing).toMatchObject({ model: "claude-haiku-4-5-20251001" });
+    expect(ms).toBeLessThanOrEqual(6_000);
   });
 
   it("keeps the connection alive while the models are quiet, then ends with an error, not silence", async () => {
@@ -385,5 +449,161 @@ describe("streaming Generate", () => {
     script.luna = [{ chunks: tokens(GOOD) }];
     const res = await POST(request(false));
     expect(res.headers.get("server-timing")).toMatch(/auth;dur=\d+.*ai-ttft;dur=\d+.*ai;dur=\d+.*total;dur=\d+/);
+  });
+});
+
+// A clean comment of about `n` characters, sourced from the post (no figures
+// of its own), for the length checks.
+function commentOf(n: number) {
+  const words = "Putting the invite step after the first real win is the part most teams skip when they rebuild onboarding ";
+  return `${words.repeat(Math.ceil(n / words.length)).slice(0, n - 1).trimEnd()}.`;
+}
+
+describe("comments a little off the profile's length", () => {
+  it("keeps one a few characters past a rough length bucket instead of writing it again", async () => {
+    const near = commentOf(228); // "Short (1-2 lines)" is 40-220
+    expect(near.length).toBeGreaterThan(220);
+    script.luna = [{ chunks: tokens(near) }];
+    const list = await events(await POST(request(true)));
+    expect(list.at(-1)).toMatchObject({ event: "final", data: { comment: near } });
+    expect(script.lunaCalls).toHaveLength(1);
+  });
+
+  it("still writes again one that is far off the bucket", async () => {
+    script.luna = [{ chunks: tokens(commentOf(300)) }, { chunks: tokens(GOOD) }];
+    const list = await events(await POST(request(true)));
+    expect(list.at(-1)).toMatchObject({ event: "final", data: { comment: GOOD } });
+    expect(script.lunaCalls).toHaveLength(2);
+  });
+
+  it("holds an explicit character range exactly: the profile states it as a limit", async () => {
+    state.profile = { ...PROFILE, length: "100-220 characters" };
+    const inRange = commentOf(160);
+    script.luna = [{ chunks: tokens(commentOf(228)) }, { chunks: tokens(inRange) }];
+    const list = await events(await POST(request(true)));
+    expect(list.at(-1)).toMatchObject({ event: "final", data: { comment: inRange } });
+    expect(script.lunaCalls).toHaveLength(2);
+  });
+});
+
+describe("when the panel stops listening (Stop, Regenerate, a new post, panel closed)", () => {
+  it("stops the model, saves nothing and gives the free use back, instead of finishing a comment nobody sees", async () => {
+    script.luna = [{ chunks: tokens(GOOD), stallAfter: 6 }];
+    script.haiku = [{ chunks: tokens(GOOD) }];
+    const res = await POST(request(true));
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let seen = "";
+    // Until the first words arrive, then the panel goes away.
+    while (!seen.includes("event: text")) seen += decoder.decode((await reader.read()).value);
+    await reader.cancel();
+
+    await vi.waitFor(() => expect(state.release).toHaveBeenCalledOnce());
+    expect(state.history).toHaveLength(0);
+    // Luna was cut off, and no second model or attempt was started.
+    expect(script.haikuCalls).toHaveLength(0);
+    expect(script.lunaCalls).toHaveLength(1);
+  });
+
+  it("logs the panel's request id with the timing, so the two sides can be matched", async () => {
+    script.luna = [{ chunks: tokens(GOOD) }];
+    const req = request(true);
+    req.headers.set("X-Engage-Request-Id", "5d1f3c2a-9b7e-4c1d-8f00-123456789abc");
+    const list = await events(await POST(req));
+    expect(list.at(-1)!.data.timing).toMatchObject({ requestId: "5d1f3c2a-9b7e-4c1d-8f00-123456789abc" });
+    expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/^\[ext\/generate\] timing req=5d1f3c2a-9b7e-4c1d-8f00-123456789abc /));
+  });
+
+  it("ignores a request id that isn't one (anything could be sent in that header)", async () => {
+    script.luna = [{ chunks: tokens(GOOD) }];
+    const req = request(true);
+    req.headers.set("X-Engage-Request-Id", "<script>alert(1)</script>");
+    const list = await events(await POST(req));
+    expect(list.at(-1)!.data.timing).toMatchObject({ requestId: null });
+  });
+});
+
+// The panel leaving, as the server sees it: the request's signal aborts (what
+// Vercel does with supportsCancellation, and Next's own server), and/or the
+// response stream is cancelled. Charged only when the final comment reached
+// a client still listening; given back (once) otherwise.
+describe("cancellation and free-use accounting", () => {
+  async function readAll(res: Response) {
+    return parseEvents(await res.text());
+  }
+
+  it("Stop before any output: the model call is stopped, nothing saved, the free use given back once", async () => {
+    script.luna = [{ stallAfter: 0 }];
+    script.haiku = [{ chunks: tokens(GOOD) }];
+    const client = new AbortController();
+    const res = await POST(request(true, client.signal));
+    client.abort();
+    await res.text().catch(() => "");
+    await vi.waitFor(() => expect(state.release).toHaveBeenCalledOnce());
+    expect(state.history).toHaveLength(0);
+    expect(script.haikuCalls).toHaveLength(0);
+  });
+
+  it("Stop during streaming, reported twice (the request's abort and the stream's cancel): given back once", async () => {
+    script.luna = [{ chunks: tokens(GOOD), stallAfter: 6 }];
+    const client = new AbortController();
+    const res = await POST(request(true, client.signal));
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let seen = "";
+    while (!seen.includes("event: text")) seen += decoder.decode((await reader.read()).value);
+    client.abort();
+    await reader.cancel();
+    client.abort();
+    await vi.waitFor(() => expect(state.release).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(state.release).toHaveBeenCalledOnce();
+    expect(state.history).toHaveLength(0);
+  });
+
+  it("Regenerate right after Stop: the stopped one is given back, the new one is saved and charged", async () => {
+    script.luna = [{ chunks: tokens(GOOD), stallAfter: 3 }, { chunks: tokens(GOOD_2) }];
+    const first = new AbortController();
+    const stopped = POST(request(true, first.signal)).then((res) => res.text().catch(() => ""));
+    await vi.waitFor(() => expect(script.lunaCalls).toHaveLength(1));
+    first.abort();
+    const list = await readAll(await POST(request(true)));
+    await stopped;
+    expect(list.at(-1)).toMatchObject({ event: "final", data: { comment: GOOD_2 } });
+    expect(state.release).toHaveBeenCalledOnce();
+    expect(state.history.map((h) => h.comment)).toEqual([GOOD_2]);
+  });
+
+  it("the client leaving at the moment the comment finishes: not delivered, so not saved and given back", async () => {
+    const client = new AbortController();
+    script.luna = [{ chunks: tokens(GOOD), afterLast: () => client.abort() }];
+    const res = await POST(request(true, client.signal));
+    await res.text().catch(() => "");
+    await vi.waitFor(() => expect(state.release).toHaveBeenCalledOnce());
+    expect(state.history).toHaveLength(0);
+  });
+
+  it("closing the panel after the comment arrived changes nothing: saved, charged, never given back", async () => {
+    script.luna = [{ chunks: tokens(GOOD) }];
+    const client = new AbortController();
+    const list = await readAll(await POST(request(true, client.signal)));
+    expect(list.at(-1)).toMatchObject({ event: "final", data: { comment: GOOD } });
+    client.abort();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(state.release).not.toHaveBeenCalled();
+    expect(state.history).toHaveLength(1);
+  });
+
+  it("1.2.x's JSON request: leaving mid-generation stops the model and gives the free use back", async () => {
+    script.luna = [{ chunks: tokens(GOOD), stallAfter: 3 }];
+    script.haiku = [{ chunks: tokens(GOOD) }];
+    const client = new AbortController();
+    const pending = POST(request(false, client.signal));
+    await vi.waitFor(() => expect(script.lunaCalls).toHaveLength(1));
+    client.abort();
+    expect((await pending).status).toBe(502);
+    expect(state.release).toHaveBeenCalledOnce();
+    expect(state.history).toHaveLength(0);
+    expect(script.haikuCalls).toHaveLength(0);
   });
 });

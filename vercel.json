@@ -32,5 +32,13 @@
       "path": "/api/cron/comment-history-cleanup",
       "schedule": "30 3 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "app/api/ext/generate/route.ts": {
+      "supportsCancellation": true
+    },
+    "app/api/ext/x/reply/route.ts": {
+      "supportsCancellation": true
+    }
+  }
 }

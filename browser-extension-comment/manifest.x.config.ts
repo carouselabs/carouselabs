@@ -17,6 +17,8 @@ export default defineManifest(({ mode }) => {
     manifest_version: 3,
     name: "CarouseLabs Engage for X",
     version: X_VERSION,
+    // Development builds only: when it was built (see manifest.config.ts).
+    ...(isDev ? { version_name: `${X_VERSION} dev ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC` } : {}),
     description: "Write X replies and messages in your own voice. You review and post every one yourself.",
     icons: {
       16: "icons/icon16.png",

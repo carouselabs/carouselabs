@@ -72,15 +72,51 @@ Generate, streamed (Comment and Reply; the other routes still answer JSON)
     replaces the draft. Without the Accept header (1.2.0 and earlier) the route
     answers JSON as before.
   → timing: Server-Timing header (JSON), `timing` in `final`, one
-    "[ext/generate] timing" log line; the panel logs "[perf] generate".
+    "[ext/generate] timing req=<id>" log line; the panel logs
+    "[perf] generate req=<id>" with the same random id (X-Engage-Request-Id),
+    so one slow Generate can be followed through both.
+  → the panel leaving (Stop, Regenerate, a new post, closing it) aborts its
+    request; the server (request.signal, the stream's cancel, or a failed
+    write) stops the model call, writes no history row and gives the free use
+    back, once. vercel.json turns on Vercel's request cancellation for the two
+    streaming routes, and the remaining work is kept alive with after().
+    Charged only when the final comment reached a client still listening.
+  → length: a clean comment up to 10% past a rough length bucket ("Short
+    (1-2 lines)") is kept instead of written again; explicit "N-M characters"
+    ranges and X's limit stay exact.
     Benchmark: npm run bench (real models, a few cents; see tests/bench).
 
 Insert (never submits)
-  Panel → chrome.tabs.sendMessage(activeTab, {type:"carouselabs:insert-comment", text, mode})
+  Panel (src/sidepanel/useInsert.ts) → chrome.tabs.sendMessage(activeTab,
+    {type:"carouselabs:insert-comment", text, mode, insertId, target | expect})
   mode comment|reply → LinkedIn comment/reply editor
-  mode connect       → invitation "Add a note" box
+  mode connect       → invitation "Add a note" box: replaces only an empty box
+                       or the extension's own unedited note; text the person
+                       wrote is left alone and the panel offers "Replace it
+                       with this note" (sent again with replace: true)
   mode message       → DM compose box
-  via document.execCommand("insertText"), fallback: set text + dispatch input
+  - target: the capture's InsertTarget (captureId, the post card's componentkey
+    and permalink URN, the comment URNs for a reply), stored with
+    lastSelectedPost and sent back untouched. The content script uses its own
+    remembered card only for its own capture; otherwise (the card redrawn,
+    Insert from another tab, a fresh copy of the script) it finds the post
+    again by those ids, and only a single match counts. Never "the first box
+    on the page".
+  - The box may still be opening: waited for up to 2s (src/content/waitFor.ts),
+    then a clear refusal.
+  - Typed the way a keystroke is (execCommand "insertText": a trusted input
+    event, checked in Chromium), at the end of any draft, then confirmed: the
+    box must hold the text, and still hold it after the editor's next redraw
+    (src/content/editor.ts). A paste is tried only if nothing changed (so
+    text never lands twice); text is never just written into the page. The
+    answer is ok only once confirmed; otherwise the text stays in the panel
+    for Copy, with why.
+  - insertId: one per click. A repeat (the panel resending after a lost
+    answer, two copies of the script during an update) gets the first answer
+    instead of typing again (src/lib/insertOnce.ts). The panel ignores a
+    second click while one runs, and says "Inserted" for 1.5s after.
+  - The server's Insert switch is read when the page loads and kept 5
+    minutes (src/lib/insertSwitch.ts), so Insert doesn't wait on the network.
 
 Read (on demand)
   Panel → tabs.sendMessage {type:"carouselabs:read-conversation"} → {conversation}

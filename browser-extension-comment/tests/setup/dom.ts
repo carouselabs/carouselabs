@@ -41,14 +41,77 @@ Object.defineProperty(HTMLElement.prototype, "offsetParent", {
   },
 });
 
-// execCommand: absent in jsdom. Returning false makes production code take its
-// documented fallback path (set text + dispatch input), which is what unit
-// tests exercise. The execCommand path itself is tested in real Chromium.
+// execCommand: absent in jsdom. A stand-in for "insertText" that types at the
+// caret the way Chromium does (checked there: the selection is replaced by the
+// text, and one `input` event with inputType "insertText" follows), so unit
+// tests run the same path real pages take. Any other command does nothing
+// and returns false. Tests that need an editor which takes nothing assign
+// their own document.execCommand. The real command is tested in Chromium
+// (tests/e2e).
 if (typeof document.execCommand !== "function") {
-  (document as unknown as { execCommand: () => boolean }).execCommand = () => false;
+  (Document.prototype as unknown as { execCommand: typeof typeAtCaret }).execCommand = typeAtCaret;
 }
 
 if (typeof Element.prototype.scrollIntoView !== "function") {
   Element.prototype.scrollIntoView = () => {};
 }
+
+// DataTransfer and ClipboardEvent: absent in jsdom. Just enough for a page's
+// own paste handler to read the pasted text, as script editors (Draft.js) do.
+// A made-up paste does nothing by itself in Chromium either.
+if (typeof window.DataTransfer !== "function") {
+  class TestDataTransfer {
+    private data = new Map<string, string>();
+    setData(type: string, value: string) {
+      this.data.set(type, value);
+    }
+    getData(type: string) {
+      return this.data.get(type) ?? "";
+    }
+  }
+  (window as unknown as { DataTransfer: unknown }).DataTransfer = TestDataTransfer;
+}
+if (typeof window.ClipboardEvent !== "function") {
+  class TestClipboardEvent extends Event {
+    readonly clipboardData: DataTransfer | null;
+    constructor(type: string, init: EventInit & { clipboardData?: DataTransfer | null } = {}) {
+      super(type, init);
+      this.clipboardData = init.clipboardData ?? null;
+    }
+  }
+  (window as unknown as { ClipboardEvent: unknown }).ClipboardEvent = TestClipboardEvent;
+}
+}
+
+// Works in any document, including a frame's (tests/unit/helpers.ts copies it
+// there): no instanceof, and events made by that document's own window.
+function typeAtCaret(this: Document, command: string, _ui?: boolean, value = ""): boolean {
+  if (command !== "insertText") return false;
+  const InputEventOf = (this.defaultView as (Window & typeof globalThis) | null)?.InputEvent ?? InputEvent;
+  const active = this.activeElement as HTMLTextAreaElement | null;
+  if (active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT")) {
+    const start = active.selectionStart ?? active.value.length;
+    const end = active.selectionEnd ?? start;
+    active.value = active.value.slice(0, start) + value + active.value.slice(end);
+    active.setSelectionRange(start + value.length, start + value.length);
+    active.dispatchEvent(new InputEventOf("input", { bubbles: true, inputType: "insertText", data: value }));
+    return true;
+  }
+  const selection = this.getSelection();
+  if (!selection || selection.rangeCount === 0) return false;
+  const range = selection.getRangeAt(0);
+  const start = range.startContainer;
+  const host = (start.nodeType === Node.ELEMENT_NODE ? (start as Element) : start.parentElement)?.closest(
+    '[contenteditable="true"], [contenteditable=""]',
+  );
+  if (!host) return false;
+  range.deleteContents();
+  const typed = this.createTextNode(value);
+  range.insertNode(typed);
+  range.setStartAfter(typed);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  host.dispatchEvent(new InputEventOf("input", { bubbles: true, inputType: "insertText", data: value }));
+  return true;
 }

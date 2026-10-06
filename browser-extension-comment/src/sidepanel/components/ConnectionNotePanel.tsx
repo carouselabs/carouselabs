@@ -16,11 +16,11 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   apiFetch,
-  ApiError,
   isCancelled,
   type ConnectionNoteResponse,
   type ConnectionProfile,
   type MeResponse,
+  userFacingError,
 } from "@/lib/api";
 import { RecommendedBadge } from "./RecommendedBadge";
 import { FreeGenerationsNote, UnlockCard } from "./UnlockCard";
@@ -60,10 +60,6 @@ const LENGTH_OPTIONS: { preset: ConnectLengthPreset; label: string }[] = [
   { preset: "custom", label: "Custom" },
 ];
 
-function userFacingError(err: unknown): string {
-  if (err instanceof ApiError && err.status >= 400 && err.status < 500) return err.message;
-  return "Something went wrong, try again";
-}
 
 interface Props {
   target: LinkedInProfileInfo;
@@ -74,7 +70,12 @@ interface Props {
   // comment flow; this panel only asks for an insert.
   showInsert: boolean;
   inserting: boolean;
+  // The note just went in (src/sidepanel/useInsert.ts).
+  inserted?: boolean;
   insertError: string | null;
+  // Set when LinkedIn's note box already holds the person's own text and
+  // Insert left it alone: a "Replace it" button under the error, their choice.
+  onReplace?: () => void;
   // historyId is the note's History row, so HomeScreen can mark it INSERTED.
   onInsert: (text: string, historyId: string | null) => void;
   // Opens the connection-profile builder; owned by App, like the comment one.
@@ -95,7 +96,9 @@ export function ConnectionNotePanel({
   paywalled,
   showInsert,
   inserting,
+  inserted = false,
   insertError,
+  onReplace,
   onInsert,
   onCreateProfile,
   offSite = false,
@@ -490,7 +493,7 @@ export function ConnectionNotePanel({
             copied={copied}
             copyDisabled={!hasNote || busy}
             onCopy={handleCopy}
-            insert={showInsert ? { disabled: !hasNote || busy, inserting, onClick: () => onInsert(note, historyId) } : null}
+            insert={showInsert ? { disabled: !hasNote || busy, inserting, inserted, onClick: () => onInsert(note, historyId) } : null}
             onRegenerate={handleGenerate}
             regenerateDisabled={generateDisabled}
             notice={
@@ -507,10 +510,17 @@ export function ConnectionNotePanel({
             // note is already written and sits right above, ready to copy.
             <Alert>
               {error || insertError}
-              {!error && hasNote && (
+              {!error && hasNote && !onReplace && (
                 <span className="mt-1 block text-foreground/80">
                   Your note is ready above: copy it and paste it into LinkedIn yourself.
                 </span>
+              )}
+              {!error && onReplace && (
+                // LinkedIn's box holds the person's own text: replacing it
+                // is their choice, never automatic.
+                <Button size="sm" variant="outline" className="mt-2" disabled={inserting} onClick={onReplace}>
+                  Replace it with this note
+                </Button>
               )}
             </Alert>
           )}

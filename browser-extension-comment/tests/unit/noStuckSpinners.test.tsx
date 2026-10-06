@@ -250,6 +250,17 @@ describe("Home: Stop and a new post", () => {
     expect(((await screen.findByRole("button", { name: "Generate" })) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("Generate right after Stop is a new request; the stopped one stays aborted (the server then stops it)", async () => {
+    render(<HomeScreen onCreateProfile={() => {}} />);
+    await clickGenerate();
+    fireEvent.click(await screen.findByRole("button", { name: "Stop" }));
+    await clickGenerate();
+    await waitFor(() => expect(generations).toHaveLength(2));
+    expect(generations[0].signal.aborted).toBe(true);
+    expect(generations[1].signal.aborted).toBe(false);
+    expect(generations[0].signal).not.toBe(generations[1].signal);
+  });
+
   it("Stop on a regenerate puts the previous comment back", async () => {
     answerFirstAtOnce = true;
     render(<HomeScreen onCreateProfile={() => {}} />);

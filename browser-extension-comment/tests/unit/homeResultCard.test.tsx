@@ -94,6 +94,53 @@ describe("Home result card", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("a double click inserts once, for the post it was written for, and the button says Inserted", async () => {
+    insertEnabled = true;
+    server();
+    const target = { captureId: "c1", postKey: "update-card-focus1", postUrn: "urn:li:activity:1" };
+    chromeMock().__store.lastSelectedPost = { ...POST, target };
+    const chrome = chromeMock();
+    chrome.tabs.sendMessage.mockResolvedValue({ ok: true });
+    await generateOnce();
+    await waitFor(() => expect(box().value).toBe(COMMENT));
+
+    const insert = screen.getByRole("button", { name: "Insert" });
+    fireEvent.click(insert);
+    fireEvent.click(insert);
+    await screen.findByRole("button", { name: "Inserted" });
+    expect((screen.getByRole("button", { name: "Inserted" }) as HTMLButtonElement).disabled).toBe(true);
+    const inserts = chrome.tabs.sendMessage.mock.calls.filter(([, m]) => (m as { type?: string }).type === "carouselabs:insert-comment");
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0][1]).toMatchObject({ text: COMMENT, mode: "comment", target, insertId: expect.any(String) });
+  });
+
+  it("a failed Insert keeps the comment, says why, and the next click is a new Insert", async () => {
+    insertEnabled = true;
+    server();
+    const chrome = chromeMock();
+    const answers = [
+      { ok: false, error: "Couldn't find this post's comment box. Click Comment on the post to open it, then try Insert again." },
+      { ok: true },
+    ];
+    chrome.tabs.sendMessage.mockImplementation(async (_tab: number, m: { type?: string }) =>
+      m.type === "carouselabs:insert-comment" ? answers.shift() : { ok: true },
+    );
+    await generateOnce();
+    await waitFor(() => expect(box().value).toBe(COMMENT));
+
+    fireEvent.click(screen.getByRole("button", { name: "Insert" }));
+    await screen.findByText(/Couldn't find this post's comment box/);
+    expect(box().value).toBe(COMMENT);
+
+    fireEvent.click(screen.getByRole("button", { name: "Insert" }));
+    await screen.findByRole("button", { name: "Inserted" });
+    expect(screen.queryByText(/Couldn't find this post's comment box/)).toBeNull();
+    const ids = chrome.tabs.sendMessage.mock.calls
+      .map(([, m]) => (m as { insertId?: string }).insertId)
+      .filter(Boolean);
+    expect(new Set(ids).size).toBe(2);
+  });
+
   it("keeps the card when the box is cleared by hand, so the user can write their own", async () => {
     server();
     await generateOnce();

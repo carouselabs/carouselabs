@@ -30,7 +30,8 @@ import {
   useExtensionAccess,
 } from "@/lib/extensionAccess";
 import { isSiteTab, noContentScriptMessage, sameConversation, sendToTab } from "@/lib/tabs";
-import { insertFailureCode, readFailureCode, reportClientError, tabFailureCode } from "@/lib/errorReport";
+import { readFailureCode, reportClientError, tabFailureCode } from "@/lib/errorReport";
+import { useInsert } from "../../useInsert";
 import { MESSAGES_SITE as SITE } from "@/sidepanel/messagesSite";
 import { markHistoryAction } from "@/lib/history";
 // Kept on the account, so the website's Extension section edits the same values.
@@ -43,6 +44,7 @@ import {
   type MeResponse,
   type MessageGenerateResponse,
   type MessageProfile,
+  userFacingError,
 } from "@/lib/api";
 import {
   MAX_MESSAGE_PURPOSE_CHARS,
@@ -69,10 +71,6 @@ import {
 const CREATE_CUSTOM_VALUE = "__create_custom__";
 const PROFILE_TONE_VALUE = "__profile_tone__";
 
-function userFacingError(err: unknown): string {
-  if (err instanceof ApiError && err.status >= 400 && err.status < 500) return err.message;
-  return "Something went wrong, try again";
-}
 
 interface Props {
   // Opens the message-profile builder; owned by App, like the other panels.
@@ -125,7 +123,8 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
 
   const [insertEnabled, setInsertEnabled] = useState(false);
   const [showInsertPref, setShowInsertPref] = useState(true);
-  const [inserting, setInserting] = useState(false);
+  const insertion = useInsert();
+  const inserting = insertion.inserting;
   const [insertError, setInsertError] = useState<string | null>(null);
 
   // What defaultProfileId() picks from. Refs, because a read started on open
@@ -389,29 +388,22 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
   }
 
   async function performInsert(text: string) {
-    setInserting(true);
-    setInsertError(null);
-    let tab: chrome.tabs.Tab | undefined;
-    try {
-      [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id === undefined) throw new Error("no active tab");
-      if (!conversation) throw new Error("nothing read");
+    if (!conversation) {
+      setInsertError(SITE.words.openToInsert);
+      return;
+    }
+    const outcome = await insertion.insert({
       // The page refuses unless this conversation is still the one open, so
       // text written for one person can't land in another's box.
-      const res = await sendToTab<{ ok: boolean; error?: string } | undefined>(tab, SITE.insertMessage(text, conversation));
-
-      if (!res?.ok) {
-        setInsertError(res?.error ?? SITE.words.insertFailed);
-        reportClientError(SITE.reportFeature, insertFailureCode(res?.error));
-        return;
-      }
-      markHistoryAction(historyId, "INSERTED", text);
-    } catch (err) {
-      if (isSiteTab(tab)) reportClientError(SITE.reportFeature, tabFailureCode(err));
-      setInsertError(noContentScriptMessage(tab, SITE.words.openToInsert));
-    } finally {
-      setInserting(false);
-    }
+      message: SITE.insertMessage(text, conversation),
+      feature: SITE.reportFeature,
+      failed: SITE.words.insertFailed,
+      notOnSite: SITE.words.openToInsert,
+    });
+    // Ignored: an Insert is already running, or just landed.
+    if (!outcome) return;
+    setInsertError(outcome.ok ? null : outcome.error);
+    if (outcome.ok) markHistoryAction(historyId, "INSERTED", text);
   }
 
   const recommendedProfiles = profiles.filter((p) => p.isRecommended);
@@ -699,7 +691,12 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
                 onCopy={handleCopy}
                 insert={
                   showInsert
-                    ? { disabled: !hasMessage || generating || inserting, inserting, onClick: handleInsertClick }
+                    ? {
+                        disabled: !hasMessage || generating || inserting,
+                        inserting,
+                        inserted: insertion.inserted,
+                        onClick: handleInsertClick,
+                      }
                     : null
                 }
                 onRegenerate={handleGenerate}

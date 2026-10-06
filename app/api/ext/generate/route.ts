@@ -23,12 +23,22 @@ import {
   buildCommentUserMessage,
   buildReplySystemMessage,
   buildReplyUserMessage,
+  lengthSlack,
   targetLengthRange,
   type CommentPostInput,
   type CommentReplyInput,
   type ReplyThreadEntryInput,
 } from "@/lib/ai/prompts/commentPrompt"
-import { generateComment, GENERIC_FAILURE, stageTimer, streamGeneration, type GenerationInput, type GenerationResult } from "@/lib/engage/commentEngine"
+import {
+  generateComment,
+  GENERIC_FAILURE,
+  holdOpen,
+  requestIdOf,
+  stageTimer,
+  streamGeneration,
+  type GenerationInput,
+  type GenerationResult,
+} from "@/lib/engage/commentEngine"
 
 // Generation stops itself after GENERATION_BUDGET_MS (lib/ai/commentModel.ts);
 // this is the platform's backstop, well above it.
@@ -72,6 +82,7 @@ function parseReply(raw: unknown): CommentReplyInput | null {
 
 export async function POST(req: Request) {
   const timer = stageTimer()
+  const requestId = requestIdOf(req)
 
   const user = await getUserFromCommentExtensionToken(req)
   timer.mark("auth")
@@ -165,6 +176,9 @@ export async function POST(req: Request) {
     userMessage,
     min,
     max,
+    // A few characters past a rough length bucket isn't worth a second
+    // generation; an explicit range stays exact.
+    lengthSlack: lengthSlack(profile.length),
     numberSources,
     engage: { userId: user.id, kind: reply ? "replies" : "comments" },
   }
@@ -197,11 +211,13 @@ export async function POST(req: Request) {
       },
     })
 
-  // One line per generation: stage durations only.
+  // One line per generation: stage durations only, and the panel's random
+  // request id to match it with the panel's own "[perf]" line.
   const logTiming = (stream: boolean, result: GenerationResult | null) => {
     const s = timer.stages
     console.log(
-      `[ext/generate] timing stream=${stream ? 1 : 0} model=${result?.model || "none"} attempts=${result?.attempts ?? 0}` +
+      `[ext/generate] timing req=${requestId ?? "-"} stream=${stream ? 1 : 0} model=${result?.model || "none"}` +
+        ` attempts=${result?.attempts ?? 0} cancelled=${result?.cancelled ? 1 : 0}` +
         ` auth=${s.auth} limit=${s.limit} profile=${s.profile} reserve=${s.reserve}` +
         ` ttft=${Math.round(result?.ttftMs ?? -1)} first_text=${Math.round(result?.firstTextMs ?? -1)}` +
         ` generate=${s.generate ?? -1} history=${s.history ?? -1} total=${timer.elapsed()}`,
@@ -210,6 +226,7 @@ export async function POST(req: Request) {
 
   const timingSummary = (result: GenerationResult) => ({
     ...timer.stages,
+    requestId,
     beforeModel: beforeModelMs,
     ttft: result.ttftMs === null ? null : Math.round(result.ttftMs),
     firstText: result.firstTextMs === null ? null : Math.round(result.firstTextMs),
@@ -221,17 +238,28 @@ export async function POST(req: Request) {
   const wantsStream = (req.headers.get("accept") ?? "").includes("text/event-stream")
 
   if (!wantsStream) {
-    const result = await generateComment(input)
-    timer.mark("generate")
-    if (!result.comment) {
-      logTiming(false, result)
-      // The free use is given back and no history row is written — the user
-      // sees an error and can retry.
-      await gate.release()
-      return NextResponse.json({ error: GENERIC_FAILURE }, { status: 502 })
-    }
+    // 1.2.x asks for JSON. If it goes away mid-generation (its panel closed),
+    // the request's signal stops the model and the free use is given back,
+    // as for a failure; Vercel ends the function on disconnect, so this is
+    // kept alive until that is done (holdOpen).
+    const finished = holdOpen()
+    let result: GenerationResult
+    let history: { id: string }
+    try {
+      result = await generateComment(input, {}, req.signal)
+      timer.mark("generate")
+      if (!result.comment) {
+        logTiming(false, result)
+        // The free use is given back and no history row is written — the user
+        // sees an error and can retry.
+        await gate.release()
+        return NextResponse.json({ error: GENERIC_FAILURE }, { status: 502 })
+      }
 
-    const history = await saveHistory(result)
+      history = await saveHistory(result)
+    } finally {
+      finished()
+    }
     timer.mark("history")
     logTiming(false, result)
 
@@ -261,6 +289,7 @@ export async function POST(req: Request) {
   return streamGeneration({
     input,
     beforeModelMs,
+    signal: req.signal,
     onGenerated: () => timer.mark("generate"),
     onEmpty: async (result) => {
       logTiming(true, result)

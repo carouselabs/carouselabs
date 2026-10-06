@@ -18,6 +18,11 @@ describe("production manifest", () => {
     expect(prod.manifest_version).toBe(3);
     expect(prod.name).toBeTruthy();
     expect(prod.version).toBe(pkg.version);
+    // A store build shows the plain version; a development build says when it
+    // was built, to confirm Chrome is running the new files.
+    expect(prod.version_name).toBeUndefined();
+    expect(dev.version_name?.startsWith(`${pkg.version} dev `)).toBe(true);
+    expect(dev.version_name).toMatch(/ dev \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC$/);
     expect(prod.description!.length).toBeLessThanOrEqual(132); // Chrome Web Store limit
   });
 

@@ -36,9 +36,12 @@ import {
   type LinkedInProfileInfo,
 } from "@/lib/connectionNote";
 import { insertIntoComposeBox, readConversation } from "@/content/messageThread";
-import { insertTextAtEnd } from "@/content/editor";
+import { typeInto, usableEditor } from "@/content/editor";
+import { waitFor } from "@/content/waitFor";
 import { READ_CONVERSATION_MESSAGE_TYPE } from "@/lib/messageThread";
 import { PING_MESSAGE_TYPE } from "@/lib/tabs";
+import { insertSwitch as readInsertSwitch, readInsertEnabled, rememberInsertSwitch } from "@/lib/insertSwitch";
+import { insertOnce, type InsertAnswer } from "@/lib/insertOnce";
 
 // Captured posts, threads and profiles are other people's content; they go to
 // the page console only in development builds.
@@ -143,6 +146,26 @@ interface SelectedPost {
   // Present in "connect" mode: the person whose Connect button was clicked.
   // The post fields above then carry their name and headline, text is empty.
   connect?: { target: LinkedInProfileInfo };
+  // Comment and reply modes: where Insert must put the text. The panel sends
+  // it back, untouched, with the Insert.
+  target?: InsertTarget;
+}
+
+// Which post (and, for a reply, which comment) a capture was for, so Insert
+// finds that one box again — after LinkedIn redraws the card, from another
+// LinkedIn tab, or in a fresh copy of this script — and never a different
+// post's box.
+interface InsertTarget {
+  // This capture's own id: only the copy of this script that made it may use
+  // the elements it remembered (lastPostContainer, lastReplyTarget).
+  captureId: string;
+  // The post card's componentkey, and the URN in its permalink. Either finds
+  // the card again; both null when the layout shows neither.
+  postKey: string | null;
+  postUrn: string | null;
+  // Reply mode: the comment replied to, and the top comment of its thread.
+  commentUrn?: string | null;
+  rootUrn?: string | null;
 }
 
 // Reading a conversation is on-demand (see src/content/messageThread.ts's
@@ -169,7 +192,10 @@ async function loadConfig(): Promise<ExtensionConfig> {
   try {
     const res = await fetch(`${baseUrl}/api/ext/config`, { signal: controller.signal });
     if (!res.ok) throw new Error(`/api/ext/config responded ${res.status}`);
-    return (await res.json()) as ExtensionConfig;
+    const config = (await res.json()) as ExtensionConfig;
+    // This reading of the Insert switch counts for the next Insert too.
+    rememberInsertSwitch(config.insertEnabled !== false);
+    return config;
   } finally {
     clearTimeout(timer);
   }
@@ -616,6 +642,7 @@ async function handleClick(event: MouseEvent) {
   // Remembered so a later Insert targets this post's comment box rather than
   // whichever one happens to be first in the feed.
   lastPostContainer = postContainer;
+  const insertTarget = rememberCapture({ ...postIdentity(postContainer) });
 
   // Text first: the author's last-resort tier is cross-checked against it.
   const text = extractPostText(postContainer, config.postTextSelector);
@@ -634,6 +661,7 @@ async function handleClick(event: MouseEvent) {
       postContainer.querySelector<HTMLAnchorElement>('a[href*="/feed/update/"]')?.href ??
       window.location.href,
     capturedAt: Date.now(),
+    target: insertTarget,
   };
 
   if (!post.authorName || !post.text) {
@@ -716,8 +744,14 @@ async function handleReplyClick(replyButton: Element, config: ExtensionConfig) {
     rootUrn: thread.rootItem ? commentUrn(thread.rootItem) : null,
     postContainer,
   };
+  const insertTarget = rememberCapture({
+    ...postIdentity(postContainer),
+    commentUrn: lastReplyTarget.itemUrn,
+    rootUrn: lastReplyTarget.rootUrn,
+  });
 
   sendPostToSidePanel({
+    target: insertTarget,
     mode: "reply",
     authorName,
     authorHeadline: extractHeadlineNear(author?.link ?? null, authorName),
@@ -748,6 +782,82 @@ async function handleReplyClick(replyButton: Element, config: ExtensionConfig) {
 // several open comment boxes puts the text in the right one.
 let lastPostContainer: Element | null = null;
 
+// The target of this copy's last Comment or Reply capture (see InsertTarget).
+let lastCapture: InsertTarget | null = null;
+
+function rememberCapture(identity: Omit<InsertTarget, "captureId">): InsertTarget {
+  const captureId =
+    typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  lastCapture = { captureId, ...identity };
+  return lastCapture;
+}
+
+// The URN in a post card's permalink ("urn:li:activity:7123…"), if it has one.
+function permalinkUrn(card: Element | null): string | null {
+  const href = card?.querySelector('a[href*="/feed/update/"]')?.getAttribute("href") ?? "";
+  return /\/feed\/update\/(urn:li:[A-Za-z]+:\d+)/.exec(href)?.[1] ?? null;
+}
+
+function postIdentity(card: Element | null): Pick<InsertTarget, "postKey" | "postUrn"> {
+  return { postKey: card?.getAttribute("componentkey") || null, postUrn: permalinkUrn(card) };
+}
+
+// Whether an Insert's target is this copy's own last capture, so its
+// remembered elements are the right ones. An Insert with no target comes from
+// an older panel, which only ever meant the last capture.
+function isOwnCapture(target: InsertTarget | undefined): boolean {
+  return !target || (lastCapture !== null && target.captureId === lastCapture.captureId);
+}
+
+// The post card an element sits in: the verified container, else the
+// outermost fallback match, as findPostContainer does — never a guess.
+function cardAround(el: Element, config: ExtensionConfig): Element | null {
+  const primary = el.closest(config.postContainerSelector);
+  if (primary) return primary;
+  const fallbackSelector = config.postContainerFallbackSelector || FALLBACK_CONFIG.postContainerFallbackSelector;
+  let outermost: Element | null = null;
+  for (let p: Element | null = el; p; p = p.parentElement) if (p.matches(fallbackSelector)) outermost = p;
+  return outermost;
+}
+
+// A post card found again on this page from a capture's identity: by its
+// componentkey, else by its permalink, else (on the post's own page, which
+// may not link to itself) the page's only card. Only a single match counts.
+function findPostCard(config: ExtensionConfig, identity: Pick<InsertTarget, "postKey" | "postUrn">): Element | null {
+  const cards = new Set<Element>();
+  if (identity.postKey) {
+    for (const el of document.querySelectorAll(`[componentkey=${JSON.stringify(identity.postKey)}]`)) {
+      cards.add(cardAround(el, config) ?? el);
+    }
+  }
+  if (cards.size === 0 && identity.postUrn) {
+    for (const link of document.querySelectorAll(`a[href*=${JSON.stringify(`/feed/update/${identity.postUrn}`)}]`)) {
+      const card = cardAround(link, config);
+      if (card) cards.add(card);
+    }
+    if (cards.size === 0 && window.location.pathname.includes(identity.postUrn)) {
+      const fallbackSelector = config.postContainerFallbackSelector || FALLBACK_CONFIG.postContainerFallbackSelector;
+      const onPage = Array.from(document.querySelectorAll(fallbackSelector)).filter(
+        (el) => !el.parentElement?.closest(fallbackSelector),
+      );
+      if (onPage.length === 1) cards.add(onPage[0]);
+    }
+  }
+  return cards.size === 1 ? [...cards][0] : null;
+}
+
+// The card of the post a comment is for: this copy's remembered card while it
+// is still on the page, else the same post found again by its identity.
+function resolvePostCard(config: ExtensionConfig, target: InsertTarget | undefined): Element | null {
+  const own = isOwnCapture(target);
+  if (own && lastPostContainer?.isConnected) return lastPostContainer;
+  const identity = target ?? lastCapture;
+  return identity ? findPostCard(config, identity) : null;
+}
+
+const hasIdentity = (target: InsertTarget | null | undefined): boolean =>
+  !!(target && (target.postKey || target.postUrn || target.commentUrn));
+
 // The /in/<slug> path of the profile whose Connect was clicked last, if that
 // Connect was for the page owner. See handleConnectClick.
 let lastConnectTargetPath: string | null = null;
@@ -762,7 +872,7 @@ function profilePath(url: string): string {
 
 // The comment whose Reply was clicked last, for Insert in reply mode.
 let lastReplyTarget: {
-  item: Element;
+  item: Element | null;
   root: Element | null;
   itemUrn: string | null;
   rootUrn: string | null;
@@ -779,22 +889,31 @@ function liveCommentElement(el: Element | null, urn: string | null): Element | n
   return document.querySelector(`[componentkey*=${JSON.stringify(`urn:li:comment:(${urn})`)}]`);
 }
 
+// The comment an Insert in reply mode is for: this copy's remembered one, or,
+// for a capture made elsewhere (another tab, an earlier copy of this script),
+// just its URNs, from which the elements are found again.
+function replyTargetFor(target: InsertTarget | undefined): typeof lastReplyTarget {
+  if (isOwnCapture(target) && lastReplyTarget) return lastReplyTarget;
+  if (!target?.commentUrn) return null;
+  return { item: null, root: null, itemUrn: target.commentUrn, rootUrn: target.rootUrn ?? null, postContainer: null };
+}
+
 // LinkedIn opens the reply box when Reply is clicked. Where it renders isn't
 // verified against live markup yet, so this looks in descending order of
 // certainty and never falls back to the post's main comment box: putting a
 // reply there would publish it as a top-level comment on the post.
-function findReplyBox(config: ExtensionConfig): HTMLElement | null {
-  if (!lastReplyTarget) return null;
+function findReplyBox(config: ExtensionConfig, reply: NonNullable<typeof lastReplyTarget>): HTMLElement | null {
   const itemSelector = config.commentItemSelector || FALLBACK_CONFIG.commentItemSelector;
-  const item = liveCommentElement(lastReplyTarget.item, lastReplyTarget.itemUrn);
-  const root = liveCommentElement(lastReplyTarget.root, lastReplyTarget.rootUrn);
+  const item = liveCommentElement(reply.item, reply.itemUrn);
+  const root = liveCommentElement(reply.root, reply.rootUrn);
+  const usable = (box: HTMLElement) => usableEditor(box) && !isMessageComposeBox(box);
 
   // 1. Inside the target comment, and belonging to it rather than to one of
   //    its nested replies: the nearest comment wrapper names the same URN.
   if (item) {
     const own = Array.from(item.querySelectorAll<HTMLElement>(config.commentBoxSelector)).find((box) => {
       const owner = box.closest(itemSelector);
-      return owner ? commentUrn(owner) === lastReplyTarget?.itemUrn : true;
+      return usable(box) && (owner ? commentUrn(owner) === reply.itemUrn : true);
     });
     if (own) return own;
   }
@@ -802,7 +921,7 @@ function findReplyBox(config: ExtensionConfig): HTMLElement | null {
   // 2. Anywhere in the thread: replying to a reply usually opens the box at
   //    the foot of the thread. Prefer the first box after the target.
   if (root) {
-    const boxes = Array.from(root.querySelectorAll<HTMLElement>(config.commentBoxSelector));
+    const boxes = Array.from(root.querySelectorAll<HTMLElement>(config.commentBoxSelector)).filter(usable);
     const after = item
       ? boxes.find((box) => item.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING)
       : undefined;
@@ -810,10 +929,11 @@ function findReplyBox(config: ExtensionConfig): HTMLElement | null {
   }
 
   // 3. The editor LinkedIn focused when Reply was clicked, if it still has
-  //    focus on the page and sits in the same thread or post.
+  //    focus on the page and sits in the same thread or post. Only for this
+  //    copy's own capture: anything else can't vouch for what has focus.
   const active = document.activeElement;
-  if (active instanceof HTMLElement && active.matches(config.commentBoxSelector)) {
-    const scope = root ?? lastReplyTarget.postContainer;
+  if (reply.item && active instanceof HTMLElement && active.matches(config.commentBoxSelector) && usable(active)) {
+    const scope = root ?? reply.postContainer;
     if (!scope || scope.contains(active)) return active;
   }
 
@@ -831,66 +951,103 @@ function isMessageComposeBox(el: Element): boolean {
 }
 
 // The post's own top-level comment box: inside the captured post, not a
-// reply box under one of its comments, not a DM box.
-function findPostCommentBox(config: ExtensionConfig): HTMLElement | null {
-  if (!lastPostContainer?.isConnected) return null;
+// reply box under one of its comments, not a DM box, and one that can be
+// typed into.
+function findPostCommentBox(config: ExtensionConfig, card: Element | null): HTMLElement | null {
+  if (!card?.isConnected) return null;
   const itemSelector = config.commentItemSelector || FALLBACK_CONFIG.commentItemSelector;
   return (
-    Array.from(lastPostContainer.querySelectorAll<HTMLElement>(config.commentBoxSelector)).find(
-      (box) => !isMessageComposeBox(box) && !box.closest(itemSelector),
+    Array.from(card.querySelectorAll<HTMLElement>(config.commentBoxSelector)).find(
+      (box) => !isMessageComposeBox(box) && !box.closest(itemSelector) && usableEditor(box),
     ) ?? null
   );
 }
 
+// How long Insert waits for a box LinkedIn is still opening, or a card it is
+// redrawing, before saying it couldn't find it.
+const BOX_WAIT_MS = 2_000;
+
+// What the person is told when LinkedIn's editor didn't keep the text.
+const NOT_KEPT = "LinkedIn's box didn't keep the text. It's still here in the panel: use Copy, then paste it in.";
+
 async function insertIntoCommentBox(
   text: string,
   mode: "comment" | "reply",
-): Promise<{ ok: boolean; error?: string }> {
+  target: InsertTarget | undefined,
+  wrote: () => void,
+): Promise<InsertAnswer> {
   const config = await getConfig();
 
-  if (mode === "comment" && !lastPostContainer?.isConnected) {
-    // The panel can show a post captured before this page reloaded, or in a
-    // different tab. Inserting then used to fill the first box on the page —
-    // some other post's, or a chat pop-up's.
-    return { ok: false, error: "Click Comment on the post again, then try Insert." };
+  if (mode === "reply") {
+    const reply = replyTargetFor(target);
+    if (!reply) return { ok: false, error: "Click Reply on the comment again, then try Insert." };
+    const box = await waitFor(() => findReplyBox(config, reply), BOX_WAIT_MS);
+    if (!box) {
+      return { ok: false, error: "Couldn't find the reply box. Click Reply on the comment again, then try Insert." };
+    }
+    // After anything already there, such as the @mention LinkedIn pre-fills.
+    return typeInto(box, text, { refind: () => findReplyBox(config, reply), failure: NOT_KEPT, onWrite: wrote });
   }
 
-  const box = mode === "reply" ? findReplyBox(config) : findPostCommentBox(config);
-  if (!box || isMessageComposeBox(box)) {
-    return {
-      ok: false,
-      error:
-        mode === "reply"
-          ? "Couldn't find the reply box. Click Reply on the comment again, then try Insert."
-          : "Couldn't find this post's comment box. Open it (click Comment on the post), then try again.",
-    };
-  }
+  // Nothing to look for: this page never captured the post (the panel can
+  // show one captured before a reload), and the panel sent nothing to find it
+  // by. Inserting used to fill the first box on the page then — another
+  // post's, or a chat pop-up's.
+  const nothingToFind = !(isOwnCapture(target) && lastPostContainer?.isConnected) && !hasIdentity(target ?? lastCapture);
+  if (nothingToFind) return { ok: false, error: "Click Comment on the post again, then try Insert." };
 
-  // After anything already there: a draft the user typed, or the @mention
-  // LinkedIn pre-fills in a reply box.
-  insertTextAtEnd(box, text);
-  return { ok: true };
+  const commentBox = () => findPostCommentBox(config, resolvePostCard(config, target));
+  const box = await waitFor(commentBox, BOX_WAIT_MS);
+  if (!box) {
+    return resolvePostCard(config, target)
+      ? { ok: false, error: "Couldn't find this post's comment box. Click Comment on the post to open it, then try Insert again." }
+      : { ok: false, error: "That post isn't open in this tab. Go back to it, click Comment on it again, then Insert." };
+  }
+  // After anything already there: a draft the person typed while waiting.
+  return typeInto(box, text, { refind: commentBox, failure: NOT_KEPT, onWrite: wrote });
 }
 
-// The server kill switch, checked fresh at the moment of Insert rather than
-// trusting the copy fetched at page load or the panel's copy. Fails closed:
-// when the switch can't be read, nothing is inserted, and the person is told
-// it was the connection rather than that Insert is off.
+// The server kill switch, from a recent reading or read again
+// (lib/insertSwitch.ts). Fails closed: with no usable reading, nothing is
+// inserted, and the person is told it was the connection.
 async function insertSwitch(): Promise<"on" | "off" | "unknown"> {
-  try {
-    return (await loadConfig()).insertEnabled !== false ? "on" : "off";
-  } catch {
-    return "unknown";
-  }
+  const baseUrl = await getApiBaseUrl();
+  return readInsertSwitch((signal) => readInsertEnabled(baseUrl, signal));
 }
 
 type InsertRequest = {
   text: string;
   mode?: string;
   expect?: { threadPath?: string; contactName?: string; profileUrl?: string };
+  // One per Insert click (src/lib/insertOnce.ts). Absent from older panels.
+  insertId?: string;
+  // Comment and reply modes: the capture's InsertTarget, as stored.
+  target?: InsertTarget;
+  // Connect mode: replace the person's own text in the note box (their choice).
+  replace?: boolean;
 };
 
-async function handleInsert(message: InsertRequest): Promise<{ ok: boolean; error?: string }> {
+// Only the fields this script reads, and only when they have the right shape:
+// the target travels through the panel and storage.
+function insertTargetOf(raw: unknown): InsertTarget | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const t = raw as Record<string, unknown>;
+  if (typeof t.captureId !== "string") return undefined;
+  const text = (v: unknown) => (typeof v === "string" && v ? v : null);
+  return {
+    captureId: t.captureId,
+    postKey: text(t.postKey),
+    postUrn: text(t.postUrn),
+    commentUrn: text(t.commentUrn),
+    rootUrn: text(t.rootUrn),
+  };
+}
+
+function handleInsert(message: InsertRequest): Promise<InsertAnswer> {
+  return insertOnce(message.insertId, (wrote) => insertNow(message, wrote));
+}
+
+async function insertNow(message: InsertRequest, wrote: () => void): Promise<InsertAnswer> {
   const insert = await insertSwitch();
   if (insert === "off") {
     return { ok: false, error: "Insert is turned off right now. Use Copy instead." };
@@ -909,7 +1066,8 @@ async function handleInsert(message: InsertRequest): Promise<{ ok: boolean; erro
     if (lastConnectTargetPath !== expected) {
       return { ok: false, error: "Click Connect on this profile again, then Insert." };
     }
-    return insertIntoNoteBox(message.text);
+    // replace: the person chose to replace what they had typed in the box.
+    return insertIntoNoteBox(message.text, wrote, { replace: message.replace === true });
   }
 
   if (message.mode === "message") {
@@ -919,11 +1077,12 @@ async function handleInsert(message: InsertRequest): Promise<{ ok: boolean; erro
       expected?.threadPath && expected.contactName
         ? { threadPath: expected.threadPath, contactName: expected.contactName }
         : undefined,
+      wrote,
     );
   }
 
   // Older panels send no mode; they only know about comments.
-  return insertIntoCommentBox(message.text, message.mode === "reply" ? "reply" : "comment");
+  return insertIntoCommentBox(message.text, message.mode === "reply" ? "reply" : "comment", insertTargetOf(message.target), wrote);
 }
 
 function onRuntimeMessage(

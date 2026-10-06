@@ -5,7 +5,14 @@
 // because only LinkedIn was answered. Here: each extension's pages are
 // answered, nothing else is, and every site a content script runs on is in
 // the list (the e2e tests can't catch this: intercepted responses skip CORS).
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// The route reads the Insert switch from the Engage settings. Without this the
+// Prisma client finds DATABASE_URL in the website's .env and queries that
+// database (seconds per test, and never a unit test's business). No rows:
+// the defaults, Insert on.
+vi.mock("../../../lib/db", () => ({ db: { engageSetting: { findMany: vi.fn(async () => []) } } }));
+
 import { GET, OPTIONS } from "../../../app/api/ext/config/route";
 import { CONTENT_SCRIPT_ORIGINS } from "../../../lib/contentScriptOrigins";
 import linkedinManifest from "../../manifest.config";

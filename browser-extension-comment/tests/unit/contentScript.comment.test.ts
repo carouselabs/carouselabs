@@ -81,6 +81,69 @@ describe("Insert into a comment box", () => {
     expect(byFixture("post-2-comment-box").textContent).toBe("");
   });
 
+  it("remembers which post a capture was for: its card's componentkey and permalink", async () => {
+    await feed();
+    await click(commentButton("post-2"));
+    expect((await storedPost())?.target).toEqual({
+      captureId: expect.any(String),
+      postKey: "update-card-focusBBB222FeedType_MAIN_FEED",
+      postUrn: "urn:li:activity:222",
+    });
+  });
+
+  it("finds the post again after LinkedIn redraws its card", async () => {
+    await feed();
+    await click(commentButton("post-2"));
+    const target = (await storedPost())?.target;
+    const card = byFixture("post-2");
+    card.replaceWith(card.cloneNode(true));
+    const res = await sendToContentScript({ type: INSERT, text: "After the redraw", mode: "comment", target });
+    expect(res).toEqual({ ok: true });
+    expect(byFixture("post-2-comment-box").textContent).toContain("After the redraw");
+  });
+
+  it("puts a comment captured elsewhere (another tab) in its own post's box, never the post this page captured last", async () => {
+    await feed();
+    await click(commentButton("post-2"));
+    const elsewhere = { ...((await storedPost())?.target as object), captureId: "another-tab" };
+    // This page's own last capture is post 1, with a box of its own.
+    const box1 = document.createElement("div");
+    box1.setAttribute("contenteditable", "true");
+    box1.setAttribute("role", "textbox");
+    byFixture("post-1").append(box1);
+    await click(commentButton("post-1"));
+
+    const res = await sendToContentScript({ type: INSERT, text: "For post two", mode: "comment", target: elsewhere });
+    expect(res).toEqual({ ok: true });
+    expect(box1.textContent).toBe("");
+    expect(byFixture("post-2-comment-box").textContent).toContain("For post two");
+  });
+
+  it("refuses, typing nowhere, when the post a comment was written for isn't on this page", async () => {
+    await feed();
+    const target = { captureId: "another-tab", postKey: "update-card-focusZZZ999FeedType_MAIN_FEED", postUrn: "urn:li:activity:999" };
+    vi.useFakeTimers();
+    try {
+      const pending = sendToContentScript({ type: INSERT, text: "Lost", mode: "comment", target });
+      await vi.advanceTimersByTimeAsync(2_100);
+      const res = (await pending) as { ok: boolean; error: string };
+      expect(res.ok).toBe(false);
+      expect(res.error).toMatch(/isn't open in this tab/);
+      expect(document.body.textContent).not.toContain("Lost");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("types one Insert once, however many times its message arrives", async () => {
+    await feed();
+    await click(commentButton("post-2"));
+    const message = { type: INSERT, text: "Only once", mode: "comment", insertId: "click-1", target: (await storedPost())?.target };
+    const answers = await Promise.all([sendToContentScript(message), sendToContentScript(message)]);
+    expect(answers).toEqual([{ ok: true }, { ok: true }]);
+    expect(byFixture("post-2-comment-box").textContent?.split("Only once").length).toBe(2);
+  });
+
   it("never lands a comment in a chat pop-up's message box", async () => {
     await feed();
     byFixture("post-2-comment-box").remove();
@@ -88,10 +151,8 @@ describe("Insert into a comment box", () => {
     expect(byFixture("overlay-compose").textContent).toBe("");
   });
 
-  it("says it couldn't reach CarouseLabs, instead of hanging, when the switch can't be checked", async () => {
-    await feed();
-    await click(commentButton("post-2"));
-    // The connection stalls: no answer until the request is given up on.
+  // The connection stalls: no answer until the request is given up on.
+  const stallFetch = () =>
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -101,10 +162,27 @@ describe("Insert into a comment box", () => {
           }),
       ),
     );
+
+  it("still inserts when the connection stalls, using the switch the page read when it loaded", async () => {
+    // Insert used to re-read the switch every time and refuse whenever that
+    // failed: "Insert sometimes doesn't work".
+    await feed();
+    await click(commentButton("post-2"));
+    stallFetch();
+    const res = await sendToContentScript({ type: INSERT, text: "Congrats!", mode: "comment" });
+    expect(res).toEqual({ ok: true });
+    expect(byFixture("post-2-comment-box").textContent).toContain("Congrats!");
+  });
+
+  it("with no reading of the switch at all, says it couldn't reach CarouseLabs within 4s instead of hanging", async () => {
+    loadFixture("feed.html", "/feed/");
+    await importContentScript({ configStatus: 503 });
+    await click(commentButton("post-2"));
+    stallFetch();
     vi.useFakeTimers();
     try {
       const pending = sendToContentScript({ type: INSERT, text: "Congrats!", mode: "comment" });
-      await vi.advanceTimersByTimeAsync(8_000);
+      await vi.advanceTimersByTimeAsync(4_000);
       const res = (await pending) as { ok: boolean; error: string };
       expect(res.ok).toBe(false);
       expect(res.error).toMatch(/Couldn't reach CarouseLabs/);

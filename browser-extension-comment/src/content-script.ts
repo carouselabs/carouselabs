@@ -177,13 +177,47 @@ interface InsertTarget {
 console.log("[content-script] loaded on", window.location.href);
 
 // Fetched once and cached for the life of this content script instance (a
-// fresh LinkedIn page load re-injects the script and re-fetches) — the spec
-// calls for "cache in memory for the session", not persisted anywhere.
+// fresh LinkedIn page load re-injects the script and re-fetches).
 let configPromise: Promise<ExtensionConfig> | null = null;
 
-// A stalled connection must not hold up a Comment click (which falls back to
-// the built-in selectors) or an Insert (which says it couldn't check).
+// A stalled connection must not hold up an Insert (which says it couldn't
+// check) for long.
 const CONFIG_TIMEOUT_MS = 8_000;
+
+// The selectors a click is read with, available at once: this page's answer
+// from the server once it has arrived, else the last one any page got (kept
+// in extension storage), else the built-in copy. A click never waits for the
+// network: on a slow connection the wait made Comment seem to do nothing, and
+// by the time the answer came LinkedIn had often redrawn the clicked button
+// out of the page, so the click was lost.
+const CONFIG_STORAGE_KEY = "contentScriptConfig";
+let serverConfig: ExtensionConfig | null = null;
+let storedConfig: ExtensionConfig | null = null;
+
+// Every key present even when the server (or an older stored copy) left one
+// out, so no selector is ever undefined.
+function completeConfig(config: Partial<ExtensionConfig> | null | undefined): ExtensionConfig {
+  const complete = { ...FALLBACK_CONFIG };
+  for (const [key, value] of Object.entries(config ?? {})) {
+    if (key in complete && value !== undefined && value !== null && value !== "") {
+      (complete as Record<string, unknown>)[key] = value;
+    }
+  }
+  return complete;
+}
+
+function configNow(): ExtensionConfig {
+  return serverConfig ?? storedConfig ?? FALLBACK_CONFIG;
+}
+
+chrome.storage.local
+  .get(CONFIG_STORAGE_KEY)
+  .then((stored) => {
+    if (stored[CONFIG_STORAGE_KEY]) storedConfig = completeConfig(stored[CONFIG_STORAGE_KEY] as Partial<ExtensionConfig>);
+  })
+  .catch(() => {
+    // No stored copy: the built-in one is used until the server answers.
+  });
 
 async function loadConfig(): Promise<ExtensionConfig> {
   const baseUrl = await getApiBaseUrl();
@@ -192,9 +226,11 @@ async function loadConfig(): Promise<ExtensionConfig> {
   try {
     const res = await fetch(`${baseUrl}/api/ext/config`, { signal: controller.signal });
     if (!res.ok) throw new Error(`/api/ext/config responded ${res.status}`);
-    const config = (await res.json()) as ExtensionConfig;
+    const config = completeConfig((await res.json()) as Partial<ExtensionConfig>);
     // This reading of the Insert switch counts for the next Insert too.
     rememberInsertSwitch(config.insertEnabled !== false);
+    serverConfig = config;
+    void chrome.storage.local.set({ [CONFIG_STORAGE_KEY]: config }).catch(() => {});
     return config;
   } finally {
     clearTimeout(timer);
@@ -606,11 +642,44 @@ function findPostContainer(from: Element, config: ExtensionConfig): { container:
   return { container: null, strategy: "none" };
 }
 
+// The Comment button a click landed on (or inside): the configured selector,
+// else any button that calls itself exactly "Comment", by its label or its
+// text, so a layout whose button lost or reworded its aria-label still counts.
+// Never a button that submits a comment ("Comment" is also the label of the
+// comment box's own Post button in some layouts): that would replace the
+// panel's post as the person posts.
+const COMMENT_LABEL_PATTERN = /^comment$/i;
+
+function findCommentButton(target: Element, selector: string): Element | null {
+  const configured = target.closest(selector);
+  if (configured) return configured;
+  const control = target.closest("button, [role='button']");
+  if (!control || control.closest("form") || control.getAttribute("type") === "submit") return null;
+  const label = control.getAttribute("aria-label")?.trim() ?? "";
+  const text = (control.textContent ?? "").replace(/\s+/g, " ").trim();
+  return COMMENT_LABEL_PATTERN.test(label) || COMMENT_LABEL_PATTERN.test(text) ? control : null;
+}
+
+// Must match CAPTURE_FAILURE_STORAGE_KEY in HomeScreen.tsx. A Comment click
+// whose post couldn't be found, so the panel can say so (and tell the server)
+// instead of staying silent. Only the kind of click and when: nothing from
+// the page.
+const CAPTURE_FAILURE_STORAGE_KEY = "lastCaptureFailure";
+
+function reportCaptureFailure(mode: "comment") {
+  chrome.storage.local
+    .set({ [CAPTURE_FAILURE_STORAGE_KEY]: { mode, at: Date.now() } })
+    .catch((err) => console.warn("[content-script] failed to store a capture failure:", err));
+}
+
 async function handleClick(event: MouseEvent) {
   const target = event.target as Element | null;
   if (!target) return;
 
-  const config = await getConfig();
+  // Read with the selectors at hand, never waiting for the server's (see
+  // configNow); a fetch that isn't done yet is left to finish for next time.
+  const config = configNow();
+  void getConfig();
 
   // Profile pages only: Connect buttons elsewhere (My Network, search
   // results) have no profile page around them to read.
@@ -628,7 +697,7 @@ async function handleClick(event: MouseEvent) {
     return;
   }
 
-  const commentButton = target.closest(config.commentButtonSelector);
+  const commentButton = findCommentButton(target, config.commentButtonSelector);
   if (!commentButton) return; // not a click on (or inside) a Comment button
 
   const { container: postContainer } = findPostContainer(commentButton, config);
@@ -636,6 +705,7 @@ async function handleClick(event: MouseEvent) {
     console.warn(
       `[content-script] matched a Comment button but no post container was found (postContainerSelector "${config.postContainerSelector}", fallback "${config.postContainerFallbackSelector}") — LinkedIn's DOM has likely changed; update the selector in app/api/ext/config.`,
     );
+    reportCaptureFailure("comment");
     return;
   }
 
@@ -976,7 +1046,9 @@ async function insertIntoCommentBox(
   target: InsertTarget | undefined,
   wrote: () => void,
 ): Promise<InsertAnswer> {
-  const config = await getConfig();
+  // Whether Insert is on was checked already (insertSwitch); the selectors
+  // don't wait for the network either.
+  const config = configNow();
 
   if (mode === "reply") {
     const reply = replyTargetFor(target);

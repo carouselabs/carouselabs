@@ -8,6 +8,7 @@
 import { ensureContentScript } from "@/lib/tabs";
 import { markConversationTabs } from "@/lib/conversationBadge";
 import { listenForSignIn } from "@/lib/signInReceiver";
+import { setUpToolbarPanel } from "@/lib/panelHost";
 
 // Must match GENERATE_SHORTCUT_MESSAGE_TYPE in HomeScreen.tsx. The keyboard
 // shortcut is registered in manifest.config.ts and fires here, in the service
@@ -30,11 +31,11 @@ chrome.commands.onCommand.addListener((command) => {
 
 console.log("[background] service worker script evaluated, registering listeners.");
 
-chrome.runtime.onInstalled.addListener((details) => {
-  chrome.sidePanel
-    .setPanelBehavior({ openPanelOnActionClick: true })
-    .catch((error) => console.error("[CarouseLabs Engage] setPanelBehavior failed:", error));
+// The toolbar icon opens the panel: the browser's side panel, or a window of
+// its own in browsers without one (src/lib/panelHost.ts).
+setUpToolbarPanel("src/sidepanel/index.html", "[CarouseLabs Engage]");
 
+chrome.runtime.onInstalled.addListener((details) => {
   // Only on a genuine first install: an update or a browser restart also fires
   // this listener, and reopening the welcome tab then would be noise.
   // chrome.sidePanel.open() cannot be called here (it needs a user gesture),

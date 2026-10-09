@@ -9,6 +9,7 @@
 // it twice either. Whatever happens, the text stays in the panel for Copy.
 import { useEffect, useRef, useState } from "react";
 import { isSiteTab, noContentScriptMessage, sendToTab, TabTimeout } from "@/lib/tabs";
+import { activeTab } from "./activeTab";
 import { insertFailureCode, reportClientError, tabFailureCode, type ReportFeature } from "@/lib/errorReport";
 
 // How long the button says "Inserted" (and ignores clicks) after a success.
@@ -64,7 +65,7 @@ export function useInsert() {
       // fields like url are withheld. The tab beside the panel is the one the
       // person is looking at, so that is where the text goes; the page itself
       // refuses unless the post or conversation it was written for is there.
-      [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      tab = await activeTab();
       if (tab?.id === undefined) throw new Error("no active tab");
 
       const answer = await sendToTab<PageAnswer>(tab, { ...request.message, insertId: newInsertId() });
@@ -91,7 +92,7 @@ export function useInsert() {
       }
       // No content script in the active tab (not the site, or a tab opened
       // before an update that couldn't be repaired).
-      return { ok: false, error: noContentScriptMessage(tab, request.notOnSite) };
+      return { ok: false, error: noContentScriptMessage(tab, request.notOnSite, err) };
     } finally {
       running.current = false;
       setInserting(false);

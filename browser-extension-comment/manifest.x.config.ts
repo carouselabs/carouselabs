@@ -7,7 +7,7 @@ import { defineManifest } from "@crxjs/vite-plugin";
 //
 // Versioned on its own: the LinkedIn extension's version lives in
 // package.json.
-export const X_VERSION = "1.0.0";
+export const X_VERSION = "1.0.2";
 
 export default defineManifest(({ mode }) => {
   // localhost only in development builds, as in manifest.config.ts.

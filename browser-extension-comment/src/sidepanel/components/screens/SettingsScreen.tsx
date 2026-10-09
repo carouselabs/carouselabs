@@ -280,15 +280,15 @@ export function SettingsScreen() {
                 )}
               </div>
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Works while the side panel is open. Chrome doesn&apos;t let an extension change its own shortcut, so
-                it&apos;s changed on Chrome&apos;s shortcuts page.
+                Works while the panel is open. Browsers don&apos;t let an extension change its own shortcut, so it&apos;s
+                changed on your browser&apos;s shortcuts page.
               </p>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => chrome.tabs.create({ url: "chrome://extensions/shortcuts" })}
               >
-                Change in Chrome
+                Change shortcut
                 <ExternalLink aria-hidden />
               </Button>
             </div>

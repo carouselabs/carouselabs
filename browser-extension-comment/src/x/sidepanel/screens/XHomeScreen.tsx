@@ -29,7 +29,6 @@ import {
   useExtensionAccess,
 } from "@/lib/extensionAccess";
 import { markHistoryAction } from "@/lib/history";
-import { ensureContentScript } from "@/lib/tabs";
 import { useInsert } from "@/sidepanel/useInsert";
 import { X_INSERT_MESSAGE_TYPE, X_LAST_POST_STORAGE_KEY, type XCapturedPost } from "@/x/lib/xPost";
 import { xLength, X_MAX_LENGTH } from "@/x/lib/xText";
@@ -144,9 +143,8 @@ export function XHomeScreen({ onCreateProfile }: Props) {
       .then((config) => !cancelled && setInsertEnabled(config.insertEnabled))
       .catch(() => {});
 
-    // An X tab left over from before an update has no working content
-    // script; put one in now, before Reply is clicked.
-    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => void ensureContentScript(tab));
+    // An X tab left over from before an update gets a working content script
+    // from App's site check (SiteBlockedNotice's useSiteBlocked).
 
     return () => {
       cancelled = true;

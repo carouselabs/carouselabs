@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ExternalLink, Minus, MousePointerClick, Plus, RotateCcw, Sparkles, Timer, X } from "lucide-react";
-import { ensureContentScript } from "@/lib/tabs";
-import { type ReportFeature } from "@/lib/errorReport";
+import { reportClientError, type ReportFeature } from "@/lib/errorReport";
 import { useInsert } from "../../useInsert";
 import { markHistoryAction } from "@/lib/history";
 import { loadCachedCommentProfiles, saveCachedCommentProfiles } from "@/lib/profileCache";
@@ -67,6 +66,12 @@ const POST_SELECTED_MESSAGE_TYPE = "carouselabs:post-selected";
 
 // Must likewise match LAST_POST_STORAGE_KEY in src/content-script.ts.
 const LAST_POST_STORAGE_KEY = "lastSelectedPost";
+
+// Must match CAPTURE_FAILURE_STORAGE_KEY in src/content-script.ts: a Comment
+// click whose post the content script couldn't find ({ mode, at }).
+const CAPTURE_FAILURE_STORAGE_KEY = "lastCaptureFailure";
+// A failure older than this, found when the panel opens, is old news.
+const CAPTURE_FAILURE_SHOWN_FOR_MS = 10 * 60_000;
 
 // Must match INSERT_MESSAGE_TYPE in src/content-script.ts exactly.
 const INSERT_MESSAGE_TYPE = "carouselabs:insert-comment";
@@ -151,6 +156,9 @@ export function HomeScreen({ onCreateProfile }: Props) {
   // so a NEW post arriving mid-session clears stale comment text rather than
   // leaving it attached to the wrong post.
   const [selectedPost, setSelectedPost] = useState<SelectedPost | null>(null);
+  // When the last Comment click that couldn't be read happened; shown while
+  // no newer post has arrived.
+  const [captureFailedAt, setCaptureFailedAt] = useState<number | null>(null);
   const [extraInstruction, setExtraInstruction] = useState("");
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
@@ -268,7 +276,13 @@ export function HomeScreen({ onCreateProfile }: Props) {
       changes: { [key: string]: chrome.storage.StorageChange },
       areaName: string,
     ) {
-      if (areaName !== "local" || !(LAST_POST_STORAGE_KEY in changes)) return;
+      if (areaName !== "local") return;
+      const failure = changes[CAPTURE_FAILURE_STORAGE_KEY]?.newValue as { at?: unknown } | undefined;
+      if (!cancelled && typeof failure?.at === "number") {
+        setCaptureFailedAt(failure.at);
+        reportClientError("comments", "capture.no_post");
+      }
+      if (!(LAST_POST_STORAGE_KEY in changes)) return;
       const post = changes[LAST_POST_STORAGE_KEY].newValue as SelectedPost | undefined;
       if (post) applyPost(post);
     }
@@ -278,9 +292,13 @@ export function HomeScreen({ onCreateProfile }: Props) {
 
     // Covers the panel being opened (or this screen navigated back to)
     // after the Comment click already happened.
-    chrome.storage.local.get(LAST_POST_STORAGE_KEY).then((stored) => {
+    chrome.storage.local.get([LAST_POST_STORAGE_KEY, CAPTURE_FAILURE_STORAGE_KEY]).then((stored) => {
       const post = stored[LAST_POST_STORAGE_KEY] as SelectedPost | undefined;
       if (post) applyPost(post);
+      const failure = stored[CAPTURE_FAILURE_STORAGE_KEY] as { at?: unknown } | undefined;
+      if (!cancelled && typeof failure?.at === "number" && failure.at > Date.now() - CAPTURE_FAILURE_SHOWN_FOR_MS) {
+        setCaptureFailedAt(failure.at);
+      }
     });
 
     return () => {
@@ -409,10 +427,8 @@ export function HomeScreen({ onCreateProfile }: Props) {
       if (!cancelled) setShowInsertPref(show);
     });
 
-    // A LinkedIn tab left over from before an update has no working content
-    // script, so a Comment click in it would never reach this panel. Put one
-    // in now, before the user clicks.
-    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => void ensureContentScript(tab));
+    // A LinkedIn tab left over from before an update gets a working content
+    // script from App's site check (SiteBlockedNotice's useSiteBlocked).
 
     return () => {
       cancelled = true;
@@ -886,6 +902,14 @@ export function HomeScreen({ onCreateProfile }: Props) {
             <X aria-hidden className="h-3.5 w-3.5" />
           </button>
         </div>
+      )}
+
+      {captureFailedAt !== null && (!selectedPost || captureFailedAt > selectedPost.capturedAt) && (
+        <Alert>
+          Couldn&apos;t read the post you clicked Comment on. Reload the LinkedIn page, then click Comment again. If
+          it keeps happening, LinkedIn has likely changed its layout: let us know.
+          {selectedPost && " Below is the post you picked before."}
+        </Alert>
       )}
 
       {selectedPost ? (

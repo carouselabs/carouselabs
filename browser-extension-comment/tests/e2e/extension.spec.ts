@@ -2,7 +2,7 @@
 // content script injects on (fixture) LinkedIn pages, execCommand insertion
 // actually lands in contenteditable/textarea editors, real CSS/layout decides
 // what is "rendered", and textarea maxlength behaves as it does for users.
-import { expect, test } from "./harness";
+import { BROWSER_CHANNEL, expect, test } from "./harness";
 
 const INSERT = "carouselabs:insert-comment";
 const READ = "carouselabs:read-conversation";
@@ -157,6 +157,8 @@ test("Connection note: a note the person typed is never replaced unless they cho
 // reload. Playwright doesn't re-attach to a restarted service worker, so the
 // extension is reached afterwards through one of its own pages instead.
 test("after an update, a LinkedIn tab that was already open works without a reload", async ({ harness }) => {
+  // Reloads the extension through chrome://extensions, whose page Edge (edge://extensions) builds differently.
+  test.skip(BROWSER_CHANNEL !== "chromium", "drives Chromium's own extensions page");
   const page = await harness.open("/feed/", "feed.html");
   // What an update does to the running extension: it's replaced by a fresh
   // instance, as a developer's Reload on chrome://extensions does (an

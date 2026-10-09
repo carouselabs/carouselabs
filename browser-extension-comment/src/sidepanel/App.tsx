@@ -12,6 +12,7 @@ import { AccountScreen } from "./components/screens/AccountScreen";
 import { Onboarding, ONBOARDING_DONE_STORAGE_KEY } from "./components/Onboarding";
 import { CaptureToast } from "./components/CaptureToast";
 import { ConversationHint } from "./components/ConversationHint";
+import { SiteBlockedNotice, useSiteBlocked } from "./components/SiteBlockedNotice";
 import { useOpenConversation } from "./useOpenConversation";
 import type { Screen } from "./types";
 import type { ProfileKind } from "./components/screens/ProfilesScreen";
@@ -65,6 +66,9 @@ export default function App() {
   const [dismissedHints, setDismissedHints] = useState<string[]>([]);
   // Set by the hint's button: Messages reads the conversation as it opens.
   const [readOnOpen, setReadOnOpen] = useState(false);
+  // The browser blocking extensions on LinkedIn (the person's site setting):
+  // nothing reaches the page until they undo it, so the panel says how.
+  const siteBlocked = useSiteBlocked();
 
   useEffect(() => {
     chrome.storage.local.get("extensionToken").then(({ extensionToken }) => {
@@ -152,6 +156,11 @@ export default function App() {
         {/* Keyed by screen: a switch starts the new screen at the top with a
             short fade, instead of at the old screen's scroll position. */}
         <main key={activeScreen} className="min-w-0 flex-1 animate-fade-in overflow-y-auto">
+          {siteBlocked.blocked && (
+            <div className="px-4 pt-4">
+              <SiteBlockedNotice checking={siteBlocked.checking} onCheck={siteBlocked.check} />
+            </div>
+          )}
           {showHint && (
             <div className="px-4 pt-4">
               <ConversationHint

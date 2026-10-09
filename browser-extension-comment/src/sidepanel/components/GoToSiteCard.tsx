@@ -1,14 +1,18 @@
 import { ExternalLink, MousePointerClick } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SITE_NAME, SITE_ORIGIN } from "@/lib/platform";
+import { servedWindowId } from "../activeTab";
 
-// Switches to the site: the most recently used tab on it in this window, or a
-// new one at `homeUrl` when there is none.
+// Switches to the site: the most recently used tab on it in the browser window
+// the panel works with, or a new one at `homeUrl` when there is none.
 export async function goToSite(homeUrl: string): Promise<void> {
-  const tabs = await chrome.tabs.query({ url: `${SITE_ORIGIN}*`, currentWindow: true });
+  const windowId = await servedWindowId();
+  const tabs = await chrome.tabs.query(
+    windowId === undefined ? { url: `${SITE_ORIGIN}*`, currentWindow: true } : { url: `${SITE_ORIGIN}*`, windowId },
+  );
   const latest = tabs.sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0];
   if (latest?.id !== undefined) await chrome.tabs.update(latest.id, { active: true });
-  else await chrome.tabs.create({ url: homeUrl });
+  else await chrome.tabs.create(windowId === undefined ? { url: homeUrl } : { url: homeUrl, windowId });
 }
 
 // Shown on Home while the active tab is on another site: writing (and

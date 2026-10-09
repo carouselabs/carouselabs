@@ -43,6 +43,27 @@ npx vite build --config vite.x.config.ts --outDir dist-x-store  # the store buil
 
 End-to-end tests for it: `EXT_DIST=dist-x npx playwright test tests/e2e/x*.spec.ts tests/e2e/signIn.spec.ts`.
 
+## Other browsers
+
+The same zips install in every Chromium browser (Chrome, Edge, Brave, Opera,
+Vivaldi, Arc). Where the browser has a side panel (`chrome.sidePanel`) the
+toolbar icon opens it; where it doesn't, the panel opens in a window of its
+own beside the browser window (`src/lib/panelHost.ts`), and the panel works
+with the active tab of the browser window used last
+(`src/sidepanel/activeTab.ts`).
+
+A browser can also block every extension on a site (the Extensions menu's
+"Allow extensions on www.linkedin.com" switch, or a policy). Nothing then
+runs on LinkedIn, though the panel still sees the tab, so the panel checks
+for it (`contentScriptStatus` in `src/lib/tabs.ts`) and says how to allow
+extensions again (`src/sidepanel/components/SiteBlockedNotice.tsx`). Edge
+answers such a page "Blocked"; the e2e harness can start a profile with it
+(`test.use({ blockedSites: [...] })`, Edge only).
+
+Any e2e suite runs in the Edge installed on this machine with
+`EXT_BROWSER=msedge` (any Playwright channel works, e.g. `chrome`), e.g.
+`EXT_BROWSER=msedge EXT_DIST=dist-store npx playwright test`.
+
 ## Structure
 
 - `manifest.config.ts` — MV3 manifest (via `@crxjs/vite-plugin`'s

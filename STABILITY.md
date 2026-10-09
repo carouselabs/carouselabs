@@ -2,15 +2,29 @@
 
 The current state of the website and both extensions: what was checked, what was fixed, how to re-run the checks, how to recover, and what is still unverified. Results from 2026-10-05 and 2026-10-06, on `main` at `9ce9ce0` plus uncommitted changes. Background: [audit report](docs/AUDIT-2026-09-30.md), [main integration](docs/MAIN-INTEGRATION-2026-10-04.md), [dependency notes](docs/audit-dependency-notes.md), and, for Insert and Generate, [the extension's architecture](browser-extension-comment/ARCHITECTURE.md).
 
-**Status: not release-verified.** Every browser result below is a *fixture-browser* result: real Chromium, but on saved copies of LinkedIn and X pages without the sites' own scripts. Nothing has been checked on live LinkedIn or X, and nothing server-side has run on Vercel. See "Live checks still needed".
+**Status (2026-10-06):** the automated browser results below are *fixture-browser* results: real Chromium, on saved copies of LinkedIn and X pages without the sites' own scripts. On top of them, the owner ran the live checks (L1–L7, X1–X3) on real LinkedIn and X and the deployed checks (D1–D3) on Vercel after the push of `90cf851`, and reported all of them passed; those results are the owner's, not recorded by a test. LinkedIn 1.3.0 and X 1.0.0 (earlier builds, without this work's Insert fixes) were approved in the Chrome Web Store the same day; this work ships as LinkedIn **1.3.1** and X **1.0.1**.
+
+## Other browsers (2026-10-09, LinkedIn 1.3.2 / X 1.0.2)
+
+**Report:** both extensions worked only in Chrome; in Edge, clicking Comment did nothing; in Chrome it sometimes did nothing.
+
+**Edge cause (found on the owner's machine):** the Edge profile blocked every extension on `www.linkedin.com` (Extensions menu → "Allow extensions on www.linkedin.com" switched off). Edge then runs no content script there, though the extension keeps its permission and sees the tab; `chrome.scripting.executeScript` answers "Blocked". Not a code fault: the owner's saved Edge feed is the same LinkedIn layout, and Comment works on it in real Edge. The owner switched it back on and confirmed it works.
+
+**Changes**
+- The panel detects a blocked site (`contentScriptStatus` in `src/lib/tabs.ts`) and shows "<Browser> is blocking extensions on LinkedIn/X" with the browser's own steps and Check again (`SiteBlockedNotice.tsx`; the browser named by `src/lib/browserName.ts`, never a wrong name). Insert and Read say the same; reported as `site_blocked`.
+- A Comment click is read with the selectors at hand (server's, last stored, built-in) and never waits for `/api/ext/config` (it waited up to 8 s and lost clicks LinkedIn redrew meanwhile). A button labelled exactly "Comment" counts. An unreadable Comment click shows an alert and reports `capture.no_post`.
+- Browsers without `chrome.sidePanel` (Opera, Vivaldi, Arc) get the panel in a window of its own beside the browser window (`src/lib/panelHost.ts`); the panel then works with the browser window's active tab (`src/sidepanel/activeTab.ts`).
+- Welcome page and Settings wording no longer assume Chrome.
+
+**Checked:** extension unit 829; e2e on `dist-store` / `dist-x-store`: LinkedIn 36/36 Chromium and 36/36 Edge, X 13/13 Chromium and 14/14 Edge (the blocked-site test runs only in Edge; Playwright's Chromium ignores the site setting). Real Google Chrome 154 (loaded over CDP `Extensions.loadUnpacked`): Chrome enforces the block only with its `ExtensionsMenuAccessControl` feature on in that build; with it on, the panel says "Chrome is blocking extensions on LinkedIn" / "on X". **Not yet done:** the owner's live check with 1.3.2 / 1.0.2 in Chrome before upload.
 
 ## What the product is
 
 | Part | Where | Notes |
 | --- | --- | --- |
 | Website and admin | Next.js 16 app (`app/`, `lib/`, `proxy.ts`) on Vercel, Mumbai (`bom1`) | Clerk 7 sign-in; Prisma 5 on Supabase Postgres; Lemon Squeezy billing; Vercel crons. `admin.carouselabs.com` is the same app. |
-| CarouseLabs Engage for LinkedIn | `browser-extension-comment/` | Live in the store: 1.2.1 (non-streamed Generate). This build: 1.3.0. |
-| CarouseLabs Engage for X | the same folder, `vite.x.config.ts` | This build: 1.0.0. |
+| CarouseLabs Engage for LinkedIn | `browser-extension-comment/` | Published: 1.3.1 (seen installed from the store 2026-10-09). This build: 1.3.2. |
+| CarouseLabs Engage for X | the same folder, `vite.x.config.ts` | Published: 1.0.0; 1.0.1 uploaded 2026-10-06. This build: 1.0.2. |
 | Extension API | `app/api/ext/*`, `lib/engage/commentEngine.ts`, `lib/ai/commentModel.ts` | Shared by both extensions and every released version of them. |
 
 ## Issue summary
@@ -127,10 +141,10 @@ Mutation checks: every new rule (insert once, re-finding the post, paste only if
 
 | Folder | Command (in `browser-extension-comment/`) | Manifest version (as Chrome shows it) | API | localhost permission |
 | --- | --- | --- | --- | --- |
-| `dist-store` (LinkedIn, upload this) | `npm run build -- --outDir dist-store` | 1.3.0 | https://carouselabs.com | no |
-| `dist` (LinkedIn, development) | `npm run build:dev` | 1.3.0 dev <build time> UTC | http://localhost:3000 | yes |
-| `dist-x-store` (X, upload this) | `npm run build:x -- --outDir dist-x-store` | 1.0.0 | https://carouselabs.com | no |
-| `dist-x` (X, development) | `npm run build:x:dev` | 1.0.0 dev <build time> UTC | http://localhost:3000 | yes |
+| `dist-store` (LinkedIn, upload this) | `npm run build -- --outDir dist-store` | 1.3.2 | https://carouselabs.com | no |
+| `dist` (LinkedIn, development) | `npm run build:dev` | 1.3.2 dev <build time> UTC | http://localhost:3000 | yes |
+| `dist-x-store` (X, upload this) | `npm run build:x -- --outDir dist-x-store` | 1.0.2 | https://carouselabs.com | no |
+| `dist-x` (X, development) | `npm run build:x:dev` | 1.0.2 dev <build time> UTC | http://localhost:3000 | yes |
 
 Plain `npm run build` writes to `dist`, not `dist-store`: on 2026-10-06 `dist-store` turned out to be an old build for that reason. The check script (fixes present, version, API, localhost) is in the session notes; the same checks by hand: `manifest.json` in each folder, and searching `assets/*.js` for "isn't open in this tab" (LinkedIn), "already has text you wrote" (LinkedIn), "isn't ready to type in" (X), "__carouselabsInserts" (both).
 
@@ -155,18 +169,19 @@ EXT_DIST=dist npx playwright test
 EXT_DIST=dist-store npx playwright test
 EXT_DIST=dist-x npx playwright test tests/e2e/x*.spec.ts tests/e2e/signIn.spec.ts tests/e2e/workerRestart.spec.ts tests/e2e/insertReliability.spec.ts
 EXT_DIST=dist-x-store npx playwright test tests/e2e/x*.spec.ts tests/e2e/signIn.spec.ts tests/e2e/workerRestart.spec.ts tests/e2e/insertReliability.spec.ts
+EXT_BROWSER=msedge EXT_DIST=dist-store npx playwright test   # any suite, in the Edge installed on this machine
 npx playwright show-trace test-results/<failed test>/trace.zip   # a failed e2e keeps its trace
 BENCH_PAIRS_REPS=2 npx vitest run --config vitest.bench.config.ts tests/bench/abLatency.bench.test.ts   # 48 real-model requests, a few cents
 ```
 
-## Live checks still needed
+## Live checks (owner-reported passed, 2026-10-06; repeat for each release)
 
 Done by the owner, signed in, on real LinkedIn and X. **Never click Post, Reply, Send or Connect.**
 
 **Setup**
 1. `chrome://extensions` → switch **off** the Web Store "CarouseLabs Engage" (and "for X", if installed) and any older unpacked copy. Only one LinkedIn copy and one X copy may be on.
 2. Developer mode on → Load unpacked → `C:\Users\anant\carouselabs\browser-extension-comment\dist-store`, then `...\dist-x-store`.
-3. Each card must say version **1.3.0** / **1.0.0**, and Details → "Loaded from" must end in `dist-store` / `dist-x-store`. To confirm the new files: Details → "Inspect views: service worker" → Console: `chrome.runtime.getManifest().web_accessible_resources.flatMap(w => w.resources).find(r => r.includes("content-script"))` must print `assets/content-script.ts-Bz88KASq.js` (LinkedIn) / `assets/content-script.ts-Cmlg07xR.js` (X) for the builds of 2026-10-06 14:11–14:13 UTC (a rebuild prints the new folder's own name: compare with `manifest.json` there).
+3. Each card must say the version being released (now **1.3.2** / **1.0.2**), and Details → "Loaded from" must end in `dist-store` / `dist-x-store`. To confirm the new files: Details → "Inspect views: service worker" → Console: `chrome.runtime.getManifest().web_accessible_resources.flatMap(w => w.resources).find(r => r.includes("content-script"))` must print the content-script file named in that folder's `manifest.json`.
 4. Reload every LinkedIn and X tab. Sign in from each panel (a newly loaded copy is a new extension and needs its own sign-in).
 
 **LinkedIn** (pass = the text appears once, in the right box, stays, and LinkedIn treats it as typed: its Post button turns on, you can keep typing)
@@ -185,7 +200,7 @@ Done by the owner, signed in, on real LinkedIn and X. **Never click Post, Reply,
 
 **Send back**: L1–L7, X1–X3 as pass/fail. For any fail: a screenshot of the panel and of the page box, and the page's console lines starting with `[content-script]` (right-click the page → Inspect → Console).
 
-## Deployed checks still needed (after the website is pushed)
+## Deployed checks (owner-reported passed after the push of `90cf851`)
 
 - D1 The deployment builds with the new `vercel.json` `functions` block (a wrong pattern fails the build; production then stays on the previous deployment).
 - D2 Stop a Generate after the first words: Vercel's log shows `[ext/generate] timing req=… cancelled=1`, and Admin → Engage → AI shows the call as "cancelled". On a free account the free count is unchanged afterwards.
@@ -202,15 +217,15 @@ Done by the owner, signed in, on real LinkedIn and X. **Never click Post, Reply,
 
 **Vercel backend (website and API).** Dashboard → Project → Instant Rollback → choose the previous production deployment → Confirm. Hobby plans can only go back to the immediately previous deployment; Pro to any earlier production deployment. Vercel then stops auto-assigning production, so later pushes won't go live until **Undo Rollback** (or `vercel promote <deployment>`). The rolled-back deployment keeps its own build-time config (its `vercel.json`, crons); environment variables are not changed by a rollback. No database change came with this work, so nothing to undo there; never run the `*-rollback.sql` scripts as routine. To keep the code but drop only cancellation: remove the `functions` block from `vercel.json` and redeploy.
 
-**LinkedIn extension.** Chrome Web Store Developer Dashboard → the item → ⋮ (or Build → Package) → "Roll back to previous version", give a new version number and a reason. It re-publishes the *previous published* version (today 1.2.1) under that new number, within about a minute, without review, and Chrome auto-updates users to it. It discards any pending or staged submission. 1.2.1 works with the new server (above), and the data these builds store is compatible with it.
+**LinkedIn extension.** Chrome Web Store Developer Dashboard → the item → ⋮ (or Build → Package) → "Roll back to previous version", give a new version number and a reason. It re-publishes the *previous published* version under that new number, within about a minute, without review, and Chrome auto-updates users to it. It discards any pending or staged submission. Once 1.3.1 is published, the previous version is 1.3.0 (the earlier streaming build): it works with the new server (it streams, and sends no request id), and the only data 1.3.1 adds (`target` inside `lastSelectedPost`) is ignored by it. Until 1.3.1 is published, there is nothing to roll back from.
 
-**X extension.** Same procedure, but a rollback needs a previously published version. If 1.0.0 is the first one published, there is nothing to roll back to: unpublish the item from the dashboard, or upload a fixed version for review.
+**X extension.** Same procedure. Once 1.0.1 is published, a rollback returns to 1.0.0 (published 2026-10-06), which works with the new server the same way. While 1.0.0 is the only published version, there is nothing earlier: unpublish the item, or upload a fixed version for review.
 
-Uploading: the Web Store needs a version higher than the published one. If 1.3.0 (or X 1.0.0) is already sitting in review, either cancel that submission and upload this build, or raise the version (1.3.1 / 1.0.1) if the dashboard refuses the same number.
+Uploading: the Web Store needs a version higher than the published one, which is why this work is 1.3.1 / 1.0.1 (1.3.0 and 1.0.0 were already published). Zips: `browser-extension-comment/dist-zip/carouselabs-engage-v1.3.1.zip` and `carouselabs-engage-for-x-v1.0.1.zip` (built from `dist-store` / `dist-x-store`: 34/34 and 12/12 fixture e2e passed on them).
 
 ## Release order
 
-1. Run in Supabase any SQL not yet applied: `scripts/x-extension-schema.sql`, `scripts/engage-admin-phase-c.sql` (covers phase B), `scripts/x-billing.sql`. (This work added none.)
-2. Live checks L1–L7, X1–X3 with `dist-store` / `dist-x-store` (they use the live server, which doesn't need the new server code for Insert).
-3. Push `main`; then deployed checks D1–D3.
-4. Upload `dist-store` and `dist-x-store` (zip each folder).
+1. Run in Supabase any SQL not yet applied: `scripts/x-extension-schema.sql`, `scripts/engage-admin-phase-c.sql` (covers phase B), `scripts/x-billing.sql`. (This work added none.) Done 2026-10-06.
+2. Live checks L1–L7, X1–X3 with `dist-store` / `dist-x-store`. Done 2026-10-06 (owner).
+3. Push `main`; then deployed checks D1–D3. Done 2026-10-06 (`90cf851`, owner).
+4. Upload `carouselabs-engage-v1.3.1.zip` and `carouselabs-engage-for-x-v1.0.1.zip`. Uploaded 2026-10-06; in review.

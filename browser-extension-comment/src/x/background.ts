@@ -6,12 +6,12 @@
 import { ensureContentScript } from "@/lib/tabs";
 import { listenForSignIn } from "@/lib/signInReceiver";
 import { markConversationTabs } from "@/lib/conversationBadge";
+import { setUpToolbarPanel } from "@/lib/panelHost";
+
+// The side panel, or a window of its own without one (src/lib/panelHost.ts).
+setUpToolbarPanel("src/x/sidepanel/index.html", "[CarouseLabs Engage for X]");
 
 chrome.runtime.onInstalled.addListener((details) => {
-  chrome.sidePanel
-    .setPanelBehavior({ openPanelOnActionClick: true })
-    .catch((error) => console.error("[CarouseLabs Engage for X] setPanelBehavior failed:", error));
-
   // Only on a genuine first install, not on updates or browser restarts.
   if (details.reason === "install") {
     chrome.tabs.create({ url: chrome.runtime.getURL("welcome-x.html") });

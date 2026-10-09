@@ -77,11 +77,14 @@ afterEach(() => {
 export interface ContentScriptOptions {
   config?: Record<string, unknown>;
   configStatus?: number;
+  // The config route never answers (a stalled connection).
+  configHangs?: boolean;
 }
 
 export async function importContentScript(options: ContentScriptOptions = {}) {
   vi.resetModules();
   const fetchMock = vi.fn(async () => {
+    if (options.configHangs) return new Promise<Response>(() => {});
     const status = options.configStatus ?? 200;
     return new Response(JSON.stringify(options.config ?? {}), { status });
   });

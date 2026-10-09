@@ -131,6 +131,41 @@ export function createChromeMock() {
     }),
     setBadgeBackgroundColor: vi.fn(async () => undefined),
     setBadgeTextColor: vi.fn(async () => undefined),
+    onClicked: createEvent<(tab: chrome.tabs.Tab) => void>(),
+  };
+
+  // Browser windows: one normal window (id 1) unless a test adds more.
+  // create() opens a new one and returns it.
+  const windowList = new Map<number, chrome.windows.Window>([
+    [1, { id: 1, type: "normal", state: "normal", left: 0, top: 0, width: 1400, height: 900, focused: true, alwaysOnTop: false, incognito: false }],
+  ]);
+  let nextWindowId = 100;
+  const windows = {
+    WINDOW_ID_NONE: -1,
+    get: vi.fn(async (id: number) => {
+      const win = windowList.get(id);
+      if (!win) throw new Error(`No window with id: ${id}.`);
+      return { ...win };
+    }),
+    getLastFocused: vi.fn(async () => ({ ...windowList.get(1)! })),
+    create: vi.fn(async (props: chrome.windows.CreateData) => {
+      const id = nextWindowId++;
+      const win = { id, type: props.type ?? "normal", state: "normal", left: props.left, top: props.top, width: props.width, height: props.height, focused: true, alwaysOnTop: false, incognito: false } as chrome.windows.Window;
+      windowList.set(id, win);
+      return { ...win };
+    }),
+    update: vi.fn(async (id: number, info: chrome.windows.UpdateInfo) => {
+      const win = windowList.get(id);
+      if (!win) throw new Error(`No window with id: ${id}.`);
+      Object.assign(win, info);
+      return { ...win };
+    }),
+    remove: vi.fn(async (id: number) => {
+      windowList.delete(id);
+      for (const fn of [...windows.onRemoved.listeners]) fn(id);
+    }),
+    onRemoved: createEvent<(windowId: number) => void>(),
+    onFocusChanged: createEvent<(windowId: number) => void>(),
   };
 
   const commands = {
@@ -138,7 +173,10 @@ export function createChromeMock() {
     getAll: vi.fn(async () => [{ name: "generate-comment", shortcut: "Alt+Shift+G" }]),
   };
 
-  const sidePanel = { setPanelBehavior: vi.fn(async () => undefined) };
+  const sidePanel = {
+    setPanelBehavior: vi.fn(async () => undefined),
+    open: vi.fn(async () => undefined),
+  };
 
   const scripting = { executeScript: vi.fn(async () => [] as unknown[]) };
 
@@ -150,6 +188,7 @@ export function createChromeMock() {
     sidePanel,
     scripting,
     action,
+    windows,
     // Test-only handles, never present on the real chrome object.
     __store: store,
     __sentMessages: sentMessages,

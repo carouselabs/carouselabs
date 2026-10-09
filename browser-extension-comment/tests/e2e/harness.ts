@@ -12,6 +12,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 // EXT_DIST=dist-store runs the same suite against the Chrome Web Store build
 // (`npx vite build --outDir dist-store`), the exact files that get uploaded.
 const DIST = path.resolve(ROOT, process.env.EXT_DIST ?? "dist");
+// EXT_BROWSER=msedge runs the suite in the Microsoft Edge installed on this
+// machine (also "chrome", "chrome-beta", ...: any Playwright channel).
+// Default: Playwright's own Chromium.
+export const BROWSER_CHANNEL = process.env.EXT_BROWSER ?? "chromium";
 const FIXTURES = path.join(ROOT, "tests/fixtures/linkedin");
 // Cleaned copies of real x.com pages, for the X extension (EXT_DIST=dist-x).
 const X_FIXTURES = path.join(ROOT, "tests/fixtures/x");
@@ -52,17 +56,34 @@ export interface Harness {
   storage(): Promise<Record<string, unknown>>;
 }
 
-export const test = base.extend<{ harness: Harness }>({
-  // eslint-disable-next-line no-empty-pattern
-  harness: async ({}, runFixture, testInfo) => {
+export const test = base.extend<{ harness: Harness; blockedSites: string[] }>({
+  // Sites where the browser profile blocks every extension, as the
+  // Extensions menu's "Allow extensions on <site>" switch turned off leaves
+  // it (`test.use({ blockedSites: ["https://www.linkedin.com"] })`). Edge
+  // honours it; Playwright's Chromium ignores it.
+  blockedSites: [[], { option: true }],
+  harness: async ({ blockedSites }, runFixture, testInfo) => {
     if (!fs.existsSync(path.join(DIST, "manifest.json"))) {
       throw new Error("dist/ is missing — run `npm run build:dev` first (npm run test:e2e does this).");
     }
     const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), "cl-e2e-"));
+    if (blockedSites.length > 0) {
+      fs.mkdirSync(path.join(profileDir, "Default"));
+      fs.writeFileSync(
+        path.join(profileDir, "Default", "Preferences"),
+        JSON.stringify({ extensions: { user_permissions: { restricted_sites: blockedSites } } }),
+      );
+    }
     const context = await chromium.launchPersistentContext(profileDir, {
-      channel: "chromium",
+      channel: BROWSER_CHANNEL,
       headless: true,
-      args: [`--disable-extensions-except=${DIST}`, `--load-extension=${DIST}`],
+      args: [
+        `--disable-extensions-except=${DIST}`,
+        `--load-extension=${DIST}`,
+        // Branded browsers (Edge, Chrome) ignore --load-extension unless this
+        // is switched off.
+        ...(BROWSER_CHANNEL === "chromium" ? [] : ["--disable-features=DisableLoadExtensionCommandLineSwitch"]),
+      ],
     });
 
     await context.tracing.start({ snapshots: true, screenshots: true });

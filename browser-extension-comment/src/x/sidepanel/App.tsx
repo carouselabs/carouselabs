@@ -7,6 +7,7 @@ import { AccountScreen } from "@/sidepanel/components/screens/AccountScreen";
 import { MessagesScreen } from "@/sidepanel/components/screens/MessagesScreen";
 import { HistoryScreen } from "@/sidepanel/components/screens/HistoryScreen";
 import { ConversationHint } from "@/sidepanel/components/ConversationHint";
+import { SiteBlockedNotice, useSiteBlocked } from "@/sidepanel/components/SiteBlockedNotice";
 import { useOpenConversation } from "@/sidepanel/useOpenConversation";
 import type { Screen } from "@/sidepanel/types";
 import { XHomeScreen } from "./screens/XHomeScreen";
@@ -57,6 +58,8 @@ export default function App() {
   // An X chat open in the tab beside the panel, so the panel can point to
   // Messages (src/sidepanel/useOpenConversation.ts).
   const openConversation = useOpenConversation();
+  // The browser blocking extensions on X (see the LinkedIn App).
+  const siteBlocked = useSiteBlocked();
   const [dismissedHints, setDismissedHints] = useState<string[]>([]);
   const [readOnOpen, setReadOnOpen] = useState(false);
   // "+ Create custom profile" on Home or Messages: Profiles opens straight
@@ -111,6 +114,11 @@ export default function App() {
       <Header />
       <div className="flex min-h-0 flex-1">
         <main key={activeScreen} className="min-w-0 flex-1 animate-fade-in overflow-y-auto">
+          {siteBlocked.blocked && (
+            <div className="px-4 pt-4">
+              <SiteBlockedNotice checking={siteBlocked.checking} onCheck={siteBlocked.check} />
+            </div>
+          )}
           {showHint && (
             <div className="px-4 pt-4">
               <ConversationHint

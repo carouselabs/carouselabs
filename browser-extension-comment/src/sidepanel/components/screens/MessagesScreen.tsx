@@ -36,6 +36,7 @@ import { MESSAGES_SITE as SITE } from "@/sidepanel/messagesSite";
 import { markHistoryAction } from "@/lib/history";
 // Kept on the account, so the website's Extension section edits the same values.
 import { loadShowInsert, loadSyncedMessageContext, saveSyncedMessageContext } from "@/lib/syncedSettings";
+import { activeTab } from "../../activeTab";
 import {
   apiFetch,
   ApiError,
@@ -213,7 +214,7 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
     setGenerateError(null);
     let tab: chrome.tabs.Tab | undefined;
     try {
-      [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      tab = await activeTab();
       if (tab?.id === undefined) throw new Error("no active tab");
       const res = await sendToTab<{ ok: boolean; conversation?: unknown; error?: string } | undefined>(tab, SITE.readMessage);
       const read = res?.ok ? SITE.toConversation(res.conversation) : null;
@@ -248,7 +249,7 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
       }
     } catch (err) {
       if (isSiteTab(tab)) reportClientError(SITE.reportFeature, tabFailureCode(err));
-      setReadError(noContentScriptMessage(tab, SITE.words.openInTab));
+      setReadError(noContentScriptMessage(tab, SITE.words.openInTab, err));
     } finally {
       setReading(false);
     }

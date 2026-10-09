@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { byFixture, click, importContentScript, loadFixture, sendToContentScript, SERVER_CONFIG, storedPost } from "./helpers";
+import { chromeMock } from "../setup/chrome";
 
 const INSERT = "carouselabs:insert-comment";
 
@@ -216,5 +217,73 @@ describe("messages the content script does not own", () => {
     await feed();
     expect(await sendToContentScript({ type: "something-else" })).toBeUndefined();
     expect(await sendToContentScript({ type: INSERT, text: 42 })).toBeUndefined();
+  });
+});
+
+// A Comment click is read with the selectors at hand. Waiting for the config
+// route made Comment seem to do nothing on a slow connection, and lost the
+// click when LinkedIn redrew the button meanwhile.
+describe("a Comment click never waits for the network", () => {
+  it("is captured at once while the config route hasn't answered", async () => {
+    loadFixture("feed.html", "/feed/");
+    await importContentScript({ configHangs: true });
+    await click(commentButton("post-1"));
+    expect(await storedPost()).toMatchObject({ mode: "comment", authorName: "Jane Doe" });
+  });
+
+  it("uses the selectors the last page got from the server until this page's arrive", async () => {
+    loadFixture("feed.html", "/feed/");
+    const button = commentButton("post-1");
+    button.removeAttribute("aria-label");
+    button.textContent = "Discuss"; // matches no built-in rule
+    button.classList.add("feed-comment-action");
+    chromeMock().__store.contentScriptConfig = { ...SERVER_CONFIG, commentButtonSelector: "button.feed-comment-action" };
+    await importContentScript({ configHangs: true });
+    await click(button);
+    expect(await storedPost()).toMatchObject({ mode: "comment", authorName: "Jane Doe" });
+  });
+
+  it("keeps what the server sent for next time, and fills in a key it left out", async () => {
+    const { commentButtonSelector: _left, ...partial } = SERVER_CONFIG;
+    await feed(partial);
+    expect(chromeMock().__store.contentScriptConfig).toMatchObject({
+      postContainerSelector: SERVER_CONFIG.postContainerSelector,
+      commentButtonSelector: expect.stringContaining("button[aria-label^='Comment']"),
+    });
+    await click(commentButton("post-2"));
+    expect(await storedPost()).toMatchObject({ authorName: "Acme Corp" });
+  });
+});
+
+describe("telling a Comment button apart", () => {
+  it("counts a button that says just “Comment” even without the expected label", async () => {
+    loadFixture("feed.html", "/feed/");
+    const button = commentButton("post-1");
+    button.removeAttribute("aria-label");
+    await importContentScript({ config: SERVER_CONFIG });
+    await click(button);
+    expect(await storedPost()).toMatchObject({ mode: "comment", authorName: "Jane Doe" });
+  });
+
+  it("never takes the comment box's own “Comment” (post) button for one", async () => {
+    await feed();
+    const form = document.createElement("form");
+    form.innerHTML = '<button type="submit">Comment</button>';
+    byFixture("post-2").append(form);
+    await click(form.querySelector("button")!);
+    expect(await storedPost()).toBeUndefined();
+  });
+});
+
+describe("a Comment click whose post can't be found", () => {
+  it("is recorded for the panel (when, and nothing from the page) instead of being dropped silently", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    await feed();
+    const stray = document.createElement("button");
+    stray.setAttribute("aria-label", "Comment");
+    document.querySelector("main")!.append(stray); // outside every post card, on a page of several
+    await click(stray);
+    expect(await storedPost()).toBeUndefined();
+    expect(chromeMock().__store.lastCaptureFailure).toEqual({ mode: "comment", at: expect.any(Number) });
   });
 });

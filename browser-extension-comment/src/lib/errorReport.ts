@@ -9,7 +9,7 @@
 // classified here and never sent. The same failure isn't reported twice
 // within a minute.
 import { apiFetch } from "@/lib/api";
-import { TabTimeout } from "@/lib/tabs";
+import { SiteBlocked, TabTimeout } from "@/lib/tabs";
 
 export type ReportFeature = "comments" | "replies" | "connection_notes" | "messages" | "x_replies" | "x_messages";
 
@@ -24,7 +24,9 @@ const DESCRIPTIONS = {
   "read.no_conversation": "Couldn't find an open conversation on the Messaging page.",
   "read.hidden_thread": "The conversation was hidden (narrow LinkedIn window).",
   "read.failed": "Couldn't read the conversation on the page.",
+  "capture.no_post": "A Comment click matched no post card (LinkedIn's layout may have changed).",
   tab_unreachable: "Couldn't reach the LinkedIn tab (opened before an update, or still loading).",
+  site_blocked: "The browser blocks extensions on the site (the person's site setting or a policy).",
   tab_timeout: "The LinkedIn tab didn't answer within 12s.",
 } as const;
 
@@ -56,6 +58,7 @@ export function readFailureCode(error: string | undefined): ReportCode | null {
 // A message to the LinkedIn tab that failed: no answer in time, or no
 // content script there to answer.
 export function tabFailureCode(err: unknown): ReportCode {
+  if (err instanceof SiteBlocked) return "site_blocked";
   return err instanceof TabTimeout ? "tab_timeout" : "tab_unreachable";
 }
 

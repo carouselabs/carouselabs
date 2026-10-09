@@ -11,7 +11,8 @@
 // ensureContentScript). A fresh copy replaces any older one in the tab (see
 // the takeover at the bottom of src/content-script.ts).
 
-import { PLATFORM, SITE_ORIGIN } from "@/lib/platform";
+import { PLATFORM, SITE_NAME, SITE_ORIGIN } from "@/lib/platform";
+import { browserName, extensionsIconLooks } from "@/lib/browserName";
 
 // Must match the ping handler in src/content-script.ts (and src/x/content-script.ts).
 export const PING_MESSAGE_TYPE = "carouselabs:ping";
@@ -143,12 +144,36 @@ async function answersPing(tabId: number): Promise<boolean> {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Injects the content script into a tab and waits until it answers. The
-// manifest's file is a loader that imports the real script asynchronously,
-// so executeScript returning doesn't yet mean anything is listening. False
-// when it can't be done: a discarded tab, a page still being replaced, or no
-// permission for it.
-export async function injectContentScript(tabId: number, waitMs = 3000): Promise<boolean> {
+// What became of making sure a tab has a working content script:
+// - "ready": it answers;
+// - "blocked": the browser refuses to run any extension on the site although
+//   this one has the site's permission: the person switched extensions off
+//   for the site (the Extensions menu's "Allow extensions on …"), or an
+//   administrator's policy did. Nothing works there until that's undone, so
+//   the panel says how (src/sidepanel/components/SiteBlockedNotice.tsx);
+// - "failed": anything else (a page still loading or being replaced, an
+//   error page), which a reload usually fixes;
+// - "skipped": not a site tab, or a discarded one (it gets the script when
+//   it's next opened).
+export type ContentScriptStatus = "ready" | "blocked" | "failed" | "skipped";
+
+// Edge answers "Blocked"; a policy block names the policy; Chrome refuses
+// with "Cannot access contents of …" (the extension holds the permission, so
+// that too is the browser's block, not a missing permission).
+function isBlockedError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /\bblocked\b|cannot be scripted|policy|cannot access contents/i.test(message);
+}
+
+// The site blocks extensions (see ContentScriptStatus).
+export class SiteBlocked extends Error {
+  constructor() {
+    super("The browser blocks extensions on this site");
+    this.name = "SiteBlocked";
+  }
+}
+
+async function injectContentScriptStatus(tabId: number, waitMs: number): Promise<ContentScriptStatus> {
   const modulePath = siteContentScriptModule();
   const files = siteContentScriptFiles();
   try {
@@ -161,47 +186,77 @@ export async function injectContentScript(tabId: number, waitMs = 3000): Promise
       // A build without a loader: the manifest's files are the script itself.
       await chrome.scripting.executeScript({ target: { tabId }, files });
     } else {
-      return false;
+      return "failed";
     }
-  } catch {
-    return false;
+  } catch (err) {
+    return isBlockedError(err) ? "blocked" : "failed";
   }
   // At most waitMs by the clock (a ping can itself take up to
   // PING_TIMEOUT_MS), and never more tries than one per 100ms of it.
   const until = Date.now() + waitMs;
   for (let tries = 0; tries <= waitMs / 100 && Date.now() <= until; tries += 1) {
-    if (await answersPing(tabId)) return true;
+    if (await answersPing(tabId)) return "ready";
     await sleep(100);
   }
-  return false;
+  return "failed";
+}
+
+// Injects the content script into a tab and waits until it answers. The
+// manifest's file is a loader that imports the real script asynchronously,
+// so executeScript returning doesn't yet mean anything is listening. False
+// when it can't be done: a discarded tab, a page still being replaced, no
+// permission for it, or a site where the browser blocks extensions.
+export async function injectContentScript(tabId: number, waitMs = 3000): Promise<boolean> {
+  return (await injectContentScriptStatus(tabId, waitMs)) === "ready";
+}
+
+// Makes sure a site tab has a working content script, putting one in if it
+// has none, and says how that went (see ContentScriptStatus).
+export async function contentScriptStatus(tab: chrome.tabs.Tab | undefined): Promise<ContentScriptStatus> {
+  if (tab?.id === undefined || !isSiteTab(tab) || tab.discarded) return "skipped";
+  if (await answersPing(tab.id)) return "ready";
+  return injectContentScriptStatus(tab.id, 3000);
 }
 
 // Makes sure a LinkedIn tab has a working content script, so a Comment click
 // in it reaches the panel. Nothing happens for other tabs.
 export async function ensureContentScript(tab: chrome.tabs.Tab | undefined): Promise<boolean> {
-  if (tab?.id === undefined || !isSiteTab(tab) || tab.discarded) return false;
-  if (await answersPing(tab.id)) return true;
-  return injectContentScript(tab.id);
+  return (await contentScriptStatus(tab)) === "ready";
 }
 
 // chrome.tabs.sendMessage to a LinkedIn tab that may have no content script:
 // when nothing answers, injects one and sends again. Throws what
-// chrome.tabs.sendMessage threw if the tab still can't be reached.
+// chrome.tabs.sendMessage threw if the tab still can't be reached, or
+// SiteBlocked when the browser blocks extensions on the site.
 export async function sendToTab<T>(tab: chrome.tabs.Tab, message: unknown): Promise<T> {
   if (tab.id === undefined) throw new Error("No tab to send to");
   try {
     return (await answerWithin(chrome.tabs.sendMessage(tab.id, message), TAB_ANSWER_TIMEOUT_MS)) as T;
   } catch (err) {
-    if (err instanceof TabTimeout || !isSiteTab(tab) || !(await injectContentScript(tab.id))) throw err;
+    if (err instanceof TabTimeout || !isSiteTab(tab)) throw err;
+    const status = await injectContentScriptStatus(tab.id, 3000);
+    if (status === "blocked") throw new SiteBlocked();
+    if (status !== "ready") throw err;
     return (await answerWithin(chrome.tabs.sendMessage(tab.id, message), TAB_ANSWER_TIMEOUT_MS)) as T;
   }
 }
 
+// The host the browser's site setting names ("www.linkedin.com", "x.com").
+export const SITE_HOST = new URL(SITE_ORIGIN).host;
+
+// How to undo a site block, naming the browser, in the words of its own
+// Extensions menu (the same in Chrome and Edge).
+export function siteBlockedMessage(): string {
+  const browser = browserName();
+  return `${browser} is blocking extensions on ${SITE_NAME}. Click the Extensions icon (${extensionsIconLooks(browser)}) next to the address bar, turn on “Allow extensions on ${SITE_HOST}”, then reload the page.`;
+}
+
 // What to tell the user when a tab still can't be reached. On LinkedIn that
-// now means even injecting failed, which a reload fixes; anywhere else they
-// need to be on LinkedIn first.
-export function noContentScriptMessage(tab: chrome.tabs.Tab | undefined, notOnLinkedIn: string): string {
+// now means even injecting failed, which a reload fixes, unless the browser
+// blocks extensions there; anywhere else they need to be on LinkedIn first.
+export function noContentScriptMessage(tab: chrome.tabs.Tab | undefined, notOnLinkedIn: string, err?: unknown): string {
+  if (err instanceof SiteBlocked) return siteBlockedMessage();
   return isSiteTab(tab)
-    ? "Couldn't reach this LinkedIn tab. Reload the page, then try again."
+    ? `Couldn't reach this ${SITE_NAME} tab. Reload the page, then try again.`
     : notOnLinkedIn;
 }

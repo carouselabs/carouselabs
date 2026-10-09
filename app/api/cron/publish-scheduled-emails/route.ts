@@ -16,10 +16,8 @@
 import { NextResponse } from "next/server"
 import { Resend } from "resend"
 import { db } from "@/lib/db"
-import { resolveRecipients, renderBroadcastEmailHtml, type BroadcastRecipients } from "@/lib/broadcast"
-import { applyVariables } from "@/lib/broadcastRender"
-import { resolveVariables } from "@/lib/broadcastVariables"
-import { sendInternBroadcastEmail } from "@/lib/email"
+import { resolveRecipients, sendUserBroadcast, type BroadcastRecipients } from "@/lib/broadcast"
+import { sendInternBroadcastEmails } from "@/lib/email"
 
 export const maxDuration = 300
 
@@ -34,17 +32,11 @@ const BATCH_LIMIT = 20
 // same value and role as publish-scheduled-posts' STUCK_PUBLISHING_MS.
 const STUCK_SENDING_MS = 10 * 60 * 1000
 
-async function safeSend(fn: () => Promise<unknown>): Promise<boolean> {
-  try {
-    await fn()
-    return true
-  } catch (err) {
-    console.error("[cron/publish-scheduled-emails] send failed:", err)
-    return false
-  }
-}
-
-async function sendUserBroadcast(
+// Both kinds go out in batches of 100 (lib/emailBatchSend.ts). The scheduled
+// email's id keys each batch, so a run that's retried after a crash (the
+// stuck-row reclaim above) never sends a batch Resend already took.
+async function sendScheduledUserBroadcast(
+  id: string,
   subject: string,
   body: string,
   recipientType: string,
@@ -58,29 +50,13 @@ async function sendUserBroadcast(
     recipientType === "custom"
       ? await resolveRecipients(recipientIds)
       : await resolveRecipients(recipientType as BroadcastRecipients, recipientValue)
-
-  let sent = 0
-  let failed = 0
-  for (const r of recipients) {
-    const ok = await safeSend(async () => {
-      const variables = r.userId ? await resolveVariables(r.userId) : null
-      const finalSubject = variables ? applyVariables(subject, variables) : subject
-      const finalBody = variables ? applyVariables(body, variables) : body
-      const { error } = await resend.emails.send({
-        from: FROM,
-        to: r.email,
-        subject: finalSubject,
-        html: renderBroadcastEmailHtml(finalSubject, finalBody),
-      })
-      if (error) throw new Error(error.message)
-    })
-    if (ok) sent++
-    else failed++
-  }
+  const { sent, failed, error } = await sendUserBroadcast(resend, FROM, recipients, subject, body, `scheduled-${id}`)
+  if (error) console.error(`[cron/publish-scheduled-emails] id=${id}: ${failed} not sent: ${error}`)
   return { sent, failed }
 }
 
-async function sendInternBroadcastBatch(
+async function sendScheduledInternBroadcast(
+  id: string,
   subject: string,
   body: string,
   recipientType: string,
@@ -93,14 +69,8 @@ async function sendInternBroadcastBatch(
           where: { id: { in: recipientIds } },
           select: { id: true, name: true, email: true },
         })
-
-  let sent = 0
-  let failed = 0
-  for (const intern of interns) {
-    const ok = await safeSend(() => sendInternBroadcastEmail(intern.email, intern.name, subject, body))
-    if (ok) sent++
-    else failed++
-  }
+  const { sent, failed, error } = await sendInternBroadcastEmails(interns, subject, body, `scheduled-${id}`)
+  if (error) console.error(`[cron/publish-scheduled-emails] id=${id}: ${failed} not sent: ${error}`)
   return { sent, failed }
 }
 
@@ -145,13 +115,15 @@ export async function GET(req: Request) {
     try {
       const { sent, failed } =
         scheduled.type === "intern_broadcast"
-          ? await sendInternBroadcastBatch(
+          ? await sendScheduledInternBroadcast(
+              scheduled.id,
               scheduled.subject,
               scheduled.body,
               scheduled.recipientType,
               scheduled.recipientIds,
             )
-          : await sendUserBroadcast(
+          : await sendScheduledUserBroadcast(
+              scheduled.id,
               scheduled.subject,
               scheduled.body,
               scheduled.recipientType,

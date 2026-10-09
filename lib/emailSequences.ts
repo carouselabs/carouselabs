@@ -8,6 +8,7 @@
 import { db } from "@/lib/db"
 import type { Plan } from "@prisma/client"
 import { availableCredits } from "@/lib/credits"
+import { ENGAGE_SEGMENTS, usesEngageWhere } from "@/lib/engage/audience"
 
 const DEFAULT_INACTIVE_DAYS = 30
 const DEFAULT_CREDIT_THRESHOLD = 100
@@ -48,6 +49,11 @@ export async function matchesSegment(
   if (segmentType === "no_content") {
     const count = await db.post.count({ where: { userId: user.id } })
     return count === 0
+  }
+
+  const engagePlatform = ENGAGE_SEGMENTS[segmentType]
+  if (engagePlatform) {
+    return (await db.user.count({ where: { id: user.id, ...usesEngageWhere(engagePlatform) } })) > 0
   }
 
   if (segmentType === "low_credits") {

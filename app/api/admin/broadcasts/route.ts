@@ -14,7 +14,8 @@ import { Resend } from "resend"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
 import { logAdminAction, getRequestIp } from "@/lib/auditLog"
-import { resolveRecipients, renderBroadcastEmailHtml, type BroadcastRecipients } from "@/lib/broadcast"
+import { randomUUID } from "node:crypto"
+import { resolveRecipients, renderBroadcastEmailHtml, sendUserBroadcast, type BroadcastRecipients } from "@/lib/broadcast"
 import { applyVariables } from "@/lib/broadcastRender"
 import { resolveVariables } from "@/lib/broadcastVariables"
 import { SEGMENT_TYPES } from "@/lib/segments"
@@ -30,7 +31,10 @@ const ratelimit = new Ratelimit({
   analytics: false,
 })
 
-const MAX_RECIPIENTS = 5000
+// A whole broadcast is sent within this request: at 100 emails per batch
+// request, paced, 10,000 takes about two minutes, well inside maxDuration.
+export const maxDuration = 300
+const MAX_RECIPIENTS = 10_000
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const VALID_SEGMENTS = new Set<string>(SEGMENT_TYPES.map((s) => s.value))
 
@@ -115,32 +119,24 @@ export async function POST(req: Request) {
     )
   }
 
-  // Personalized per-recipient: a userId-less custom-list address (no
-  // matching User row) gets the raw template — applyVariables leaves
-  // unresolved {{key}} placeholders as literal text rather than blanking them.
-  const results = await Promise.allSettled(
-    recipientRows.map(async (r) => {
-      const variables = r.userId ? await resolveVariables(r.userId) : null
-      const finalSubject = variables ? applyVariables(subject, variables) : subject
-      const finalBody = variables ? applyVariables(body, variables) : body
-      const { error } = await resend.emails.send({
-        from: FROM,
-        to: r.email,
-        subject: finalSubject,
-        html: renderBroadcastEmailHtml(finalSubject, finalBody),
-      })
-      if (error) throw new Error(error.message)
-    }),
+  // Personalized per recipient, sent in batches of 100 (lib/broadcast.ts).
+  // Firing one request per recipient all at once is what capped broadcasts
+  // at about ten: Resend refuses requests past its per-second limit.
+  const { sent, failed, error } = await sendUserBroadcast(
+    resend,
+    FROM,
+    recipientRows,
+    subject,
+    body,
+    `broadcast-${randomUUID()}`,
   )
-  const sent = results.filter((r) => r.status === "fulfilled").length
-  const failed = results.length - sent
 
   await logAdminAction({
     adminEmail: admin.email,
     action: "SEND_BROADCAST",
-    details: `"${subject}" → ${typeof recipients === "string" ? recipients : `${recipientRows.length} custom emails`} (${sent} sent, ${failed} failed)`,
+    details: `"${subject}" → ${typeof recipients === "string" ? recipients : `${recipientRows.length} custom emails`} (${sent} sent, ${failed} failed)${error ? ` — ${error}` : ""}`,
     ipAddress: getRequestIp(req),
   })
 
-  return NextResponse.json({ ok: true, sent, failed, total: recipientRows.length })
+  return NextResponse.json({ ok: true, sent, failed, total: recipientRows.length, ...(error ? { error } : {}) })
 }

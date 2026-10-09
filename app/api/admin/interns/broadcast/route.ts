@@ -10,7 +10,8 @@ import { Redis } from "@upstash/redis"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
 import { logAdminAction, getRequestIp } from "@/lib/auditLog"
-import { sendInternBroadcastEmail } from "@/lib/email"
+import { randomUUID } from "node:crypto"
+import { sendInternBroadcastEmail, sendInternBroadcastEmails } from "@/lib/email"
 
 // Per-admin limit (unlike the general user broadcast's single global key) —
 // each admin gets their own 5-per-hour budget against accidental spam.
@@ -96,22 +97,18 @@ export async function POST(req: Request) {
     )
   }
 
-  let sent = 0
-  const failedEmails: string[] = []
-  for (const intern of interns) {
-    const ok = await safeEmail(() => sendInternBroadcastEmail(intern.email, intern.name, subject, body))
-    if (ok) sent++
-    else failedEmails.push(intern.email)
-  }
+  // In batches of 100, paced to Resend's rate limit (lib/emailBatchSend.ts).
+  const result = await sendInternBroadcastEmails(interns, subject, body, `intern-broadcast-${randomUUID()}`)
+  const { sent, failed, failedTo: failedEmails, error } = result
 
   await logAdminAction({
     adminEmail: admin.email,
     action: "BROADCAST_INTERN_EMAIL",
     details: `"${subject}" → ${
       recipientType === "all" ? "all active interns" : `${interns.length} selected interns`
-    } (${sent} sent, ${failedEmails.length} failed)`,
+    } (${sent} sent, ${failed} failed)${error ? ` — ${error}` : ""}`,
     ipAddress: getRequestIp(req),
   })
 
-  return NextResponse.json({ sent, failed: failedEmails.length, failedEmails })
+  return NextResponse.json({ sent, failed, failedEmails, ...(error ? { error } : {}) })
 }

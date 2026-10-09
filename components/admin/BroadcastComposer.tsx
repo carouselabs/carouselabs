@@ -232,11 +232,12 @@ export function BroadcastComposer() {
       const res = await (sendMode === "now" ? sendRequest({}) : scheduleRequest({}))
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error)
+      // Some not sent: say why (Resend's reason, e.g. its daily quota).
       toast(
         sendMode === "now"
-          ? `Broadcast sent — ${data.sent} delivered, ${data.failed} failed`
+          ? `Broadcast sent — ${data.sent} delivered, ${data.failed} failed${data.failed && data.error ? ` (${data.error})` : ""}`
           : `Scheduled for ${new Date(scheduledFor).toLocaleString()}`,
-        "success",
+        sendMode === "now" && data.failed ? "error" : "success",
       )
       setConfirmCount(null)
       setSubject("")

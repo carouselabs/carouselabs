@@ -1,6 +1,7 @@
 // lib/email.ts
 import { Resend } from "resend"
 import { render } from "@react-email/render"
+import { sendInBatches, type BatchSendResult } from "@/lib/emailBatchSend"
 import { db } from "@/lib/db"
 import { WelcomeEmail } from "@/emails/WelcomeEmail"
 import { OnboardingCompleteEmail } from "@/emails/OnboardingCompleteEmail"
@@ -334,6 +335,31 @@ export async function sendInternBroadcastEmail(
     html: await render(InternBroadcastEmail({ name, subject, body })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
+}
+
+// The same to many interns, through Resend's batch endpoint (100 per
+// request, paced: lib/emailBatchSend.ts), for intern broadcasts sent now or
+// scheduled. idempotencyPrefix: a retried run never emails a batch twice.
+export async function sendInternBroadcastEmails(
+  interns: { email: string; name: string }[],
+  subject: string,
+  body: string,
+  idempotencyPrefix: string,
+): Promise<BatchSendResult> {
+  return sendInBatches(
+    resend,
+    FROM,
+    interns,
+    async (batch) =>
+      Promise.all(
+        batch.map(async (intern) => ({
+          to: intern.email,
+          subject,
+          html: await render(InternBroadcastEmail({ name: intern.name, subject, body })),
+        })),
+      ),
+    { idempotencyPrefix },
+  )
 }
 
 // Notifies ADMIN_EMAIL when an intern sends a new Support message.

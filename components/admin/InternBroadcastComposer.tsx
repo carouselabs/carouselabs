@@ -154,9 +154,9 @@ export function InternBroadcastComposer() {
       if (!res.ok) throw new Error(data.error)
       toast(
         sendMode === "now"
-          ? `Sent to ${data.sent} intern${data.sent === 1 ? "" : "s"}${data.failed ? ` — ${data.failed} failed` : ""}`
+          ? `Sent to ${data.sent} intern${data.sent === 1 ? "" : "s"}${data.failed ? ` — ${data.failed} failed${data.error ? ` (${data.error})` : ""}` : ""}`
           : `Scheduled for ${new Date(scheduledFor).toLocaleString()}`,
-        "success",
+        sendMode === "now" && data.failed ? "error" : "success",
       )
       setConfirmOpen(false)
       setSubject("")

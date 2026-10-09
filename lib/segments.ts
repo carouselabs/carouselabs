@@ -29,6 +29,9 @@ export const SEGMENT_TYPES = [
     valueLabel: "Credit threshold",
     valuePlaceholder: "100",
   },
+  // Signed in to that extension or generated with it (lib/engage/audience.ts).
+  { value: "engage_linkedin", label: "CarouseLabs Engage for LinkedIn users", needsValue: false },
+  { value: "engage_x", label: "CarouseLabs Engage for X users", needsValue: false },
 ] as const
 
 export type SegmentType = (typeof SEGMENT_TYPES)[number]["value"]

@@ -19,7 +19,8 @@ import { resolveRecipients, type BroadcastRecipients } from "@/lib/broadcast"
 import { logAdminAction, getRequestIp } from "@/lib/auditLog"
 import { SEGMENT_TYPES } from "@/lib/segments"
 
-const MAX_USER_RECIPIENTS = 5000
+// Same cap as an immediate broadcast (app/api/admin/broadcasts).
+const MAX_USER_RECIPIENTS = 10_000
 const VALID_USER_SEGMENTS = new Set<string>([...SEGMENT_TYPES.map((s): string => s.value), "custom"])
 
 // Same config/key as app/api/admin/broadcasts — a separately-instantiated

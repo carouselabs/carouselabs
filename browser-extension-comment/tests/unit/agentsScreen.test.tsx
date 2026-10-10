@@ -75,6 +75,9 @@ describe("the Agents tab", () => {
     expect(await screen.findByText("No agents yet")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "New agent" }));
+    // New agent offers the AI builder or the form by hand.
+    expect(await screen.findByRole("button", { name: /Build with AI/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Fill it in myself/ }));
     const create = screen.getByRole("button", { name: "Create agent" }) as HTMLButtonElement;
     expect(create.disabled).toBe(true); // needs a name and a goal
     fireEvent.change(screen.getByLabelText(/Agent name/), { target: { value: "Founder outreach" } });

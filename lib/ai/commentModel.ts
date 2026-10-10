@@ -228,6 +228,9 @@ export interface ModelCallOptions {
   // Who asked and for what: picks the feature's model (admin → Engage → AI)
   // and records each call for that page. Without it: Luna first, unrecorded.
   engage?: AiCaller
+  // A longer answer (an agent's whole setup, not one comment): the first
+  // model gets its full time instead of being handed to the backup early.
+  patient?: boolean
 }
 
 // The order to try the models in: the feature's chosen model, then the other.
@@ -280,14 +283,14 @@ export async function callCommentModelWithInfo(
   systemMessage: string,
   userMessage: string,
   label: string,
-  { deadline, engage }: ModelCallOptions = {},
+  { deadline, engage, patient }: ModelCallOptions = {},
 ): Promise<{ raw: string; model: string }> {
   const order = await modelOrder(engage)
   for (let i = 0; i < order.length; i += 1) {
     const key = order[i]
     const last = i === order.length - 1
     // While a backup is left, a stuck first model is cut off sooner.
-    const limitMs = callLimit(last ? CALL_MS[key] : Math.min(CALL_MS[key], PRIMARY_COMPLETE_MS), deadline)
+    const limitMs = callLimit(last || patient ? CALL_MS[key] : Math.min(CALL_MS[key], PRIMARY_COMPLETE_MS), deadline)
     const usage = { input: null as number | null, output: null as number | null }
     const start = performance.now()
     const note = (outcome: AiOutcome) => {

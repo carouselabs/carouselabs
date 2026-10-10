@@ -69,7 +69,8 @@ export const AGENT_LIMITS = {
   description: 200,
   longText: 1500,
   nextStep: 300,
-  tone: 60,
+  // A tone the AI builder writes can be a short phrase, not one word.
+  tone: 160,
   language: 40,
   rules: 1000,
   listItem: 400,

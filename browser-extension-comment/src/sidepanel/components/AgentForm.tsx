@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { Sparkles, Undo2 } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import {
   AGENT_LENGTHS,
@@ -16,6 +17,9 @@ import {
   type AgentPurpose,
 } from "@/lib/agents";
 import { MESSAGE_TONES } from "@/lib/messageThread";
+import { clearBuilderProgress, FIELD_LABELS, refineDraft } from "@/lib/agentBuilder";
+import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -45,6 +49,97 @@ interface Props {
   seed?: AgentDraft;
   onSaved: (agent: Agent) => void;
   onCancel: () => void;
+  // The seed came from the AI builder: its saved interview is cleared once
+  // the agent is saved.
+  fromBuilder?: boolean;
+}
+
+// One-click instructions for Refine with AI.
+const QUICK_REFINES: { label: string; instruction: string }[] = [
+  { label: "Improve it", instruction: "Improve it: clearer, more specific, more useful for writing replies." },
+  { label: "Friendlier", instruction: "Make the tone friendlier and warmer, still natural." },
+  { label: "More professional", instruction: "Make it more professional and polished." },
+  { label: "Shorter replies", instruction: "Make replies shorter and more to the point." },
+];
+
+// Refine with AI: the agent's wording improved by the AI, following a quick
+// pick or the person's own instruction. Their facts, examples and rules are
+// kept by the server whatever it returns; Undo puts back the version before.
+function RefinePanel({ draft, onRefined }: { draft: AgentDraft; onRefined: (next: AgentDraft) => void }) {
+  const [instruction, setInstruction] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ changed: string[]; before: AgentDraft } | null>(null);
+
+  async function refine(text: string) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const before = draft;
+      const { draft: next, changed } = await refineDraft(draft, text);
+      onRefined(next);
+      setResult({ changed, before });
+      setInstruction("");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't refine it just now. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section aria-label="Refine with AI" className="space-y-2 rounded-lg border bg-muted/40 p-3">
+      <p className="flex items-center gap-1.5 text-sm font-medium">
+        <Sparkles aria-hidden className="h-4 w-4 text-primary-text" />
+        Refine with AI
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {QUICK_REFINES.map((quick) => (
+          <Button key={quick.label} size="sm" variant="outline" className="h-7 px-2.5" disabled={busy || !draft.config.goals.trim()} onClick={() => void refine(quick.instruction)}>
+            {quick.label}
+          </Button>
+        ))}
+      </div>
+      <div className="flex gap-1.5">
+        <Input
+          aria-label="What to change"
+          value={instruction}
+          onChange={(e) => setInstruction(e.target.value.slice(0, 500))}
+          placeholder="Or say what to change"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && instruction.trim()) void refine(instruction.trim());
+          }}
+        />
+        <Button size="sm" className="h-9 shrink-0" loading={busy} disabled={!instruction.trim() || !draft.config.goals.trim()} onClick={() => void refine(instruction.trim())}>
+          Refine
+        </Button>
+      </div>
+      {error && <Alert>{error}</Alert>}
+      {result && !busy && (
+        <div role="status" className="flex items-start justify-between gap-2 text-xs text-muted-foreground">
+          <span>
+            {result.changed.length > 0
+              ? `Updated ${result.changed.map((key) => FIELD_LABELS[key] ?? key).join(", ")}. Your facts, examples and rules were kept.`
+              : "Nothing needed changing."}
+          </span>
+          {result.changed.length > 0 && (
+            <button
+              type="button"
+              className="inline-flex shrink-0 items-center gap-1 font-medium text-foreground hover:underline"
+              onClick={() => {
+                onRefined(result.before);
+                setResult(null);
+              }}
+            >
+              <Undo2 aria-hidden className="h-3.5 w-3.5" />
+              Undo
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -56,7 +151,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-export function AgentForm({ existing, seed, onSaved, onCancel }: Props) {
+export function AgentForm({ existing, seed, onSaved, onCancel, fromBuilder = false }: Props) {
   const [draft, setDraft] = useState<AgentDraft>(existing ? draftFromAgent(existing) : (seed ?? EMPTY_AGENT_DRAFT));
   // The version the edit started from; replaced by the server's when it says
   // the agent changed elsewhere meanwhile.
@@ -94,6 +189,7 @@ export function AgentForm({ existing, seed, onSaved, onCancel }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      if (fromBuilder) await clearBuilderProgress();
       onSaved(agent);
     } catch (err) {
       const latest = err instanceof ApiError && err.status === 409 ? (err.data as { agent?: Agent }).agent : undefined;
@@ -119,6 +215,8 @@ export function AgentForm({ existing, seed, onSaved, onCancel }: Props) {
       canSave={canSave}
       onSave={handleSave}
     >
+      <RefinePanel draft={draft} onRefined={(next) => setDraft((current) => ({ ...next, name: current.name }))} />
+
       <Section title="The agent">
         <FormField label="Agent name" required>
           {(id) => (

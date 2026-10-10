@@ -90,6 +90,52 @@ test("an agent writes the reply to a real LinkedIn conversation", async ({ harne
   expect(asked!.profileId).toBeUndefined();
 });
 
+test("Build with AI: describe, answer, build, review and save, all at 320px", async ({ harness }) => {
+  await signedIn(harness);
+  const asked: Record<string, unknown>[] = [];
+  const steps = [
+    { done: false, question: "Who do you mostly talk to?", hint: "Seed-stage SaaS founders", optional: false, topic: "audience" },
+    { done: true },
+  ];
+  await harness.context.route("**/api/ext/agents/builder", async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    asked.push(body);
+    const answer =
+      body.action === "interview"
+        ? (steps.shift() ?? { done: true })
+        : { draft: { name: "Founder outreach", description: "Builds relationships with founders", purpose: "sales", config: { ...config, facts: ["Pro is $29 a month"] } } };
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(answer) });
+  });
+  let saved: Record<string, unknown> | null = null;
+  await harness.context.route("**/api/ext/agents", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    saved = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ agent: { ...AGENTS[0], id: "new" } }) });
+  });
+  await harness.open("/feed/", "feed.html");
+  const panel = await openPanel(harness, 320);
+  await panel.getByRole("button", { name: "Profiles", exact: true }).click();
+  await panel.getByRole("radio", { name: "Agents" }).click();
+  await panel.getByRole("button", { name: "New agent" }).click();
+  await panel.getByRole("button", { name: /Build with AI/ }).click();
+  expect(await scrollsSideways(panel)).toBe(false);
+
+  await panel.getByLabel("What do you want your AI agent to help you achieve?").fill("I run a SaaS company that helps founders post on LinkedIn consistently.");
+  await panel.getByRole("button", { name: "Continue" }).click();
+  await panel.getByRole("textbox", { name: "Your answer" }).fill("Seed-stage SaaS founders");
+  expect(await scrollsSideways(panel)).toBe(false);
+  await panel.getByRole("button", { name: "Next" }).click();
+  await panel.getByRole("button", { name: "Build my agent", exact: true }).click();
+
+  await expect(panel.getByLabel(/Agent name/)).toHaveValue("Founder outreach");
+  await expect(panel.getByRole("region", { name: "Refine with AI" })).toBeVisible();
+  expect(await scrollsSideways(panel)).toBe(false);
+  await panel.getByRole("button", { name: "Create agent" }).click();
+  await expect.poll(() => saved).toMatchObject({ name: "Founder outreach", status: "active", config: { facts: ["Pro is $29 a month"] } });
+  expect(asked.map((b) => b.action)).toEqual(["interview", "interview", "draft"]);
+  expect(asked[1]).toMatchObject({ answers: [{ question: "Who do you mostly talk to?", answer: "Seed-stage SaaS founders", topic: "audience" }] });
+});
+
 test("the Agents tab and the agent builder fit a 320px panel", async ({ harness }) => {
   await signedIn(harness);
   await harness.open("/feed/", "feed.html");
@@ -100,6 +146,7 @@ test("the Agents tab and the agent builder fit a 320px panel", async ({ harness 
   expect(await scrollsSideways(panel)).toBe(false);
 
   await panel.getByRole("button", { name: "New agent" }).click();
+  await panel.getByRole("button", { name: /Fill it in myself/ }).click();
   await expect(panel.getByRole("button", { name: "Create agent" })).toBeVisible();
   expect(await scrollsSideways(panel)).toBe(false);
 

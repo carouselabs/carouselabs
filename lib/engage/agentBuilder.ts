@@ -13,6 +13,7 @@
 import { db } from "@/lib/db"
 import { callCommentModelWithInfo, generationDeadline, GenerationTimeout } from "@/lib/ai/commentModel"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
+import { parseJsonObject } from "@/lib/ai/jsonAnswer"
 import {
   buildDraftSystem,
   buildDraftUser,
@@ -67,20 +68,7 @@ export function parseDescription(raw: unknown): string {
   return description
 }
 
-// The first JSON object in a model's answer (bare, or in a code fence).
-export function parseJsonObject(raw: string): Record<string, unknown> | null {
-  const candidates = [raw.match(/```(?:json)?\s*([\s\S]*?)```/)?.[1], raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)]
-  for (const candidate of candidates) {
-    if (!candidate?.trim()) continue
-    try {
-      const parsed: unknown = JSON.parse(candidate)
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>
-    } catch {
-      // Try the next form.
-    }
-  }
-  return null
-}
+export { parseJsonObject }
 
 // How many builder calls this person made in the last 24 hours.
 async function callsToday(userId: string): Promise<number> {

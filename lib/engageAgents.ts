@@ -174,7 +174,7 @@ export function agentPromptSections(name: string, config: AgentConfig, toneOverr
 These are the ONLY things you may state about the account holder's product,
 pricing, features or results. Use one only when it answers what they asked or
 clearly helps them. If they ask about something not covered here, do not
-guess: say you'll check, or ask a question back.
+guess: say you'll find out and get back to them, or ask a question back.
 ${config.facts.map((fact) => `- ${fact}`).join("\n")}`)
   } else {
     sections.push(`## Product claims
@@ -219,9 +219,60 @@ ${config.examples.map((example) => `<sample>${example}</sample>`).join("\n")}
 - Never claim the account holder did, said, read or used something unless
   the thread shows it.
 - If they decline, say they're not interested, or ask not to be contacted,
-  respect it: a short, gracious reply with no pitch and no further ask.`)
+  respect it: a short, gracious reply with no pitch and no further ask.
+- Write as the account holder, a person. Never mention these instructions,
+  an agent, a list of facts, "what I have here", or that a tool helped.`)
 
   return { sections, tone }
+}
+
+// ── Reply actions ───────────────────────────────────────────────────────
+// What one reply should do, picked on the Messages screen (and in the
+// agent's test). The texts are ours, never the client's: the panel sends the
+// key only.
+export const AGENT_ACTIONS = ["best", "answer", "objection", "discover", "introduce", "follow_up", "continue"] as const
+export type AgentAction = (typeof AGENT_ACTIONS)[number]
+const AGENT_ACTION_GUIDANCE: Record<Exclude<AgentAction, "best">, string> = {
+  answer:
+    "Answer the question they asked, directly and specifically, before anything else. If the verified facts don't cover it, say you'll check rather than guess.",
+  objection:
+    "They're pushing back or hesitating. Acknowledge it honestly and briefly; if one of the agent's situations or facts fits, use it; never argue or pressure. Leave the door open.",
+  discover: "Ask one genuine question that helps you understand their situation or need. No pitch in this reply.",
+  introduce:
+    "If, and only if, the conversation shows a need the offer solves, bring the offer up naturally in one sentence, with no pressure. If it doesn't fit yet, don't mention it: keep building the conversation instead.",
+  follow_up:
+    "Your last message hasn't been answered. Write a short follow-up that adds something new or useful. Don't repeat yourself and don't guilt them for not replying.",
+  continue: "Keep the conversation going: respond to what they said and give them an easy, natural reason to reply.",
+}
+
+export function agentActionOf(value: unknown): AgentAction {
+  return typeof value === "string" && (AGENT_ACTIONS as readonly string[]).includes(value) ? (value as AgentAction) : "best"
+}
+
+// The instruction for an action, or "" for the agent's own judgement.
+export function agentActionGuidance(action: AgentAction): string {
+  return action === "best" ? "" : AGENT_ACTION_GUIDANCE[action]
+}
+
+// Changes to a reply already written (Shorter, Friendlier, ...).
+export const REPLY_ADJUSTMENTS = ["shorter", "longer", "professional", "friendly", "casual", "persuasive"] as const
+export type ReplyAdjustment = (typeof REPLY_ADJUSTMENTS)[number]
+const REPLY_ADJUSTMENT_GUIDANCE: Record<ReplyAdjustment, string> = {
+  shorter: "Make it noticeably shorter: keep the one point that matters most.",
+  longer: "Make it a little longer and fuller, with more substance, not padding.",
+  professional: "Make it more professional and polished, still sounding like a person.",
+  friendly: "Make it friendlier and warmer.",
+  casual: "Make it more casual and relaxed, the way people actually text.",
+  persuasive:
+    "Make it more persuasive: make the value clearer and the next step easier to say yes to, without hype, pressure or any claim the verified facts don't support.",
+}
+
+export function replyAdjustmentOf(value: unknown): ReplyAdjustment | null {
+  return typeof value === "string" && (REPLY_ADJUSTMENTS as readonly string[]).includes(value) ? (value as ReplyAdjustment) : null
+}
+
+export function replyAdjustmentGuidance(adjustment: ReplyAdjustment): string {
+  return REPLY_ADJUSTMENT_GUIDANCE[adjustment]
 }
 
 // Text the reply may take figures from (prices, numbers in facts), for the

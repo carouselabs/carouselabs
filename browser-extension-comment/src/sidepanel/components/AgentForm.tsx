@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { Sparkles, Undo2 } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronDown, FlaskConical, RotateCcw, Sparkles, Undo2 } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import {
   AGENT_LENGTHS,
@@ -15,6 +15,11 @@ import {
   type AgentDraft,
   type AgentLength,
   type AgentPurpose,
+  AGENT_ACTIONS,
+  AGENT_ACTION_LABELS,
+  testAgent,
+  type AgentAction,
+  type AgentTestResult,
 } from "@/lib/agents";
 import { MESSAGE_TONES } from "@/lib/messageThread";
 import { clearBuilderProgress, FIELD_LABELS, refineDraft } from "@/lib/agentBuilder";
@@ -52,6 +57,119 @@ interface Props {
   // The seed came from the AI builder: its saved interview is cleared once
   // the agent is saved.
   fromBuilder?: boolean;
+}
+
+// "Test this agent": the agent as it stands in the form replies to a message
+// someone might send, with a note on why the reply fits. Counted like the
+// profile builder's Test.
+function TestPanel({ draft }: { draft: AgentDraft }) {
+  const [message, setMessage] = useState("");
+  const [earlier, setEarlier] = useState("");
+  const [showEarlier, setShowEarlier] = useState(false);
+  const [action, setAction] = useState<AgentAction>("best");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<(AgentTestResult & { message: string }) | null>(null);
+  const [showWhy, setShowWhy] = useState(false);
+  const inFlight = useRef<AbortController | null>(null);
+
+  useEffect(() => () => inFlight.current?.abort(), []);
+
+  async function run() {
+    if (busy || !message.trim()) return;
+    const controller = new AbortController();
+    inFlight.current = controller;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await testAgent(draft, { message: message.trim(), earlier: earlier.trim() || undefined, action }, controller.signal);
+      if (controller.signal.aborted) return;
+      setResult({ ...res, message: message.trim() });
+      setShowWhy(false);
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      setError(err instanceof ApiError ? err.message : "Couldn't test it just now. Try again.");
+    } finally {
+      if (!controller.signal.aborted) setBusy(false);
+    }
+  }
+
+  return (
+    <section aria-label="Test this agent" className="space-y-2 rounded-lg border p-3">
+      <p className="flex items-center gap-1.5 text-sm font-medium">
+        <FlaskConical aria-hidden className="h-4 w-4 text-primary-text" />
+        Test this agent
+      </p>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Write a message someone might send you and see how it answers. Each test uses one generation, like a profile test.
+      </p>
+      <Textarea
+        autoGrow
+        aria-label="Their message"
+        value={message}
+        onChange={(e) => setMessage(e.target.value.slice(0, 2000))}
+        placeholder="e.g. Sounds interesting, how much does it cost?"
+        className="max-h-40 min-h-[3.5rem]"
+      />
+      {showEarlier ? (
+        <Textarea
+          autoGrow
+          aria-label="What you said before"
+          value={earlier}
+          onChange={(e) => setEarlier(e.target.value.slice(0, 2000))}
+          placeholder="Optional: your message they're answering"
+          className="max-h-40 min-h-[2.625rem]"
+        />
+      ) : (
+        <button type="button" className="text-xs font-medium text-primary-text hover:underline" onClick={() => setShowEarlier(true)}>
+          + Add what you said before
+        </button>
+      )}
+      <Select value={action} onValueChange={(value) => setAction(value as AgentAction)}>
+        <SelectTrigger aria-label="What should the reply do?">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {AGENT_ACTIONS.map((a) => (
+            <SelectItem key={a} value={a}>
+              {AGENT_ACTION_LABELS[a]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button size="sm" className="w-full" loading={busy} disabled={!message.trim() || !draft.config.goals.trim()} onClick={() => void run()}>
+        {!busy && (result ? <RotateCcw aria-hidden /> : <FlaskConical aria-hidden />)}
+        {result ? "Test again" : "Test reply"}
+      </Button>
+      {!draft.config.goals.trim() && <p className="text-xs text-muted-foreground">Add the goal first: the agent needs to know what conversations are for.</p>}
+      {error && <Alert>{error}</Alert>}
+      {result && !busy && (
+        <div className="animate-fade-in space-y-2 rounded-md border bg-card p-2.5">
+          <p className="text-xs text-muted-foreground">
+            They said: <span className="text-foreground">“{result.message}”</span>
+          </p>
+          <p aria-label="The agent's reply" className="whitespace-pre-wrap text-sm leading-relaxed">
+            {result.reply}
+          </p>
+          {result.why && (
+            <div>
+              <button
+                type="button"
+                aria-expanded={showWhy}
+                className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                onClick={() => setShowWhy((v) => !v)}
+              >
+                <ChevronDown aria-hidden className={`h-3.5 w-3.5 transition-transform ${showWhy ? "rotate-180" : ""}`} />
+                Why this reply
+              </button>
+              {showWhy && <p className="pt-1 text-xs leading-relaxed text-muted-foreground">{result.why}</p>}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">Not right? Change the agent above, then test again.</p>
+        </div>
+      )}
+    </section>
+  );
 }
 
 // One-click instructions for Refine with AI.
@@ -408,6 +526,8 @@ export function AgentForm({ existing, seed, onSaved, onCancel, fromBuilder = fal
           onChange={(examples) => set("examples", examples)}
         />
       </Section>
+
+      <TestPanel draft={draft} />
 
       <DefaultCheckbox
         checked={setAsDefault}

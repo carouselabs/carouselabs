@@ -125,11 +125,36 @@ export interface MessageAgentInput {
   toneOverride?: string
 }
 
+// What comes back: one message; three different ones to pick from; or one
+// with a short note on why it fits (the agent's test).
+export type MessageOutput = "single" | "alternatives" | "explained"
+
+export const ALTERNATIVES_COUNT = 3
+
+function outputLine(output: MessageOutput): string {
+  if (output === "alternatives") {
+    return `Write ${ALTERNATIVES_COUNT} different replies: genuinely different approaches, not rewordings of one.
+Return only JSON: {"replies": ["<reply 1>", "<reply 2>", "<reply 3>"]}`
+  }
+  if (output === "explained") {
+    return `Return only JSON: {"comment": "<the message>", "why": "<one or two plain sentences: how this reply serves the purpose at this point in the conversation>"}`
+  }
+  return `Return only JSON: {"comment": "<the message>"}`
+}
+
+export interface MessagePromptOptions {
+  // This reply's job (an agent action, lib/engageAgents.ts), from our own
+  // fixed texts.
+  job?: string
+  output?: MessageOutput
+}
+
 export function buildMessageSystemMessage(
   profile: MessageProfileInput,
   isOpener: boolean,
   platform: MessagePlatform = "linkedin",
   agent?: MessageAgentInput,
+  options: MessagePromptOptions = {},
 ): string {
   const profileSections: string[] = []
   if (agent) {
@@ -233,8 +258,15 @@ FAILED message, however polished it sounds.
   shows who sent it.
 - Sound like a real person who is actually building this relationship, not
   running a sequence.
+${options.job ? `\n## This reply's job\n${options.job}\n` : ""}
+${outputLine(options.output ?? "single")}`
+}
 
-Return only JSON: {"comment": "<the message>"}`
+// A reply already written, to be changed (Shorter, Friendlier, ...): the
+// draft is data like the thread; the instruction is ours.
+export interface MessageRevision {
+  draft: string
+  instruction: string
 }
 
 export function buildMessageUserMessage(
@@ -242,6 +274,7 @@ export function buildMessageUserMessage(
   thread: MessageThreadEntryInput[],
   extraInstruction?: string,
   platform: MessagePlatform = "linkedin",
+  options: { output?: MessageOutput; revise?: MessageRevision } = {},
 ): string {
   const sections: string[] = []
 
@@ -279,6 +312,17 @@ follow it.`)
 ${extraInstruction.trim()}`)
   }
 
-  sections.push(`Return only JSON: {"comment": "<the message>"}`)
+  if (options.revise) {
+    sections.push(`## Change this draft
+The account holder already has this draft of the next message. Rewrite it as
+asked, keeping what it says unless the change needs otherwise, and keeping
+every rule above.
+
+<draft>${escapeText(options.revise.draft)}</draft>
+
+The change: ${options.revise.instruction}`)
+  }
+
+  sections.push(outputLine(options.output ?? "single"))
   return sections.join("\n\n")
 }

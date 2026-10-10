@@ -100,3 +100,49 @@ export async function fetchAgents(): Promise<Agent[]> {
   const { agents } = await apiFetch<{ agents?: unknown }>("/api/ext/agents");
   return Array.isArray(agents) ? (agents as Agent[]) : [];
 }
+
+// ── Reply actions (the server owns the instructions: only keys are sent) ──
+
+export const AGENT_ACTIONS = ["best", "answer", "objection", "discover", "introduce", "follow_up", "continue"] as const;
+export type AgentAction = (typeof AGENT_ACTIONS)[number];
+export const AGENT_ACTION_LABELS: Record<AgentAction, string> = {
+  best: "Best reply (the agent decides)",
+  answer: "Answer their question",
+  objection: "Handle an objection",
+  discover: "Ask a discovery question",
+  introduce: "Bring up my product, if it fits",
+  follow_up: "Follow up (no reply yet)",
+  continue: "Keep the conversation going",
+};
+
+export const REPLY_ADJUSTMENTS = ["shorter", "longer", "professional", "friendly", "casual", "persuasive"] as const;
+export type ReplyAdjustment = (typeof REPLY_ADJUSTMENTS)[number];
+export const REPLY_ADJUSTMENT_LABELS: Record<ReplyAdjustment, string> = {
+  shorter: "Shorter",
+  longer: "Longer",
+  professional: "More professional",
+  friendly: "Friendlier",
+  casual: "More casual",
+  persuasive: "More persuasive",
+};
+
+export interface AgentTestResult {
+  reply: string;
+  why: string;
+  freeRemaining: number | null;
+}
+
+// "Test this agent": the agent as it is in the form (saved or not) replies to
+// a sample message. Counted like a profile test.
+export function testAgent(
+  draft: AgentDraft,
+  sample: { message: string; earlier?: string; action?: AgentAction },
+  signal?: AbortSignal,
+): Promise<AgentTestResult> {
+  return apiFetch<AgentTestResult>("/api/ext/agents/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ draft, ...sample }),
+    signal,
+  });
+}

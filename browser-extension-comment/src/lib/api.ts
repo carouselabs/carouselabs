@@ -125,6 +125,8 @@ export interface MessageProfileDraft {
 
 export interface MessageGenerateResponse {
   message: string;
+  // Asked for alternatives: every reply that passed, the first being message.
+  alternatives?: string[];
   freeRemaining: FreeRemaining;
   // History row for this message, for marking Copy/Insert. null if the save failed.
   historyId: string | null;

@@ -90,6 +90,64 @@ test("an agent writes the reply to a real LinkedIn conversation", async ({ harne
   expect(asked!.profileId).toBeUndefined();
 });
 
+test("an agent's tools on a real conversation: what the reply does, Shorter, Alternatives, at 320px", async ({ harness }) => {
+  await signedIn(harness);
+  const asked: Record<string, unknown>[] = [];
+  await harness.context.route("**/api/ext/message", async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    asked.push(body);
+    const answer = body.alternatives
+      ? { message: "First option.", alternatives: ["First option.", "Second option.", "Third option."], freeRemaining: null, historyId: "h1" }
+      : { message: body.adjust ? "A shorter one." : "Pro is $29 a month. What takes the most time?", freeRemaining: null, historyId: "h1" };
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(answer) });
+  });
+  await harness.open("/messaging/thread/2-bharti/", "messaging-thread.html");
+  const panel = await openPanel(harness, 320);
+  await panel.getByRole("button", { name: "Messages", exact: true }).click();
+  await panel.getByRole("button", { name: "Read this conversation" }).click();
+
+  await panel.getByRole("combobox", { name: "What should this reply do?" }).click();
+  await panel.getByRole("option", { name: "Answer their question" }).click();
+  await panel.getByRole("button", { name: "Generate reply" }).click();
+  const box = panel.getByRole("textbox", { name: "Your message" });
+  await expect(box).toHaveValue(/\$29/);
+  expect(asked[0]).toMatchObject({ agentId: "ag1", action: "answer" });
+
+  await panel.getByRole("button", { name: "Shorter" }).click();
+  await expect(box).toHaveValue("A shorter one.");
+  expect(asked[1]).toMatchObject({ adjust: "shorter", draft: "Pro is $29 a month. What takes the most time?" });
+
+  await panel.getByRole("button", { name: "Alternatives" }).click();
+  await panel.getByRole("button", { name: "Second option." }).click();
+  await expect(box).toHaveValue("Second option.");
+  expect(await scrollsSideways(panel)).toBe(false);
+});
+
+test("Test this agent in the agent form, at 320px", async ({ harness }) => {
+  await signedIn(harness);
+  let sent: Record<string, unknown> | null = null;
+  await harness.context.route("**/api/ext/agents/test", async (route) => {
+    sent = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ reply: "Pro is $29 a month, with a free plan.", why: "Answers the price with a verified fact.", freeRemaining: 4 }),
+    });
+  });
+  await harness.open("/feed/", "feed.html");
+  const panel = await openPanel(harness, 320);
+  await panel.getByRole("button", { name: "Profiles", exact: true }).click();
+  await panel.getByRole("radio", { name: "Agents" }).click();
+  await panel.getByRole("button", { name: "Edit" }).first().click();
+  await panel.getByRole("textbox", { name: "Their message" }).fill("How much does it cost?");
+  await panel.getByRole("button", { name: "Test reply" }).click();
+  await expect(panel.getByLabel("The agent's reply")).toHaveText("Pro is $29 a month, with a free plan.");
+  await panel.getByRole("button", { name: "Why this reply" }).click();
+  await expect(panel.getByText("Answers the price with a verified fact.")).toBeVisible();
+  expect(sent).toMatchObject({ message: "How much does it cost?", action: "best", draft: { name: "Founder outreach" } });
+  expect(await scrollsSideways(panel)).toBe(false);
+});
+
 test("Build with AI: describe, answer, build, review and save, all at 320px", async ({ harness }) => {
   await signedIn(harness);
   const asked: Record<string, unknown>[] = [];

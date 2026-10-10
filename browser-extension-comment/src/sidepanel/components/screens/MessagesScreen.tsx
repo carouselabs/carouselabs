@@ -37,7 +37,16 @@ import { markHistoryAction } from "@/lib/history";
 // Kept on the account, so the website's Extension section edits the same values.
 import { loadShowInsert, loadSyncedMessageContext, saveSyncedMessageContext } from "@/lib/syncedSettings";
 import { activeTab } from "../../activeTab";
-import { AGENT_PURPOSE_LABELS, fetchAgents, type Agent } from "@/lib/agents";
+import {
+  AGENT_ACTIONS,
+  AGENT_ACTION_LABELS,
+  AGENT_PURPOSE_LABELS,
+  REPLY_ADJUSTMENT_LABELS,
+  fetchAgents,
+  type Agent,
+  type AgentAction,
+  type ReplyAdjustment,
+} from "@/lib/agents";
 import {
   apiFetch,
   ApiError,
@@ -105,6 +114,12 @@ export function MessagesScreen({ onCreateProfile, onCreateAgent, readOnOpen = fa
   // none: then the reason below does). An agent replaces the reason.
   const [agents, setAgents] = useState<Agent[]>([]);
   const [agentId, setAgentId] = useState<string>("");
+  // With an agent: what this reply should do, and (after Alternatives) the
+  // replies to pick from.
+  const [agentAction, setAgentAction] = useState<AgentAction>("best");
+  const [alternatives, setAlternatives] = useState<string[]>([]);
+  // Which agent tool is running, for its button's spinner.
+  const [tool, setTool] = useState<ReplyAdjustment | "alternatives" | null>(null);
   const [purpose, setPurpose] = useState("");
   // Only used for choice: "custom" — a saved profile carries its own tone.
   const [tone, setTone] = useState<string>(MESSAGE_TONES[0]);
@@ -268,6 +283,7 @@ export function MessagesScreen({ onCreateProfile, onCreateAgent, readOnOpen = fa
       setConversation(read);
       setMessage("");
       setHasResult(false);
+      setAlternatives([]);
       setHistoryId(null);
       setCopied(false);
       setInsertError(null);
@@ -368,8 +384,15 @@ export function MessagesScreen({ onCreateProfile, onCreateAgent, readOnOpen = fa
     if (el) el.scrollTop = el.scrollHeight;
   }, [conversation]);
 
-  async function handleGenerate() {
+  function handleGenerate() {
+    return generateWith({});
+  }
+
+  // A reply with an agent's extras: a change to the message showing (adjust),
+  // or several to pick from (alternatives).
+  async function generateWith(extra: { adjust?: ReplyAdjustment; alternatives?: boolean }) {
     if (!conversation || !canGenerate) return;
+    setTool(extra.adjust ?? (extra.alternatives ? "alternatives" : null));
     generationRef.current?.abort();
     const controller = new AbortController();
     generationRef.current = controller;
@@ -396,10 +419,16 @@ export function MessagesScreen({ onCreateProfile, onCreateAgent, readOnOpen = fa
           // too, when the user picked one explicitly.
           tone: tone || undefined,
           extraInstruction: extraInstruction.trim() || undefined,
+          // The agent's tools (the server ignores them without an agent's
+          // words to work from: its own texts, only keys are sent).
+          ...(writingAgentId ? { action: agentAction } : {}),
+          ...(writingAgentId && extra.adjust && message.trim() ? { adjust: extra.adjust, draft: message } : {}),
+          ...(writingAgentId && extra.alternatives ? { alternatives: true } : {}),
         }),
       });
       if (!current()) return;
       setMessage(res.message);
+      setAlternatives(extra.alternatives && res.alternatives && res.alternatives.length > 1 ? res.alternatives : []);
       setResultReason(usedReason);
       setHasResult(true);
       setHistoryId(res.historyId ?? null);
@@ -414,6 +443,7 @@ export function MessagesScreen({ onCreateProfile, onCreateAgent, readOnOpen = fa
       if (current() || generationRef.current === null) {
         generationRef.current = null;
         setGenerating(false);
+        setTool(null);
       }
     }
   }
@@ -476,6 +506,42 @@ export function MessagesScreen({ onCreateProfile, onCreateAgent, readOnOpen = fa
       : !writingAgentId && choice === "custom" && !purpose.trim()
         ? "Write your reason first."
         : null;
+
+  // An agent's tools on the result card: change the message showing, or ask
+  // for several to pick from. Each is one generation, like Regenerate.
+  const toolsOff = !hasMessage || generating || inserting || paywalled;
+  const agentTools = (
+    <>
+      {(["shorter", "longer"] as const).map((adjust) => (
+        <Button
+          key={adjust}
+          size="sm"
+          variant="ghost"
+          className="px-2.5"
+          disabled={toolsOff}
+          loading={tool === adjust}
+          onClick={() => void generateWith({ adjust })}
+        >
+          {REPLY_ADJUSTMENT_LABELS[adjust]}
+        </Button>
+      ))}
+      <Select value="" onValueChange={(value) => void generateWith({ adjust: value as ReplyAdjustment })} disabled={toolsOff}>
+        <SelectTrigger aria-label="Change the tone" className="h-8 w-auto gap-1 border-0 bg-transparent px-2.5 text-sm shadow-none">
+          <SelectValue placeholder={tool && tool !== "shorter" && tool !== "longer" && tool !== "alternatives" ? "Changing…" : "Tone…"} />
+        </SelectTrigger>
+        <SelectContent>
+          {(["professional", "friendly", "casual", "persuasive"] as const).map((adjust) => (
+            <SelectItem key={adjust} value={adjust}>
+              {REPLY_ADJUSTMENT_LABELS[adjust]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button size="sm" variant="ghost" className="px-2.5" disabled={toolsOff} loading={tool === "alternatives"} onClick={() => void generateWith({ alternatives: true })}>
+        Alternatives
+      </Button>
+    </>
+  );
 
   // The tab moved on to someone else's conversation after this one was read.
   const otherConversationOpen =
@@ -631,6 +697,25 @@ export function MessagesScreen({ onCreateProfile, onCreateAgent, readOnOpen = fa
               <p className="text-xs leading-relaxed text-muted-foreground">
                 {AGENT_PURPOSE_LABELS[activeAgent.purpose]} · {activeAgent.description || activeAgent.config.goals}
               </p>
+            )}
+            {activeAgent && (
+              <div className="space-y-1.5 pt-1">
+                <label id="message-agent-action-label" className="text-xs font-medium text-muted-foreground">
+                  What should this reply do?
+                </label>
+                <Select value={agentAction} onValueChange={(value) => setAgentAction(value as AgentAction)}>
+                  <SelectTrigger aria-labelledby="message-agent-action-label">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AGENT_ACTIONS.map((a) => (
+                      <SelectItem key={a} value={a}>
+                        {AGENT_ACTION_LABELS[a]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             )}
             {activeAgent && rewriteReason && (
               <RewriteButton
@@ -815,7 +900,36 @@ export function MessagesScreen({ onCreateProfile, onCreateAgent, readOnOpen = fa
                 }
                 onRegenerate={handleGenerate}
                 regenerateDisabled={!canGenerate || generating || inserting || paywalled}
+                tools={activeAgent ? agentTools : undefined}
               />
+              {activeAgent && alternatives.length > 1 && !generating && (
+                <section aria-label="Alternatives" className="animate-fade-in space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">Pick one</p>
+                  <ul className="space-y-1.5">
+                    {alternatives.map((option, index) => {
+                      const showing = option === message;
+                      return (
+                        <li key={index}>
+                          <button
+                            type="button"
+                            aria-pressed={showing}
+                            onClick={() => {
+                              setMessage(option);
+                              setCopied(false);
+                            }}
+                            className={cn(
+                              "w-full rounded-lg border p-2.5 text-left text-sm leading-relaxed transition-colors duration-fast",
+                              showing ? "border-primary/60 bg-accent/50" : "bg-card hover:border-primary/40",
+                            )}
+                          >
+                            {option}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              )}
               {(generateError || insertError) && <Alert>{generateError || insertError}</Alert>}
               {paywalled && <UnlockCard />}
             </>

@@ -15,21 +15,27 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import { engagePreflight, reserveEngageGeneration } from "@/lib/engage/gate"
-import { ANTI_FABRICATION_REMINDER, WEAK_COMMENT_PATTERNS } from "@/lib/ai/prompts/commentPrompt"
 import {
   buildMessageSystemMessage,
   buildMessageUserMessage,
-  MESSAGE_WEAK_PATTERNS,
-  PLACEHOLDER_BRACKET_PATTERN,
   type MessageContactInput,
+  type MessageRevision,
   type MessagePlatform,
   type MessageProfileInput,
   type MessageThreadEntryInput,
 } from "@/lib/ai/prompts/messagePrompt"
-import { callCommentModelWithInfo, generationDeadline, GenerationTimeout, parseComment, sanitizeComment, PRIMARY_MODEL } from "@/lib/ai/commentModel"
+import { PRIMARY_MODEL } from "@/lib/ai/commentModel"
+import { writeMessage } from "@/lib/engage/messageWriter"
 import { HISTORY_SNIPPET_CHARS, linkedInUrl } from "@/lib/extensionHistory"
-import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
-import { agentNumberSources, normalizeAgentConfig } from "@/lib/engageAgents"
+import {
+  agentActionGuidance,
+  agentActionOf,
+  agentNumberSources,
+  normalizeAgentConfig,
+  replyAdjustmentGuidance,
+  replyAdjustmentOf,
+  type AgentAction,
+} from "@/lib/engageAgents"
 
 const MAX_FIELD_CHARS = 300
 const MAX_MESSAGE_CHARS = 4000
@@ -103,6 +109,11 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
   // or `flow` must be present instead — three-way either/or, unlike the
   // connection-note route's two-way "profile" vs "custom".
   let profileId: string | undefined
+  // What this reply should do (an agent action), a change to a draft already
+  // written (Shorter, Friendlier...), or several replies to pick from.
+  let action: AgentAction = "best"
+  let revise: MessageRevision | undefined
+  let alternatives = false
   // Or one of the user's own agents (model EngageAgent), which writes
   // instead of a reason.
   let agentId: string | undefined
@@ -118,6 +129,11 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
     thread = parseThread(body.thread)
     profileId = typeof body.profileId === "string" && body.profileId ? body.profileId : undefined
     agentId = typeof body.agentId === "string" && body.agentId ? body.agentId.slice(0, 40) : undefined
+    action = agentActionOf(body.action)
+    const adjustment = replyAdjustmentOf(body.adjust)
+    const draft = str(body.draft, MAX_MESSAGE_CHARS)
+    revise = adjustment && draft ? { draft, instruction: replyAdjustmentGuidance(adjustment) } : undefined
+    alternatives = body.alternatives === true && !revise
     goal = str(body.goal, MAX_GOAL_CHARS) || undefined
     flow = body.flow === true
     // Meaningful regardless of profileId/goal: it can override a saved
@@ -169,95 +185,30 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
   if (!gate.ok) return gate.response
 
   const isOpener = thread.length === 0
-  const systemMessage = buildMessageSystemMessage(profileInput, isOpener, platform, agent)
-  const userMessage = buildMessageUserMessage(contact, thread, extraInstruction, platform)
+  const output = alternatives ? "alternatives" : "single"
+  const systemMessage = buildMessageSystemMessage(profileInput, isOpener, platform, agent, { job: agentActionGuidance(action), output })
+  const userMessage = buildMessageUserMessage(contact, thread, extraInstruction, platform, { output, revise })
 
   const numberSources = [
     contact.name,
     contact.headline,
     agent ? agentNumberSources(agent.config) : profileInput.goal,
     extraInstruction ?? "",
+    // A draft being changed may keep the figures it already had.
+    revise?.draft ?? "",
     ...thread.map((entry) => entry.text),
   ].join(" ")
 
-  let message = ""
-  // The model that wrote the message kept (recorded in History), and the
-  // one that wrote the fallback.
-  let model: string = PRIMARY_MODEL
-  let fallbackModel: string = PRIMARY_MODEL
-  let answerModel: string = PRIMARY_MODEL
-  // Clean but weak-patterned, held in case the retry fails outright.
-  let fallback = ""
-  let remindAboutFabrication = false
-
-  const deadline = generationDeadline()
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const userContent = remindAboutFabrication ? `${userMessage}\n\n${ANTI_FABRICATION_REMINDER}` : userMessage
-
-    let raw: string
-    try {
-      const answer = await callCommentModelWithInfo(systemMessage, userContent, label, {
-        deadline,
-        engage: { userId: user.id, kind: isX ? "x_messages" : "messages" },
-      })
-      raw = answer.raw
-      answerModel = answer.model
-    } catch (err) {
-      if (err instanceof GenerationTimeout) {
-        console.error(`[${label}] attempt ${attempt}: out of time, giving up`)
-        break
-      }
-      console.error(`[${label}] attempt ${attempt}: both models failed:`, err)
-      continue
-    }
-
-    const parsed = parseComment(raw)
-    if (!parsed?.trim()) {
-      console.warn(`[${label}] attempt ${attempt}: unparseable response:`, raw.slice(0, 300))
-      continue
-    }
-
-    const { comment: cleaned, removedChars } = sanitizeComment(parsed)
-    if (!cleaned || removedChars > parsed.length * 0.25) {
-      console.warn(`[${label}] attempt ${attempt}: ${removedChars} chars stripped, retrying`)
-      continue
-    }
-
-    // Never kept, even as a fallback: the message goes out under the user's
-    // name, to someone they are trying to build a real relationship with.
-    const unsourced = findUnsourcedNumbers(cleaned, numberSources)
-    if (unsourced.length > 0) {
-      console.warn(`[${label}] attempt ${attempt}: unsourced figures (${unsourced.join(", ")}), discarding`)
-      remindAboutFabrication = true
-      continue
-    }
-
-    // Same reasoning as unsourced numbers: a literal "[their industry]" left
-    // in the output is a template, not a message, and must never be sent.
-    if (PLACEHOLDER_BRACKET_PATTERN.test(cleaned)) {
-      console.warn(`[${label}] attempt ${attempt}: unfilled placeholder bracket, discarding`)
-      continue
-    }
-
-    const weak = [...MESSAGE_WEAK_PATTERNS, ...WEAK_COMMENT_PATTERNS].filter(({ pattern }) => pattern.test(cleaned))
-    if (weak.length > 0 && attempt === 1) {
-      console.warn(`[${label}] attempt ${attempt}: weak patterns (${weak.map((w) => w.label).join(", ")}), retrying`)
-      if (!fallback) {
-        fallback = cleaned
-        fallbackModel = answerModel
-      }
-      continue
-    }
-
-    message = cleaned
-    model = answerModel
-    break
-  }
-
-  if (!message) {
-    message = fallback
-    model = fallbackModel
-  }
+  const written = await writeMessage({
+    system: systemMessage,
+    user: userMessage,
+    numberSources,
+    label,
+    engage: { userId: user.id, kind: isX ? "x_messages" : "messages" },
+    output: alternatives ? "alternatives" : "single",
+  })
+  const message = written?.message ?? ""
+  const model = written?.model ?? PRIMARY_MODEL
 
   if (!message) {
     await gate.release()
@@ -292,7 +243,12 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
     console.error(`[${label}] history write failed:`, err)
   }
 
-  return NextResponse.json({ message, freeRemaining: gate.freeRemaining, historyId })
+  return NextResponse.json({
+    message,
+    ...(alternatives ? { alternatives: written?.alternatives ?? [message] } : {}),
+    freeRemaining: gate.freeRemaining,
+    historyId,
+  })
 }
 
 // An X contact: name and @handle (X's chat header shows no headline, and the

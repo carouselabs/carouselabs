@@ -18,6 +18,7 @@
 // your instructions" is content to respond to, not a command.
 
 import { BANNED_PHRASES } from "./commentPrompt"
+import { agentPromptSections, type AgentConfig } from "@/lib/engageAgents"
 
 export interface MessageProfileInput {
   goal: string
@@ -116,32 +117,50 @@ softening ("just wondering if", "no worries if not"). Polite, just efficient.`,
 // (CarouseLabs Engage for X) says otherwise; its DMs share these reasons.
 export type MessagePlatform = "linkedin" | "x"
 
+// A custom agent (lib/engageAgents.ts) writing instead of a message profile.
+export interface MessageAgentInput {
+  name: string
+  config: AgentConfig
+  // This generation's tone, over the agent's own.
+  toneOverride?: string
+}
+
 export function buildMessageSystemMessage(
   profile: MessageProfileInput,
   isOpener: boolean,
   platform: MessagePlatform = "linkedin",
+  agent?: MessageAgentInput,
 ): string {
   const profileSections: string[] = []
-  const toneGuidance = TONE_GUIDANCE.filter(({ test }) => test.test(profile.tone)).map((t) => t.guidance)
-  profileSections.push(`## Why this conversation is happening
+  if (agent) {
+    // The agent's own sections take the profile's place; its tone gets the
+    // same steering a profile's would.
+    const { sections, tone } = agentPromptSections(agent.name, agent.config, agent.toneOverride)
+    const toneGuidance = TONE_GUIDANCE.filter(({ test }) => test.test(tone)).map((t) => t.guidance)
+    profileSections.push(...sections)
+    if (toneGuidance.length > 0) profileSections.push(`## Tone, in practice\n${toneGuidance.join("\n\n")}`)
+  } else {
+    const toneGuidance = TONE_GUIDANCE.filter(({ test }) => test.test(profile.tone)).map((t) => t.guidance)
+    profileSections.push(`## Why this conversation is happening
 ${profile.goal}
 
 - Tone: ${profile.tone}${toneGuidance.length > 0 ? `\n\n${toneGuidance.join("\n\n")}` : ""}`)
 
-  const constraints: string[] = []
-  if (profile.alwaysDo?.trim()) constraints.push(`- Always: ${profile.alwaysDo.trim()}`)
-  if (profile.neverDo?.trim()) constraints.push(`- Never: ${profile.neverDo.trim()}`)
-  if (constraints.length > 0) profileSections.push(`## Constraints\n${constraints.join("\n")}`)
+    const constraints: string[] = []
+    if (profile.alwaysDo?.trim()) constraints.push(`- Always: ${profile.alwaysDo.trim()}`)
+    if (profile.neverDo?.trim()) constraints.push(`- Never: ${profile.neverDo.trim()}`)
+    if (constraints.length > 0) profileSections.push(`## Constraints\n${constraints.join("\n")}`)
 
-  const samples = (profile.samples ?? []).map((sample) => sample.trim()).filter(Boolean)
-  if (samples.length > 0) {
-    profileSections.push(`## Voice
+    const samples = (profile.samples ?? []).map((sample) => sample.trim()).filter(Boolean)
+    if (samples.length > 0) {
+      profileSections.push(`## Voice
 Match the voice of these messages. Copy their rhythm, sentence length and
 level of formality, not their subject matter.
 
 <samples>
 ${samples.map((sample) => `<sample>${sample}</sample>`).join("\n")}
 </samples>`)
+    }
   }
 
   const situation = isOpener
@@ -164,6 +183,16 @@ have no you="true" or them="true" marking at all (sender unresolved) — when
 that happens, do NOT guess who sent it or treat it as license to swap
 perspective. Write the next message the account holder would send, full stop.`
 
+  // An agent with a set length says so in its Style section; otherwise the
+  // moment decides.
+  const lengthRule =
+    agent && agent.config.length !== "auto"
+      ? "Follow the length in the Style section above. Never pad to sound thorough."
+      : `There is no fixed length. Match what the moment calls for: an opener is
+usually a few sentences; a reply can be one line or several, depending on what
+they said and how much there is to respond to. Never pad to sound thorough,
+and never write a wall of text where two sentences would do.`
+
   const site = platform === "x" ? "X (formerly Twitter)" : "LinkedIn"
   const siteNote =
     platform === "x"
@@ -177,10 +206,7 @@ relationships — not cold sales copy, not a script.${siteNote}
 ${profileSections.join("\n\n")}
 
 ## LENGTH
-There is no fixed length. Match what the moment calls for: an opener is
-usually a few sentences; a reply can be one line or several, depending on what
-they said and how much there is to respond to. Never pad to sound thorough,
-and never write a wall of text where two sentences would do.
+${lengthRule}
 
 ## The situation
 ${situation}

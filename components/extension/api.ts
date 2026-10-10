@@ -6,9 +6,12 @@
 
 export class ExtApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  // The error response's JSON body (e.g. the current agent on a 409).
+  data: Record<string, unknown>
+  constructor(status: number, message: string, data: Record<string, unknown> = {}) {
     super(message)
     this.status = status
+    this.data = data
   }
 }
 
@@ -20,7 +23,7 @@ export async function extApi<T>(path: string, init: RequestInit = {}): Promise<T
   })
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
   if (!res.ok) {
-    throw new ExtApiError(res.status, typeof body.error === "string" ? body.error : `Request failed (${res.status})`)
+    throw new ExtApiError(res.status, typeof body.error === "string" ? body.error : `Request failed (${res.status})`, body)
   }
   return body as T
 }

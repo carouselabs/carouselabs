@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { RotateCcw, ShieldOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { browserName, extensionsIconLooks } from "@/lib/browserName";
@@ -18,41 +18,51 @@ export function useSiteBlocked(): { blocked: boolean; checking: boolean; check: 
   const [blocked, setBlocked] = useState(false);
   const [checking, setChecking] = useState(false);
   const running = useRef(false);
-  const mounted = useRef(true);
 
-  const check = useRef(async () => {
-    if (running.current) return;
+  // The answer, one check at a time: true when the site blocks extensions,
+  // null when it couldn't be told (a check already running, the panel closing).
+  const isBlocked = useCallback(async (): Promise<boolean | null> => {
+    if (running.current) return null;
     running.current = true;
-    setChecking(true);
     try {
       const status = await contentScriptStatus(await activeTab());
-      if (!mounted.current) return;
-      setBlocked(status === "blocked");
       if (status === "blocked") reportClientError(PLATFORM === "x" ? "x_replies" : "comments", "site_blocked");
+      return status === "blocked";
     } catch {
-      // The panel is closing; nothing to update.
+      return null;
     } finally {
       running.current = false;
-      if (mounted.current) setChecking(false);
     }
-  }).current;
+  }, []);
 
   useEffect(() => {
-    mounted.current = true;
-    void check();
-    const stop = onActiveTabChange(() => void check());
+    let cancelled = false;
+    async function refresh() {
+      const result = await isBlocked();
+      if (!cancelled && result !== null) setBlocked(result);
+    }
+    void refresh();
+    const stop = onActiveTabChange(() => void refresh());
     const onVisible = () => {
-      if (document.visibilityState === "visible") void check();
+      if (document.visibilityState === "visible") void refresh();
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
     return () => {
-      mounted.current = false;
+      cancelled = true;
       stop();
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [check]);
+  }, [isBlocked]);
+
+  // "Check again": the same, with the button's spinner.
+  const check = useCallback(async () => {
+    setChecking(true);
+    const result = await isBlocked();
+    if (result !== null) setBlocked(result);
+    setChecking(false);
+  }, [isBlocked]);
 
   return { blocked, checking, check: () => void check() };
 }

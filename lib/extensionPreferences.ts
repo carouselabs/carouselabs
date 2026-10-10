@@ -103,8 +103,11 @@ export function isContactUrl(v: unknown): v is string {
 export interface ContactContextInput {
   contactUrl: string
   contactName: string
-  choice: "profile" | "custom" | "flow"
+  choice: "profile" | "custom" | "flow" | "agent"
   profileId: string | null
+  // choice "agent": the EngageAgent. Left as stored when a caller doesn't
+  // send it (panels without agents), so they never clear someone's agent.
+  agentId?: string | null
   purpose: string
   tone: string
 }
@@ -113,14 +116,15 @@ export function parseContactContext(body: unknown): Parsed<ContactContextInput> 
   const o = obj(body)
   if (!o) return { ok: false, error: "Invalid request body" }
   if (!isContactUrl(o.contactUrl)) return { ok: false, error: "contactUrl must be a LinkedIn profile path (/in/…)" }
-  if (o.choice !== "profile" && o.choice !== "custom" && o.choice !== "flow") {
-    return { ok: false, error: 'choice must be "profile", "custom" or "flow"' }
+  if (o.choice !== "profile" && o.choice !== "custom" && o.choice !== "flow" && o.choice !== "agent") {
+    return { ok: false, error: 'choice must be "profile", "custom", "flow" or "agent"' }
   }
   const value: ContactContextInput = {
     contactUrl: o.contactUrl,
     contactName: str(o.contactName, 100),
     choice: o.choice,
     profileId: str(o.profileId, 40) || null,
+    ...("agentId" in o ? { agentId: str(o.agentId, 40) || null } : {}),
     purpose: str(o.purpose, MAX_MESSAGE_PURPOSE),
     tone: str(o.tone, 60),
   }

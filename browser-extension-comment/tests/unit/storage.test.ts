@@ -17,6 +17,11 @@ describe("per-contact conversation memory", () => {
     expect(await loadMessageContext(URL_A)).toEqual({ choice: "custom", profileId: "", purpose: "Lead", tone: "Direct" });
   });
 
+  it("round-trips a conversation's agent", async () => {
+    await saveMessageContext(URL_A, { choice: "agent", agentId: "ag1", profileId: "mp1", purpose: "", tone: "" });
+    expect(await loadMessageContext(URL_A)).toEqual({ choice: "agent", agentId: "ag1", profileId: "mp1", purpose: "", tone: "" });
+  });
+
   it("caps the stored purpose", async () => {
     await saveMessageContext(URL_A, { choice: "custom", profileId: "", purpose: "x".repeat(5000), tone: "" });
     expect((await loadMessageContext(URL_A))?.purpose).toHaveLength(MAX_MESSAGE_PURPOSE_CHARS);

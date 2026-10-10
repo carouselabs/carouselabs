@@ -5,6 +5,7 @@ import { ProfileForm, draftFromProfile, xProfileFormSite } from "@/sidepanel/com
 import { ProfileList } from "@/sidepanel/components/ProfileList";
 import { ScreenHeader } from "@/sidepanel/components/ScreenHeader";
 import { MessageProfilesScreen } from "@/sidepanel/components/screens/MessageProfilesScreen";
+import { AgentsScreen } from "@/sidepanel/components/screens/AgentsScreen";
 import { X_MAX_LENGTH } from "@/x/lib/xText";
 
 type View =
@@ -13,7 +14,8 @@ type View =
   | { mode: "edit"; profile: CommentProfile }
   | { mode: "duplicate"; profile: CommentProfile };
 
-export type XProfileKind = "replies" | "messages";
+// "agents": the AI agents Messages can reply with, shared with LinkedIn.
+export type XProfileKind = "replies" | "messages" | "agents";
 
 interface Props {
   // Opens straight into a builder (from "+ Create custom profile" on Home or
@@ -107,12 +109,17 @@ export function XProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {})
         options={[
           { value: "replies", label: "Replies" },
           { value: "messages", label: "Messages" },
+          { value: "agents", label: "Agents" },
         ]}
         value={tab}
         onChange={setTab}
       />
     </>
   );
+
+  if (tab === "agents") {
+    return <AgentsScreen header={header} startInBuilder={startInBuilder === "agents"} onBuilderOpened={onBuilderOpened} />;
+  }
 
   if (tab === "messages") {
     return (

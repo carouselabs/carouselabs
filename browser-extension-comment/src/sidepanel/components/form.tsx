@@ -179,7 +179,15 @@ export function FormLayout({
   );
 }
 
-export function DefaultCheckbox({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
+export function DefaultCheckbox({
+  checked,
+  onChange,
+  label = "Use this profile by default",
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label?: string;
+}) {
   return (
     <label className="flex cursor-pointer items-center gap-2 text-sm">
       <input
@@ -188,7 +196,7 @@ export function DefaultCheckbox({ checked, onChange }: { checked: boolean; onCha
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
       />
-      Use this profile by default
+      {label}
     </label>
   );
 }

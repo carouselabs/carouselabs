@@ -63,7 +63,8 @@ export interface MessageInsertExpectation {
 // Only makes real sense once there is a thread to read; with an empty
 // thread it still generates, just a more generic opener than a stated
 // reason would produce.
-export type MessageContextChoice = "profile" | "custom" | "flow";
+// "agent": one of the person's own AI agents (src/lib/agents.ts) writes.
+export type MessageContextChoice = "profile" | "custom" | "flow" | "agent";
 
 // Shared with MessageProfileForm's builder, so a saved profile and a one-off
 // "write my own" purpose offer the same tone vocabulary rather than two
@@ -87,6 +88,8 @@ export interface MessageContextSetting {
   // no stated reason at all).
   choice: MessageContextChoice;
   profileId: string;
+  // choice "agent": which agent. Absent from settings saved before agents.
+  agentId?: string;
   purpose: string;
   // A tone override. Meaningful for every choice, not just "custom": it can
   // also override a saved profile's own baked-in tone for one generation.
@@ -107,17 +110,19 @@ export async function loadMessageContext(profileUrl: string): Promise<MessageCon
   const key = contactKey(profileUrl);
   const stored = (await chrome.storage.local.get(key))[key];
   if (!stored || typeof stored !== "object") return null;
-  const { choice, profileId, purpose, tone } = stored as Partial<MessageContextSetting>;
-  if (choice !== "profile" && choice !== "custom" && choice !== "flow") return null;
+  const { choice, profileId, agentId, purpose, tone } = stored as Partial<MessageContextSetting>;
+  if (choice !== "profile" && choice !== "custom" && choice !== "flow" && choice !== "agent") return null;
   const storedTone = typeof tone === "string" ? tone : "";
   return {
     choice,
     profileId: typeof profileId === "string" ? profileId : "",
+    // Only when an agent was set, so a setting without one reads as before.
+    ...(typeof agentId === "string" && agentId ? { agentId } : {}),
     purpose: typeof purpose === "string" ? purpose : "",
-    // Empty stays empty for "profile" (means "use the profile's own tone",
+    // Empty stays empty for "profile" and "agent" (means "use its own tone",
     // not "Natural"); custom/flow have no profile tone to defer to, so an
     // empty value there is filled in.
-    tone: storedTone || (choice === "profile" ? "" : MESSAGE_TONES[0]),
+    tone: storedTone || (choice === "profile" || choice === "agent" ? "" : MESSAGE_TONES[0]),
   };
 }
 
@@ -127,6 +132,7 @@ export function saveMessageContext(profileUrl: string, setting: MessageContextSe
     [contactKey(profileUrl)]: {
       choice: setting.choice,
       profileId: setting.profileId,
+      ...(setting.agentId ? { agentId: setting.agentId } : {}),
       purpose: setting.purpose.slice(0, MAX_MESSAGE_PURPOSE_CHARS),
       tone: setting.tone,
     },

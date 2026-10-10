@@ -10,6 +10,7 @@ import { Puzzle } from "lucide-react"
 const TABS = [
   { href: "/extension", label: "Overview" },
   { href: "/extension/profiles", label: "Custom tones" },
+  { href: "/extension/agents", label: "AI agents" },
   { href: "/extension/history", label: "History" },
   { href: "/extension/settings", label: "Settings" },
   { href: "/extension/x", label: "X (Twitter)" },

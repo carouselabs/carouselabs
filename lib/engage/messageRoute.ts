@@ -29,6 +29,7 @@ import {
 import { callCommentModelWithInfo, generationDeadline, GenerationTimeout, parseComment, sanitizeComment, PRIMARY_MODEL } from "@/lib/ai/commentModel"
 import { HISTORY_SNIPPET_CHARS, linkedInUrl } from "@/lib/extensionHistory"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
+import { agentNumberSources, normalizeAgentConfig } from "@/lib/engageAgents"
 
 const MAX_FIELD_CHARS = 300
 const MAX_MESSAGE_CHARS = 4000
@@ -102,6 +103,9 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
   // or `flow` must be present instead — three-way either/or, unlike the
   // connection-note route's two-way "profile" vs "custom".
   let profileId: string | undefined
+  // Or one of the user's own agents (model EngageAgent), which writes
+  // instead of a reason.
+  let agentId: string | undefined
 
   try {
     const body = await req.json()
@@ -113,6 +117,7 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
         : ""
     thread = parseThread(body.thread)
     profileId = typeof body.profileId === "string" && body.profileId ? body.profileId : undefined
+    agentId = typeof body.agentId === "string" && body.agentId ? body.agentId.slice(0, 40) : undefined
     goal = str(body.goal, MAX_GOAL_CHARS) || undefined
     flow = body.flow === true
     // Meaningful regardless of profileId/goal: it can override a saved
@@ -122,7 +127,7 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
     tone = str(body.tone, 60) || undefined
     extraInstruction = str(body.extraInstruction, 500) || undefined
 
-    if (!profileId && !goal && !flow) {
+    if (!agentId && !profileId && !goal && !flow) {
       throw new Error("No reason was given for this conversation. Pick a saved reason, write one, or choose \"Just continue\", then retry.")
     }
     if (!contact.name) {
@@ -145,6 +150,13 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
     return NextResponse.json({ error: "Message profile not found" }, { status: 404 })
   }
 
+  // Agents are only ever the user's own.
+  const agentRow = agentId ? await db.engageAgent.findFirst({ where: { id: agentId, userId: user.id } }) : null
+  if (agentId && !agentRow) {
+    return NextResponse.json({ error: "That agent no longer exists. Pick another one, then try again." }, { status: 404 })
+  }
+  const agent = agentRow ? { name: agentRow.name, config: normalizeAgentConfig(agentRow.config), toneOverride: tone } : undefined
+
   // A saved profile can still have its tone overridden for one generation.
   // Without a saved profile, a typed reason (or the flow default) becomes a
   // one-off profile, no samples, same "custom" idea connection notes use.
@@ -157,13 +169,13 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
   if (!gate.ok) return gate.response
 
   const isOpener = thread.length === 0
-  const systemMessage = buildMessageSystemMessage(profileInput, isOpener, platform)
+  const systemMessage = buildMessageSystemMessage(profileInput, isOpener, platform, agent)
   const userMessage = buildMessageUserMessage(contact, thread, extraInstruction, platform)
 
   const numberSources = [
     contact.name,
     contact.headline,
-    profileInput.goal,
+    agent ? agentNumberSources(agent.config) : profileInput.goal,
     extraInstruction ?? "",
     ...thread.map((entry) => entry.text),
   ].join(" ")
@@ -263,8 +275,8 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
       data: {
         userId: user.id,
         kind: isX ? "x_message" : "message",
-        profileId: profile?.id ?? null,
-        profileName: profile?.name ?? (flow && !goal ? "Just continue" : "Custom reason"),
+        profileId: agent ? null : (profile?.id ?? null),
+        profileName: agent ? `Agent: ${agent.name}` : (profile?.name ?? (flow && !goal ? "Just continue" : "Custom reason")),
         postAuthor: contact.name,
         postUrl: threadUrl,
         postSnippet: answered.slice(0, HISTORY_SNIPPET_CHARS),

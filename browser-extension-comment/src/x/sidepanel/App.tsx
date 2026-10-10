@@ -32,6 +32,7 @@ function renderScreen(
       return (
         <MessagesScreen
           onCreateProfile={() => onCreateProfile("messages")}
+          onCreateAgent={() => onCreateProfile("agents")}
           readOnOpen={messages.readOnOpen}
           openConversation={messages.openConversation}
         />

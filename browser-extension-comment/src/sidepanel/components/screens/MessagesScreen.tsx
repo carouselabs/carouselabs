@@ -37,6 +37,7 @@ import { markHistoryAction } from "@/lib/history";
 // Kept on the account, so the website's Extension section edits the same values.
 import { loadShowInsert, loadSyncedMessageContext, saveSyncedMessageContext } from "@/lib/syncedSettings";
 import { activeTab } from "../../activeTab";
+import { AGENT_PURPOSE_LABELS, fetchAgents, type Agent } from "@/lib/agents";
 import {
   apiFetch,
   ApiError,
@@ -71,11 +72,16 @@ import {
 // which a dropdown option can't use as its value.
 const CREATE_CUSTOM_VALUE = "__create_custom__";
 const PROFILE_TONE_VALUE = "__profile_tone__";
+// The agent dropdown's "no agent" and "+ Create agent" entries.
+const NO_AGENT_VALUE = "__no_agent__";
+const CREATE_AGENT_VALUE = "__create_agent__";
 
 
 interface Props {
   // Opens the message-profile builder; owned by App, like the other panels.
   onCreateProfile: () => void;
+  // Opens the agent builder (Profiles, Agents tab).
+  onCreateAgent?: () => void;
   // Read the open conversation as soon as the screen is ready: the person got
   // here from the conversation hint's "Write a reply with AI".
   readOnOpen?: boolean;
@@ -84,7 +90,7 @@ interface Props {
   openConversation?: string | null;
 }
 
-export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConversation = null }: Props) {
+export function MessagesScreen({ onCreateProfile, onCreateAgent, readOnOpen = false, openConversation = null }: Props) {
   const [profiles, setProfiles] = useState<MessageProfile[]>([]);
   const [profilesLoaded, setProfilesLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -95,6 +101,10 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
 
   const [choice, setChoice] = useState<MessageContextChoice>("profile");
   const [profileId, setProfileId] = useState<string>("");
+  // The person's AI agents, and the one writing this conversation ("" when
+  // none: then the reason below does). An agent replaces the reason.
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agentId, setAgentId] = useState<string>("");
   const [purpose, setPurpose] = useState("");
   // Only used for choice: "custom" — a saved profile carries its own tone.
   const [tone, setTone] = useState<string>(MESSAGE_TONES[0]);
@@ -132,18 +142,24 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
   // runs from the first render, before these arrive.
   const profilesRef = useRef<MessageProfile[]>([]);
   const meRef = useRef<MeResponse | null>(null);
+  const agentsRef = useRef<Agent[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
       apiFetch<{ profiles: MessageProfile[] }>("/api/ext/message-profiles"),
       apiFetch<MeResponse>("/api/ext/me"),
+      // Agents are extra: without them (an older server, a failed request)
+      // the screen works exactly as before.
+      fetchAgents().catch(() => [] as Agent[]),
     ])
-      .then(([{ profiles: fetched }, meRes]) => {
+      .then(([{ profiles: fetched }, meRes, fetchedAgents]) => {
         if (cancelled) return;
         profilesRef.current = fetched;
         meRef.current = meRes;
+        agentsRef.current = fetchedAgents;
         setProfiles(fetched);
+        setAgents(fetchedAgents);
         setExtensionAccess(meRes.extension);
       })
       .catch((err) => {
@@ -190,9 +206,25 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
     );
   }
 
+  // The agent a conversation starts with: the person's default agent, if any.
+  function defaultAgentId(): string {
+    return agentsRef.current.find((a) => a.isDefault)?.id ?? "";
+  }
+
   async function applyContextForContact(url: string) {
     const stored = await loadSyncedMessageContext(url);
-    if (stored) {
+    if (stored?.choice === "agent") {
+      // Its agent, or (deleted since) the default one; the reason underneath
+      // starts from the default either way.
+      const kept = agentsRef.current.some((a) => a.id === stored.agentId) ? (stored.agentId ?? "") : defaultAgentId();
+      setAgentId(kept);
+      setChoice("profile");
+      setProfileId(stored.profileId || defaultProfileId());
+      setPurpose(stored.purpose);
+      setTone(stored.tone);
+    } else if (stored) {
+      // A reason was picked for this conversation: no agent.
+      setAgentId("");
       setChoice(stored.choice);
       setProfileId(stored.profileId || defaultProfileId());
       setPurpose(stored.purpose);
@@ -201,6 +233,7 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
       // custom/flow), so it is used as-is rather than re-defaulted here.
       setTone(stored.tone);
     } else {
+      setAgentId(defaultAgentId());
       setChoice("profile");
       setProfileId(defaultProfileId());
       setPurpose("");
@@ -255,9 +288,18 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
     }
   }
 
-  async function persistContext(next: MessageContextSetting) {
+  // Saved with the agent when one writes: the choice is then "agent".
+  async function persistContext(next: MessageContextSetting, nextAgentId: string = agentId) {
     if (!conversation?.contact.profileUrl) return;
-    await saveSyncedMessageContext(conversation.contact.profileUrl, next, conversation.contact.name);
+    const setting: MessageContextSetting = nextAgentId
+      ? { ...next, choice: "agent", agentId: nextAgentId }
+      : { ...next, agentId: "" };
+    await saveSyncedMessageContext(conversation.contact.profileUrl, setting, conversation.contact.name);
+  }
+
+  function handleAgentChange(id: string) {
+    setAgentId(id);
+    void persistContext({ choice, profileId, purpose, tone }, id);
   }
 
   function handleChoiceChange(next: MessageContextChoice) {
@@ -284,18 +326,29 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
     void persistContext({ choice, profileId, purpose, tone: next });
   }
 
+  // The agent writing this conversation: only one that still exists counts.
+  const activeAgent = agentId ? (agents.find((a) => a.id === agentId) ?? null) : null;
+  const writingAgentId = activeAgent?.id ?? "";
+
   const isOpener = (conversation?.thread.length ?? 0) === 0;
   const canGenerate =
     Boolean(conversation?.contact.name) &&
-    (choice === "profile" ? Boolean(profileId) : choice === "custom" ? Boolean(purpose.trim()) : true);
+    (writingAgentId ? true : choice === "profile" ? Boolean(profileId) : choice === "custom" ? Boolean(purpose.trim()) : true);
 
   const hasMessage = message.trim().length > 0;
   const showResult = generating || hasResult;
 
   // Which reason is picked, and how it reads, for "Rewrite with …".
-  const reasonKey = choice === "profile" ? `profile:${profileId}` : choice === "custom" ? `custom:${purpose.trim()}` : "flow";
+  const reasonKey = writingAgentId
+    ? `agent:${writingAgentId}`
+    : choice === "profile"
+      ? `profile:${profileId}`
+      : choice === "custom"
+        ? `custom:${purpose.trim()}`
+        : "flow";
   function reasonName(key: string): string {
     if (key === "flow") return "Just continue";
+    if (key.startsWith("agent:")) return agents.find((a) => `agent:${a.id}` === key)?.name ?? "an agent";
     if (key.startsWith("custom:")) return "your own reason";
     return profiles.find((p) => `profile:${p.id}` === key)?.name ?? "another reason";
   }
@@ -334,9 +387,11 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
           // For History's "Open chat" link only; never sent to the model.
           threadPath: conversation.threadPath,
           thread: conversation.thread,
-          profileId: choice === "profile" ? profileId : undefined,
-          goal: choice === "custom" ? purpose.trim() : undefined,
-          flow: choice === "flow" || undefined,
+          // An agent writes instead of a reason.
+          agentId: writingAgentId || undefined,
+          profileId: !writingAgentId && choice === "profile" ? profileId : undefined,
+          goal: !writingAgentId && choice === "custom" ? purpose.trim() : undefined,
+          flow: (!writingAgentId && choice === "flow") || undefined,
           // Sent regardless of choice: overrides a saved profile's own tone
           // too, when the user picked one explicitly.
           tone: tone || undefined,
@@ -416,9 +471,9 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
   // Why Generate is off, in words, rather than a button that just won't press.
   const generateBlocker = !conversation?.contact.name
     ? "Couldn't tell who this conversation is with. Read it again."
-    : choice === "profile" && !profileId
+    : !writingAgentId && choice === "profile" && !profileId
       ? "Pick a saved reason first."
-      : choice === "custom" && !purpose.trim()
+      : !writingAgentId && choice === "custom" && !purpose.trim()
         ? "Write your reason first."
         : null;
 
@@ -533,7 +588,61 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
             {readError && <Alert>{readError}</Alert>}
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
+            <label id="message-agent-label" className="text-xs font-medium text-muted-foreground">
+              Agent <span className="font-normal">(optional)</span>
+            </label>
+            <Select
+              value={writingAgentId || NO_AGENT_VALUE}
+              onValueChange={(value) => {
+                if (value === CREATE_AGENT_VALUE) {
+                  onCreateAgent?.();
+                  return;
+                }
+                handleAgentChange(value === NO_AGENT_VALUE ? "" : value);
+              }}
+            >
+              <SelectTrigger aria-labelledby="message-agent-label">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_AGENT_VALUE}>No agent: use a reason</SelectItem>
+                {agents.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>Your agents</SelectLabel>
+                    {agents.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+                {onCreateAgent && (
+                  <>
+                    <SelectSeparator />
+                    <SelectItem value={CREATE_AGENT_VALUE} className="font-medium text-primary-text">
+                      + Create agent
+                    </SelectItem>
+                  </>
+                )}
+              </SelectContent>
+            </Select>
+            {activeAgent && (
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {AGENT_PURPOSE_LABELS[activeAgent.purpose]} · {activeAgent.description || activeAgent.config.goals}
+              </p>
+            )}
+            {activeAgent && rewriteReason && (
+              <RewriteButton
+                label={`Rewrite with ${reasonName(reasonKey)}`}
+                current={`Current message: ${reasonName(resultReason!)}`}
+                onClick={() => void handleGenerate()}
+              />
+            )}
+          </div>
+
+          {/* While an agent writes, the reason is its business. */}
+          <div className={activeAgent ? "hidden" : "space-y-2"}>
             <p className="text-xs font-medium text-muted-foreground">Reason for this conversation</p>
             <Segmented
               label="Reason for this conversation"
@@ -636,7 +745,7 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
 
           <div className="space-y-1.5">
             <label id="message-tone-label" className="text-xs font-medium text-muted-foreground">
-              Tone {choice === "profile" && <span className="font-normal">(optional)</span>}
+              Tone {(activeAgent || choice === "profile") && <span className="font-normal">(optional)</span>}
             </label>
             <Select
               value={tone || PROFILE_TONE_VALUE}
@@ -646,7 +755,11 @@ export function MessagesScreen({ onCreateProfile, readOnOpen = false, openConver
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {choice === "profile" && <SelectItem value={PROFILE_TONE_VALUE}>Use the profile&apos;s own tone</SelectItem>}
+                {activeAgent ? (
+                  <SelectItem value={PROFILE_TONE_VALUE}>Use the agent&apos;s own tone</SelectItem>
+                ) : (
+                  choice === "profile" && <SelectItem value={PROFILE_TONE_VALUE}>Use the profile&apos;s own tone</SelectItem>
+                )}
                 {tone && !(MESSAGE_TONES as readonly string[]).includes(tone) && <SelectItem value={tone}>{tone}</SelectItem>}
                 {MESSAGE_TONES.map((t) => (
                   <SelectItem key={t} value={t}>

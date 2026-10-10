@@ -144,6 +144,7 @@ model User {
   linkedinProfile            Json?
   insertButtonHidden         Boolean?
   contactContexts            ContactContext[]
+  engageAgents               EngageAgent[]
 
   // ── Engage admin (admin.carouselabs.com → Engage) ──
   engageControl EngageUserControl?
@@ -538,6 +539,35 @@ model MessageProfile {
   @@index([userId])
 }
 
+// A custom AI conversation agent (CarouseLabs Engage, both extensions'
+// Messages screens; the website's Extension → AI agents). Always the user's
+// own: there are no shared presets. `config` is the structured setup
+// (business, offer, audience, goals, strategy, style, verified facts,
+// objections, rules, example replies; lib/engageAgents.ts validates it), from
+// which the reply prompt is built on every generation. `version` goes up on
+// every save, so an edit made from a stale copy (another device, the
+// website) is refused instead of overwriting the newer one.
+// scripts/engage-agents.sql.
+model EngageAgent {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String   @default("")
+  // sales | networking | recruiting | partnerships | support | other
+  purpose     String   @default("other")
+  config      Json     @default("{}")
+  // "active", or "draft" while the AI builder is still filling it in.
+  status      String   @default("active")
+  // The agent new conversations start with (one per user at most).
+  isDefault   Boolean  @default(false)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
 model CommentProfile {
   id            String   @id @default(cuid())
   userId        String?
@@ -652,8 +682,10 @@ model ContactContext {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   contactUrl  String
   contactName String   @default("")
-  choice      String // "profile" | "custom" | "flow"
+  choice      String // "profile" | "custom" | "flow" | "agent"
   profileId   String?
+  // choice "agent": which EngageAgent. Panels without agents ignore it.
+  agentId     String?
   purpose     String   @default("")
   tone        String   @default("")
   createdAt   DateTime @default(now())

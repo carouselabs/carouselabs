@@ -34,6 +34,12 @@ interface Props<P extends ListProfile> {
   onDelete: (profile: P) => void;
   /** Link to edit on the website, where one exists. */
   websiteLink?: { label: string; onClick: () => void };
+  /** What the items are called ("profile" unless said: agents use "agent"). */
+  noun?: string;
+  /** Shown instead of the list when the person has none of their own. */
+  emptyState?: ReactNode;
+  /** Offered on the default item, where a list allows having no default. */
+  onUnsetDefault?: (profile: P) => void;
 }
 
 // The list of one kind of profile (comments, connection notes, messages).
@@ -56,6 +62,9 @@ export function ProfileList<P extends ListProfile>({
   onSetDefault,
   onDelete,
   websiteLink,
+  noun = "profile",
+  emptyState,
+  onUnsetDefault,
 }: Props<P>) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
@@ -81,7 +90,7 @@ export function ProfileList<P extends ListProfile>({
 
         {confirming ? (
           <div role="group" aria-label={`Delete ${profile.name}?`} className="flex flex-wrap items-center gap-2 pt-0.5">
-            <span className="text-xs font-medium text-destructive">Delete this profile?</span>
+            <span className="text-xs font-medium text-destructive">Delete this {noun}?</span>
             <Button
               size="sm"
               variant="destructive"
@@ -114,6 +123,11 @@ export function ProfileList<P extends ListProfile>({
               <Button size="sm" variant="ghost" className="h-7 px-2" loading={pending} onClick={() => onSetDefault(profile)}>
                 {!pending && <Star aria-hidden className="!size-3.5" />}
                 Make default
+              </Button>
+            )}
+            {isDefault && onUnsetDefault && (
+              <Button size="sm" variant="ghost" className="h-7 px-2" loading={pending} onClick={() => onUnsetDefault(profile)}>
+                Stop using by default
               </Button>
             )}
             {/* An icon at the far end, away from the everyday actions. */}
@@ -165,14 +179,14 @@ export function ProfileList<P extends ListProfile>({
         </div>
         <Button size="sm" onClick={onNew}>
           <Plus aria-hidden />
-          New profile
+          New {noun}
         </Button>
       </div>
 
       {error && <Alert>{error}</Alert>}
 
       {loading ? (
-        <div aria-label="Loading profiles" role="status" className="space-y-2 rounded-lg border bg-card p-3">
+        <div aria-label={`Loading ${noun}s`} role="status" className="space-y-2 rounded-lg border bg-card p-3">
           {[0, 1, 2].map((i) => (
             <div key={i} className="space-y-2 py-1.5">
               <Skeleton className="h-3.5 w-2/5" />
@@ -182,7 +196,8 @@ export function ProfileList<P extends ListProfile>({
         </div>
       ) : (
         <>
-          {section("Your profiles", null, custom)}
+          {custom.length === 0 && emptyState}
+          {section(`Your ${noun}s`, null, custom)}
           {section("Recommended by CarouseLabs", "Duplicate one to make it your own.", recommended)}
           {section("Built-in", recommended.length > 0 ? null : "Duplicate one to make it your own.", builtIn)}
         </>

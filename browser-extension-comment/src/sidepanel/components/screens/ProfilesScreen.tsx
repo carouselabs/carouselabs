@@ -6,6 +6,7 @@ import { ProfileList } from "../ProfileList";
 import { ScreenHeader } from "../ScreenHeader";
 import { ConnectionProfilesScreen } from "./ConnectionProfilesScreen";
 import { MessageProfilesScreen } from "./MessageProfilesScreen";
+import { AgentsScreen } from "./AgentsScreen";
 
 type View =
   | { mode: "list" }
@@ -20,7 +21,8 @@ type LoadState = "loading" | "ready" | "error";
 // Which kind of profile the screen opens on, and whose builder to open. All
 // three live here rather than on separate screens: they are the same idea,
 // and one nav entry keeps them findable.
-export type ProfileKind = "comment" | "connection" | "message";
+// "agent": the AI agents Messages can reply with (AgentsScreen).
+export type ProfileKind = "comment" | "connection" | "message" | "agent";
 
 interface Props {
   // Set when onboarding ended on "Create my profile now", or when a panel's
@@ -139,6 +141,7 @@ export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) 
           { value: "comment", label: "Comments" },
           { value: "connection", label: "Notes" },
           { value: "message", label: "Messages" },
+          { value: "agent", label: "Agents" },
         ]}
         value={tab}
         onChange={setTab}
@@ -154,6 +157,10 @@ export function ProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {}) 
         onBuilderOpened={onBuilderOpened}
       />
     );
+  }
+
+  if (tab === "agent") {
+    return <AgentsScreen header={header} startInBuilder={startInBuilder === "agent"} onBuilderOpened={onBuilderOpened} />;
   }
 
   if (tab === "message") {

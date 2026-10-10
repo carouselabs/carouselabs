@@ -46,8 +46,10 @@ interface ContactRow {
   id: string;
   contactUrl: string;
   contactName: string;
-  choice: "profile" | "custom" | "flow";
+  choice: "profile" | "custom" | "flow" | "agent";
   profileId: string | null;
+  // Absent from servers before agents.
+  agentId?: string | null;
   purpose: string;
   tone: string;
 }
@@ -231,7 +233,13 @@ export async function loadSyncedMessageContext(profileUrl: string): Promise<Mess
   }
   await cache(
     key,
-    remote && { choice: remote.choice, profileId: remote.profileId ?? "", purpose: remote.purpose, tone: remote.tone },
+    remote && {
+      choice: remote.choice,
+      profileId: remote.profileId ?? "",
+      agentId: remote.agentId ?? "",
+      purpose: remote.purpose,
+      tone: remote.tone,
+    },
   );
   return loadMessageContext(profileUrl);
 }

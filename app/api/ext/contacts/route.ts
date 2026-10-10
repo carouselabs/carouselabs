@@ -16,6 +16,7 @@ const shape = (row: {
   contactName: string
   choice: string
   profileId: string | null
+  agentId: string | null
   purpose: string
   tone: string
   updatedAt: Date
@@ -25,6 +26,7 @@ const shape = (row: {
   contactName: row.contactName,
   choice: row.choice,
   profileId: row.profileId,
+  agentId: row.agentId,
   purpose: row.purpose,
   tone: row.tone,
   updatedAt: row.updatedAt.toISOString(),

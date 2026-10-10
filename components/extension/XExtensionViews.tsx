@@ -1,25 +1,35 @@
 "use client"
 
-// Extension → X: everything CarouseLabs Engage for X uses — its reply
-// profiles, its history and its settings — through the same routes as the X
-// side panel (app/api/ext/x/*, app/api/ext/history?platform=x), so a change
-// here shows up there and the other way round. The reasons behind X chats
+// CarouseLabs Engage for X's pages on the website (app/(app)/extension/x/*):
+// its reply profiles and its settings, through the same routes as the X side
+// panel (app/api/ext/x/*), so a change here shows up there and the other way
+// round. Its history is HistoryList platform="x". The reasons behind X chats
 // are shared with LinkedIn's conversations (Custom tones → Conversations).
 import { useCallback, useEffect, useState } from "react"
 import { Check, Loader2 } from "lucide-react"
 import { X_MAX_LENGTH, X_PREMIUM_REPLY_LENGTH } from "@/lib/xText"
 import { KindPanel, xKind } from "./ProfilesManager"
-import { HistoryList } from "./HistoryList"
 import { Row, selectClass } from "./ExtensionSettingsForm"
 import { errorMessage, extApi, type CommentProfile, type XSettings } from "./api"
 
-const VIEWS = [
-  { id: "profiles", label: "Reply profiles" },
-  { id: "history", label: "History" },
-  { id: "settings", label: "Settings" },
-] as const
+// X's settings, which the reply profiles need too (X Premium sets how long a
+// reply may be).
+function useXSettings() {
+  const [settings, setSettings] = useState<XSettings | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-type View = (typeof VIEWS)[number]["id"]
+  const load = useCallback(() => {
+    extApi<XSettings>("/api/ext/x/settings")
+      .then(setSettings)
+      .catch((err) => setError(errorMessage(err)))
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  return { settings, setSettings, error, load }
+}
 
 function XSettingsForm({ settings, onSaved }: { settings: XSettings; onSaved: (next: XSettings) => void }) {
   const [profiles, setProfiles] = useState<(CommentProfile & { isDefault?: boolean })[]>([])
@@ -134,61 +144,31 @@ function XSettingsForm({ settings, onSaved }: { settings: XSettings; onSaved: (n
   )
 }
 
-export function XExtensionManager() {
-  const [view, setView] = useState<View>("profiles")
-  const [settings, setSettings] = useState<XSettings | null>(null)
-  const [error, setError] = useState<string | null>(null)
+// Extension → Engage for X → Reply profiles.
+export function XReplyProfiles() {
+  const { settings, error, load } = useXSettings()
 
-  const loadSettings = useCallback(() => {
-    extApi<XSettings>("/api/ext/x/settings")
-      .then(setSettings)
-      .catch((err) => setError(errorMessage(err)))
-  }, [])
-
-  useEffect(() => {
-    loadSettings()
-  }, [loadSettings])
-
+  if (error) return <p className="text-[13px] text-[#DC2626]">{error}</p>
+  if (!settings) return <p className="text-[13px] text-[#9CA3AF]">Loading…</p>
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center gap-2">
-        {VIEWS.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            onClick={() => setView(v.id)}
-            className={[
-              "rounded-full px-4 py-2 text-[13px] font-medium transition-colors",
-              view === v.id
-                ? "bg-[#1A1A1A] text-white"
-                : "border border-[#E5E3DE] bg-white text-[#6B7280] hover:text-[#0A0A0A]",
-            ].join(" ")}
-          >
-            {v.label}
-          </button>
-        ))}
-      </div>
-
-      {error && <p className="text-[13px] text-[#DC2626]">{error}</p>}
-
-      {view === "history" ? (
-        <HistoryList platform="x" />
-      ) : !settings ? (
-        !error && <p className="text-[13px] text-[#9CA3AF]">Loading…</p>
-      ) : view === "settings" ? (
-        <XSettingsForm settings={settings} onSaved={setSettings} />
-      ) : (
-        <>
-          <KindPanel kind={xKind(settings.maxReplyLength)} me={null} onDefaultsChanged={loadSettings} />
-          <p className="text-[12px] text-[#9CA3AF]">
-            The reasons behind your X chats are shared with LinkedIn: edit them under{" "}
-            <a href="/extension/profiles" className="font-medium text-[#7C3AED] hover:underline">
-              Custom tones → Conversations
-            </a>
-            .
-          </p>
-        </>
-      )}
+      <KindPanel kind={xKind(settings.maxReplyLength)} me={null} onDefaultsChanged={load} />
+      <p className="text-[12px] text-[#9CA3AF]">
+        The reasons behind your X chats are shared with LinkedIn: edit them under{" "}
+        <a href="/extension/profiles" className="font-medium text-[#7C3AED] hover:underline">
+          Custom tones → Conversations
+        </a>
+        .
+      </p>
     </div>
   )
+}
+
+// Extension → Engage for X → Settings.
+export function XSettingsPanel() {
+  const { settings, setSettings, error } = useXSettings()
+
+  if (error) return <p className="text-[13px] text-[#DC2626]">{error}</p>
+  if (!settings) return <p className="text-[13px] text-[#9CA3AF]">Loading…</p>
+  return <XSettingsForm settings={settings} onSaved={setSettings} />
 }

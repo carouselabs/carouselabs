@@ -25,6 +25,16 @@ const ME = {
 };
 
 describe("Account screen", () => {
+  it("Open on carouselabs.com opens LinkedIn's pages (the X build opens X's)", async () => {
+    chromeMock().__store.extensionToken = "cl_cmt_live";
+    server({ "/api/ext/me": { status: 200, body: ME } });
+    render(<AccountScreen />);
+    fireEvent.click(await screen.findByRole("button", { name: /Open on carouselabs\.com/ }));
+    await waitFor(() =>
+      expect(new URL((chromeMock().tabs.create as ReturnType<typeof vi.fn>).mock.calls[0][0].url).pathname).toBe("/extension"),
+    );
+  });
+
   it("signs out: revokes server-side, then clears the local token", async () => {
     chromeMock().__store.extensionToken = "cl_cmt_live";
     server({ "/api/ext/me": { status: 200, body: ME }, "/api/ext/auth/signout": { status: 200, body: { ok: true } } });

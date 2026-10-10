@@ -22,3 +22,7 @@ export const TOKEN_MESSAGE_TYPE =
 
 // The hand-off page, told which extension is asking.
 export const CONNECT_PATH = PLATFORM === "x" ? "/extension-connect?for=x" : "/extension-connect";
+
+// This extension's own pages on the website: its overview here, its tabs
+// below it (/agents, /history, ...). Each extension has its own.
+export const WEBSITE_PATH = PLATFORM === "x" ? "/extension/x" : "/extension";

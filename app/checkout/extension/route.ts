@@ -44,5 +44,5 @@ export async function GET(req: Request) {
   if (checkout.kind === "subscribed" && checkout.manageUrl) return NextResponse.redirect(checkout.manageUrl, 303)
   // Already subscribed without a portal link, or checkout not configured:
   // the extension's plan page explains either case.
-  return NextResponse.redirect(new URL(platform === "x" ? "/extension/x" : "/extension/billing", req.url), 303)
+  return NextResponse.redirect(new URL(platform === "x" ? "/extension/x/billing" : "/extension/billing", req.url), 303)
 }

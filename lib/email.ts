@@ -29,7 +29,12 @@ import { ScheduledPostFailedEmail } from "@/emails/ScheduledPostFailedEmail"
 import { ScheduledPostPublishedEmail } from "@/emails/ScheduledPostPublishedEmail"
 import { WeeklySummaryEmail, type WeeklySummaryEmailPost } from "@/emails/WeeklySummaryEmail"
 
-import { EngageAccessGrantedEmail } from "@/emails/EngageAccessGrantedEmail"
+import {
+  EngageAccessGrantedEmail,
+  engageAccessGrantedSubject,
+  type GrantedExtensions,
+} from "@/emails/EngageAccessGrantedEmail"
+import { EXTENSION_STORE_URL, X_EXTENSION_STORE_URL } from "@/lib/plans"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -46,12 +51,14 @@ export async function sendWelcomeEmail(email: string, name: string) {
   if (error) throw new Error(`Resend: ${error.message}`)
 }
 
-export async function sendEngageAccessGrantedEmail(email: string, until: string | null, storeUrl: string | null) {
+export async function sendEngageAccessGrantedEmail(email: string, until: string | null, platform: GrantedExtensions) {
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: "You've got CarouseLabs Engage",
-    html: await render(EngageAccessGrantedEmail({ until, storeUrl })),
+    subject: engageAccessGrantedSubject(platform),
+    html: await render(
+      EngageAccessGrantedEmail({ until, platform, storeUrls: { linkedin: EXTENSION_STORE_URL, x: X_EXTENSION_STORE_URL } }),
+    ),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
 }

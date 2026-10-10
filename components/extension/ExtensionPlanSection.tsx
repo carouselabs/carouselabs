@@ -9,6 +9,7 @@ import {
   EXTENSION_STORE_URL,
   X_EXTENSION_CHECKOUT_PATH,
   X_EXTENSION_PLAN,
+  X_EXTENSION_STORE_URL,
 } from "@/lib/plans"
 import type { ExtAccessSummary } from "@/lib/extAccess"
 import type { EngagePlatform } from "@/lib/engage/features"
@@ -37,8 +38,7 @@ export function ExtensionPlanSection({ ext, platform = "linkedin" }: { ext: ExtA
   // X's checkout link has a built-in default (lib/plans.ts).
   const checkoutConfigured = isX || !!process.env.LEMONSQUEEZY_EXTENSION_CHECKOUT_URL
   const plan = isX ? X_EXTENSION_PLAN : EXTENSION_PLAN
-  // The X extension isn't in the Chrome Web Store yet.
-  const storeUrl = isX ? null : EXTENSION_STORE_URL
+  const storeUrl = isX ? X_EXTENSION_STORE_URL : EXTENSION_STORE_URL
   const cta =
     ext.access === "unlimited" ? (
       <ExtensionCTA

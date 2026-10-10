@@ -3,6 +3,7 @@ import { Bot, ChevronLeft, PenLine, Sparkles } from "lucide-react";
 import { apiFetch, ApiError, openWebsite } from "@/lib/api";
 import { AGENT_PURPOSE_LABELS, draftFromAgent, fetchAgents, type Agent, type AgentDraft } from "@/lib/agents";
 import { clearBuilderProgress, loadBuilderProgress, type BuilderProgress } from "@/lib/agentBuilder";
+import { WEBSITE_PATH } from "@/lib/platform";
 import { AgentForm } from "../AgentForm";
 import { AgentBuilder } from "../AgentBuilder";
 import { ProfileList } from "../ProfileList";
@@ -208,7 +209,7 @@ export function AgentsScreen({ header, startInBuilder, onBuilderOpened }: Props 
       }
       websiteLink={{
         label: "Easier on a big screen? Edit agents on carouselabs.com",
-        onClick: () => void openWebsite("/extension/agents"),
+        onClick: () => void openWebsite(`${WEBSITE_PATH}/agents`),
       }}
     />
   );

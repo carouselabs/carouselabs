@@ -1,13 +1,15 @@
-// app/(app)/extension/layout.tsx — the website's home for the LinkedIn
-// extension: voice profiles, history, settings, plan and payments. Nothing
-// here generates text; generation only happens in the extension, on LinkedIn.
+// app/(app)/extension/layout.tsx — the website's home for the two Engage
+// extensions: CarouseLabs Engage for LinkedIn (/extension/*) and for X
+// (/extension/x/*), each with its install steps, voice profiles, history,
+// settings, plan and payments; the header switches between them. Nothing
+// here generates text; generation only happens in the extensions.
 import type { ReactNode } from "react"
 import type { Metadata } from "next"
 import { ExtensionTabs } from "@/components/extension/ExtensionTabs"
 
 export const metadata: Metadata = {
-  title: "LinkedIn Extension",
-  description: "Your CarouseLabs Engage extension: voice profiles, history, settings and plan.",
+  title: "Engage for LinkedIn",
+  description: "Your CarouseLabs Engage for LinkedIn extension: install it, voice profiles, history, settings and plan.",
 }
 
 export default function ExtensionLayout({ children }: { children: ReactNode }) {

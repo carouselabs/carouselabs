@@ -120,7 +120,7 @@ export const EXTENSION_PLAN = {
 // Chrome Web Store listing for the extension (CarouseLabs Engage). Set to
 // null to hide every Install button rather than show a broken link.
 export const EXTENSION_STORE_URL: string | null =
-  "https://chromewebstore.google.com/detail/carouselabs-comment/jgbmpekpdlckkeeffbamcbcnfodamnia"
+  "https://chromewebstore.google.com/detail/carouselabs-engage/jgbmpekpdlckkeeffbamcbcnfodamnia"
 
 // Where every "Buy the extension" button points. Signed-out visitors go to
 // sign-up first and come straight back here (app/checkout/extension).
@@ -135,9 +135,10 @@ export const X_EXTENSION_CHECKOUT_URL = "https://carouselabs.lemonsqueezy.com/ch
 export const X_EXTENSION_VARIANT_ID = 2202499
 export const X_EXTENSION_CHECKOUT_PATH = "/checkout/extension?platform=x"
 
-// The X extension's Chrome Web Store listing. null until it's published:
-// every X Install button is then left out rather than shown broken.
-export const X_EXTENSION_STORE_URL: string | null = null
+// The X extension's Chrome Web Store listing (published 2026-10-06). Set to
+// null to hide every X Install button rather than show a broken link.
+export const X_EXTENSION_STORE_URL: string | null =
+  "https://chromewebstore.google.com/detail/carouselabs-engage-for-x/ehijoiaapdlimkmkoejijammmiahcfbo"
 
 export const X_EXTENSION_PLAN = {
   name: "CarouseLabs Engage for X",

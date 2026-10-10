@@ -157,4 +157,12 @@ describe("the Agents tab", () => {
     fireEvent.click(screen.getByRole("button", { name: "Stop using by default" }));
     await waitFor(() => expect(lastCall("PUT")!.body).toMatchObject({ setAsDefault: false }));
   });
+
+  it("editing on the website opens LinkedIn's AI agents page (the X build opens X's)", async () => {
+    render(<AgentsScreen />);
+    fireEvent.click(await screen.findByRole("button", { name: /Edit agents on carouselabs\.com/ }));
+    await waitFor(() =>
+      expect(new URL((chromeMock().tabs.create as ReturnType<typeof vi.fn>).mock.calls[0][0].url).pathname).toBe("/extension/agents"),
+    );
+  });
 });

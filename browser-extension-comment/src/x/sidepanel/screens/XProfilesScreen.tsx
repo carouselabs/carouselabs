@@ -159,7 +159,7 @@ export function XProfilesScreen({ startInBuilder, onBuilderOpened }: Props = {})
       }
       websiteLink={{
         label: "Easier on a big screen? Edit profiles on carouselabs.com",
-        onClick: () => void openWebsite("/extension/x"),
+        onClick: () => void openWebsite("/extension/x/profiles"),
       }}
     />
   );

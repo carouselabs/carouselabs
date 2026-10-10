@@ -13,6 +13,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { XProfilesScreen } from "@/x/sidepanel/screens/XProfilesScreen";
 import { XSettingsScreen } from "@/x/sidepanel/screens/XSettingsScreen";
 import { HistoryScreen } from "@/sidepanel/components/screens/HistoryScreen";
+import { AccountScreen } from "@/sidepanel/components/screens/AccountScreen";
+import { AgentsScreen } from "@/sidepanel/components/screens/AgentsScreen";
 import App from "@/x/sidepanel/App";
 import { chromeMock } from "../setup/chrome";
 
@@ -260,5 +262,29 @@ describe("X panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "History" }));
     expect(await screen.findByText(/Replies and messages you write for X/)).toBeTruthy();
     expect(screen.queryByText(/Coming in the next step/)).toBeNull();
+  });
+});
+
+describe("X panel → the website", () => {
+  const opened = () => (chromeMock().tabs.create as ReturnType<typeof vi.fn>).mock.calls.map(([arg]) => new URL((arg as { url: string }).url).pathname);
+
+  it("Account → Open on carouselabs.com opens X's own pages, not LinkedIn's", async () => {
+    const me = { email: "a@b.co", plan: "FREE", commentsThisMonth: 0, extension: { access: "unlimited", freeUsed: 0, freeLimit: 10, status: "active", renewsAt: null, endsAt: null, manageUrl: null } };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(me), { status: 200 })));
+    render(<AccountScreen />);
+    fireEvent.click(await screen.findByRole("button", { name: /Open on carouselabs\.com/ }));
+    await waitFor(() => expect(opened()).toEqual(["/extension/x"]));
+  });
+
+  it("editing X profiles on the website opens X's Reply profiles", async () => {
+    render(<XProfilesScreen />);
+    fireEvent.click(await screen.findByRole("button", { name: /Edit profiles on carouselabs\.com/ }));
+    await waitFor(() => expect(opened()).toEqual(["/extension/x/profiles"]));
+  });
+
+  it("editing agents on the website opens them under X", async () => {
+    render(<AgentsScreen />);
+    fireEvent.click(await screen.findByRole("button", { name: /Edit agents on carouselabs\.com/ }));
+    await waitFor(() => expect(opened()).toEqual(["/extension/x/agents"]));
   });
 });

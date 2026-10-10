@@ -4,7 +4,6 @@
 import { db } from "@/lib/db"
 import { logAdminAction } from "@/lib/auditLog"
 import { sendEngageAccessGrantedEmail } from "@/lib/email"
-import { EXTENSION_STORE_URL } from "@/lib/plans"
 import { grantEndsAt, GRANT_DURATION_LABELS, GRANT_PLATFORM_LABELS, type GrantDuration, type GrantPlatform } from "@/lib/engage/grants"
 import type { EngageAdmin } from "@/lib/engage/adminAccess"
 
@@ -48,7 +47,7 @@ export async function createGrant(input: {
 
   let inviteSent: boolean | null = null
   if (input.sendInvite) {
-    inviteSent = await sendEngageAccessGrantedEmail(email, endsAt ? fmt(endsAt) : null, EXTENSION_STORE_URL)
+    inviteSent = await sendEngageAccessGrantedEmail(email, endsAt ? fmt(endsAt) : null, platform)
       .then(() => true)
       .catch((err) => {
         console.error("[engage] invitation email failed:", err)

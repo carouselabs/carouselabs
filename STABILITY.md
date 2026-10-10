@@ -4,6 +4,15 @@ The current state of the website and both extensions: what was checked, what was
 
 **Status (2026-10-06):** the automated browser results below are *fixture-browser* results: real Chromium, on saved copies of LinkedIn and X pages without the sites' own scripts. On top of them, the owner ran the live checks (L1–L7, X1–X3) on real LinkedIn and X and the deployed checks (D1–D3) on Vercel after the push of `90cf851`, and reported all of them passed; those results are the owner's, not recorded by a test. LinkedIn 1.3.0 and X 1.0.0 (earlier builds, without this work's Insert fixes) were approved in the Chrome Web Store the same day; this work ships as LinkedIn **1.3.1** and X **1.0.1**.
 
+## Two extensions on the website (2026-10-10, LinkedIn 1.3.3 / X 1.0.3)
+
+**Report:** the first X buyer couldn't find, on the website, where or how to install CarouseLabs Engage for X (the payment itself worked: an active `XSubscription` within a minute). The X listing link was still `null` in `lib/plans.ts`, so there was no X Install button anywhere, and X had a single tab under the LinkedIn extension's pages.
+
+- **Extension section** (`components/extension/ExtensionTabs.tsx`, `engageExtensions.tsx`): the title is a dropdown between CarouseLabs Engage for LinkedIn (`/extension/*`) and for X (`/extension/x/*`), each with the same tabs (Overview, profiles, AI agents, History, Settings, Plan & payments); switching keeps the tab.
+- **Overview with install steps** (`ExtensionOverview.tsx`, `InstallSteps.tsx`): that extension's plan, four install steps with its own Chrome Web Store listing (open until it's signed in on a browser, then folded away), this month's activity, the other extension (sold separately) and only its own signed-in browsers.
+- **Links:** `X_EXTENSION_STORE_URL` is the live listing (`ehijoiaapdlimkmkoejijammmiahcfbo`); the X plan card, Toolkit and the checkout fallback now reach X's pages. Admin grants' invitation email links the extension(s) granted (an X or both grant used to get LinkedIn's link only). In the X extension, Account → Open on carouselabs.com, Edit agents and Edit profiles open X's pages (`WEBSITE_PATH`, `src/lib/platform.ts`), so the store builds were rebuilt (versions unchanged; neither was uploaded yet).
+- **Checked**: extension unit 936; website 272 + typecheck + lint 0 errors + build; 22/22 mutations; e2e on the rebuilt `dist-store` / `dist-x-store`: LinkedIn 41/41, X 13/13 Chromium; layout screenshots at 1280px and 390px with no sideways scroll.
+
 ## AI agents (2026-10-10, LinkedIn 1.3.3 / X 1.0.3)
 
 Custom AI conversation agents for DMs in both extensions, alongside message profiles (reasons). Website side deployed: `f3e9041` (agents, database: `scripts/engage-agents.sql`, run 2026-10-10), `7ab2935` (AI builder), `5dbcf9a` (test console, reply actions). The extension side ships in 1.3.3 / 1.0.3; released versions without it are unaffected (they ignore the new contact field and never call the new routes).

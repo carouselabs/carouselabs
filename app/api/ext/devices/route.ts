@@ -1,6 +1,7 @@
-// app/api/ext/devices/route.ts — the browsers this account's LinkedIn
-// extension is signed in on (one ExtensionToken each, see
-// app/api/ext/auth/exchange), for the website's Extension overview.
+// app/api/ext/devices/route.ts — the browsers this account's extensions are
+// signed in on (one ExtensionToken each, see app/api/ext/auth/exchange; the X
+// extension's are labelled X_DEVICE_PREFIX), for the website's Extension
+// overviews.
 // Either caller (getExtensionUser). Token hashes never leave the server.
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"

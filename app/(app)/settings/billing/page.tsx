@@ -282,13 +282,13 @@ export default async function BillingPage() {
       </div>
 
       <div id="extension" className="flex flex-col gap-3 scroll-mt-24">
-        <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Chrome extension</h2>
+        <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Chrome extensions</h2>
         <ExtensionPlanSection ext={extension} />
         <a href="/extension/billing" className="text-[12.5px] font-medium text-[#7C3AED] hover:underline w-fit">
-          Payment history and everything else for the extension →
+          Payment history and everything else for the LinkedIn extension →
         </a>
         <ExtensionPlanSection ext={xExtension} platform="x" />
-        <a href="/extension/x#plan" className="text-[12.5px] font-medium text-[#7C3AED] hover:underline w-fit">
+        <a href="/extension/x/billing" className="text-[12.5px] font-medium text-[#7C3AED] hover:underline w-fit">
           Payment history and everything else for the X extension →
         </a>
       </div>

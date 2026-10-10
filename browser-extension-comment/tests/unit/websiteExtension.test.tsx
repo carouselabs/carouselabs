@@ -7,15 +7,21 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { ProfilesManager } from "../../../components/extension/ProfilesManager";
 import { HistoryList } from "../../../components/extension/HistoryList";
 import { ExtensionSettingsForm } from "../../../components/extension/ExtensionSettingsForm";
-import { XExtensionManager } from "../../../components/extension/XExtensionManager";
+import { XReplyProfiles, XSettingsPanel } from "../../../components/extension/XExtensionViews";
 import { ExtensionTabs } from "../../../components/extension/ExtensionTabs";
+import { DevicesList } from "../../../components/extension/DevicesList";
+import { InstallSteps } from "../../../components/extension/InstallSteps";
+import { ExtensionPlanSection } from "../../../components/extension/ExtensionPlanSection";
+import { platformOfPath, tabPathOf } from "../../../components/extension/engageExtensions";
+import { EXTENSION_STORE_URL, X_EXTENSION_STORE_URL } from "../../../lib/plans";
+import type { ExtAccessSummary } from "../../../lib/extAccess";
 
 const nav = vi.hoisted(() => ({ pathname: "/extension" }));
 vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
 // Next's Link brings the website's own React; a plain link is all the tab row needs.
 vi.mock("next/link", () => ({
-  default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => (
-    <a href={href} className={className}>
+  default: ({ href, children, ...rest }: { href: string; children: React.ReactNode } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a href={href} {...rest}>
       {children}
     </a>
   ),
@@ -343,7 +349,7 @@ describe("website — X extension", () => {
 
   it("creates an X reply profile on X's route, within X's limit, apart from LinkedIn's", async () => {
     const calls = xServer(X_SETTINGS, { "POST /api/ext/x/profiles": { profile: { id: "new" } } });
-    render(<XExtensionManager />);
+    render(<XReplyProfiles />);
     expect(await screen.findByText("Punchy founder")).toBeTruthy();
     fireEvent.click(await newProfileButton());
     expect(screen.getByText(/New profile · X replies/)).toBeTruthy();
@@ -364,7 +370,7 @@ describe("website — X extension", () => {
 
   it("allows a longer range once X Premium is on", async () => {
     xServer({ ...X_SETTINGS, maxReplyLength: 1000 });
-    render(<XExtensionManager />);
+    render(<XReplyProfiles />);
     fireEvent.click(await newProfileButton());
     fireEvent.change(screen.getByPlaceholderText("e.g. Founder voice"), { target: { value: "x" } });
     fireEvent.change(screen.getByPlaceholderText(/B2B SaaS founder/), { target: { value: "y" } });
@@ -375,7 +381,7 @@ describe("website — X extension", () => {
 
   it("makes a profile the default through X's settings, and shows it", async () => {
     const calls = xServer();
-    render(<XExtensionManager />);
+    render(<XReplyProfiles />);
     const card = (await screen.findByText("Punchy founder")).closest("div.rounded-2xl") as HTMLElement;
     expect(within(card).queryByText("Default")).toBeNull();
     fireEvent.click(within(card).getByRole("button", { name: /make default/i }));
@@ -392,8 +398,7 @@ describe("website — X extension", () => {
         nextCursor: null,
       },
     });
-    render(<XExtensionManager />);
-    fireEvent.click(await screen.findByRole("button", { name: "History" }));
+    render(<HistoryList platform="x" />);
     expect(await screen.findByText("Order beats count.")).toBeTruthy();
     expect(screen.getByText("Reply to Priya")).toBeTruthy();
     expect(screen.getByRole("link", { name: /View post/ }).getAttribute("href")).toBe("https://x.com/priya/status/1");
@@ -404,8 +409,7 @@ describe("website — X extension", () => {
 
   it("saves X Premium, the default X profile and Insert to X's settings", async () => {
     const calls = xServer();
-    render(<XExtensionManager />);
-    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    render(<XSettingsPanel />);
     fireEvent.click(await screen.findByRole("checkbox", { name: /I have X Premium/ }));
     await waitFor(() => expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1));
 
@@ -427,15 +431,178 @@ describe("website — X extension", () => {
   });
 });
 
-describe("website — Extension tabs", () => {
-  it("has an X tab, whose page is titled for X; the others stay LinkedIn's", () => {
-    nav.pathname = "/extension/x";
-    render(<ExtensionTabs />);
-    expect(screen.getByRole("heading", { name: "X Extension" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "X (Twitter)" }).getAttribute("href")).toBe("/extension/x");
-    cleanup();
+describe("website — Extension header: two separate extensions", () => {
+  const tabHrefs = () => screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+
+  it("LinkedIn's pages are titled for LinkedIn, with LinkedIn's tabs only", () => {
     nav.pathname = "/extension/history";
     render(<ExtensionTabs />);
-    expect(screen.getByRole("heading", { name: "LinkedIn Extension" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "CarouseLabs Engage for LinkedIn" })).toBeTruthy();
+    expect(tabHrefs()).toEqual([
+      "/extension",
+      "/extension/profiles",
+      "/extension/agents",
+      "/extension/history",
+      "/extension/settings",
+      "/extension/billing",
+    ]);
+    expect(screen.getByRole("link", { name: "Custom tones" })).toBeTruthy();
+  });
+
+  it("X's pages are titled for X, with X's own tabs under /extension/x", () => {
+    nav.pathname = "/extension/x/settings";
+    render(<ExtensionTabs />);
+    expect(screen.getByRole("heading", { name: "CarouseLabs Engage for X" })).toBeTruthy();
+    expect(screen.getByText(/separate extension from LinkedIn's, with its own plan/)).toBeTruthy();
+    expect(tabHrefs()).toEqual([
+      "/extension/x",
+      "/extension/x/profiles",
+      "/extension/x/agents",
+      "/extension/x/history",
+      "/extension/x/settings",
+      "/extension/x/billing",
+    ]);
+    expect(screen.getByRole("link", { name: "Reply profiles" }).getAttribute("href")).toBe("/extension/x/profiles");
+  });
+
+  it("the title is a dropdown that switches extension and stays on the same tab", () => {
+    nav.pathname = "/extension/history";
+    render(<ExtensionTabs />);
+    const toggle = screen.getByRole("button", { name: "CarouseLabs Engage for LinkedIn" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("link", { name: /CarouseLabs Engage for X/ })).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    const toX = screen.getByRole("link", { name: /CarouseLabs Engage for X/ });
+    expect(toX.getAttribute("href")).toBe("/extension/x/history");
+    const here = screen.getByRole("link", { name: /CarouseLabs Engage for LinkedIn/ });
+    expect(here.getAttribute("href")).toBe("/extension/history");
+    expect(here.getAttribute("aria-current")).toBe("page");
+    expect(toX.getAttribute("aria-current")).toBeNull();
+    expect(screen.getByText(/Two separate extensions/)).toBeTruthy();
+
+    // jsdom can't navigate; the menu closing is what this checks.
+    toX.addEventListener("click", (e) => e.preventDefault());
+    fireEvent.click(toX);
+    expect(screen.queryByRole("link", { name: /CarouseLabs Engage for X/ })).toBeNull();
+  });
+
+  it("from X's overview it goes to LinkedIn's overview", () => {
+    nav.pathname = "/extension/x";
+    render(<ExtensionTabs />);
+    fireEvent.click(screen.getByRole("button", { name: "CarouseLabs Engage for X" }));
+    expect(screen.getByRole("link", { name: /CarouseLabs Engage for LinkedIn/ }).getAttribute("href")).toBe("/extension");
+  });
+
+  it("closes on Escape (back to the button) and on a click outside", () => {
+    nav.pathname = "/extension";
+    render(<ExtensionTabs />);
+    const toggle = screen.getByRole("button", { name: "CarouseLabs Engage for LinkedIn" });
+    fireEvent.click(toggle);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(toggle);
+
+    fireEvent.click(toggle);
+    fireEvent.pointerDown(screen.getByRole("link", { name: /CarouseLabs Engage for X/ }));
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.pointerDown(document.body);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("knows which extension and tab a path is", () => {
+    expect(platformOfPath("/extension/x")).toBe("x");
+    expect(platformOfPath("/extension/x/history")).toBe("x");
+    expect(platformOfPath("/extension/xyz")).toBe("linkedin");
+    expect(platformOfPath("/extension")).toBe("linkedin");
+    expect(tabPathOf("/extension/x/billing")).toBe("/billing");
+    expect(tabPathOf("/extension/profiles")).toBe("/profiles");
+    expect(tabPathOf("/extension/x/somewhere-else")).toBe("");
+  });
+});
+
+describe("website — signed-in browsers", () => {
+  const DEVICES = [
+    { id: "d1", device: "Chrome on Windows", lastUsedAt: "2026-10-09T10:00:00Z", createdAt: "2026-10-01T10:00:00Z" },
+    { id: "d2", device: "X extension · Edge on Windows", lastUsedAt: "2026-10-10T10:00:00Z", createdAt: "2026-10-10T10:00:00Z" },
+  ];
+
+  it("shows only LinkedIn's sign-ins on LinkedIn's overview", async () => {
+    server({ "GET /api/ext/devices": { devices: DEVICES } });
+    render(<DevicesList />);
+    expect(await screen.findByText("Chrome on Windows")).toBeTruthy();
+    expect(screen.queryByText(/Edge on Windows/)).toBeNull();
+  });
+
+  it("shows only X's on X's, without the label the server uses to tell them apart", async () => {
+    server({ "GET /api/ext/devices": { devices: DEVICES } });
+    render(<DevicesList platform="x" />);
+    expect(await screen.findByText("Edge on Windows")).toBeTruthy();
+    expect(screen.queryByText("Chrome on Windows")).toBeNull();
+  });
+
+  it("says where to sign in when there are none", async () => {
+    server({ "GET /api/ext/devices": { devices: [DEVICES[0]] } });
+    render(<DevicesList platform="x" />);
+    expect(await screen.findByText(/Open the extension's panel on X/)).toBeTruthy();
+  });
+});
+
+describe("website — install steps", () => {
+  const ACCESS = { access: "free", freeUsed: 3, freeLimit: 10, status: null, renewsAt: null, endsAt: null, manageUrl: null, source: "free", grantEndsAt: null, suspended: false } as unknown as ExtAccessSummary;
+  const PAID = { ...ACCESS, access: "unlimited", status: "active", source: "subscription" } as ExtAccessSummary;
+
+  it("X, paid, not installed yet: open, with X's own listing, x.com and the account to sign in with", () => {
+    const { container } = render(<InstallSteps platform="x" email="me@site.co" ext={PAID} signedInBrowsers={0} />);
+    expect(container.querySelector("details")!.open).toBe(true);
+    expect(screen.getByText("Install CarouseLabs Engage for X")).toBeTruthy();
+    const store = screen.getByRole("link", { name: /Open in Chrome Web Store/ });
+    expect(store.getAttribute("href")).toBe(X_EXTENSION_STORE_URL);
+    expect(store.getAttribute("target")).toBe("_blank");
+    expect(screen.getByRole("link", { name: "X" }).getAttribute("href")).toBe("https://x.com/home");
+    expect(screen.getByText(/separate extension from the LinkedIn one/)).toBeTruthy();
+    expect(screen.getByText(/plan is active/).textContent).toContain("me@site.co");
+    expect(screen.getByText(/that's what unlocks your plan/)).toBeTruthy();
+    expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual([
+      "Add it to your browser",
+      "Pin it to your toolbar",
+      "Sign in",
+      "Start writing",
+    ]);
+  });
+
+  it("LinkedIn: its own listing and LinkedIn; free tries left while it's free", () => {
+    render(<InstallSteps platform="linkedin" email="me@site.co" ext={ACCESS} signedInBrowsers={0} />);
+    expect(screen.getByRole("link", { name: /Open in Chrome Web Store/ }).getAttribute("href")).toBe(EXTENSION_STORE_URL);
+    expect(screen.getByRole("link", { name: "LinkedIn" }).getAttribute("href")).toBe("https://www.linkedin.com/feed/");
+    expect(screen.getByText(/You have 7 free generations/)).toBeTruthy();
+    expect(screen.queryByText(/plan is active/)).toBeNull();
+    expect(screen.queryByText(/separate extension/)).toBeNull();
+  });
+
+  it("folds away once it's signed in somewhere", () => {
+    const { container } = render(<InstallSteps platform="x" email="me@site.co" ext={PAID} signedInBrowsers={2} />);
+    expect(container.querySelector("details")!.open).toBe(false);
+    expect(screen.getByText("Install on another browser")).toBeTruthy();
+    expect(screen.getByText("Signed in on 2 browsers.")).toBeTruthy();
+    expect(screen.queryByText(/plan is active/)).toBeNull();
+  });
+
+  it("no free-tries line once they're used up", () => {
+    render(<InstallSteps platform="x" email="me@site.co" ext={{ ...ACCESS, freeUsed: 10 }} signedInBrowsers={0} />);
+    expect(screen.queryByText(/free generation/)).toBeNull();
+  });
+});
+
+describe("website — plan card install links", () => {
+  const PAID_X = { access: "unlimited", freeUsed: 0, freeLimit: 10, status: "active", renewsAt: null, endsAt: null, manageUrl: null, source: "subscription", grantEndsAt: null, suspended: false } as unknown as ExtAccessSummary;
+
+  it("each extension's plan card links its own Chrome Web Store listing", () => {
+    render(<ExtensionPlanSection ext={PAID_X} platform="x" />);
+    expect(screen.getByRole("link", { name: "Install from Chrome Web Store" }).getAttribute("href")).toBe(X_EXTENSION_STORE_URL);
+    cleanup();
+    render(<ExtensionPlanSection ext={PAID_X} />);
+    expect(screen.getByRole("link", { name: "Install from Chrome Web Store" }).getAttribute("href")).toBe(EXTENSION_STORE_URL);
   });
 });

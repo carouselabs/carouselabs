@@ -13,6 +13,7 @@ import {
   setExtensionAccess,
   useExtensionAccess,
 } from "@/lib/extensionAccess";
+import { WEBSITE_PATH } from "@/lib/platform";
 import { Initials } from "../Initials";
 import { ScreenHeader } from "../ScreenHeader";
 
@@ -237,7 +238,7 @@ export function AccountScreen() {
             </section>
 
             <div className="space-y-1.5">
-              <Button variant="outline" className="w-full" onClick={() => void openWebsite("/extension")}>
+              <Button variant="outline" className="w-full" onClick={() => void openWebsite(WEBSITE_PATH)}>
                 Open on carouselabs.com
                 <ExternalLink aria-hidden />
               </Button>

@@ -4,6 +4,21 @@ The current state of the website and both extensions: what was checked, what was
 
 **Status (2026-10-06):** the automated browser results below are *fixture-browser* results: real Chromium, on saved copies of LinkedIn and X pages without the sites' own scripts. On top of them, the owner ran the live checks (L1–L7, X1–X3) on real LinkedIn and X and the deployed checks (D1–D3) on Vercel after the push of `90cf851`, and reported all of them passed; those results are the owner's, not recorded by a test. LinkedIn 1.3.0 and X 1.0.0 (earlier builds, without this work's Insert fixes) were approved in the Chrome Web Store the same day; this work ships as LinkedIn **1.3.1** and X **1.0.1**.
 
+## AI agents (2026-10-10, LinkedIn 1.3.3 / X 1.0.3)
+
+Custom AI conversation agents for DMs in both extensions, alongside message profiles (reasons). Website side deployed: `f3e9041` (agents, database: `scripts/engage-agents.sql`, run 2026-10-10), `7ab2935` (AI builder), `5dbcf9a` (test console, reply actions). The extension side ships in 1.3.3 / 1.0.3; released versions without it are unaffected (they ignore the new contact field and never call the new routes).
+
+- **Agents** (`EngageAgent`, `/api/ext/agents`): owner-scoped, 30 max, one default, a version so a stale edit gets 409 instead of overwriting. Panel: Profiles → Agents; Messages → Agent picker above the reason. Website: Extension → AI agents (editing only; the website never generates).
+- **AI builder** (`/api/ext/agents/builder`, extension token only): interview (one question at a time, at most 8, each topic once), draft, Refine. Free, capped at 60 AI calls per person per day. Facts quoting numbers the person never gave are dropped; example replies must be their own words; refining keeps facts, examples and rules (rules can only be added).
+- **Reply actions and test** (`lib/engage/messageWriter.ts`, `/api/ext/agents/test`): what the reply should do, Shorter / Longer / tone / Alternatives on Messages; "Test this agent" (counted like a profile test). Every agent reply passes the DM checks (no invented figures, no template brackets).
+- **Checked**: extension unit 915; website 268 + lint 0 errors + build; e2e on `dist-store` / `dist-x-store`: LinkedIn 41/41 Chromium and 41/41 Edge, X 13/13 Chromium; real-model benches (`tests/bench/agentBuilder.bench.test.ts`, `agentReplies.bench.test.ts`, about a cent each).
+
+**Agent live checks** (owner, signed in, with `dist-store` / `dist-x-store`; never click Send):
+- A1 Profiles → Agents → New agent → Build with AI: describe, answer two or three questions, Build my agent; the form shows a sensible agent; Refine with AI → Friendlier; Test this agent with "How much does it cost?"; Create agent.
+- A2 Open a LinkedIn conversation → Messages → Read → the Agent picker shows it (make it the default first) → Generate reply → Shorter → Alternatives → pick one → Insert → once, in that conversation's box.
+- A3 The same agent in an X chat (X extension) → Generate reply → Insert.
+- A4 carouselabs.com → Extension → AI agents shows the agent; edit its tone there, then reopen it in the panel: the change is there.
+
 ## Other browsers (2026-10-09, LinkedIn 1.3.2 / X 1.0.2)
 
 **Report:** both extensions worked only in Chrome; in Edge, clicking Comment did nothing; in Chrome it sometimes did nothing.
@@ -23,8 +38,8 @@ The current state of the website and both extensions: what was checked, what was
 | Part | Where | Notes |
 | --- | --- | --- |
 | Website and admin | Next.js 16 app (`app/`, `lib/`, `proxy.ts`) on Vercel, Mumbai (`bom1`) | Clerk 7 sign-in; Prisma 5 on Supabase Postgres; Lemon Squeezy billing; Vercel crons. `admin.carouselabs.com` is the same app. |
-| CarouseLabs Engage for LinkedIn | `browser-extension-comment/` | Published: 1.3.1 (seen installed from the store 2026-10-09). This build: 1.3.2. |
-| CarouseLabs Engage for X | the same folder, `vite.x.config.ts` | Published: 1.0.0; 1.0.1 uploaded 2026-10-06. This build: 1.0.2. |
+| CarouseLabs Engage for LinkedIn | `browser-extension-comment/` | Published: 1.3.1 (seen installed from the store 2026-10-09). This build: 1.3.3. |
+| CarouseLabs Engage for X | the same folder, `vite.x.config.ts` | Published: 1.0.0; 1.0.1 uploaded 2026-10-06. This build: 1.0.3. |
 | Extension API | `app/api/ext/*`, `lib/engage/commentEngine.ts`, `lib/ai/commentModel.ts` | Shared by both extensions and every released version of them. |
 
 ## Issue summary
@@ -141,10 +156,10 @@ Mutation checks: every new rule (insert once, re-finding the post, paste only if
 
 | Folder | Command (in `browser-extension-comment/`) | Manifest version (as Chrome shows it) | API | localhost permission |
 | --- | --- | --- | --- | --- |
-| `dist-store` (LinkedIn, upload this) | `npm run build -- --outDir dist-store` | 1.3.2 | https://carouselabs.com | no |
-| `dist` (LinkedIn, development) | `npm run build:dev` | 1.3.2 dev <build time> UTC | http://localhost:3000 | yes |
-| `dist-x-store` (X, upload this) | `npm run build:x -- --outDir dist-x-store` | 1.0.2 | https://carouselabs.com | no |
-| `dist-x` (X, development) | `npm run build:x:dev` | 1.0.2 dev <build time> UTC | http://localhost:3000 | yes |
+| `dist-store` (LinkedIn, upload this) | `npm run build -- --outDir dist-store` | 1.3.3 | https://carouselabs.com | no |
+| `dist` (LinkedIn, development) | `npm run build:dev` | 1.3.3 dev <build time> UTC | http://localhost:3000 | yes |
+| `dist-x-store` (X, upload this) | `npm run build:x -- --outDir dist-x-store` | 1.0.3 | https://carouselabs.com | no |
+| `dist-x` (X, development) | `npm run build:x:dev` | 1.0.3 dev <build time> UTC | http://localhost:3000 | yes |
 
 Plain `npm run build` writes to `dist`, not `dist-store`: on 2026-10-06 `dist-store` turned out to be an old build for that reason. The check script (fixes present, version, API, localhost) is in the session notes; the same checks by hand: `manifest.json` in each folder, and searching `assets/*.js` for "isn't open in this tab" (LinkedIn), "already has text you wrote" (LinkedIn), "isn't ready to type in" (X), "__carouselabsInserts" (both).
 
@@ -181,7 +196,7 @@ Done by the owner, signed in, on real LinkedIn and X. **Never click Post, Reply,
 **Setup**
 1. `chrome://extensions` → switch **off** the Web Store "CarouseLabs Engage" (and "for X", if installed) and any older unpacked copy. Only one LinkedIn copy and one X copy may be on.
 2. Developer mode on → Load unpacked → `C:\Users\anant\carouselabs\browser-extension-comment\dist-store`, then `...\dist-x-store`.
-3. Each card must say the version being released (now **1.3.2** / **1.0.2**), and Details → "Loaded from" must end in `dist-store` / `dist-x-store`. To confirm the new files: Details → "Inspect views: service worker" → Console: `chrome.runtime.getManifest().web_accessible_resources.flatMap(w => w.resources).find(r => r.includes("content-script"))` must print the content-script file named in that folder's `manifest.json`.
+3. Each card must say the version being released (now **1.3.3** / **1.0.3**), and Details → "Loaded from" must end in `dist-store` / `dist-x-store`. To confirm the new files: Details → "Inspect views: service worker" → Console: `chrome.runtime.getManifest().web_accessible_resources.flatMap(w => w.resources).find(r => r.includes("content-script"))` must print the content-script file named in that folder's `manifest.json`.
 4. Reload every LinkedIn and X tab. Sign in from each panel (a newly loaded copy is a new extension and needs its own sign-in).
 
 **LinkedIn** (pass = the text appears once, in the right box, stays, and LinkedIn treats it as typed: its Post button turns on, you can keep typing)

@@ -18,9 +18,9 @@ import {
   buildRewriteUserMessage,
   rewriteBounds,
   countSentences,
+  COMMENT_AI_TELLS,
   WEAK_COMMENT_PATTERNS,
 } from "@/lib/ai/prompts/commentPrompt"
-import { X_AI_TELLS } from "@/lib/ai/prompts/xReplyPrompt"
 import { callCommentModel, generationDeadline, GenerationTimeout, parseComment, sanitizeComment } from "@/lib/ai/commentModel"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
 import { xLength, X_MAX_LENGTH } from "@/lib/xText"
@@ -137,7 +137,11 @@ export async function handleRewriteRequest(req: Request, platform: RewritePlatfo
 
     // Same tells the generate route rejects. Without this, Longer could
     // reintroduce a cliché ("at scale") that Generate would have blocked.
-    const weak = (isX ? [...WEAK_COMMENT_PATTERNS, ...X_AI_TELLS] : WEAK_COMMENT_PATTERNS).filter(({ pattern }) => pattern.test(comment))
+    // Only tells the rewrite added: one the comment already had (the person
+    // may have typed it) is theirs to keep.
+    const weak = [...WEAK_COMMENT_PATTERNS, ...COMMENT_AI_TELLS].filter(
+      ({ pattern }) => pattern.test(comment) && !pattern.test(currentComment),
+    )
     if (weak.length > 0 && attempt === 1) {
       console.warn(
         `[${label}] attempt ${attempt}: weak patterns (${weak.map((w) => w.label).join(", ")}), retrying`,

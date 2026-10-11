@@ -127,6 +127,14 @@ vi.mock("../../../lib/db", () => ({
         state.history.push(data);
         return { id: `h${state.history.length}` };
       }),
+      // Newest first, like orderBy createdAt desc (lib/engage/recentComments.ts).
+      findMany: vi.fn(async ({ where, take }: { where: Record<string, unknown>; take: number }) =>
+        state.history
+          .filter((row) => row.userId === where.userId && row.kind === where.kind)
+          .reverse()
+          .slice(0, take)
+          .map((row) => ({ comment: row.comment })),
+      ),
     },
   },
 }));
@@ -168,7 +176,7 @@ const tokens = (comment: string, size = 5) => {
   return Array.from({ length: Math.ceil(raw.length / size) }, (_, i) => raw.slice(i * size, (i + 1) * size));
 };
 
-const GOOD = "Moving from 14 steps to 5 is the real story. Order beats count when people need a first win.";
+const GOOD = "Going from 14 steps to 5 is a big cut. Putting the invite after the first win is what I'd copy.";
 const GOOD_2 = "The invite prompt after the first result is the detail worth copying here.";
 
 function request(stream: boolean, signal?: AbortSignal) {
@@ -455,7 +463,7 @@ describe("streaming Generate", () => {
 // A clean comment of about `n` characters, sourced from the post (no figures
 // of its own), for the length checks.
 function commentOf(n: number) {
-  const words = "Putting the invite step after the first real win is the part most teams skip when they rebuild onboarding ";
+  const words = "Putting the invite step after the first real win makes sense when a team rebuilds its onboarding ";
   return `${words.repeat(Math.ceil(n / words.length)).slice(0, n - 1).trimEnd()}.`;
 }
 
@@ -605,5 +613,81 @@ describe("cancellation and free-use accounting", () => {
     expect(state.release).toHaveBeenCalledOnce();
     expect(state.history).toHaveLength(0);
     expect(script.haikuCalls).toHaveLength(0);
+  });
+});
+
+// What the model was sent as the user message on a call.
+const userMessageOf = (call: { body: Record<string, unknown> }) => (call.body.messages as { content: string }[])[1].content;
+
+describe("comments that sound AI-written (2026-10-11)", () => {
+  it("writes again, told which tells it used, when a comment quotes the post, grades it and fishes for replies", async () => {
+    // The shape of the owner's example ("'Dying by 2027' is a bold
+    // prediction. Which of the three do you think..."), on this post.
+    const ai = "\u201c14 steps to 5\u201d is a bold move. Which of the two numbers do you think mattered more?";
+    script.luna = [{ chunks: tokens(ai) }, { chunks: tokens(GOOD) }];
+    const list = await events(await POST(request(true)));
+    expect(list.at(-1)).toMatchObject({ event: "final", data: { comment: GOOD } });
+    expect(script.lunaCalls).toHaveLength(2);
+    const second = userMessageOf(script.lunaCalls[1]);
+    expect(second).toContain("YOUR PREVIOUS ATTEMPT SOUNDED AI-WRITTEN");
+    expect(second).toMatch(/opens by quoting the post.*grades the post.*asks for their opinion/);
+    expect(userMessageOf(script.lunaCalls[0])).not.toContain("SOUNDED AI-WRITTEN");
+  });
+
+  it("writes again when a comment repeats the post's own words back", async () => {
+    const copied = "Activation went from 31% to 48% by changing one thing, makes sense.";
+    script.luna = [{ chunks: tokens(copied) }, { chunks: tokens(GOOD) }];
+    const list = await events(await POST(request(true)));
+    expect(list.at(-1)).toMatchObject({ event: "final", data: { comment: GOOD } });
+    expect(userMessageOf(script.lunaCalls[1])).toMatch(/copies the post's own words \("Activation went from 31 to"\)/);
+  });
+
+  it("keeps the second try even if it still has a tell, rather than failing", async () => {
+    const ai = "Going from 14 steps to 5 is such a smart shift.";
+    script.luna = [{ chunks: tokens(ai) }, { chunks: tokens(ai) }];
+    const list = await events(await POST(request(true)));
+    expect(list.at(-1)).toMatchObject({ event: "final", data: { comment: ai } });
+    expect(script.lunaCalls).toHaveLength(2);
+  });
+
+  it("a plain, human comment goes through first time", async () => {
+    script.luna = [{ chunks: tokens(GOOD) }];
+    await events(await POST(request(true)));
+    expect(script.lunaCalls).toHaveLength(1);
+  });
+});
+
+describe("the person's recent comments", () => {
+  it("are shown to the model, newest first, only their own and only this kind", async () => {
+    state.history = [
+      { userId: "u1", kind: "comment", comment: "Older comment of mine." },
+      { userId: "u1", kind: "reply", comment: "A reply of mine." },
+      { userId: "u2", kind: "comment", comment: "Someone else's comment." },
+      { userId: "u1", kind: "comment", comment: "Newest comment of mine." },
+    ];
+    script.luna = [{ chunks: tokens(GOOD) }];
+    await events(await POST(request(true)));
+    const user = userMessageOf(script.lunaCalls[0]);
+    expect(user).toContain("## Comments this person wrote recently");
+    expect(user.indexOf("Newest comment of mine.")).toBeLessThan(user.indexOf("Older comment of mine."));
+    expect(user).not.toContain("A reply of mine.");
+    expect(user).not.toContain("Someone else's comment.");
+  });
+
+  it("each comment written is one the next one sees", async () => {
+    script.luna = [{ chunks: tokens(GOOD) }, { chunks: tokens(GOOD_2) }];
+    await events(await POST(request(true)));
+    expect(userMessageOf(script.lunaCalls[0])).not.toContain("wrote recently");
+    await events(await POST(request(true)));
+    expect(userMessageOf(script.lunaCalls[1])).toContain(`<comment>${GOOD}</comment>`);
+  });
+
+  it("a failed lookup writes without them instead of failing", async () => {
+    const { db } = await import("../../../lib/db");
+    vi.mocked(db.commentHistory.findMany).mockRejectedValueOnce(new Error("pool timeout"));
+    script.luna = [{ chunks: tokens(GOOD) }];
+    const list = await events(await POST(request(true)));
+    expect(list.at(-1)).toMatchObject({ event: "final", data: { comment: GOOD } });
+    expect(userMessageOf(script.lunaCalls[0])).not.toContain("wrote recently");
   });
 });

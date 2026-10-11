@@ -73,6 +73,14 @@ vi.mock("../../../lib/db", () => ({
         state.history.push(data);
         return { id: `h${state.history.length}` };
       }),
+      // Newest first, like orderBy createdAt desc (lib/engage/recentComments.ts).
+      findMany: vi.fn(async ({ where, take }: { where: Record<string, unknown>; take: number }) =>
+        state.history
+          .filter((row) => row.userId === where.userId && row.kind === where.kind)
+          .reverse()
+          .slice(0, take)
+          .map((row) => ({ comment: row.comment })),
+      ),
     },
   },
 }));
@@ -110,7 +118,7 @@ const POST_BODY = {
   quoted: null,
   isOwnPost: false,
 };
-const GOOD = "Moving the invite step after the first win is the part most teams miss. 14 to 5 only works because of that order.";
+const GOOD = "Moving the invite step after the first win matters more than the cut. 14 to 5 only works because of that order.";
 const raw = (comment: string) => {
   const json = JSON.stringify({ comment });
   return Array.from({ length: Math.ceil(json.length / 8) }, (_, i) => json.slice(i * 8, (i + 1) * 8));
@@ -192,9 +200,10 @@ describe("X Reply route", () => {
     await events(await replyPOST(request("/api/ext/x/reply", { method: "POST", body: JSON.stringify(POST_BODY) })));
     const { system } = script.prompts[0];
     expect(system).toMatch(/## Sound like a person, not an AI/);
-    expect(system).toMatch(/"underrated", "game changer", "the real story"/);
-    expect(system).toMatch(/"says a lot", "speaks volumes"/);
-    expect(system).not.toMatch(/Example of a STRONG comment/);
+    // The shared rules come with the profile part (SOUND_HUMAN_RULES).
+    expect(system).toMatch(/"game changer", "underrated", "the real story"/);
+    expect(system).toMatch(/don't quote it or repeat it back/);
+    expect(system).not.toMatch(/## Example/);
   });
 
   it("rolls again once when a reply gives itself away as AI", async () => {
@@ -215,6 +224,26 @@ describe("X Reply route", () => {
       expect(list.at(-1), tell).toMatchObject({ event: "final", data: { comment: plain } });
       expect(script.prompts, tell).toHaveLength(2);
     }
+  });
+
+  it("rolls again when a reply repeats the post's words, and says so", async () => {
+    state.profiles[0] = { ...PRESET, length: "15-120 characters" };
+    const plain = "14 steps down to 5 is a big drop, makes sense more people stuck around";
+    script.luna = [raw("We cut onboarding from 14 steps to 5 and it shows"), raw(plain)];
+    const list = await events(await replyPOST(request("/api/ext/x/reply", { method: "POST", body: JSON.stringify(POST_BODY) })));
+    expect(list.at(-1)).toMatchObject({ event: "final", data: { comment: plain } });
+    expect(script.prompts[1].user).toMatch(/copies the post's own words/);
+  });
+
+  it("shows the model the person's last X replies, not their LinkedIn comments", async () => {
+    state.history = [
+      { userId: "u1", kind: "comment", comment: "A LinkedIn comment." },
+      { userId: "u1", kind: "x_reply", comment: "An earlier X reply." },
+    ];
+    script.luna = [raw(GOOD)];
+    await events(await replyPOST(request("/api/ext/x/reply", { method: "POST", body: JSON.stringify(POST_BODY) })));
+    expect(script.prompts[0].user).toContain("<comment>An earlier X reply.</comment>");
+    expect(script.prompts[0].user).not.toContain("A LinkedIn comment.");
   });
 
   it("a plain, human reply goes through first time", async () => {

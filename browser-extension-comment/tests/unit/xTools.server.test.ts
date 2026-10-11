@@ -182,6 +182,22 @@ describe("Shorter / Longer", () => {
     expect(state.prompts).toHaveLength(1);
   });
 
+  it("writes again when Shorter adds an AI tell the comment didn't have", async () => {
+    const current = "Most teams cut steps and keep the order, which is the mistake. Fix the order first and the count matters less.";
+    state.replies = ["Fix the order first; the count matters less.", "Fix the order first and the count matters less."];
+    const res = await rewritePOST(req("/x", "POST", { currentComment: current, direction: "shorter" }));
+    expect(await res.json()).toMatchObject({ comment: "Fix the order first and the count matters less." });
+    expect(state.prompts).toHaveLength(2);
+  });
+
+  it("keeps a tell the person's own comment already had, rather than writing again for it", async () => {
+    const current = "Love this. Most teams cut steps and keep the order, which is the mistake. Fix the order first and the count matters less.";
+    state.replies = ["Love this. Fix the order first, the count matters less."];
+    const res = await rewritePOST(req("/x", "POST", { currentComment: current, direction: "shorter" }));
+    expect(await res.json()).toMatchObject({ comment: "Love this. Fix the order first, the count matters less." });
+    expect(state.prompts).toHaveLength(1);
+  });
+
   it("LinkedIn: unchanged", async () => {
     state.replies = ["Order beats count."];
     const res = await rewritePOST(req("/x", "POST", { currentComment: "Order beats count. Most teams cut steps and keep the order, which is the mistake.", direction: "shorter" }));

@@ -11,7 +11,13 @@ import { generationDeadline, GenerationTimeout, parseComment, sanitizeComment, s
 import type { AiCaller } from "@/lib/engage/aiUsage"
 import { extractPartialComment, visibleCommentText } from "@/lib/ai/commentText"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
-import { ANTI_FABRICATION_REMINDER, WEAK_COMMENT_PATTERNS } from "@/lib/ai/prompts/commentPrompt"
+import {
+  aiTellReminder,
+  ANTI_FABRICATION_REMINDER,
+  COMMENT_AI_TELLS,
+  copiedPhrase,
+  WEAK_COMMENT_PATTERNS,
+} from "@/lib/ai/prompts/commentPrompt"
 import { after } from "next/server"
 
 // How often a quiet stream says it is still alive (see streamGeneration).
@@ -82,9 +88,14 @@ export interface GenerationInput {
   // Who asked and for what: picks the feature's AI model and records each
   // call (lib/ai/commentModel.ts).
   engage?: AiCaller
-  // Generic-AI tells that get a reply rolled again once. Default
-  // WEAK_COMMENT_PATTERNS; X adds X_AI_TELLS.
+  // Generic-AI tells that get a comment rolled again once. Default
+  // WEAK_COMMENT_PATTERNS plus COMMENT_AI_TELLS.
   weakPatterns?: { label: string; pattern: RegExp }[]
+  // What the comment responds to (the post, or the comment being replied
+  // to): a comment that copies a run of its words is rolled again once too
+  // (copiedPhrase). Never the person's own instruction, whose wording they
+  // may want used.
+  copySource?: string
 }
 
 export interface GenerationHooks {
@@ -131,9 +142,10 @@ export async function generateComment(
   // comment beats failing the request entirely. Fabricated output is never
   // stored here: returning it would defeat the guardrail below.
   let offLengthFallback: { text: string; model: string } | null = null
-  // Set when the previous attempt invented a figure, so the retry carries the
-  // blunter reminder rather than the same message that already failed.
-  let remindAboutFabrication = false
+  // Set when the previous attempt invented a figure or sounded AI-written, so
+  // the retry says what went wrong rather than sending the same message that
+  // already failed.
+  let reminder: string | null = null
   let attempts = 0
 
   // Two attempts: the first failure (unparseable, empty, mostly-banned filler,
@@ -145,9 +157,7 @@ export async function generateComment(
     attempts = attempt
     if (attempt > 1) hooks.onRetry?.(attempt)
 
-    const message = remindAboutFabrication
-      ? `${input.userMessage}\n\n${ANTI_FABRICATION_REMINDER}`
-      : input.userMessage
+    const message = reminder ? `${input.userMessage}\n\n${reminder}` : input.userMessage
 
     // Mid-stream guard: the text shown so far is checked for invented figures
     // BEFORE it is shown, so a made-up statistic never reaches the screen.
@@ -204,7 +214,7 @@ export async function generateComment(
         console.warn(
           `[${label}] attempt ${attempt}: unsourced figures (${invented.join(", ")}) not in post or instruction, stopped mid-stream`,
         )
-        remindAboutFabrication = true
+        reminder = ANTI_FABRICATION_REMINDER
         continue
       }
       console.error(`[${label}] attempt ${attempt}: both models failed:`, err)
@@ -237,21 +247,22 @@ export async function generateComment(
       console.warn(
         `[${label}] attempt ${attempt}: unsourced figures (${unsourced.join(", ")}) not in post or instruction, discarding`,
       )
-      remindAboutFabrication = true
+      reminder = ANTI_FABRICATION_REMINDER
       continue
     }
 
     // Generic-AI tells are retried rather than stripped: they are positional
-    // or mid-sentence, so deleting them would leave broken text. A second roll
-    // usually lands somewhere more specific.
-    const weak = (input.weakPatterns ?? WEAK_COMMENT_PATTERNS).filter(({ pattern }) => pattern.test(cleaned))
+    // or mid-sentence, so deleting them would leave broken text. The second
+    // roll is told which ones it used.
+    const weak = (input.weakPatterns ?? [...WEAK_COMMENT_PATTERNS, ...COMMENT_AI_TELLS])
+      .filter(({ pattern }) => pattern.test(cleaned))
+      .map((w) => w.label)
+    const copied = input.copySource ? copiedPhrase(cleaned, input.copySource) : null
+    if (copied) weak.push(`copies the post's own words ("${copied}")`)
     if (weak.length > 0 && attempt === 1) {
-      console.warn(
-        `[${label}] attempt ${attempt}: weak patterns (${weak
-          .map((w) => w.label)
-          .join(", ")}), retrying`,
-      )
+      console.warn(`[${label}] attempt ${attempt}: weak patterns (${weak.join(", ")}), retrying`)
       offLengthFallback ??= { text: cleaned, model }
+      reminder = aiTellReminder(weak)
       continue
     }
 

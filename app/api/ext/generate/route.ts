@@ -18,6 +18,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import { engagePreflight, reserveEngageGeneration } from "@/lib/engage/gate"
+import { recentComments } from "@/lib/engage/recentComments"
 import {
   buildCommentSystemMessage,
   buildCommentUserMessage,
@@ -138,10 +139,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: message }, { status: 400 })
   }
 
-  // System profiles are shared; custom ones must belong to the caller.
-  const profile = await db.commentProfile.findFirst({
-    where: { id: profileId, OR: [{ isSystem: true }, { userId: user.id }] },
-  })
+  // System profiles are shared; custom ones must belong to the caller. The
+  // person's last few comments of this kind come alongside, so this one
+  // doesn't open or run like them.
+  const [profile, recent] = await Promise.all([
+    db.commentProfile.findFirst({
+      where: { id: profileId, OR: [{ isSystem: true }, { userId: user.id }] },
+    }),
+    recentComments(user.id, reply ? "reply" : "comment"),
+  ])
   timer.mark("profile")
   if (!profile) {
     return NextResponse.json({ error: "Comment profile not found" }, { status: 404 })
@@ -156,8 +162,8 @@ export async function POST(req: Request) {
     ? buildReplySystemMessage(profile, reply.isOwnPost)
     : buildCommentSystemMessage(profile)
   const userMessage = reply
-    ? buildReplyUserMessage(post, reply, extraInstruction)
-    : buildCommentUserMessage(post, extraInstruction)
+    ? buildReplyUserMessage(post, reply, extraInstruction, recent)
+    : buildCommentUserMessage(post, extraInstruction, recent)
   const replyTarget = reply?.thread.find((entry) => entry.isTarget) ?? null
   const { min, max } = targetLengthRange(profile.length)
 
@@ -180,6 +186,8 @@ export async function POST(req: Request) {
     // generation; an explicit range stays exact.
     lengthSlack: lengthSlack(profile.length),
     numberSources,
+    // What the comment answers, whose wording it must not repeat back.
+    copySource: replyTarget ? replyTarget.text : post.text,
     engage: { userId: user.id, kind: reply ? "replies" : "comments" },
   }
   const beforeModelMs = timer.elapsed()

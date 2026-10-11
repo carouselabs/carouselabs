@@ -11,9 +11,10 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import { engagePreflight, reserveEngageGeneration } from "@/lib/engage/gate"
+import { recentComments } from "@/lib/engage/recentComments"
 import { requestIdOf, stageTimer, streamGeneration, type GenerationInput, type GenerationResult } from "@/lib/engage/commentEngine"
-import { targetLengthRange, WEAK_COMMENT_PATTERNS } from "@/lib/ai/prompts/commentPrompt"
-import { buildXReplySystemMessage, buildXReplyUserMessage, xNumberSources, X_AI_TELLS } from "@/lib/ai/prompts/xReplyPrompt"
+import { targetLengthRange } from "@/lib/ai/prompts/commentPrompt"
+import { buildXReplySystemMessage, buildXReplyUserMessage, xNumberSources } from "@/lib/ai/prompts/xReplyPrompt"
 import { parseReplyBody } from "@/lib/xReply"
 import { xLength, X_MAX_LENGTH } from "@/lib/xText"
 import { HISTORY_SNIPPET_CHARS } from "@/lib/extensionHistory"
@@ -41,10 +42,13 @@ export async function POST(req: Request) {
   }
   const { profileId, input: reply, extraInstruction } = parsed
 
-  // System profiles are shared; custom ones must belong to the caller.
-  const [profile, settings] = await Promise.all([
+  // System profiles are shared; custom ones must belong to the caller. The
+  // person's last few replies come alongside, so this one doesn't open or run
+  // like them.
+  const [profile, settings, recent] = await Promise.all([
     db.xProfile.findFirst({ where: { id: profileId, OR: [{ isSystem: true }, { userId: user.id }] } }),
     db.xUserSettings.findUnique({ where: { userId: user.id }, select: { maxReplyLength: true } }),
+    recentComments(user.id, "x_reply"),
   ])
   timer.mark("profile")
   if (!profile) return NextResponse.json({ error: "X profile not found" }, { status: 404 })
@@ -62,14 +66,15 @@ export async function POST(req: Request) {
 
   const input: GenerationInput = {
     systemMessage: buildXReplySystemMessage(profile, max, reply.isOwnPost),
-    userMessage: buildXReplyUserMessage(reply, extraInstruction),
+    userMessage: buildXReplyUserMessage(reply, extraInstruction, recent),
     min,
     max,
     numberSources: xNumberSources(reply, extraInstruction),
     label: "ext/x/reply",
     measure: xLength,
     engage: { userId: user.id, kind: "x_replies" },
-    weakPatterns: [...WEAK_COMMENT_PATTERNS, ...X_AI_TELLS],
+    // What the reply answers, whose wording it must not repeat back.
+    copySource: reply.post.text,
   }
   const beforeModelMs = timer.elapsed()
 

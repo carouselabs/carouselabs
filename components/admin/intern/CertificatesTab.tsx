@@ -144,7 +144,7 @@ export function CertificatesTab({
         }
       >
         {certificates.length === 0 ? (
-          <p className="py-8 text-center text-[13px] text-[#8A8A8A]">No certificates issued yet.</p>
+          <p className="py-8 text-center text-label text-muted-foreground">No certificates issued yet.</p>
         ) : (
           <div className={tableCls.wrap}>
             <table className={tableCls.table}>
@@ -159,7 +159,7 @@ export function CertificatesTab({
               <tbody>
                 {certificates.map((c) => (
                   <tr key={c.id} className={tableCls.row}>
-                    <td className={`${tableCls.td} font-mono text-white`}>{c.verificationCode}</td>
+                    <td className={`${tableCls.td} font-mono text-foreground`}>{c.verificationCode}</td>
                     <td className={tableCls.td}>{c.issuedFor}</td>
                     <td className={tableCls.td}>{fmtDate(c.issuedDate)}</td>
                     <td className={`${tableCls.td} text-right`}>
@@ -168,14 +168,14 @@ export function CertificatesTab({
                           href={c.certificateUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="rounded-lg p-1.5 text-[#8A8A8A] transition-colors hover:bg-[#232323] hover:text-white"
+                          className="rounded-control-sm p-1.5 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
                           title="View certificate"
                         >
                           <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                         <button
                           onClick={() => setDeleteTarget(c)}
-                          className="rounded-lg p-1.5 text-[#8A8A8A] transition-colors hover:bg-[#3A1520] hover:text-red-400"
+                          className="rounded-control-sm p-1.5 text-muted-foreground transition-colors hover:bg-danger-soft hover:text-danger"
                           title="Delete"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -197,18 +197,18 @@ export function CertificatesTab({
       >
         {createdCode ? (
           <div className="space-y-4">
-            <div className="flex flex-col items-center gap-2 rounded-xl border border-[#2A2A2A] bg-[#141414] py-6">
-              <Award className="h-8 w-8 text-[#7C3AED]" />
-              <span className="font-mono text-[20px] font-bold tracking-wide text-white">{createdCode}</span>
+            <div className="flex flex-col items-center gap-2 rounded-control border border-border bg-background py-6">
+              <Award className="h-8 w-8 text-brand" />
+              <span className="font-mono text-lead font-bold text-foreground">{createdCode}</span>
             </div>
             <AdminButton variant="secondary" className="w-full" onClick={() => void copyCode()}>
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               {copied ? "Copied!" : "Copy Code"}
             </AdminButton>
-            <p className="text-[12.5px] leading-relaxed text-[#8A8A8A]">
+            <p className="text-caption leading-relaxed text-muted-foreground">
               Add this code to the certificate before giving it to the intern — it&apos;s what they (or
               anyone) can use to verify it&apos;s genuine at{" "}
-              <span className="text-white">carouselabs.com/verify-certificate</span>.
+              <span className="text-foreground">carouselabs.com/verify-certificate</span>.
             </p>
             <div className="flex justify-end">
               <AdminButton onClick={closeUpload}>Done</AdminButton>
@@ -217,7 +217,7 @@ export function CertificatesTab({
         ) : (
           <div className="space-y-3">
             <label className="block">
-              <span className="mb-1 block text-[11px] font-medium text-[#8A8A8A]">
+              <span className="mb-1 block text-caption font-medium text-muted-foreground">
                 Certificate file (PDF or image)
               </span>
               <input
@@ -225,16 +225,16 @@ export function CertificatesTab({
                 type="file"
                 accept={ALLOWED_ACCEPT}
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                className="block w-full text-[12.5px] text-[#B0B0B0] file:mr-3 file:rounded-lg file:border-0 file:bg-[#232323] file:px-3 file:py-2 file:text-[12px] file:font-semibold file:text-white hover:file:bg-[#2E2E2E]"
+                className="block w-full text-caption text-muted-foreground file:mr-3 file:rounded-control-sm file:border-0 file:bg-surface-muted file:px-3 file:py-2 file:text-caption file:font-semibold file:text-foreground hover:file:bg-surface-raised"
               />
               {file && (
-                <p className="mt-1 text-[11px] text-[#6A6A6A]">
+                <p className="mt-1 text-caption text-muted-foreground/80">
                   {file.name} ({(file.size / 1024).toFixed(0)} KB)
                 </p>
               )}
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11px] font-medium text-[#8A8A8A]">Issued for</span>
+              <span className="mb-1 block text-caption font-medium text-muted-foreground">Issued for</span>
               <AdminInput
                 value={issuedFor}
                 onChange={(e) => setIssuedFor(e.target.value)}
@@ -243,7 +243,7 @@ export function CertificatesTab({
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11px] font-medium text-[#8A8A8A]">Issued date</span>
+              <span className="mb-1 block text-caption font-medium text-muted-foreground">Issued date</span>
               <AdminInput
                 type="date"
                 value={issuedDate}
@@ -252,7 +252,7 @@ export function CertificatesTab({
               />
             </label>
             {error && (
-              <div className="rounded-lg border border-[#5A2030] bg-[#3A1520] px-3 py-2 text-[12px] text-red-400">
+              <div className="rounded-control-sm border border-danger/35 bg-danger-soft px-3 py-2 text-caption text-danger">
                 {error}
               </div>
             )}

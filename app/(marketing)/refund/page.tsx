@@ -15,7 +15,7 @@ export default function RefundPage() {
     >
       <LegalSection heading="1. No refunds">
         <p>
-          <span className="text-[#0A0A0A] font-medium">
+          <span className="text-foreground font-medium">
             All payments made to CarouseLabs are final and non-refundable.
           </span>{" "}
           Once a payment is processed — whether for a Pro subscription or any other purchase — we do
@@ -38,14 +38,14 @@ export default function RefundPage() {
         <p>
           You may cancel your subscription at any time from your billing settings. When you cancel:
         </p>
-        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-[#1A1A1A]">
+        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-muted-foreground">
           <li>
             Your Pro access and remaining credits continue until the end of the current paid billing
             period.
           </li>
           <li>You will not be charged again after the current period ends.</li>
           <li>
-            <span className="text-[#0A0A0A] font-medium">
+            <span className="text-foreground font-medium">
               No refund is issued for the current billing period
             </span>{" "}
             — including any unused portion of that period or any unused credits.
@@ -57,7 +57,7 @@ export default function RefundPage() {
       <LegalSection heading="4. Extra credits">
         <p>
           One-time purchases of extra credits are{" "}
-          <span className="text-[#0A0A0A] font-medium">non-refundable</span> once the credits have been
+          <span className="text-foreground font-medium">non-refundable</span> once the credits have been
           added to your account. Extra credits cannot be exchanged for cash and are subject to any
           expiry period shown at the time of purchase.
         </p>
@@ -80,7 +80,7 @@ export default function RefundPage() {
         <p>
           If you believe you were charged in error or experienced a duplicate or fraudulent charge,
           contact us at{" "}
-          <a href="mailto:support@carouselabs.com" className="text-[#1A1A1A] hover:underline">
+          <a href="mailto:support@carouselabs.com" className="text-foreground hover:underline">
             support@carouselabs.com
           </a>{" "}
           from the email address associated with your account, including the approximate date and

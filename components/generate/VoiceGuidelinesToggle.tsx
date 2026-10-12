@@ -1,6 +1,7 @@
 "use client"
 
 import { Check } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface VoiceGuidelinesToggleProps {
   hasGuidelines: boolean
@@ -23,10 +24,10 @@ export function VoiceGuidelinesToggle({
 
   return (
     <label
-      className={[
+      className={cn(
         "flex items-center gap-2.5 self-start select-none",
-        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
-      ].join(" ")}
+        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+      )}
     >
       <button
         type="button"
@@ -34,18 +35,16 @@ export function VoiceGuidelinesToggle({
         aria-checked={value}
         disabled={disabled}
         onClick={() => onChange(!value)}
-        className={[
-          "flex items-center justify-center w-[18px] h-[18px] rounded-[5px] border transition-colors",
+        className={cn(
+          "relative flex size-5 shrink-0 items-center justify-center rounded-detail border transition-colors duration-(--motion-fast) after:absolute after:-inset-3 after:content-['']",
           value
-            ? "bg-[#1A1A1A] border-[#1A1A1A] text-white"
-            : "bg-[#F4F2EC] border-[#D6D3CC] hover:border-[#1A1A1A]",
-        ].join(" ")}
+            ? "border-primary bg-primary text-primary-foreground"
+            : "border-control-border bg-surface hover:border-foreground"
+        )}
       >
-        {value && <Check size={12} strokeWidth={3} />}
+        {value && <Check className="size-3.5" strokeWidth={3} aria-hidden />}
       </button>
-      <span className="text-[13px] font-medium text-[#4B5563]">
-        Apply my voice guidelines
-      </span>
+      <span className="text-label font-medium text-foreground">Apply my voice guidelines</span>
     </label>
   )
 }

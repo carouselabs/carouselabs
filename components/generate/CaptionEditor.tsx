@@ -1,8 +1,10 @@
 "use client"
 
-import { useRef, useState } from "react"
-import { Copy, Check, Save, RefreshCw, Loader2 } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { Copy, Check, Save, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { ActionBar, captionFieldClasses } from "@/components/create/CreateKit"
 import { PostToLinkedInButton } from "@/components/generate/PostToLinkedInButton"
 import { ScheduleForLaterButton } from "@/components/generate/ScheduleForLaterButton"
 
@@ -17,17 +19,21 @@ interface CaptionEditorProps {
   onChange: (value: string) => void
   isGenerating: boolean
   onSave: (caption: string) => Promise<string>
-  onRegenerate: () => void
-  regenerateDisabled?: boolean
+  /** Lets the page disable Regenerate while a save is in flight (as before). */
+  onSavingChange?: (saving: boolean) => void
 }
 
+/**
+ * The caption as the canvas: the text itself, its character count, and the
+ * finishing actions (Copy, Save Draft, Post to LinkedIn, Schedule for Later)
+ * in a bar that stays in reach while you edit.
+ */
 export function CaptionEditor({
   caption,
   onChange,
   isGenerating,
   onSave,
-  onRegenerate,
-  regenerateDisabled = false,
+  onSavingChange,
 }: CaptionEditorProps) {
   const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -35,6 +41,10 @@ export function CaptionEditor({
   const saved = savedCaption === caption
   const saveInFlight = useRef<Promise<string> | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  useEffect(() => {
+    onSavingChange?.(saving)
+  }, [saving, onSavingChange])
 
   const charCount = caption.length
   const isOverLimit = charCount > MAX_CHARS
@@ -77,71 +87,8 @@ export function CaptionEditor({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[12px] font-medium text-[#ADA99F] uppercase tracking-widest">
-          Caption
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Regenerate */}
-          <button
-            onClick={onRegenerate}
-            disabled={isGenerating || regenerateDisabled || saving}
-            title="Regenerate — 1 credit"
-            className="flex items-center gap-1.5 h-[30px] px-2.5 rounded-lg border border-[#E5E3DE] text-[12px] font-medium text-[#6B7280] hover:border-[#DEDBD4] hover:text-[#4B5563] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {isGenerating ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : (
-              <RefreshCw size={12} strokeWidth={2.2} />
-            )}
-            Regenerate — 1 credit
-          </button>
-
-          {/* Copy */}
-          <button
-            onClick={handleCopy}
-            disabled={!caption || isGenerating}
-            className="flex items-center gap-1.5 h-[30px] px-2.5 rounded-lg border border-[#E5E3DE] text-[12px] font-medium text-[#6B7280] hover:border-[#DEDBD4] hover:text-[#4B5563] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {copied ? (
-              <Check size={12} strokeWidth={2.5} className="text-[#059669]" />
-            ) : (
-              <Copy size={12} strokeWidth={2.2} />
-            )}
-            {copied ? "Copied!" : "Copy"}
-          </button>
-
-          {/* Save */}
-          <button
-            onClick={handleSave}
-            disabled={!caption || isOverLimit || isGenerating || saving}
-            className={cn(
-              "flex items-center gap-1.5 h-[30px] px-3 rounded-lg text-[12px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
-              saved
-                ? "bg-[rgba(110,231,183,0.15)] border border-[rgba(110,231,183,0.3)] text-[#059669]"
-                : "bg-[#1A1A1A] hover:bg-[#000000] text-white border border-transparent",
-            )}
-          >
-            {saving ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : saved ? (
-              <Check size={12} strokeWidth={2.5} />
-            ) : (
-              <Save size={12} strokeWidth={2.2} />
-            )}
-            {saved ? "Saved!" : saving ? "Saving…" : "Save Draft"}
-          </button>
-
-          {/* Post to LinkedIn — text-only post (no images in this flow) */}
-          <PostToLinkedInButton caption={caption} disabled={!caption || isGenerating || isOverLimit || saving} />
-
-          {/* Schedule for Later — saves (or reuses) the Post, then deep-links
-              into Content Hub with it pre-selected */}
-          <ScheduleForLaterButton getPostId={savePost} disabled={!caption || isGenerating || isOverLimit || saving} />
-        </div>
-      </div>
+    <div className="flex flex-col gap-3">
+      <p className="text-caption font-medium text-muted-foreground">Caption</p>
 
       {/* Textarea */}
       <div className="relative">
@@ -153,22 +100,17 @@ export function CaptionEditor({
           disabled={isGenerating}
           placeholder={isGenerating ? "Generating your caption…" : "Your caption will appear here…"}
           className={cn(
-            "w-full min-h-[340px] px-4 py-3.5 rounded-xl text-[14px] leading-[1.65] resize-y outline-none transition-all duration-150",
-            "bg-[#F4F2EC] border text-[#1A1A1A]",
-            "placeholder:text-[#D6D3CC] disabled:opacity-60",
-            isOverLimit
-              ? "border-[rgba(239,68,68,0.5)] focus:border-[rgba(239,68,68,0.7)]"
-              : isNearLimit
-                ? "border-[rgba(251,191,36,0.4)] focus:border-[rgba(251,191,36,0.6)]"
-                : "border-[#E5E3DE] focus:border-[rgba(26,26,26,0.5)]",
+            captionFieldClasses,
+            "min-h-[22rem] resize-y bg-surface-raised p-5 md:min-h-[26rem] md:p-6 md:text-body md:leading-relaxed",
+            isNearLimit && "border-warning/60"
           )}
         />
         {isGenerating && caption.length === 0 && (
-          <div className="absolute inset-0 p-4 flex flex-col gap-2.5 pointer-events-none">
+          <div className="pointer-events-none absolute inset-0 flex flex-col gap-2.5 p-5 md:p-6" aria-hidden>
             {SKELETON_WIDTHS.map((w, i) => (
               <div
                 key={i}
-                className="h-3.5 rounded-full bg-[#ECEAE4] animate-pulse"
+                className="h-3.5 animate-pulse rounded-full bg-skeleton motion-reduce:animate-none"
                 style={{ width: w }}
               />
             ))}
@@ -176,41 +118,56 @@ export function CaptionEditor({
         )}
       </div>
 
-      {/* Footer: char count + save error */}
-      <div className="flex items-center justify-between">
-        <div>
-          {saveError && (
-            <p role="alert" className="text-[12px] text-[rgba(239,68,68,0.8)]">{saveError}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span
-            className={cn(
-              "text-[12px] tabular-nums",
-              isOverLimit
-                ? "text-[rgba(239,68,68,0.8)]"
-                : isNearLimit
-                  ? "text-[rgba(251,191,36,0.7)]"
-                  : "text-[#ADA99F]",
-            )}
-          >
-            {charCount.toLocaleString()}
-          </span>
-          <span className="text-[12px] text-[#DEDBD4]">
-            / {MAX_CHARS.toLocaleString()}
-          </span>
-          {isOverLimit && (
-            <span className="text-[11px] text-[rgba(239,68,68,0.7)] ml-1">
-              Too long for LinkedIn
+      {saveError && (
+        <p role="alert" className="text-caption text-danger">
+          {saveError}
+        </p>
+      )}
+
+      <ActionBar
+        start={
+          <p className="flex items-center gap-1.5 text-caption tabular-nums" aria-live="polite">
+            <span className={cn(isOverLimit ? "text-danger" : isNearLimit ? "text-warning" : "text-muted-foreground")}>
+              {charCount.toLocaleString()}
             </span>
+            <span className="text-muted-foreground/70">/ {MAX_CHARS.toLocaleString()}</span>
+            {isOverLimit && <span className="ml-1 font-medium text-danger">Too long for LinkedIn</span>}
+            {isNearLimit && <span className="ml-1 font-medium text-warning">Approaching limit</span>}
+          </p>
+        }
+      >
+        {/* Copy */}
+        <Button variant="ghost" size="sm" onClick={handleCopy} disabled={!caption || isGenerating}>
+          {copied ? <Check className="text-success" aria-hidden /> : <Copy aria-hidden />}
+          {copied ? "Copied!" : "Copy"}
+        </Button>
+
+        {/* Save */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleSave}
+          disabled={!caption || isOverLimit || isGenerating || saving}
+          aria-busy={saving || undefined}
+          className={cn(saved && "border-success/40 bg-success-soft text-success hover:bg-success-soft")}
+        >
+          {saving ? (
+            <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden />
+          ) : saved ? (
+            <Check aria-hidden />
+          ) : (
+            <Save aria-hidden />
           )}
-          {isNearLimit && (
-            <span className="text-[11px] text-[rgba(251,191,36,0.6)] ml-1">
-              Approaching limit
-            </span>
-          )}
-        </div>
-      </div>
+          {saved ? "Saved!" : saving ? "Saving…" : "Save Draft"}
+        </Button>
+
+        {/* Schedule for Later — saves (or reuses) the Post, then deep-links
+            into Content Hub with it pre-selected */}
+        <ScheduleForLaterButton getPostId={savePost} disabled={!caption || isGenerating || isOverLimit || saving} />
+
+        {/* Post to LinkedIn — text-only post (no images in this flow) */}
+        <PostToLinkedInButton caption={caption} disabled={!caption || isGenerating || isOverLimit || saving} />
+      </ActionBar>
     </div>
   )
 }

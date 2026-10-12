@@ -1,10 +1,15 @@
 "use client"
 
-// Shared admin-panel primitives, hardcoded to the dark admin palette
-// (bg #0F0F0F, cards #1A1A1A, borders #2A2A2A, accent #7C3AED) so they don't
-// depend on the cream app theme's CSS variables.
-import { forwardRef, useEffect, type ReactNode } from "react"
-import { Loader2, X } from "lucide-react"
+// Shared admin-panel primitives. They keep the exports every admin page
+// already uses, but now render the design system's parts (Button, Dialog,
+// ConfirmDialog, the control styles, the tokens) under the admin's dark theme.
+import { forwardRef, type ReactNode } from "react"
+import { Loader2 } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { controlClasses } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 export function AdminCard({
   title,
@@ -18,15 +23,15 @@ export function AdminCard({
   actions?: ReactNode
 }) {
   return (
-    <div className={`rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] ${className}`}>
+    <section className={cn("rounded-card border border-border bg-surface", className)}>
       {(title || actions) && (
-        <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3.5">
-          <h3 className="text-[13px] font-semibold text-white">{title}</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3.5">
+          <h2 className="text-label font-semibold text-foreground">{title}</h2>
           {actions}
         </div>
       )}
       <div className="p-5">{children}</div>
-    </div>
+    </section>
   )
 }
 
@@ -42,15 +47,26 @@ export function StatCard({
   icon?: ReactNode
 }) {
   return (
-    <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
-      <div className="flex items-center justify-between">
-        <span className="text-[12px] font-medium text-[#8A8A8A]">{label}</span>
-        {icon && <span className="text-[#7C3AED]">{icon}</span>}
+    <div className="flex flex-col gap-2 rounded-card border border-border bg-surface p-5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-caption font-medium text-muted-foreground">{label}</span>
+        {icon && (
+          <span aria-hidden className="text-muted-foreground/80 [&_svg]:size-4">
+            {icon}
+          </span>
+        )}
       </div>
-      <div className="mt-2 text-[26px] font-bold leading-none text-white tabular-nums">{value}</div>
-      {hint && <div className="mt-2 text-[11px] text-[#6A6A6A]">{hint}</div>}
+      <div className="text-title-sm leading-none font-semibold tracking-[-0.02em] text-foreground tabular-nums">{value}</div>
+      {hint && <div className="text-caption text-muted-foreground/80">{hint}</div>}
     </div>
   )
+}
+
+const ADMIN_BUTTON: Record<"primary" | "secondary" | "danger" | "ghost", { variant: "brand" | "outline" | "ghost"; className?: string }> = {
+  primary: { variant: "brand" },
+  secondary: { variant: "outline", className: "border-border bg-surface-muted hover:bg-surface-raised" },
+  danger: { variant: "outline", className: "border-danger/35 bg-danger-soft text-danger hover:bg-danger-soft/70 hover:text-danger" },
+  ghost: { variant: "ghost", className: "text-muted-foreground hover:text-foreground" },
 }
 
 export function AdminButton({
@@ -70,45 +86,36 @@ export function AdminButton({
   type?: "button" | "submit"
   className?: string
 }) {
-  const styles = {
-    primary: "bg-[#7C3AED] text-white hover:bg-[#6D28D9] border border-transparent",
-    secondary: "bg-[#232323] text-white hover:bg-[#2E2E2E] border border-[#2A2A2A]",
-    danger: "bg-[#3A1520] text-red-400 hover:bg-[#4A1A28] border border-[#5A2030]",
-    ghost: "bg-transparent text-[#B0B0B0] hover:text-white hover:bg-[#232323] border border-transparent",
-  }[variant]
+  const style = ADMIN_BUTTON[variant]
   return (
-    <button
+    <Button
       type={type}
+      size="sm"
+      variant={style.variant}
       onClick={onClick}
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-[12.5px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${styles} ${className}`}
+      aria-busy={loading || undefined}
+      className={cn("[&_svg:not([class*='size-'])]:size-3.5", style.className, className)}
     >
-      {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+      {loading && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden />}
       {children}
-    </button>
+    </Button>
   )
 }
+
+const adminControl = cn(controlClasses, "h-9 text-label md:text-label")
 
 export const AdminInput = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
   function AdminInput(props, ref) {
     const { className = "", ...rest } = props
-    return (
-      <input
-        ref={ref}
-        {...rest}
-        className={`h-9 rounded-lg border border-[#2A2A2A] bg-[#141414] px-3 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED] transition-colors ${className}`}
-      />
-    )
+    return <input ref={ref} {...rest} className={cn(adminControl, "px-3", className)} />
   },
 )
 
 export function AdminSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   const { className = "", children, ...rest } = props
   return (
-    <select
-      {...rest}
-      className={`h-9 rounded-lg border border-[#2A2A2A] bg-[#141414] px-2.5 text-[13px] text-white outline-none focus:border-[#7C3AED] transition-colors ${className}`}
-    >
+    <select {...rest} className={cn(adminControl, "w-auto px-2.5", className)}>
       {children}
     </select>
   )
@@ -128,32 +135,15 @@ export function Modal({
   // For forms with a label column and controls side by side.
   wide?: boolean
 }) {
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose()
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [open, onClose])
-
-  if (!open) return null
   return (
-    <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
-    >
-      <div
-        className={`w-full ${wide ? "max-w-2xl" : "max-w-md"} rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-2xl`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3.5">
-          <h3 className="text-[14px] font-semibold text-white">{title}</h3>
-          <button onClick={onClose} className="text-[#8A8A8A] hover:text-white transition-colors">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="p-5">{children}</div>
-      </div>
-    </div>
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className={wide ? "sm:max-w-2xl" : "sm:max-w-md"}>
+        <DialogHeader>
+          <DialogTitle className="text-body-lg">{title}</DialogTitle>
+        </DialogHeader>
+        <div>{children}</div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -176,34 +166,31 @@ export function ConfirmModal({
   loading?: boolean
 }) {
   return (
-    <Modal open={open} onClose={onClose} title={title}>
-      <p className="text-[13px] leading-relaxed text-[#B0B0B0]">{body}</p>
-      <div className="mt-5 flex justify-end gap-2">
-        <AdminButton variant="secondary" onClick={onClose}>
-          Cancel
-        </AdminButton>
-        <AdminButton variant="danger" onClick={onConfirm} loading={loading}>
-          {confirmLabel}
-        </AdminButton>
-      </div>
-    </Modal>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={(next) => !next && onClose()}
+      title={title}
+      description={body}
+      confirmLabel={confirmLabel}
+      tone="danger"
+      pending={loading}
+      onConfirm={onConfirm}
+    />
   )
 }
 
 export function PlanBadge({ plan }: { plan: string }) {
   if (plan === "GROWTH") {
     return (
-      <span className="inline-flex rounded-full bg-gradient-to-r from-[#D97706]/20 to-[#F59E0B]/20 px-2 py-0.5 text-[11px] font-semibold text-[#F59E0B]">
+      <span className="inline-flex rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning">
         GROWTH
       </span>
     )
   }
   return plan === "PRO" ? (
-    <span className="inline-flex rounded-full bg-[#7C3AED]/15 px-2 py-0.5 text-[11px] font-semibold text-[#A78BFA]">
-      PRO
-    </span>
+    <span className="inline-flex rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-semibold text-brand">PRO</span>
   ) : (
-    <span className="inline-flex rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[11px] font-medium text-[#8A8A8A]">
+    <span className="inline-flex rounded-full bg-surface-raised px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
       FREE
     </span>
   )
@@ -211,21 +198,15 @@ export function PlanBadge({ plan }: { plan: string }) {
 
 export function Spinner({ label = "Loading…" }: { label?: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-[#8A8A8A]">
-      <Loader2 className="h-4 w-4 animate-spin text-[#7C3AED]" />
+    <div role="status" className="flex items-center justify-center gap-2 py-16 text-label text-muted-foreground">
+      <Loader2 className="size-4 animate-spin text-brand motion-reduce:animate-none" aria-hidden />
       {label}
     </div>
   )
 }
 
 // Shared table class strings so every admin table looks identical.
-export const tableCls = {
-  wrap: "overflow-x-auto rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]",
-  table: "w-full text-left text-[12.5px]",
-  th: "whitespace-nowrap border-b border-[#2A2A2A] px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]",
-  td: "whitespace-nowrap border-b border-[#232323] px-4 py-3 text-[#D0D0D0]",
-  row: "hover:bg-[#1F1F1F] transition-colors",
-}
+export { tableCls } from "./tableStyles"
 
 export function fmtDate(d: string | Date | null | undefined): string {
   if (!d) return "—"

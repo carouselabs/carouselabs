@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react"
 import NextLink from "next/link"
 import {
   Plus,
@@ -14,7 +14,6 @@ import {
   Trash2,
   Pencil,
   ExternalLink,
-  Camera,
   ChevronLeft,
   ChevronRight,
   FileEdit,
@@ -30,7 +29,14 @@ import {
 } from "lucide-react"
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser"
 import { PLATFORM_META, PLATFORM_ORDER, validatePostForPlatform, type Platform } from "@/lib/platforms"
-import { PlatformBadge, PlatformIcon } from "@/components/content-hub/platforms"
+import { cn } from "@/lib/utils"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
+import { PageHeader } from "@/components/patterns/PageHeader"
+import { EmptyState } from "@/components/patterns/EmptyState"
+import { BackButton, ChoiceCard, FieldLabel } from "@/components/create/CreateKit"
+import { PlatformBadge } from "@/components/content-hub/platforms"
+import { fieldClasses, iconAction } from "@/components/content-hub/hubStyles"
 import { CustomPostComposer } from "@/components/content-hub/CustomPostComposer"
 import { PlatformPreview } from "@/components/content-hub/PlatformPreview"
 import { BulkUploadPanel } from "@/components/content-hub/BulkUploadPanel"
@@ -127,16 +133,6 @@ const FORMAT_LABELS: Record<PostFormat, string> = {
   TEXT_ONLY: "Text",
   THUMBNAIL: "Thumbnail",
   CUSTOM: "Custom",
-}
-
-const STATUS_DOT: Record<ScheduledStatus, string> = {
-  draft: "#9CA3AF",
-  queued: "#7C3AED",
-  publishing: "#7C3AED",
-  published: "#10B981",
-  failed: "#EF4444",
-  cancelled: "#D1D5DB",
-  pending_connection: "#F59E0B",
 }
 
 const STATUS_LABEL: Record<ScheduledStatus, string> = {
@@ -253,19 +249,57 @@ function defaultInputs(): { date: string; time: string } {
 const EMPTY_BANNER_KEY = "content-hub-empty-banner-dismissed"
 
 // ── Render helpers (top-level — never re-created during a parent render) ──
+const STATUS_DOT_CLASS: Record<ScheduledStatus, string> = {
+  draft: "bg-muted-foreground",
+  queued: "bg-brand",
+  publishing: "bg-brand",
+  published: "bg-success",
+  failed: "bg-danger",
+  cancelled: "bg-border",
+  pending_connection: "bg-warning",
+}
+
+const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" })
+const weekdayFormat = new Intl.DateTimeFormat(undefined, { weekday: "short" })
+const monthFormat = new Intl.DateTimeFormat(undefined, { month: "short" })
+const fullDayFormat = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" })
+
+function StatusDot({ status, className }: { status: ScheduledStatus; className?: string }) {
+  return <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", STATUS_DOT_CLASS[status], className)} />
+}
+
 function Thumbnail({ post, size = 48 }: { post: PostSummary; size?: number }) {
   const src = post.imageUrls[0]
   return (
     <div
-      className="rounded-lg overflow-hidden border border-[#E5E3DE] bg-[#F4F2EC] flex items-center justify-center flex-shrink-0"
+      className="flex shrink-0 items-center justify-center overflow-hidden rounded-control-sm border border-border bg-surface-muted"
       style={{ width: size, height: size }}
     >
       {src ? (
         /* eslint-disable-next-line @next/next/no-img-element */
-        <img src={src} alt={post.title} className="w-full h-full object-cover" />
+        <img src={src} alt="" className="h-full w-full object-cover" />
       ) : (
-        <ImageIcon size={16} className="text-[#ADA99F]" />
+        <ImageIcon className="size-4 text-muted-foreground" aria-hidden />
       )}
+    </div>
+  )
+}
+
+/** The date in the agenda's left margin — the hub's one big typographic moment. */
+function DayMark({ date }: { date: Date }) {
+  const isToday = isSameDay(date, new Date())
+  return (
+    <div className="flex flex-col items-start pt-0.5 sm:sticky sm:top-0 sm:self-start">
+      <span
+        className={cn(
+          "font-display text-[2.5rem] leading-[0.9] tracking-[-0.02em] tabular-nums sm:text-[3rem]",
+          isToday ? "text-brand" : "text-foreground"
+        )}
+      >
+        {date.getDate()}
+      </span>
+      <span className="mt-1.5 text-caption font-medium text-foreground">{weekdayFormat.format(date)}</span>
+      <span className="text-caption text-muted-foreground">{monthFormat.format(date)}</span>
     </div>
   )
 }
@@ -277,6 +311,8 @@ function ScheduledRow({
   onDuplicate,
   isRemoving = false,
   isDuplicating = false,
+  selected = false,
+  timeOnly = false,
 }: {
   item: ScheduledItem
   onReschedule: (item: ScheduledItem) => void
@@ -284,31 +320,56 @@ function ScheduledRow({
   onDuplicate: (item: ScheduledItem) => void
   isRemoving?: boolean
   isDuplicating?: boolean
+  /** Open in the side panel right now. */
+  selected?: boolean
+  /** The agenda already shows the day, so the row only needs the time. */
+  timeOnly?: boolean
 }) {
+  const editable = item.status === "queued" || item.status === "failed" || item.status === "draft"
+  const text = item.post.caption?.slice(0, 80) || item.post.title
+  const when = timeOnly ? timeFormat.format(new Date(item.scheduledFor)) : formatDateTime(item.scheduledFor)
   return (
-    <div className="group flex items-center gap-3 p-3 rounded-xl border border-[#E5E3DE] bg-white hover:border-[rgba(124,58,237,0.35)] transition-colors">
-      <Thumbnail post={item.post} />
-      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-        <div className="flex items-center gap-1.5">
-          <span
-            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-            style={{ backgroundColor: STATUS_DOT[item.status] }}
-          />
-          <span className="text-[11px] font-medium text-[#6B7280]">{STATUS_LABEL[item.status]}</span>
-          <PlatformBadge platform={item.platform} />
+    <div
+      aria-current={selected || undefined}
+      className={cn(
+        "group relative grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-1 rounded-card p-3 transition-colors duration-(--motion-fast) hover:bg-surface-raised sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-x-4",
+        selected && "bg-surface-raised shadow-card"
+      )}
+    >
+      {selected && <span aria-hidden className="absolute inset-y-3 -left-px w-0.5 rounded-full bg-brand" />}
+      <div className="row-span-2 sm:row-span-1">
+        <Thumbnail post={item.post} size={52} />
+      </div>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-caption">
+          <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+            <StatusDot status={item.status} />
+            {STATUS_LABEL[item.status]}
+          </span>
+          <span title={PLATFORM_META[item.platform].label}>
+            <PlatformBadge platform={item.platform} size={18} />
+          </span>
+          <span className="text-muted-foreground tabular-nums">
+            {when} · {FORMAT_LABELS[item.post.format]}
+          </span>
         </div>
-        <p className="text-[13px] font-medium text-[#0A0A0A] truncate">
-          {item.post.caption?.slice(0, 80) || item.post.title}
-        </p>
-        <p className="text-[11px] text-[#9CA3AF]">
-          {formatDateTime(item.scheduledFor)} · {FORMAT_LABELS[item.post.format]}
-        </p>
+        {editable ? (
+          <button
+            type="button"
+            onClick={() => onReschedule(item)}
+            className="line-clamp-2 rounded-detail text-left text-label font-medium text-foreground transition-colors duration-(--motion-fast) hover:text-brand"
+          >
+            {text}
+          </button>
+        ) : (
+          <p className="line-clamp-2 text-label font-medium text-foreground">{text}</p>
+        )}
         {item.post.tags && item.post.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 pt-0.5">
+          <div className="flex flex-wrap gap-1">
             {item.post.tags.map((t) => (
               <span
                 key={t.id}
-                className="px-1.5 py-0.5 rounded-full text-[9.5px] font-medium text-white"
+                className="rounded-full px-2 py-0.5 text-[11px] font-medium text-white"
                 style={{ backgroundColor: t.color }}
               >
                 {t.name}
@@ -317,55 +378,64 @@ function ScheduledRow({
           </div>
         )}
         {item.status === "failed" && item.failureReason && (
-          <p className="text-[11px] text-[rgba(239,68,68,0.9)]">{item.failureReason}</p>
+          <p className="text-caption text-danger">{item.failureReason}</p>
         )}
         {item.status === "pending_connection" && (
-          <p className="text-[11px] text-[#D97706]">
+          <p className="text-caption text-warning">
             Pending — connect {PLATFORM_META[item.platform].label} to publish here
           </p>
         )}
       </div>
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Below the text on phones, at the row's end from tablet up (shown on hover there) */}
+      <div
+        className={cn(
+          "col-start-2 -ml-2 flex items-center gap-0.5 transition-opacity duration-(--motion-fast) sm:col-start-3 sm:row-start-1 sm:ml-0",
+          !selected && "lg:opacity-0 lg:group-focus-within:opacity-100 lg:group-hover:opacity-100"
+        )}
+      >
         {item.status === "published" && item.publishedUrl && (
           <a
             href={item.publishedUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F4F2EC] transition-colors"
+            className={iconAction}
             title="View post"
+            aria-label="View post"
           >
-            <ExternalLink size={13} strokeWidth={2} />
+            <ExternalLink aria-hidden />
           </a>
         )}
-        {(item.status === "queued" || item.status === "failed" || item.status === "draft") && (
+        {editable && (
           <button
+            type="button"
             onClick={() => onReschedule(item)}
-            className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F4F2EC] transition-colors"
+            className={iconAction}
             title={item.status === "draft" ? "Schedule" : "Reschedule"}
+            aria-label={item.status === "draft" ? "Schedule" : "Reschedule"}
           >
-            <Pencil size={13} strokeWidth={2} />
+            <Pencil aria-hidden />
           </button>
         )}
         <button
+          type="button"
           onClick={() => onDuplicate(item)}
           disabled={isDuplicating}
-          className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F4F2EC] transition-colors disabled:opacity-50"
+          className={iconAction}
           title="Duplicate"
+          aria-label="Duplicate"
         >
-          {isDuplicating ? <Loader2 size={13} className="animate-spin" /> : <Copy size={13} strokeWidth={2} />}
+          {isDuplicating ? <Loader2 className="animate-spin" aria-hidden /> : <Copy aria-hidden />}
         </button>
         {!(item.status === "published" && item.publishedUrl) && (
           <button
+            type="button"
             onClick={() => onRemove(item)}
             disabled={isRemoving}
-            className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.08)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className={cn(iconAction, "hover:bg-danger-soft hover:text-danger")}
             title="Remove"
+            aria-label="Remove"
           >
-            {isRemoving ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
-              <Trash2 size={13} strokeWidth={2} />
-            )}
+            {isRemoving ? <Loader2 className="animate-spin" aria-hidden /> : <Trash2 aria-hidden />}
           </button>
         )}
       </div>
@@ -373,6 +443,7 @@ function ScheduledRow({
   )
 }
 
+/** One stretch of the agenda (This Week, Next Week…), posts gathered under their day. */
 function GroupSection({
   title,
   items,
@@ -381,6 +452,7 @@ function GroupSection({
   onDuplicate,
   removingId,
   duplicatingId,
+  selectedId,
 }: {
   title: string
   items: ScheduledItem[]
@@ -389,25 +461,50 @@ function GroupSection({
   onDuplicate: (item: ScheduledItem) => void
   removingId?: string | null
   duplicatingId?: string | null
+  selectedId?: string | null
 }) {
+  const headingId = useId()
   if (items.length === 0) return null
+  // Items arrive sorted, so a day's posts are always next to each other.
+  const days: { key: string; date: Date; items: ScheduledItem[] }[] = []
+  for (const item of items) {
+    const date = new Date(item.scheduledFor)
+    const key = date.toDateString()
+    const last = days[days.length - 1]
+    if (last && last.key === key) last.items.push(item)
+    else days.push({ key, date, items: [item] })
+  }
   return (
-    <div className="flex flex-col gap-2">
-      <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">{title}</p>
-      <div className="flex flex-col gap-2">
-        {items.map((item) => (
-          <ScheduledRow
-            key={item.id}
-            item={item}
-            onReschedule={onReschedule}
-            onRemove={onRemove}
-            onDuplicate={onDuplicate}
-            isRemoving={removingId === item.id}
-            isDuplicating={duplicatingId === item.id}
-          />
+    <section aria-labelledby={headingId} className="flex flex-col">
+      <h2 id={headingId} className="border-b border-foreground/80 pb-2.5 text-body font-semibold text-foreground">
+        {title}
+      </h2>
+      <ol className="flex flex-col divide-y divide-border">
+        {days.map((day) => (
+          <li
+            key={day.key}
+            className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-2 py-4 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:gap-4"
+          >
+            <DayMark date={day.date} />
+            <div className="-my-1 flex min-w-0 flex-col gap-1">
+              {day.items.map((item) => (
+                <ScheduledRow
+                  key={item.id}
+                  item={item}
+                  timeOnly
+                  selected={selectedId === item.id}
+                  onReschedule={onReschedule}
+                  onRemove={onRemove}
+                  onDuplicate={onDuplicate}
+                  isRemoving={removingId === item.id}
+                  isDuplicating={duplicatingId === item.id}
+                />
+              ))}
+            </div>
+          </li>
         ))}
-      </div>
-    </div>
+      </ol>
+    </section>
   )
 }
 
@@ -418,6 +515,9 @@ interface CalendarGridProps {
   onItemClick: (item: ScheduledItem) => void
   onDropItem: (itemId: string, day: Date) => void
   onFillRecurring: (day: Date, timeOfDay: string) => void
+  /** The day or post open in the side panel, highlighted in the grid. */
+  selectedDay?: Date | null
+  selectedItemId?: string | null
 }
 
 const WEEKDAY_HEADERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -430,15 +530,17 @@ function MonthGrid({
   onItemClick,
   onDropItem,
   onFillRecurring,
+  selectedDay,
+  selectedItemId,
 }: CalendarGridProps & { monthAnchor: Date }) {
   const today = new Date()
   const days = useMemo(() => getMonthGridDays(monthAnchor), [monthAnchor])
 
   return (
-    <div className="rounded-2xl border border-[#E5E3DE] bg-white overflow-hidden">
-      <div className="grid grid-cols-7 border-b border-[#E5E3DE] bg-[#FBFAF6]">
+    <div className="overflow-hidden rounded-card border border-border bg-surface-raised">
+      <div className="grid grid-cols-7 border-b border-border bg-surface">
         {WEEKDAY_HEADERS.map((d) => (
-          <div key={d} className="px-2 py-2 text-[11px] font-semibold text-[#9CA3AF] text-center">
+          <div key={d} className="px-1.5 py-2 text-caption font-medium text-muted-foreground sm:px-2.5">
             {d}
           </div>
         ))}
@@ -450,6 +552,7 @@ function MonthGrid({
           const visible = items.slice(0, 3)
           const overflow = items.length - visible.length
           const isToday = isSameDay(day, today)
+          const isSelected = !!selectedDay && isSameDay(day, selectedDay)
           const dayRecurring = items.length === 0 ? recurringSlotsForDay(recurringSlots, day) : []
 
           return (
@@ -462,22 +565,31 @@ function MonthGrid({
                 if (id) onDropItem(id, day)
               }}
               onClick={() => onDayClick(day)}
-              className={[
-                "min-h-[92px] p-1.5 border-r border-b border-[#E5E3DE] [&:nth-child(7n)]:border-r-0 flex flex-col gap-1 cursor-pointer hover:bg-[rgba(124,58,237,0.03)] transition-colors",
-                inMonth ? "bg-white" : "bg-[#FBFAF6]",
-              ].join(" ")}
+              className={cn(
+                "flex min-h-[4.25rem] min-w-0 cursor-pointer flex-col gap-1.5 border-r border-b border-border p-1.5 transition-colors duration-(--motion-fast) hover:bg-brand-soft/40 sm:min-h-[6.5rem] sm:p-2 xl:min-h-[7.25rem] [&:nth-child(7n)]:border-r-0 [&:nth-last-child(-n+7)]:border-b-0",
+                !inMonth && "bg-surface",
+                isSelected && "bg-brand-soft/70 shadow-[inset_0_0_0_1px_var(--brand)]"
+              )}
             >
-              <span
-                className={[
-                  "text-[11px] font-medium w-5 h-5 flex items-center justify-center rounded-full flex-shrink-0",
-                  isToday ? "bg-[#7C3AED] text-white" : inMonth ? "text-[#4B5563]" : "text-[#D1D5DB]",
-                ].join(" ")}
+              <button
+                type="button"
+                aria-label={fullDayFormat.format(day)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDayClick(day)
+                }}
+                className={cn(
+                  "flex flex-col self-start rounded-detail font-display text-[1.25rem] leading-none tabular-nums sm:text-[1.625rem]",
+                  isToday ? "text-brand" : inMonth ? "text-foreground" : "text-muted-foreground/50"
+                )}
               >
                 {day.getDate()}
-              </span>
-              <div className="flex flex-col gap-1">
+                {isToday && <span aria-hidden className="mt-1 h-0.5 w-full rounded-full bg-brand" />}
+              </button>
+              <div className="hidden min-w-0 flex-col gap-1 sm:flex">
                 {visible.map((item) => (
-                  <div
+                  <button
+                    type="button"
                     key={item.id}
                     draggable
                     onDragStart={(e) => {
@@ -488,32 +600,51 @@ function MonthGrid({
                       e.stopPropagation()
                       onItemClick(item)
                     }}
-                    className="flex items-center gap-1 p-1 rounded-md bg-[#F4F2EC] hover:bg-[#ECEAE4] cursor-grab active:cursor-grabbing transition-colors"
+                    className={cn(
+                      "flex w-full min-w-0 cursor-grab items-center gap-1.5 rounded-detail bg-surface px-1.5 py-1 text-left transition-colors duration-(--motion-fast) hover:bg-surface-muted active:cursor-grabbing",
+                      selectedItemId === item.id && "bg-brand-soft shadow-[inset_0_0_0_1px_var(--brand)]"
+                    )}
                   >
-                    <span
-                      className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: STATUS_DOT[item.status] }}
-                    />
-                    <div className="w-4 h-4 rounded overflow-hidden flex-shrink-0 bg-[#E5E3DE]">
+                    <StatusDot status={item.status} />
+                    <span className="size-4 shrink-0 overflow-hidden rounded-[4px] bg-surface-muted">
                       {item.post.imageUrls[0] && (
                         /* eslint-disable-next-line @next/next/no-img-element */
-                        <img src={item.post.imageUrls[0]} alt="" className="w-full h-full object-cover" />
+                        <img src={item.post.imageUrls[0]} alt="" className="h-full w-full object-cover" />
                       )}
-                    </div>
-                    <span className="text-[9.5px] text-[#6B7280] truncate flex-1">{item.post.title}</span>
-                  </div>
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{item.post.title}</span>
+                  </button>
                 ))}
-                {overflow > 0 && <span className="text-[9.5px] text-[#9CA3AF] pl-1">+{overflow} more</span>}
+                {overflow > 0 && <span className="pl-1 text-[11px] text-muted-foreground">+{overflow} more</span>}
                 {items.length === 0 && dayRecurring.length > 0 && (
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation()
                       onFillRecurring(day, dayRecurring[0].timeOfDay)
                     }}
-                    className="text-[9.5px] leading-tight text-[#7C3AED] px-1.5 py-1 rounded-md border border-dashed border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.03)] hover:bg-[rgba(124,58,237,0.08)] transition-colors text-left"
+                    className="rounded-detail border border-dashed border-brand/40 px-1.5 py-1 text-left text-[11px] leading-tight text-brand transition-colors duration-(--motion-fast) hover:bg-brand-soft"
                   >
                     Recurring — tap to fill
                   </button>
+                )}
+              </div>
+              {/* Phones: a dot per post; the day opens the full list. */}
+              <div className="flex flex-wrap items-center gap-1 sm:hidden">
+                {items.slice(0, 4).map((item) => (
+                  <StatusDot key={item.id} status={item.status} />
+                ))}
+                {items.length === 0 && dayRecurring.length > 0 && (
+                  <button
+                    type="button"
+                    aria-label="Recurring — tap to fill"
+                    title="Recurring — tap to fill"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onFillRecurring(day, dayRecurring[0].timeOfDay)
+                    }}
+                    className="relative size-3 rounded-full border border-dashed border-brand after:absolute after:-inset-2 after:content-['']"
+                  />
                 )}
               </div>
             </div>
@@ -532,15 +663,18 @@ function WeekGrid({
   onItemClick,
   onDropItem,
   onFillRecurring,
+  selectedDay,
+  selectedItemId,
 }: CalendarGridProps & { weekAnchor: Date }) {
   const today = new Date()
   const days = useMemo(() => getWeekDays(weekAnchor), [weekAnchor])
 
   return (
-    <div className="grid grid-cols-7 gap-2">
+    <div className="grid gap-2 md:grid-cols-7">
       {days.map((day, i) => {
         const items = itemsForDay(scheduled, day)
         const isToday = isSameDay(day, today)
+        const isSelected = !!selectedDay && isSameDay(day, selectedDay)
         const dayRecurring = items.length === 0 ? recurringSlotsForDay(recurringSlots, day) : []
 
         return (
@@ -552,65 +686,71 @@ function WeekGrid({
               const id = e.dataTransfer.getData("text/plain")
               if (id) onDropItem(id, day)
             }}
-            className="flex flex-col gap-2 min-h-[220px] rounded-xl border border-[#E5E3DE] bg-white p-2"
+            className={cn(
+              "flex min-w-0 gap-3 rounded-card border border-border bg-surface-raised p-2.5 md:min-h-[15rem] md:flex-col md:gap-2",
+              isToday && "border-brand/40",
+              isSelected && "bg-brand-soft/60 shadow-[inset_0_0_0_1px_var(--brand)]"
+            )}
           >
             <button
+              type="button"
               onClick={() => onDayClick(day)}
-              className="flex flex-col items-center gap-0.5 pb-1.5 border-b border-[#F1EFE9]"
+              aria-label={fullDayFormat.format(day)}
+              className="flex w-12 shrink-0 flex-col items-start gap-1 self-start rounded-detail md:w-full md:flex-row md:items-baseline md:justify-between md:border-b md:border-border md:pb-2"
             >
-              <span className="text-[10px] font-medium text-[#9CA3AF] uppercase tracking-wide">
-                {new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(day)}
-              </span>
+              <span className="text-caption font-medium text-muted-foreground">{weekdayFormat.format(day)}</span>
               <span
-                className={[
-                  "text-[13px] font-semibold w-6 h-6 flex items-center justify-center rounded-full",
-                  isToday ? "bg-[#7C3AED] text-white" : "text-[#1A1A1A]",
-                ].join(" ")}
+                className={cn(
+                  "font-display text-[1.75rem] leading-none tabular-nums",
+                  isToday ? "text-brand" : "text-foreground"
+                )}
               >
                 {day.getDate()}
               </span>
             </button>
-            <div className="flex flex-col gap-1.5 flex-1">
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               {items.map((item) => (
-                <div
+                <button
+                  type="button"
                   key={item.id}
                   draggable
                   onDragStart={(e) => e.dataTransfer.setData("text/plain", item.id)}
                   onClick={() => onItemClick(item)}
-                  className="flex flex-col gap-1 p-1.5 rounded-lg bg-[#F4F2EC] hover:bg-[#ECEAE4] cursor-grab active:cursor-grabbing transition-colors"
+                  className={cn(
+                    "flex min-w-0 cursor-grab items-center gap-2 rounded-control-sm bg-surface p-1.5 text-left transition-colors duration-(--motion-fast) hover:bg-surface-muted active:cursor-grabbing md:flex-col md:items-stretch",
+                    selectedItemId === item.id && "bg-brand-soft shadow-[inset_0_0_0_1px_var(--brand)]"
+                  )}
                 >
-                  <div className="flex items-center gap-1">
-                    <span
-                      className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: STATUS_DOT[item.status] }}
-                    />
-                    <span className="text-[9.5px] text-[#6B7280]">
-                      {new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(
-                        new Date(item.scheduledFor),
-                      )}
-                    </span>
-                    <PlatformBadge platform={item.platform} />
-                  </div>
-                  <div className="w-full aspect-square rounded overflow-hidden bg-[#E5E3DE]">
+                  <span className="order-first size-10 shrink-0 overflow-hidden rounded-detail bg-surface-muted md:order-last md:aspect-square md:size-auto md:w-full">
                     {item.post.imageUrls[0] && (
                       /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={item.post.imageUrls[0]} alt="" className="w-full h-full object-cover" />
+                      <img src={item.post.imageUrls[0]} alt="" className="h-full w-full object-cover" />
                     )}
-                  </div>
-                </div>
+                  </span>
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <StatusDot status={item.status} />
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                      {timeFormat.format(new Date(item.scheduledFor))}
+                    </span>
+                    <PlatformBadge platform={item.platform} size={16} />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-caption text-foreground md:hidden">{item.post.title}</span>
+                </button>
               ))}
               {items.length === 0 && dayRecurring.length > 0 && (
                 <button
+                  type="button"
                   onClick={() => onFillRecurring(day, dayRecurring[0].timeOfDay)}
-                  className="flex-1 text-[10px] leading-tight text-[#7C3AED] px-2 py-3 rounded-lg border border-dashed border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.03)] hover:bg-[rgba(124,58,237,0.08)] transition-colors"
+                  className="flex-1 rounded-control-sm border border-dashed border-brand/40 px-2 py-3 text-[11px] leading-tight text-brand transition-colors duration-(--motion-fast) hover:bg-brand-soft"
                 >
                   Recurring — tap to fill
                 </button>
               )}
               {items.length === 0 && dayRecurring.length === 0 && (
                 <button
+                  type="button"
                   onClick={() => onDayClick(day)}
-                  className="flex-1 flex items-center justify-center text-[11px] text-[#D1D5DB] hover:text-[#7C3AED] transition-colors"
+                  className="flex min-h-10 flex-1 items-center rounded-control-sm px-2 text-caption text-muted-foreground/70 transition-colors duration-(--motion-fast) hover:bg-surface hover:text-brand md:justify-center"
                 >
                   + Add
                 </button>
@@ -621,6 +761,28 @@ function WeekGrid({
       })}
     </div>
   )
+}
+
+/** Where the new-post flow is: three segments under the panel's title. */
+function StepBar({ step, skipped }: { step: 1 | 2 | 3; skipped?: boolean }) {
+  return (
+    <div aria-hidden className="grid shrink-0 grid-cols-3 gap-1 px-5 pt-4">
+      {[1, 2, 3].map((n) => (
+        <span
+          key={n}
+          className={cn(
+            "h-1 rounded-full transition-colors duration-(--motion-base)",
+            n <= step ? "bg-brand" : "bg-surface-muted",
+            skipped && n === 2 && step === 3 && "bg-brand/40"
+          )}
+        />
+      ))}
+    </div>
+  )
+}
+
+function StepHeading({ children }: { children: ReactNode }) {
+  return <h3 className="text-label font-semibold text-foreground">{children}</h3>
 }
 
 export function ContentHubClient({
@@ -1725,6 +1887,13 @@ export function ContentHubClient({
     }
   }
 
+  // The side panel takes focus when it opens or switches to something else,
+  // so keyboard users land in it (Escape closes it again).
+  const panelRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (panel) panelRef.current?.focus({ preventScroll: true })
+  }, [panel])
+
   // ── Derived data ────────────────────────────────────────────────
   const filteredPickablePosts = useMemo(() => {
     const q = postSearch.trim().toLowerCase()
@@ -1803,950 +1972,906 @@ export function ContentHubClient({
     return ""
   }, [view, cursorDate])
 
-  return (
-    <div className="max-w-5xl mx-auto flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-[20px] font-bold text-[#0A0A0A]">Content Hub</h1>
-        <p className="text-[13px] text-[#9CA3AF]">Plan, schedule, and publish — all in one place.</p>
-      </div>
+  const viewTabs = [
+    { key: "list", label: "List", icon: ListIcon },
+    { key: "week", label: "Week", icon: CalendarRange },
+    { key: "month", label: "Month", icon: CalendarIcon },
+    { key: "drafts", label: draftItems.length > 0 ? `Drafts (${draftItems.length})` : "Drafts", icon: FileEdit },
+  ] as { key: View; label: string; icon: typeof ListIcon }[]
 
-      {/* Top bar */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[#F4F2EC] border border-[#E5E3DE]">
-          {([
-            { key: "list", label: "List", icon: ListIcon },
-            { key: "week", label: "Week", icon: CalendarRange },
-            { key: "month", label: "Month", icon: CalendarIcon },
-            { key: "drafts", label: draftItems.length > 0 ? `Drafts (${draftItems.length})` : "Drafts", icon: FileEdit },
-          ] as { key: View; label: string; icon: typeof ListIcon }[]).map((v) => (
+  const tools = [
+    { mode: "recurring", label: "Recurring Slots", title: "Recurring slots", icon: Repeat, onClick: openRecurringPanel },
+    { mode: "queue", label: "Queue Settings", title: "Queue settings", icon: ListOrdered, onClick: openQueuePanel },
+    { mode: "library", label: "Library", title: "Library — templates, tags, hashtags", icon: LibraryBig, onClick: openLibraryPanel },
+    { mode: "bulk", label: "Bulk Upload", title: "Bulk upload (CSV)", icon: UploadCloud, onClick: () => setPanel({ mode: "bulk" }) },
+  ] as const
+
+  const toolClasses = buttonVariants({
+    variant: "ghost",
+    size: "sm",
+    className: "px-2.5 text-muted-foreground hover:text-foreground aria-expanded:text-foreground",
+  })
+
+  const selectedItemId = panel?.mode === "edit" ? panel.item.id : null
+  const selectedDay = panel?.mode === "day" ? panel.date : null
+  const showStepThree =
+    panel !== null &&
+    panel.mode !== "day" &&
+    step === 3 &&
+    (contentSource === "custom" ? customPlatforms.length > 0 : !!(selectedPost && selectedPlatform))
+
+  const panelTitle = !panel
+    ? ""
+    : panel.mode === "edit"
+      ? panel.item.status === "draft"
+        ? "Schedule Draft"
+        : "Reschedule"
+      : panel.mode === "day"
+        ? fullDayFormat.format(panel.date)
+        : panel.mode === "recurring"
+          ? "Recurring Slots"
+          : panel.mode === "queue"
+            ? "Queue Settings"
+            : panel.mode === "library"
+              ? "Library"
+              : panel.mode === "bulk"
+                ? "Bulk Upload"
+                : "New Post"
+
+  const rowHandlers = {
+    onReschedule: openEditPanel,
+    onRemove: (item: ScheduledItem) => void handleRemove(item),
+    onDuplicate: (item: ScheduledItem) => void handleDuplicate(item),
+    removingId,
+    duplicatingId,
+    selectedId: selectedItemId,
+  }
+
+  const gridProps = {
+    scheduled: filteredScheduled,
+    recurringSlots,
+    onDayClick: openDayPanel,
+    onItemClick: openEditPanel,
+    onDropItem: (id: string, day: Date) => void handleDropOnDay(id, day),
+    onFillRecurring: openNewPanelForDay,
+    selectedDay,
+    selectedItemId,
+  }
+
+  return (
+    <div className="mx-auto flex w-full max-w-showcase flex-col gap-6">
+      <PageHeader
+        title="Content Hub"
+        description="Plan, schedule, and publish — all in one place."
+        actions={
+          <>
+            {today && (
+              <Button
+                variant="outline"
+                onClick={() => openNewPanel(today.datetime)}
+                title={today.why}
+                className="border-brand/35 text-brand hover:bg-brand-soft"
+              >
+                {today.chipLabel}
+              </Button>
+            )}
+            <Button onClick={() => openNewPanel()}>
+              <Plus aria-hidden />
+              New Post
+            </Button>
+          </>
+        }
+      />
+
+      {/* Views on the left, the hub's tools on the right */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+        <div role="group" aria-label="View" className="inline-flex rounded-control border border-border bg-surface p-1">
+          {viewTabs.map((v) => (
             <button
               key={v.key}
+              type="button"
+              aria-pressed={view === v.key}
               onClick={() => setView(v.key)}
-              className={[
-                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors",
-                view === v.key ? "bg-white text-[#1A1A1A] shadow-sm" : "text-[#9CA3AF] hover:text-[#4B5563]",
-              ].join(" ")}
+              className="inline-flex h-8 items-center gap-1.5 rounded-control-sm px-3 text-label font-medium whitespace-nowrap text-muted-foreground transition-colors duration-(--motion-fast) hover:text-foreground aria-pressed:bg-surface-raised aria-pressed:text-foreground aria-pressed:shadow-card"
             >
-              <v.icon size={13} strokeWidth={2.2} />
+              <v.icon className="hidden size-3.5 sm:block" aria-hidden />
               {v.label}
             </button>
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
-          {today && (
-            <button
-              onClick={() => openNewPanel(today.datetime)}
-              title={today.why}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[rgba(124,58,237,0.3)] bg-[rgba(124,58,237,0.06)] hover:bg-[rgba(124,58,237,0.12)] text-[12px] font-medium text-[#7C3AED] transition-colors"
-            >
-              {today.chipLabel}
-            </button>
-          )}
-          <NextLink
-            href="/content-hub/ideas"
-            title="Ideas Board"
-            className="p-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[#6B7280] transition-colors"
-          >
-            <Lightbulb size={15} strokeWidth={2} />
+        <div className="flex items-center gap-0.5">
+          <NextLink href="/content-hub/ideas" title="Ideas Board" className={toolClasses}>
+            <Lightbulb aria-hidden />
+            <span className="max-xl:sr-only">Ideas Board</span>
           </NextLink>
-          <button
-            onClick={openRecurringPanel}
-            title="Recurring slots"
-            className="p-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[#6B7280] transition-colors"
-          >
-            <Repeat size={15} strokeWidth={2} />
-          </button>
-          <button
-            onClick={openQueuePanel}
-            title="Queue settings"
-            className="p-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[#6B7280] transition-colors"
-          >
-            <ListOrdered size={15} strokeWidth={2} />
-          </button>
-          <button
-            onClick={openLibraryPanel}
-            title="Library — templates, tags, hashtags"
-            className="p-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[#6B7280] transition-colors"
-          >
-            <LibraryBig size={15} strokeWidth={2} />
-          </button>
-          <button
-            onClick={() => setPanel({ mode: "bulk" })}
-            title="Bulk upload (CSV)"
-            className="p-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[#6B7280] transition-colors"
-          >
-            <UploadCloud size={15} strokeWidth={2} />
-          </button>
-          <button
-            onClick={() => openNewPanel()}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_18px_rgba(124,58,237,0.25)] transition-colors"
-          >
-            <Plus size={14} strokeWidth={2.4} />
-            New Post
-          </button>
+          {tools.map((t) => (
+            <button
+              key={t.mode}
+              type="button"
+              onClick={t.onClick}
+              title={t.title}
+              aria-label={t.title}
+              aria-expanded={panel?.mode === t.mode}
+              aria-controls={panel?.mode === t.mode ? "hub-panel" : undefined}
+              className={toolClasses}
+            >
+              <t.icon aria-hidden />
+              <span aria-hidden className="hidden xl:inline">
+                {t.label}
+              </span>
+            </button>
+          ))}
         </div>
       </div>
 
       {/* Tag filter — applies to List/Week/Month/Drafts below */}
       {tags.length > 0 && (
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div role="group" aria-label="Tags" className="flex flex-wrap items-center gap-1.5">
           <button
+            type="button"
+            aria-pressed={tagFilter === null}
             onClick={() => setTagFilter(null)}
-            className={[
-              "px-2.5 py-1 rounded-full text-[11.5px] font-medium transition-colors",
-              tagFilter === null ? "bg-[#1A1A1A] text-white" : "bg-[#F4F2EC] text-[#9CA3AF] hover:text-[#4B5563]",
-            ].join(" ")}
+            className="inline-flex h-8 items-center rounded-full border border-border px-3 text-caption font-medium text-muted-foreground transition-colors duration-(--motion-fast) hover:text-foreground aria-pressed:border-foreground aria-pressed:bg-foreground aria-pressed:text-background"
           >
             All
           </button>
-          {tags.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTagFilter((prev) => (prev === t.id ? null : t.id))}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-medium transition-all"
-              style={
-                tagFilter === t.id
-                  ? { backgroundColor: t.color, color: "white" }
-                  : { backgroundColor: "#F4F2EC", color: "#6B7280" }
-              }
-            >
-              <Tag size={10} strokeWidth={2.2} />
-              {t.name}
-            </button>
-          ))}
+          {tags.map((t) => {
+            const on = tagFilter === t.id
+            return (
+              <button
+                key={t.id}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setTagFilter((prev) => (prev === t.id ? null : t.id))}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-caption font-medium transition-colors duration-(--motion-fast)",
+                  on ? "border-transparent text-white" : "border-border text-muted-foreground hover:text-foreground"
+                )}
+                style={on ? { backgroundColor: t.color } : undefined}
+              >
+                <span
+                  aria-hidden
+                  className="size-2 rounded-full"
+                  style={{ backgroundColor: on ? "currentColor" : t.color }}
+                />
+                {t.name}
+              </button>
+            )
+          })}
         </div>
       )}
 
       {/* Empty-queue nudge — dismissible, once per session */}
       {showEmptyBanner && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-[rgba(124,58,237,0.06)] border border-[rgba(124,58,237,0.2)]">
-          <p className="text-[13px] text-[#4B5563]">
+        <div className="flex items-center justify-between gap-3 rounded-card border border-brand/25 bg-brand-soft px-4 py-3">
+          <p className="text-label text-foreground">
             Nothing scheduled for the next 7 days — want to plan something?
           </p>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              onClick={() => openNewPanel()}
-              className="text-[12px] font-semibold text-[#7C3AED] hover:text-[#6D28D9]"
-            >
+          <div className="flex shrink-0 items-center gap-1">
+            <Button variant="link" size="sm" onClick={() => openNewPanel()}>
               Plan something
-            </button>
-            <button
-              onClick={dismissBanner}
-              className="p-1 rounded-md text-[#9CA3AF] hover:text-[#4B5563] hover:bg-white/60 transition-colors"
-            >
-              <X size={13} strokeWidth={2.2} />
-            </button>
+            </Button>
+            <Button variant="ghost" size="icon-xs" aria-label="Dismiss" onClick={dismissBanner}>
+              <X aria-hidden />
+            </Button>
           </div>
         </div>
       )}
 
       {error && (
-        <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
+        <div role="alert" className="rounded-card border border-danger/25 bg-danger-soft px-4 py-3 text-label text-danger">
           {error}
         </div>
       )}
 
-      {/* Loading skeleton */}
-      {loading && (
-        <div className="flex flex-col gap-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-[76px] rounded-xl bg-[#F6F4EE] border border-[#F1EFE9] animate-pulse"
-              style={{ animationDelay: `${i * 60}ms` }}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* List view */}
-      {!loading && view === "list" && (
-        <>
-          {filteredScheduled.filter((s) => s.status !== "cancelled" && s.status !== "draft").length === 0 ? (
-            <div className="flex flex-col items-center justify-center min-h-[30vh] text-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-[rgba(124,58,237,0.1)] border border-[rgba(124,58,237,0.2)] flex items-center justify-center">
-                <CalendarIcon size={20} className="text-[#7C3AED]" strokeWidth={1.8} />
-              </div>
-              <div className="flex flex-col gap-1">
-                <p className="text-[15px] font-medium text-[#6B7280]">Nothing scheduled yet</p>
-                <p className="text-[13px] text-[#ADA99F] max-w-xs">
-                  Pick something you&apos;ve already generated and put it on the calendar.
-                </p>
-              </div>
-              <button
-                onClick={() => openNewPanel()}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] transition-colors"
-              >
-                <Plus size={14} strokeWidth={2.4} />
-                New Post
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-6">
-              <GroupSection
-                title="This Week"
-                items={grouped.thisWeek}
-                onReschedule={openEditPanel}
-                onRemove={(item) => void handleRemove(item)}
-                onDuplicate={(item) => void handleDuplicate(item)}
-                removingId={removingId}
-                duplicatingId={duplicatingId}
-              />
-              <GroupSection
-                title="Next Week"
-                items={grouped.nextWeek}
-                onReschedule={openEditPanel}
-                onRemove={(item) => void handleRemove(item)}
-                onDuplicate={(item) => void handleDuplicate(item)}
-                removingId={removingId}
-                duplicatingId={duplicatingId}
-              />
-              <GroupSection
-                title="Later"
-                items={grouped.later}
-                onReschedule={openEditPanel}
-                onRemove={(item) => void handleRemove(item)}
-                onDuplicate={(item) => void handleDuplicate(item)}
-                removingId={removingId}
-                duplicatingId={duplicatingId}
-              />
-              <GroupSection
-                title="Past"
-                items={grouped.past}
-                onReschedule={openEditPanel}
-                onRemove={(item) => void handleRemove(item)}
-                onDuplicate={(item) => void handleDuplicate(item)}
-                removingId={removingId}
-                duplicatingId={duplicatingId}
-              />
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Calendar views (Month/Week) */}
-      {!loading && (view === "month" || view === "week") && (
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={goPrev}
-                className="p-1.5 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[#6B7280] transition-colors"
-              >
-                <ChevronLeft size={14} strokeWidth={2.2} />
-              </button>
-              <button
-                onClick={goToday}
-                className="px-2.5 py-1.5 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[12px] font-medium text-[#4B5563] transition-colors"
-              >
-                Today
-              </button>
-              <button
-                onClick={goNext}
-                className="p-1.5 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[#6B7280] transition-colors"
-              >
-                <ChevronRight size={14} strokeWidth={2.2} />
-              </button>
-            </div>
-            <span className="text-[13px] font-semibold text-[#0A0A0A]">{cursorLabel}</span>
-          </div>
-
-          {view === "month" ? (
-            <MonthGrid
-              monthAnchor={cursorDate}
-              scheduled={filteredScheduled}
-              recurringSlots={recurringSlots}
-              onDayClick={openDayPanel}
-              onItemClick={openEditPanel}
-              onDropItem={(id, day) => void handleDropOnDay(id, day)}
-              onFillRecurring={openNewPanelForDay}
-            />
-          ) : (
-            <WeekGrid
-              weekAnchor={cursorDate}
-              scheduled={filteredScheduled}
-              recurringSlots={recurringSlots}
-              onDayClick={openDayPanel}
-              onItemClick={openEditPanel}
-              onDropItem={(id, day) => void handleDropOnDay(id, day)}
-              onFillRecurring={openNewPanelForDay}
-            />
-          )}
-        </div>
-      )}
-
-      {/* Drafts view — picked up and scheduled later, never auto-published */}
-      {!loading && view === "drafts" && (
-        <>
-          {draftItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center min-h-[30vh] text-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-[rgba(124,58,237,0.1)] border border-[rgba(124,58,237,0.2)] flex items-center justify-center">
-                <FileEdit size={20} className="text-[#7C3AED]" strokeWidth={1.8} />
-              </div>
-              <div className="flex flex-col gap-1">
-                <p className="text-[15px] font-medium text-[#6B7280]">No drafts</p>
-                <p className="text-[13px] text-[#ADA99F] max-w-xs">
-                  Save a post here when you&apos;re not ready to lock in a time yet.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {draftItems.map((item) => (
-                <ScheduledRow
-                  key={item.id}
-                  item={item}
-                  onReschedule={openEditPanel}
-                  onRemove={(i) => void handleRemove(i)}
-                  onDuplicate={(i) => void handleDuplicate(i)}
-                  isRemoving={removingId === item.id}
-                  isDuplicating={duplicatingId === item.id}
-                />
+      <div className={cn("grid gap-8", panel && "xl:grid-cols-[minmax(0,1fr)_26rem] xl:gap-10")}>
+        <div className="flex min-w-0 flex-col gap-6">
+          {/* Loading skeleton — the agenda's shape */}
+          {loading && (
+            <div aria-hidden className="flex flex-col divide-y divide-border">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-2 py-4 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:gap-4">
+                  <Skeleton className="h-10 w-9" />
+                  <div className="flex items-start gap-4 p-3">
+                    <div className="flex flex-1 flex-col gap-2">
+                      <Skeleton className="h-3 w-40" />
+                      <Skeleton className="h-4 w-full max-w-md" />
+                    </div>
+                    <Skeleton className="size-14" />
+                  </div>
+                </div>
               ))}
             </div>
           )}
-        </>
-      )}
 
-      {/* ── Add / Edit side panel ── */}
-      {panel && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/20" onClick={closePanel} />
-          <div className="relative w-full max-w-md h-full bg-[#FFFDF8] border-l border-[#E5E3DE] shadow-[-12px_0_40px_rgba(10,10,10,0.12)] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E3DE] flex-shrink-0">
-              <h2 className="text-[15px] font-bold text-[#0A0A0A]">
-                {panel.mode === "edit"
-                  ? panel.item.status === "draft"
-                    ? "Schedule Draft"
-                    : "Reschedule"
-                  : panel.mode === "day"
-                    ? new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" }).format(
-                        panel.date,
-                      )
-                    : panel.mode === "recurring"
-                      ? "Recurring Slots"
-                      : panel.mode === "queue"
-                        ? "Queue Settings"
-                        : panel.mode === "library"
-                          ? "Library"
-                          : panel.mode === "bulk"
-                            ? "Bulk Upload"
-                            : "New Post"}
-              </h2>
-              <button
-                onClick={closePanel}
-                className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F4F2EC] transition-colors"
-              >
-                <X size={16} strokeWidth={2.2} />
-              </button>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto px-5 py-5 flex flex-col gap-5">
-              {/* Recurring mode — "post automatically every [days] at [time]
-                  on [platform]", kept to one simple list + one simple form. */}
-              {panel.mode === "recurring" && (
-                <div className="flex flex-col gap-4">
-                  <p className="text-[13px] text-[#6B7280] leading-[1.5]">
-                    Post automatically on the days and time you pick — CarouseLabs fills each slot with
-                    your most recent unscheduled content.
-                  </p>
-
-                  {recurringSlots.length > 0 && (
-                    <div className="flex flex-col gap-2">
-                      {recurringSlots.map((slot) => (
-                        <div
-                          key={slot.id}
-                          className={[
-                            "flex items-center gap-3 p-3 rounded-xl border bg-white transition-colors",
-                            slot.active ? "border-[#E5E3DE]" : "border-[#E5E3DE] opacity-60",
-                          ].join(" ")}
-                        >
-                          <PlatformBadge platform={slot.platform} />
-                          <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                            <p className="text-[13px] font-medium text-[#0A0A0A] truncate">{slot.label}</p>
-                            <p className="text-[11px] text-[#9CA3AF]">
-                              Every {formatDaysOfWeek(slot.daysOfWeek)} at {formatTimeOfDay(slot.timeOfDay)}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            <button
-                              onClick={() => void toggleSlotActive(slot)}
-                              title={slot.active ? "Pause" : "Resume"}
-                              className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F4F2EC] transition-colors"
-                            >
-                              {slot.active ? (
-                                <Pause size={13} strokeWidth={2} />
-                              ) : (
-                                <Play size={13} strokeWidth={2} />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => startEditSlot(slot)}
-                              title="Edit"
-                              className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F4F2EC] transition-colors"
-                            >
-                              <Pencil size={13} strokeWidth={2} />
-                            </button>
-                            <button
-                              onClick={() => void deleteSlot(slot.id)}
-                              title="Delete"
-                              className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.08)] transition-colors"
-                            >
-                              <Trash2 size={13} strokeWidth={2} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {!recurringFormOpen ? (
-                    <button
-                      onClick={startNewSlot}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.03)] hover:bg-[rgba(124,58,237,0.08)] text-[13px] font-medium text-[#7C3AED] transition-colors"
-                    >
-                      <Plus size={14} strokeWidth={2.2} />
-                      New Recurring Slot
-                    </button>
-                  ) : (
-                    <div className="flex flex-col gap-3 p-4 rounded-xl border border-[#E5E3DE] bg-white">
-                      <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">
-                        {editingSlotId ? "Edit slot" : "New slot"}
-                      </p>
-                      <input
-                        value={slotLabel}
-                        onChange={(e) => setSlotLabel(e.target.value)}
-                        placeholder="Label (optional)"
-                        className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
-                      />
-                      <div className="flex items-center gap-1">
-                        {DAY_ABBR.map((label, d) => (
-                          <button
-                            key={d}
-                            onClick={() => toggleSlotDay(d)}
-                            className={[
-                              "flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-colors",
-                              slotDays.includes(d)
-                                ? "bg-[#7C3AED] text-white"
-                                : "bg-[#F4F2EC] text-[#9CA3AF] hover:text-[#4B5563]",
-                            ].join(" ")}
-                          >
-                            {label[0]}
-                          </button>
-                        ))}
-                      </div>
-                      <input
-                        type="time"
-                        value={slotTime}
-                        onChange={(e) => setSlotTime(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
-                      />
-                      <select
-                        value={slotPlatform}
-                        onChange={(e) => setSlotPlatform(e.target.value as Platform)}
-                        className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
-                      >
-                        {PLATFORM_ORDER.map((p) => (
-                          <option key={p} value={p}>
-                            {PLATFORM_META[p].label}
-                            {!PLATFORM_META[p].functional ? " (not connected yet)" : ""}
-                          </option>
-                        ))}
-                      </select>
-                      {slotError && (
-                        <div className="px-3 py-2 rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[12px] text-[rgba(239,68,68,0.9)]">
-                          {slotError}
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => void submitSlotForm()}
-                          disabled={slotSubmitting}
-                          className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[12.5px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 transition-colors"
-                        >
-                          {slotSubmitting ? (
-                            <Loader2 size={13} className="animate-spin" strokeWidth={2.2} />
-                          ) : editingSlotId ? (
-                            "Save Slot"
-                          ) : (
-                            "Add Slot"
-                          )}
-                        </button>
-                        <button
-                          onClick={() => setRecurringFormOpen(false)}
-                          className="px-3.5 py-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[12px] font-medium text-[#6B7280] transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Queue settings mode */}
-              {panel.mode === "queue" && (
-                <QueueSettingsPanel
-                  slots={queueSlots}
-                  formOpen={queueFormOpen}
-                  onStartNew={startNewQueueSlot}
-                  onStartEdit={startEditQueueSlot}
-                  onCancelForm={() => setQueueFormOpen(false)}
-                  editingId={editingQueueSlotId}
-                  day={queueDay}
-                  onDayChange={setQueueDay}
-                  time={queueTime}
-                  onTimeChange={setQueueTime}
-                  platform={queuePlatform}
-                  onPlatformChange={setQueuePlatform}
-                  submitting={queueSubmitting}
-                  error={queueError}
-                  onSubmit={() => void submitQueueForm()}
-                  onToggleActive={(slot) => void toggleQueueSlotActive(slot)}
-                  onDelete={(id) => void deleteQueueSlot(id)}
-                  onPauseAll={pauseAllQueues}
-                  onShuffle={shuffleQueue}
+          {/* List view — an agenda, posts under their day */}
+          {!loading && view === "list" && (
+            <>
+              {filteredScheduled.filter((s) => s.status !== "cancelled" && s.status !== "draft").length === 0 ? (
+                <EmptyState
+                  icon={<CalendarIcon />}
+                  title="Nothing scheduled yet"
+                  description="Pick something you've already generated and put it on the calendar."
+                  action={
+                    <Button onClick={() => openNewPanel()}>
+                      <Plus aria-hidden />
+                      New Post
+                    </Button>
+                  }
                 />
-              )}
-
-              {/* Library mode — Templates / Tags / Hashtag Groups management */}
-              {panel.mode === "library" && (
-                <LibraryPanel
-                  templates={templates}
-                  tags={tags}
-                  hashtagGroups={hashtagGroups}
-                  onCreateTemplate={createTemplate}
-                  onDeleteTemplate={(id) => void deleteTemplate(id)}
-                  onCreateTag={createTag}
-                  onDeleteTag={(id) => void deleteTag(id)}
-                  onCreateHashtagGroup={createHashtagGroup}
-                  onDeleteHashtagGroup={(id) => void deleteHashtagGroup(id)}
-                  shortLinks={shortLinks}
-                  onCreateShortLink={createShortLink}
-                  onDeleteShortLink={(id) => void deleteShortLink(id)}
-                />
-              )}
-
-              {/* Bulk upload mode */}
-              {panel.mode === "bulk" && <BulkUploadPanel onDone={() => void refreshScheduled()} />}
-
-              {/* Day mode — that day's full schedule, no wizard steps */}
-              {panel.mode === "day" && (
-                <div className="flex flex-col gap-3">
-                  {itemsForDay(scheduled, panel.date).length === 0 ? (
-                    <p className="text-[13px] text-[#9CA3AF] text-center py-8">Nothing scheduled this day.</p>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {itemsForDay(scheduled, panel.date).map((item) => (
-                        <ScheduledRow
-                          key={item.id}
-                          item={item}
-                          onReschedule={openEditPanel}
-                          onRemove={(i) => void handleRemove(i)}
-                          onDuplicate={(i) => void handleDuplicate(i)}
-                          isRemoving={removingId === item.id}
-                          isDuplicating={duplicatingId === item.id}
-                        />
-                      ))}
-                    </div>
-                  )}
+              ) : (
+                <div className="flex flex-col gap-10">
+                  <GroupSection title="This Week" items={grouped.thisWeek} {...rowHandlers} />
+                  <GroupSection title="Next Week" items={grouped.nextWeek} {...rowHandlers} />
+                  <GroupSection title="Later" items={grouped.later} {...rowHandlers} />
+                  <GroupSection title="Past" items={grouped.past} {...rowHandlers} />
                 </div>
               )}
+            </>
+          )}
 
-              {/* Step 1 — choose content source, then pick existing content or
-                  build a Custom Post */}
-              {panel.mode === "new" && step === 1 && (
-                <div className="flex flex-col gap-3">
-                  {contentSource === null ? (
-                    <>
-                      <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">
-                        Step 1 · Choose content
-                      </p>
-                      <button
-                        onClick={() => chooseContentSource("pick")}
-                        className="flex flex-col items-start gap-1 p-4 rounded-xl border border-[#E5E3DE] bg-white hover:border-[#7C3AED] transition-colors text-left"
-                      >
-                        <span className="text-[13px] font-semibold text-[#0A0A0A]">
-                          Pick from your generated content
-                        </span>
-                        <span className="text-[11px] text-[#9CA3AF]">
-                          Schedule a caption, image, or carousel you&apos;ve already created
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => chooseContentSource("custom")}
-                        className="flex flex-col items-start gap-1 p-4 rounded-xl border border-[#E5E3DE] bg-white hover:border-[#7C3AED] transition-colors text-left"
-                      >
-                        <span className="text-[13px] font-semibold text-[#0A0A0A]">Create a Custom Post</span>
-                        <span className="text-[11px] text-[#9CA3AF]">
-                          For content you&apos;ve made yourself outside CarouseLabs
-                        </span>
-                      </button>
-                    </>
-                  ) : contentSource === "custom" ? (
-                    <CustomPostComposer
-                      caption={customCaption}
-                      onCaptionChange={setCustomCaption}
-                      images={customImages}
-                      onAddImage={(url) => setCustomImages((prev) => [...prev, url])}
-                      onRemoveImage={(url) => setCustomImages((prev) => prev.filter((u) => u !== url))}
-                      platforms={customPlatforms}
-                      onTogglePlatform={toggleCustomPlatform}
-                      customizePerPlatform={customizePerPlatform}
-                      onToggleCustomizePerPlatform={setCustomizePerPlatform}
-                      platformCaptions={customPlatformCaptions}
-                      onPlatformCaptionChange={(platform, value) =>
-                        setCustomPlatformCaptions((prev) => ({ ...prev, [platform]: value }))
-                      }
-                      linkedInConnected={linkedInConnected}
-                      error={panelError}
-                      onBack={() => setContentSource(null)}
-                      templates={templates}
-                      onSaveTemplate={createTemplate}
-                      hashtagGroups={hashtagGroups}
-                      onShortenUrl={shortenUrlForCaption}
-                    />
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => setContentSource(null)}
-                        className="self-start text-[11px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
-                      >
-                        ← Back
-                      </button>
-                      <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">
-                        Step 1 · Pick content
-                      </p>
-                      <div className="relative">
-                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-                        <input
-                          value={postSearch}
-                          onChange={(e) => setPostSearch(e.target.value)}
-                          placeholder="Search your posts…"
-                          className="w-full pl-9 pr-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
-                        />
-                      </div>
-
-                      {loadingPosts ? (
-                        <div className="grid grid-cols-3 gap-2">
-                          {Array.from({ length: 6 }).map((_, i) => (
-                            <div key={i} className="aspect-square rounded-lg bg-[#F1EFE9] animate-pulse" />
-                          ))}
-                        </div>
-                      ) : filteredPickablePosts.length === 0 ? (
-                        <p className="text-[13px] text-[#9CA3AF] text-center py-8">
-                          {pickablePosts.length === 0
-                            ? "No generated posts yet — create one from Generate first."
-                            : "No posts match your search."}
-                        </p>
-                      ) : (
-                        <div className="grid grid-cols-3 gap-2">
-                          {filteredPickablePosts.map((p) => (
-                            <button
-                              key={p.id}
-                              onClick={() => selectPost(p)}
-                              className="flex flex-col gap-1 text-left group"
-                            >
-                              <div className="relative aspect-square rounded-lg overflow-hidden border border-[#E5E3DE] bg-[#F4F2EC] group-hover:border-[#7C3AED] transition-colors">
-                                {p.imageUrls[0] ? (
-                                  /* eslint-disable-next-line @next/next/no-img-element */
-                                  <img src={p.imageUrls[0]} alt={p.title} className="w-full h-full object-cover" />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center">
-                                    <ImageIcon size={16} className="text-[#ADA99F]" />
-                                  </div>
-                                )}
-                                {p.format === "CUSTOM" && (
-                                  <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded-full bg-[rgba(10,10,10,0.75)] text-[9px] font-semibold text-white tracking-wide">
-                                    Custom
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-[10.5px] text-[#6B7280] truncate">
-                                {FORMAT_LABELS[p.format]}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* Step 2 — pick platform */}
-              {panel.mode === "new" && step === 2 && selectedPost && (
-                <div className="flex flex-col gap-3">
-                  <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">
-                    Step 2 · Pick platform
-                  </p>
-                  <button
-                    onClick={() => selectPlatform("linkedin")}
-                    className="flex items-center gap-3 p-4 rounded-xl border border-[#E5E3DE] bg-white hover:border-[#0A66C2] transition-colors text-left"
+          {/* Calendar views (Month/Week) */}
+          {!loading && (view === "month" || view === "week") && (
+            <section aria-label={cursorLabel} className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <p aria-live="polite" className="font-display text-title leading-none text-foreground sm:text-[2.5rem]">
+                  {cursorLabel}
+                </p>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={goPrev}
+                    aria-label={view === "month" ? "Previous month" : "Previous week"}
                   >
-                    <span className="w-9 h-9 rounded-full bg-[#0A66C2] flex items-center justify-center flex-shrink-0">
-                      <PlatformIcon platform="linkedin" size={16} />
-                    </span>
-                    <span className="flex flex-col">
-                      <span className="text-[13px] font-semibold text-[#0A0A0A]">LinkedIn</span>
-                      <span className="text-[11px] text-[#9CA3AF]">
-                        {linkedInConnected === false ? "Not connected — connects at Settings" : "Ready to schedule"}
-                      </span>
-                    </span>
-                  </button>
-                  <div className="flex items-center gap-3 p-4 rounded-xl border border-dashed border-[#E5E3DE] bg-[#F9F7F2] opacity-70">
-                    <span className="w-9 h-9 rounded-full bg-[#E1306C] flex items-center justify-center flex-shrink-0">
-                      <Camera size={15} className="text-white" strokeWidth={2.2} />
-                    </span>
-                    <span className="flex flex-col">
-                      <span className="text-[13px] font-semibold text-[#0A0A0A]">Instagram</span>
-                      <span className="text-[11px] text-[#9CA3AF]">Connect Instagram to schedule here</span>
-                    </span>
-                  </div>
-                  {linkedInConnected === false && (
-                    <p className="text-[11px] text-[#9CA3AF]">
-                      You can still pick LinkedIn and connect it before this post&apos;s scheduled time in{" "}
-                      <a href="/settings/account" className="text-[#7C3AED] underline">
-                        Settings
-                      </a>
-                      .
-                    </p>
-                  )}
+                    <ChevronLeft aria-hidden />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={goToday}>
+                    Today
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={goNext}
+                    aria-label={view === "month" ? "Next month" : "Next week"}
+                  >
+                    <ChevronRight aria-hidden />
+                  </Button>
                 </div>
+              </div>
+
+              {view === "month" ? (
+                <MonthGrid monthAnchor={cursorDate} {...gridProps} />
+              ) : (
+                <WeekGrid weekAnchor={cursorDate} {...gridProps} />
               )}
+            </section>
+          )}
 
-              {/* Step 3 — date/time + preview */}
-              {panel.mode !== "day" &&
-                step === 3 &&
-                (contentSource === "custom" ? customPlatforms.length > 0 : !!(selectedPost && selectedPlatform)) && (
-                <div className="flex flex-col gap-4">
-                  <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">
-                    {panel.mode === "edit" ? "New date & time" : "Step 3 · Date & time"}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="date"
-                      value={dateValue}
-                      onChange={(e) => setDateValue(e.target.value)}
-                      className="flex-1 px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
-                    />
-                    <input
-                      type="time"
-                      value={timeValue}
-                      onChange={(e) => setTimeValue(e.target.value)}
-                      className="w-32 px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
-                    />
-                  </div>
+          {/* Drafts view — picked up and scheduled later, never auto-published */}
+          {!loading && view === "drafts" && (
+            <>
+              {draftItems.length === 0 ? (
+                <EmptyState
+                  icon={<FileEdit />}
+                  title="No drafts"
+                  description="Save a post here when you're not ready to lock in a time yet."
+                />
+              ) : (
+                <ol className="flex flex-col divide-y divide-border rounded-card border border-border bg-surface p-1">
+                  {draftItems.map((item) => (
+                    <li key={item.id} className="py-1">
+                      <ScheduledRow
+                        item={item}
+                        selected={selectedItemId === item.id}
+                        onReschedule={openEditPanel}
+                        onRemove={(i) => void handleRemove(i)}
+                        onDuplicate={(i) => void handleDuplicate(i)}
+                        isRemoving={removingId === item.id}
+                        isDuplicating={duplicatingId === item.id}
+                      />
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </>
+          )}
+        </div>
 
-                  {suggestions.length > 0 && (
-                    <div className="flex flex-col gap-1.5">
-                      <p className="text-[11px] text-[#ADA99F]">Or pick a suggested time:</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {suggestions.map((s) => (
-                          <button
-                            key={s.datetime}
-                            onClick={() => {
-                              const inputs = isoToLocalInputs(s.datetime)
-                              setDateValue(inputs.date)
-                              setTimeValue(inputs.time)
-                            }}
-                            title={s.why}
-                            className="px-2.5 py-1.5 rounded-lg border border-[#E5E3DE] bg-white hover:border-[rgba(124,58,237,0.4)] hover:bg-[rgba(124,58,237,0.04)] text-[11px] font-medium text-[#6B7280] hover:text-[#7C3AED] transition-colors"
+        {/* ── Side panel: docked beside the calendar on wide screens, a sheet on smaller ones ── */}
+        {panel && (
+          <div className="fixed inset-0 z-(--z-dialog) flex justify-end xl:sticky xl:inset-auto xl:top-0 xl:z-auto xl:block xl:self-start">
+            <div aria-hidden className="absolute inset-0 bg-foreground/25 xl:hidden" onClick={closePanel} />
+            <aside
+              id="hub-panel"
+              ref={panelRef}
+              tabIndex={-1}
+              aria-labelledby="hub-panel-title"
+              onKeyDown={(e) => {
+                if (e.key === "Escape") closePanel()
+              }}
+              className="relative flex h-full w-full max-w-md flex-col bg-surface shadow-dialog outline-none xl:h-[calc(100dvh-11rem)] xl:max-w-none xl:overflow-hidden xl:rounded-showcase xl:border xl:border-border xl:shadow-card"
+            >
+              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-4">
+                <h2
+                  id="hub-panel-title"
+                  className={cn(
+                    "text-foreground",
+                    panel.mode === "day" ? "font-display text-title-sm leading-tight" : "text-body-lg font-semibold"
+                  )}
+                >
+                  {panelTitle}
+                </h2>
+                <Button variant="ghost" size="icon-sm" aria-label="Close" onClick={closePanel} className="-mt-1 -mr-2">
+                  <X aria-hidden />
+                </Button>
+              </div>
+
+              {panel.mode === "new" && <StepBar step={step} skipped={contentSource === "custom"} />}
+
+              <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
+                {/* Recurring mode — "post automatically every [days] at [time]
+                    on [platform]", kept to one simple list + one simple form. */}
+                {panel.mode === "recurring" && (
+                  <div className="flex flex-col gap-4">
+                    <p className="text-label text-muted-foreground">
+                      Post automatically on the days and time you pick — CarouseLabs fills each slot with
+                      your most recent unscheduled content.
+                    </p>
+
+                    {recurringSlots.length > 0 && (
+                      <ul className="flex flex-col divide-y divide-border rounded-card border border-border bg-surface-raised">
+                        {recurringSlots.map((slot) => (
+                          <li
+                            key={slot.id}
+                            className={cn("flex items-center gap-3 px-3 py-2.5", !slot.active && "opacity-60")}
                           >
-                            {s.label}
-                          </button>
+                            <PlatformBadge platform={slot.platform} />
+                            <div className="flex min-w-0 flex-1 flex-col">
+                              <p className="truncate text-label font-medium text-foreground">{slot.label}</p>
+                              <p className="text-caption text-muted-foreground">
+                                Every {formatDaysOfWeek(slot.daysOfWeek)} at {formatTimeOfDay(slot.timeOfDay)}
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 items-center">
+                              <button
+                                type="button"
+                                onClick={() => void toggleSlotActive(slot)}
+                                title={slot.active ? "Pause" : "Resume"}
+                                aria-label={slot.active ? "Pause" : "Resume"}
+                                className={iconAction}
+                              >
+                                {slot.active ? <Pause aria-hidden /> : <Play aria-hidden />}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => startEditSlot(slot)}
+                                title="Edit"
+                                aria-label="Edit"
+                                className={iconAction}
+                              >
+                                <Pencil aria-hidden />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void deleteSlot(slot.id)}
+                                title="Delete"
+                                aria-label="Delete"
+                                className={cn(iconAction, "hover:bg-danger-soft hover:text-danger")}
+                              >
+                                <Trash2 aria-hidden />
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {!recurringFormOpen ? (
+                      <Button variant="outline" onClick={startNewSlot} className="border-dashed border-brand/40 text-brand hover:bg-brand-soft">
+                        <Plus aria-hidden />
+                        New Recurring Slot
+                      </Button>
+                    ) : (
+                      <div className="flex flex-col gap-3 rounded-card border border-border bg-surface-raised p-4">
+                        <StepHeading>{editingSlotId ? "Edit slot" : "New slot"}</StepHeading>
+                        <input
+                          value={slotLabel}
+                          onChange={(e) => setSlotLabel(e.target.value)}
+                          placeholder="Label (optional)"
+                          aria-label="Label (optional)"
+                          className={fieldClasses}
+                        />
+                        <div className="grid grid-cols-7 gap-1">
+                          {DAY_ABBR.map((label, d) => (
+                            <button
+                              key={d}
+                              type="button"
+                              aria-pressed={slotDays.includes(d)}
+                              aria-label={label}
+                              onClick={() => toggleSlotDay(d)}
+                              className="h-9 rounded-control-sm bg-surface-muted text-caption font-semibold text-muted-foreground transition-colors duration-(--motion-fast) hover:text-foreground aria-pressed:bg-brand aria-pressed:text-brand-foreground"
+                            >
+                              {label[0]}
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          type="time"
+                          value={slotTime}
+                          onChange={(e) => setSlotTime(e.target.value)}
+                          aria-label="Time"
+                          className={fieldClasses}
+                        />
+                        <select
+                          value={slotPlatform}
+                          onChange={(e) => setSlotPlatform(e.target.value as Platform)}
+                          aria-label="Platform"
+                          className={fieldClasses}
+                        >
+                          {PLATFORM_ORDER.map((p) => (
+                            <option key={p} value={p}>
+                              {PLATFORM_META[p].label}
+                              {!PLATFORM_META[p].functional ? " (not connected yet)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                        {slotError && (
+                          <p role="alert" className="rounded-control-sm border border-danger/25 bg-danger-soft px-3 py-2 text-caption text-danger">
+                            {slotError}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <Button variant="brand" className="flex-1" onClick={() => void submitSlotForm()} disabled={slotSubmitting}>
+                            {slotSubmitting ? (
+                              <Loader2 className="animate-spin" aria-hidden />
+                            ) : editingSlotId ? (
+                              "Save Slot"
+                            ) : (
+                              "Add Slot"
+                            )}
+                          </Button>
+                          <Button variant="ghost" onClick={() => setRecurringFormOpen(false)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Queue settings mode */}
+                {panel.mode === "queue" && (
+                  <QueueSettingsPanel
+                    slots={queueSlots}
+                    formOpen={queueFormOpen}
+                    onStartNew={startNewQueueSlot}
+                    onStartEdit={startEditQueueSlot}
+                    onCancelForm={() => setQueueFormOpen(false)}
+                    editingId={editingQueueSlotId}
+                    day={queueDay}
+                    onDayChange={setQueueDay}
+                    time={queueTime}
+                    onTimeChange={setQueueTime}
+                    platform={queuePlatform}
+                    onPlatformChange={setQueuePlatform}
+                    submitting={queueSubmitting}
+                    error={queueError}
+                    onSubmit={() => void submitQueueForm()}
+                    onToggleActive={(slot) => void toggleQueueSlotActive(slot)}
+                    onDelete={(id) => void deleteQueueSlot(id)}
+                    onPauseAll={pauseAllQueues}
+                    onShuffle={shuffleQueue}
+                  />
+                )}
+
+                {/* Library mode — Templates / Tags / Hashtag Groups management */}
+                {panel.mode === "library" && (
+                  <LibraryPanel
+                    templates={templates}
+                    tags={tags}
+                    hashtagGroups={hashtagGroups}
+                    onCreateTemplate={createTemplate}
+                    onDeleteTemplate={(id) => void deleteTemplate(id)}
+                    onCreateTag={createTag}
+                    onDeleteTag={(id) => void deleteTag(id)}
+                    onCreateHashtagGroup={createHashtagGroup}
+                    onDeleteHashtagGroup={(id) => void deleteHashtagGroup(id)}
+                    shortLinks={shortLinks}
+                    onCreateShortLink={createShortLink}
+                    onDeleteShortLink={(id) => void deleteShortLink(id)}
+                  />
+                )}
+
+                {/* Bulk upload mode */}
+                {panel.mode === "bulk" && <BulkUploadPanel onDone={() => void refreshScheduled()} />}
+
+                {/* Day mode — that day's full schedule, no wizard steps */}
+                {panel.mode === "day" && (
+                  <div className="flex flex-col gap-3">
+                    {itemsForDay(scheduled, panel.date).length === 0 ? (
+                      <p className="py-8 text-center text-label text-muted-foreground">Nothing scheduled this day.</p>
+                    ) : (
+                      <div className="-mx-3 flex flex-col gap-1">
+                        {itemsForDay(scheduled, panel.date).map((item) => (
+                          <ScheduledRow
+                            key={item.id}
+                            item={item}
+                            timeOnly
+                            onReschedule={openEditPanel}
+                            onRemove={(i) => void handleRemove(i)}
+                            onDuplicate={(i) => void handleDuplicate(i)}
+                            isRemoving={removingId === item.id}
+                            isDuplicating={duplicatingId === item.id}
+                          />
                         ))}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                )}
 
-                  {tags.length > 0 && (
-                    <div className="flex flex-col gap-1.5">
-                      <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">Tags</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {tags.map((t) => {
-                          const checked = selectedTagIds.includes(t.id)
-                          return (
-                            <button
-                              key={t.id}
-                              onClick={() => toggleSelectedTag(t.id)}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-medium transition-all"
-                              style={
-                                checked
-                                  ? { backgroundColor: t.color, color: "white" }
-                                  : { backgroundColor: "#F4F2EC", color: "#6B7280" }
-                              }
-                            >
-                              <Tag size={10} strokeWidth={2.2} />
-                              {t.name}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
+                {/* Step 1 — choose content source, then pick existing content or
+                    build a Custom Post */}
+                {panel.mode === "new" && step === 1 && (
+                  <div className="flex flex-col gap-3">
+                    {contentSource === null ? (
+                      <>
+                        <StepHeading>Step 1 · Choose content</StepHeading>
+                        <ChoiceCard
+                          onClick={() => chooseContentSource("pick")}
+                          title="Pick from your generated content"
+                          subtitle="Schedule a caption, image, or carousel you've already created"
+                        />
+                        <ChoiceCard
+                          onClick={() => chooseContentSource("custom")}
+                          title="Create a Custom Post"
+                          subtitle="For content you've made yourself outside CarouseLabs"
+                        />
+                      </>
+                    ) : contentSource === "custom" ? (
+                      <CustomPostComposer
+                        caption={customCaption}
+                        onCaptionChange={setCustomCaption}
+                        images={customImages}
+                        onAddImage={(url) => setCustomImages((prev) => [...prev, url])}
+                        onRemoveImage={(url) => setCustomImages((prev) => prev.filter((u) => u !== url))}
+                        platforms={customPlatforms}
+                        onTogglePlatform={toggleCustomPlatform}
+                        customizePerPlatform={customizePerPlatform}
+                        onToggleCustomizePerPlatform={setCustomizePerPlatform}
+                        platformCaptions={customPlatformCaptions}
+                        onPlatformCaptionChange={(platform, value) =>
+                          setCustomPlatformCaptions((prev) => ({ ...prev, [platform]: value }))
+                        }
+                        linkedInConnected={linkedInConnected}
+                        error={panelError}
+                        onBack={() => setContentSource(null)}
+                        templates={templates}
+                        onSaveTemplate={createTemplate}
+                        hashtagGroups={hashtagGroups}
+                        onShortenUrl={shortenUrlForCaption}
+                      />
+                    ) : (
+                      <>
+                        <BackButton arrow={false} onClick={() => setContentSource(null)}>
+                          ← Back
+                        </BackButton>
+                        <StepHeading>Step 1 · Pick content</StepHeading>
+                        <div className="relative">
+                          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                          <input
+                            type="search"
+                            value={postSearch}
+                            onChange={(e) => setPostSearch(e.target.value)}
+                            placeholder="Search your posts…"
+                            aria-label="Search your posts…"
+                            className={cn(fieldClasses, "pl-9")}
+                          />
+                        </div>
 
-                  {(() => {
-                    const previewPlatforms =
-                      contentSource === "custom" ? customPlatforms : selectedPlatform ? [selectedPlatform] : []
-                    const activePreviewPlatform =
-                      (previewPlatformOverride && previewPlatforms.includes(previewPlatformOverride)
-                        ? previewPlatformOverride
-                        : previewPlatforms[0]) ?? null
-                    if (!activePreviewPlatform) return null
-                    const previewCaption =
-                      contentSource === "custom"
-                        ? (customizePerPlatform && customPlatformCaptions[activePreviewPlatform]?.trim()) ||
-                          customCaption
-                        : (selectedPost?.caption ?? "")
-                    const previewImage =
-                      contentSource === "custom" ? customImages[0] : selectedPost?.imageUrls[0]
-
-                    return (
-                      <div className="flex flex-col gap-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">
-                            Preview
+                        {loadingPosts ? (
+                          <div aria-hidden className="grid grid-cols-3 gap-2">
+                            {Array.from({ length: 6 }).map((_, i) => (
+                              <Skeleton key={i} className="aspect-square" />
+                            ))}
+                          </div>
+                        ) : filteredPickablePosts.length === 0 ? (
+                          <p className="py-8 text-center text-label text-muted-foreground">
+                            {pickablePosts.length === 0
+                              ? "No generated posts yet — create one from Generate first."
+                              : "No posts match your search."}
                           </p>
-                          {previewPlatforms.length > 1 && (
-                            <div className="flex items-center gap-1">
-                              {previewPlatforms.map((p) => (
-                                <button
+                        ) : (
+                          <div className="grid grid-cols-3 gap-2">
+                            {filteredPickablePosts.map((p) => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => selectPost(p)}
+                                className="group flex flex-col gap-1 rounded-control-sm text-left"
+                              >
+                                <span className="relative block aspect-square overflow-hidden rounded-control-sm border border-border bg-surface-muted transition-[border-color,box-shadow] duration-(--motion-fast) group-hover:border-brand group-hover:shadow-card">
+                                  {p.imageUrls[0] ? (
+                                    /* eslint-disable-next-line @next/next/no-img-element */
+                                    <img src={p.imageUrls[0]} alt={p.title} className="h-full w-full object-cover" />
+                                  ) : (
+                                    <span className="flex h-full w-full items-center justify-center">
+                                      <ImageIcon className="size-4 text-muted-foreground" aria-hidden />
+                                    </span>
+                                  )}
+                                  {p.format === "CUSTOM" && (
+                                    <span className="absolute top-1 left-1 rounded-full bg-foreground/80 px-1.5 py-0.5 text-[10px] font-semibold text-background">
+                                      Custom
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="truncate text-[11px] text-muted-foreground">{FORMAT_LABELS[p.format]}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Step 2 — pick platform */}
+                {panel.mode === "new" && step === 2 && selectedPost && (
+                  <div className="flex flex-col gap-3">
+                    <StepHeading>Step 2 · Pick platform</StepHeading>
+                    <div className="flex items-center gap-3 rounded-card border border-border bg-surface-raised p-3">
+                      <Thumbnail post={selectedPost} size={44} />
+                      <p className="line-clamp-2 min-w-0 text-caption text-muted-foreground">
+                        {selectedPost.caption?.slice(0, 80) || selectedPost.title}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => selectPlatform("linkedin")}
+                      className="flex items-center gap-3 rounded-card border border-border bg-surface-raised p-4 text-left transition-[border-color,box-shadow] duration-(--motion-fast) hover:border-brand/60 hover:shadow-card"
+                    >
+                      <PlatformBadge platform="linkedin" size={36} />
+                      <span className="flex flex-col">
+                        <span className="text-label font-semibold text-foreground">LinkedIn</span>
+                        <span className="text-caption text-muted-foreground">
+                          {linkedInConnected === false ? "Not connected — connects at Settings" : "Ready to schedule"}
+                        </span>
+                      </span>
+                    </button>
+                    <div aria-disabled="true" className="flex items-center gap-3 rounded-card border border-dashed border-border bg-surface p-4 opacity-70">
+                      <PlatformBadge platform="instagram" size={36} />
+                      <span className="flex flex-col">
+                        <span className="text-label font-semibold text-foreground">Instagram</span>
+                        <span className="text-caption text-muted-foreground">Connect Instagram to schedule here</span>
+                      </span>
+                    </div>
+                    {linkedInConnected === false && (
+                      <p className="text-caption text-muted-foreground">
+                        You can still pick LinkedIn and connect it before this post&apos;s scheduled time in{" "}
+                        <a href="/settings/account" className="text-brand underline underline-offset-2">
+                          Settings
+                        </a>
+                        .
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Step 3 — date/time + preview */}
+                {showStepThree && (
+                  <div className="flex flex-col gap-5">
+                    <div className="flex flex-col gap-3">
+                      <StepHeading>{panel.mode === "edit" ? "New date & time" : "Step 3 · Date & time"}</StepHeading>
+                      <div className="grid grid-cols-[minmax(0,1fr)_8.5rem] gap-2">
+                        <input
+                          type="date"
+                          value={dateValue}
+                          onChange={(e) => setDateValue(e.target.value)}
+                          aria-label="Date"
+                          className={fieldClasses}
+                        />
+                        <input
+                          type="time"
+                          value={timeValue}
+                          onChange={(e) => setTimeValue(e.target.value)}
+                          aria-label="Time"
+                          className={fieldClasses}
+                        />
+                      </div>
+
+                      {suggestions.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                          <p className="text-caption text-muted-foreground">Or pick a suggested time:</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {suggestions.map((s) => (
+                              <button
+                                key={s.datetime}
+                                type="button"
+                                onClick={() => {
+                                  const inputs = isoToLocalInputs(s.datetime)
+                                  setDateValue(inputs.date)
+                                  setTimeValue(inputs.time)
+                                }}
+                                title={s.why}
+                                className="inline-flex h-8 items-center rounded-full border border-border bg-surface-raised px-3 text-caption font-medium text-muted-foreground transition-colors duration-(--motion-fast) hover:border-brand/40 hover:bg-brand-soft hover:text-brand"
+                              >
+                                {s.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {tags.length > 0 && (
+                      <div className="flex flex-col gap-2">
+                        <FieldLabel>Tags</FieldLabel>
+                        <div className="flex flex-wrap gap-1.5">
+                          {tags.map((t) => {
+                            const checked = selectedTagIds.includes(t.id)
+                            return (
+                              <button
+                                key={t.id}
+                                type="button"
+                                aria-pressed={checked}
+                                onClick={() => toggleSelectedTag(t.id)}
+                                className={cn(
+                                  "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-caption font-medium transition-colors duration-(--motion-fast)",
+                                  checked ? "border-transparent text-white" : "border-border text-muted-foreground hover:text-foreground"
+                                )}
+                                style={checked ? { backgroundColor: t.color } : undefined}
+                              >
+                                <Tag className="size-3" aria-hidden />
+                                {t.name}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {(() => {
+                      const previewPlatforms =
+                        contentSource === "custom" ? customPlatforms : selectedPlatform ? [selectedPlatform] : []
+                      const activePreviewPlatform =
+                        (previewPlatformOverride && previewPlatforms.includes(previewPlatformOverride)
+                          ? previewPlatformOverride
+                          : previewPlatforms[0]) ?? null
+                      if (!activePreviewPlatform) return null
+                      const previewCaption =
+                        contentSource === "custom"
+                          ? (customizePerPlatform && customPlatformCaptions[activePreviewPlatform]?.trim()) ||
+                            customCaption
+                          : (selectedPost?.caption ?? "")
+                      const previewImage =
+                        contentSource === "custom" ? customImages[0] : selectedPost?.imageUrls[0]
+
+                      return (
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <FieldLabel>Preview</FieldLabel>
+                            {previewPlatforms.length > 1 && (
+                              <div className="flex items-center gap-1">
+                                {previewPlatforms.map((p) => (
+                                  <button
+                                    key={p}
+                                    type="button"
+                                    aria-pressed={activePreviewPlatform === p}
+                                    aria-label={PLATFORM_META[p].label}
+                                    onClick={() => setPreviewPlatformOverride(p)}
+                                    className="rounded-full p-1 opacity-50 transition-opacity duration-(--motion-fast) hover:opacity-100 aria-pressed:opacity-100 aria-pressed:ring-2 aria-pressed:ring-brand aria-pressed:ring-offset-1 aria-pressed:ring-offset-surface"
+                                    title={PLATFORM_META[p].label}
+                                  >
+                                    <PlatformBadge platform={p} size={18} />
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <PlatformPreview
+                            platform={activePreviewPlatform}
+                            caption={previewCaption}
+                            imageUrl={previewImage}
+                            userName={user?.name || user?.email || "You"}
+                          />
+                          {contentSource === "custom" && (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {customPlatforms.map((p) => (
+                                <span
                                   key={p}
-                                  onClick={() => setPreviewPlatformOverride(p)}
-                                  className={[
-                                    "p-1 rounded-full transition-all",
-                                    activePreviewPlatform === p
-                                      ? "ring-2 ring-offset-1 ring-[#7C3AED]"
-                                      : "opacity-50 hover:opacity-100",
-                                  ].join(" ")}
-                                  title={PLATFORM_META[p].label}
+                                  className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted py-1 pr-2.5 pl-1 text-caption font-medium text-foreground"
                                 >
-                                  <PlatformBadge platform={p} size={18} />
-                                </button>
+                                  <PlatformBadge platform={p} size={16} />
+                                  {PLATFORM_META[p].label}
+                                  {!PLATFORM_META[p].functional && <span className="text-warning">· pending</span>}
+                                </span>
                               ))}
                             </div>
                           )}
                         </div>
-                        <PlatformPreview
-                          platform={activePreviewPlatform}
-                          caption={previewCaption}
-                          imageUrl={previewImage}
-                          userName={user?.name || user?.email || "You"}
-                        />
-                        {contentSource === "custom" && (
-                          <div className="flex flex-wrap gap-1.5 pt-1">
-                            {customPlatforms.map((p) => (
-                              <span
-                                key={p}
-                                className="inline-flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-full bg-[#F4F2EC] text-[11px] font-medium text-[#4B5563]"
-                              >
-                                <PlatformBadge platform={p} size={16} />
-                                {PLATFORM_META[p].label}
-                                {!PLATFORM_META[p].functional && <span className="text-[#D97706]">· pending</span>}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })()}
+                      )
+                    })()}
 
-                  {panelError && (
-                    <div className="px-3 py-2.5 rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[12px] text-[rgba(239,68,68,0.9)]">
-                      {panelError}
-                    </div>
+                    {panelError && (
+                      <p role="alert" className="rounded-control-sm border border-danger/25 bg-danger-soft px-3 py-2.5 text-caption text-danger">
+                        {panelError}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Custom composer footer — "Continue" hands off to the shared
+                  date/time + Schedule/Save-as-Draft step below */}
+              {panel.mode === "new" && step === 1 && contentSource === "custom" && (
+                <div className="shrink-0 border-t border-border bg-surface-raised/70 px-5 py-4">
+                  <Button variant="brand" className="w-full" onClick={continueCustomComposer}>
+                    Continue
+                  </Button>
+                </div>
+              )}
+
+              {/* Footer — one obvious primary action, plus a secondary "back"/"remove" where relevant */}
+              {showStepThree && (
+                <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border bg-surface-raised/70 px-5 py-4">
+                  <Button variant="brand" className="min-w-32 flex-1" onClick={() => void handleSchedule()} disabled={submitting}>
+                    {submitting && !savingAsDraft && !addingToQueue ? (
+                      <Loader2 className="animate-spin" aria-hidden />
+                    ) : panel.mode === "edit" ? (
+                      panel.item.status === "draft" ? "Schedule" : "Save New Time"
+                    ) : (
+                      "Schedule"
+                    )}
+                  </Button>
+                  {panel.mode === "edit" && (
+                    <Button
+                      variant="outline"
+                      onClick={() => void handleRemove(panel.item)}
+                      disabled={removingId === panel.item.id}
+                      className="hover:border-danger/35 hover:bg-danger-soft hover:text-danger"
+                    >
+                      {removingId === panel.item.id && <Loader2 className="animate-spin" aria-hidden />}
+                      {removingId === panel.item.id ? "Removing…" : "Remove"}
+                    </Button>
+                  )}
+                  {panel.mode === "new" && (
+                    <Button
+                      variant="outline"
+                      onClick={() => void handleAddToQueue()}
+                      disabled={submitting}
+                      title={
+                        queueSlots.filter((s) => s.active).length === 0
+                          ? "No active queue slots yet — add one via Queue Settings"
+                          : undefined
+                      }
+                    >
+                      {addingToQueue && <Loader2 className="animate-spin" aria-hidden />}
+                      {addingToQueue ? "Adding…" : "Add to Queue"}
+                    </Button>
+                  )}
+                  {panel.mode === "new" && (
+                    <Button variant="ghost" onClick={() => void handleSchedule(true)} disabled={submitting}>
+                      {savingAsDraft && <Loader2 className="animate-spin" aria-hidden />}
+                      {savingAsDraft ? "Saving…" : "Save as Draft"}
+                    </Button>
                   )}
                 </div>
               )}
-            </div>
 
-            {/* Custom composer footer — "Continue" hands off to the shared
-                date/time + Schedule/Save-as-Draft step below */}
-            {panel.mode === "new" && step === 1 && contentSource === "custom" && (
-              <div className="px-5 py-4 border-t border-[#E5E3DE] flex-shrink-0">
-                <button
-                  onClick={continueCustomComposer}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_18px_rgba(124,58,237,0.25)] transition-colors"
-                >
-                  Continue
-                </button>
-              </div>
-            )}
-
-            {/* Footer — one obvious primary action, plus a secondary "back"/"remove" where relevant */}
-            {panel.mode !== "day" &&
-              step === 3 &&
-              (contentSource === "custom" ? customPlatforms.length > 0 : !!(selectedPost && selectedPlatform)) && (
-              <div className="flex items-center gap-2 px-5 py-4 border-t border-[#E5E3DE] flex-shrink-0 flex-wrap">
-                <button
-                  onClick={() => void handleSchedule()}
-                  disabled={submitting}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 shadow-[0_0_18px_rgba(124,58,237,0.25)] transition-colors"
-                >
-                  {submitting && !savingAsDraft && !addingToQueue ? (
-                    <Loader2 size={14} className="animate-spin" strokeWidth={2.2} />
-                  ) : panel.mode === "edit" ? (
-                    panel.item.status === "draft" ? "Schedule" : "Save New Time"
-                  ) : (
-                    "Schedule"
-                  )}
-                </button>
-                {panel.mode === "edit" && (
-                  <button
-                    onClick={() => void handleRemove(panel.item)}
-                    disabled={removingId === panel.item.id}
-                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-[#E5E3DE] bg-white hover:bg-[rgba(239,68,68,0.06)] hover:border-[rgba(239,68,68,0.3)] text-[12px] font-medium text-[#6B7280] hover:text-[rgba(239,68,68,0.9)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {removingId === panel.item.id && <Loader2 size={12} className="animate-spin" />}
-                    {removingId === panel.item.id ? "Removing…" : "Remove"}
-                  </button>
-                )}
-                {panel.mode === "new" && (
-                  <button
-                    onClick={() => void handleAddToQueue()}
-                    disabled={submitting}
-                    title={
-                      queueSlots.filter((s) => s.active).length === 0
-                        ? "No active queue slots yet — add one via Queue Settings"
-                        : undefined
-                    }
-                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[12px] font-medium text-[#6B7280] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {addingToQueue && <Loader2 size={12} className="animate-spin" />}
-                    {addingToQueue ? "Adding…" : "Add to Queue"}
-                  </button>
-                )}
-                {panel.mode === "new" && (
-                  <button
-                    onClick={() => void handleSchedule(true)}
-                    disabled={submitting}
-                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[12px] font-medium text-[#6B7280] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {savingAsDraft && <Loader2 size={12} className="animate-spin" />}
-                    {savingAsDraft ? "Saving…" : "Save as Draft"}
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Day mode footer — the one obvious next action for this panel */}
-            {panel.mode === "day" && (
-              <div className="px-5 py-4 border-t border-[#E5E3DE] flex-shrink-0">
-                <button
-                  onClick={() => openNewPanelForDay(panel.date)}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_18px_rgba(124,58,237,0.25)] transition-colors"
-                >
-                  <Plus size={14} strokeWidth={2.4} />
-                  Add here
-                </button>
-              </div>
-            )}
+              {/* Day mode footer — the one obvious next action for this panel */}
+              {panel.mode === "day" && (
+                <div className="shrink-0 border-t border-border bg-surface-raised/70 px-5 py-4">
+                  <Button variant="brand" className="w-full" onClick={() => openNewPanelForDay(panel.date)}>
+                    <Plus aria-hidden />
+                    Add here
+                  </Button>
+                </div>
+              )}
+            </aside>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

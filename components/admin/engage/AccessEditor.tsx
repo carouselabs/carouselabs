@@ -101,10 +101,10 @@ export function AccessEditor({
     <Modal open={open} onClose={onClose} title="Edit access & limits" wide>
       <div className="max-h-[70vh] space-y-5 overflow-y-auto pr-1">
         <section className="space-y-2">
-          <h4 className="text-[12px] font-semibold uppercase tracking-wide text-[#8A8A8A]">Features</h4>
+          <h4 className="text-caption font-semibold text-muted-foreground">Features</h4>
           {ENGAGE_FEATURES.map((f) => (
             <div key={f} className="flex items-center justify-between gap-3">
-              <span className="text-[12.5px] text-[#D0D0D0]">{FEATURE_LABELS[f]}</span>
+              <span className="text-caption text-foreground/90">{FEATURE_LABELS[f]}</span>
               <AdminSelect
                 aria-label={FEATURE_LABELS[f]}
                 value={features[f]}
@@ -119,11 +119,11 @@ export function AccessEditor({
         </section>
 
         <section className="space-y-2">
-          <h4 className="text-[12px] font-semibold uppercase tracking-wide text-[#8A8A8A]">Limits</h4>
-          <p className="text-[11.5px] text-[#8A8A8A]">Per day and per month are calendar days and months in UTC.</p>
+          <h4 className="text-caption font-semibold text-muted-foreground">Limits</h4>
+          <p className="text-caption text-muted-foreground">Per day and per month are calendar days and months in UTC.</p>
           {LIMIT_KEYS.map((k) => (
             <div key={k} className="grid grid-cols-[1fr_auto_88px_96px] items-center gap-2">
-              <span className="text-[12.5px] text-[#D0D0D0]">{LIMIT_LABELS[k]}</span>
+              <span className="text-caption text-foreground/90">{LIMIT_LABELS[k]}</span>
               <AdminSelect
                 aria-label={`${LIMIT_LABELS[k]}: mode`}
                 value={limits[k].mode}
@@ -140,7 +140,7 @@ export function AccessEditor({
                 value={limits[k].value}
                 onChange={(e) => setLimits((s) => ({ ...s, [k]: { ...s[k], value: e.target.value.replace(/\D/g, "") } }))}
               />
-              <span className="text-right text-[11.5px] tabular-nums text-[#8A8A8A]" title="Effective after saving">
+              <span className="text-right text-caption tabular-nums text-muted-foreground" title="Effective after saving">
                 = {effective[k]}
               </span>
             </div>
@@ -148,9 +148,9 @@ export function AccessEditor({
         </section>
 
         <section className="space-y-2">
-          <h4 className="text-[12px] font-semibold uppercase tracking-wide text-[#8A8A8A]">Free generations</h4>
+          <h4 className="text-caption font-semibold text-muted-foreground">Free generations</h4>
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[12.5px] text-[#D0D0D0]">For life, before the $15 plan is needed</span>
+            <span className="text-caption text-foreground/90">For life, before the $15 plan is needed</span>
             <AdminInput
               aria-label="Free generations"
               inputMode="numeric"
@@ -163,17 +163,17 @@ export function AccessEditor({
         </section>
 
         <label className="block space-y-1.5">
-          <span className="text-[12px] font-medium text-[#B0B0B0]">Reason (optional, kept in the audit log)</span>
+          <span className="text-caption font-medium text-muted-foreground">Reason (optional, kept in the audit log)</span>
           <AdminInput className="w-full" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
         </label>
 
         {error && (
-          <p role="alert" className="text-[12.5px] text-red-400">
+          <p role="alert" className="text-caption text-danger">
             {error}
           </p>
         )}
       </div>
-      <div className="mt-4 flex justify-end gap-2 border-t border-[#2A2A2A] pt-4">
+      <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
         <AdminButton variant="secondary" onClick={onClose}>
           Cancel
         </AdminButton>

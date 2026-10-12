@@ -69,7 +69,7 @@ export default async function AdminInternDetailPage({
     <div className="space-y-6">
       <Link
         href="/admin/interns"
-        className="inline-flex items-center gap-1.5 text-[12.5px] text-[#8A8A8A] hover:text-white transition-colors print:hidden"
+        className="inline-flex items-center gap-1.5 text-caption text-muted-foreground hover:text-foreground transition-colors print:hidden"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
         All interns

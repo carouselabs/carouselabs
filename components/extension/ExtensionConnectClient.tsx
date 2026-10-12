@@ -10,6 +10,7 @@
 // see manifest.config.ts's content_scripts) is the only listener for this
 // message; it relays it into the extension via chrome.runtime.sendMessage.
 import { useEffect, useState } from "react"
+import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
 
 // Must match TOKEN_MESSAGE_TYPE in browser-extension-comment/src/lib/platform.ts
 // for each extension. The X extension opens this page with ?for=x and listens
@@ -73,26 +74,37 @@ export function ExtensionConnectClient() {
     }
   }, [])
 
-  if (status === "connecting") {
-    return <p className="text-sm text-white/70">Connecting your {PRODUCT_NAMES[client]} extension…</p>
-  }
-
-  if (status === "error") {
-    return (
-      <div className="text-center">
-        <p className="text-sm text-red-400">Couldn&apos;t connect the extension: {errorMessage}</p>
-        <p className="mt-2 text-xs text-white/50">Close this tab and try again from the extension.</p>
-      </div>
-    )
-  }
-
-  // The extension's background script closes this tab automatically once it
-  // receives the relayed message — this is a fallback in case that doesn't
-  // fire (e.g. the extension isn't installed, or the relay is blocked).
+  // Presentation only below — the exchange and postMessage logic above is
+  // unchanged. One card, the state announced politely to screen readers.
   return (
-    <div className="text-center">
-      <p className="text-sm font-medium text-white">Extension connected.</p>
-      <p className="mt-1 text-xs text-white/50">You can close this tab now.</p>
+    <div className="w-full max-w-form rounded-showcase border border-border bg-surface p-8 text-center shadow-card">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/icon.png" alt="CarouseLabs" className="mx-auto size-10" />
+      <div role="status" aria-live="polite" className="mt-6 flex flex-col items-center gap-3">
+        {status === "connecting" && (
+          <>
+            <Loader2 className="size-6 animate-spin text-muted-foreground motion-reduce:animate-none" aria-hidden />
+            <p className="text-body text-muted-foreground">Connecting your {PRODUCT_NAMES[client]} extension…</p>
+          </>
+        )}
+        {status === "error" && (
+          <>
+            <AlertCircle className="size-6 text-danger" aria-hidden />
+            <p className="text-body font-medium text-danger">Couldn&apos;t connect the extension: {errorMessage}</p>
+            <p className="text-label text-muted-foreground">Close this tab and try again from the extension.</p>
+          </>
+        )}
+        {/* The extension's background script closes this tab automatically once it
+            receives the relayed message — this is a fallback in case that doesn't
+            fire (e.g. the extension isn't installed, or the relay is blocked). */}
+        {status === "connected" && (
+          <>
+            <CheckCircle2 className="size-6 text-success" aria-hidden />
+            <p className="text-body-lg font-semibold">Extension connected.</p>
+            <p className="text-label text-muted-foreground">You can close this tab now.</p>
+          </>
+        )}
+      </div>
     </div>
   )
 }

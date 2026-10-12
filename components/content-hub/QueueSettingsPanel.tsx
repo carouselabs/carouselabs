@@ -7,7 +7,10 @@
 import { useState } from "react"
 import { Loader2, Pause, Play, Pencil, Trash2, Plus, Shuffle, PauseCircle } from "lucide-react"
 import { PLATFORM_ORDER, PLATFORM_META, type Platform } from "@/lib/platforms"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import { PlatformBadge } from "./platforms"
+import { fieldClasses, iconAction } from "./hubStyles"
 
 export interface QueueSlotSummary {
   id: string
@@ -97,99 +100,89 @@ export function QueueSettingsPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-[13px] text-[#6B7280] leading-[1.5]">
+      <p className="text-label text-muted-foreground">
         Set preset times you like to post. When you choose &quot;Add to Queue&quot; on a new post, it fills the
         next empty slot below instead of you picking a time manually.
       </p>
 
-      <div className="flex items-center gap-2">
-        <button
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => void handlePauseAll()}
           disabled={pausingAll || slots.every((s) => !s.active)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[12px] font-medium text-[#6B7280] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {pausingAll ? <Loader2 size={12} className="animate-spin" /> : <PauseCircle size={12} strokeWidth={2} />}
+          {pausingAll ? <Loader2 className="animate-spin" aria-hidden /> : <PauseCircle aria-hidden />}
           Pause All Queues
-        </button>
-        <button
-          onClick={() => void handleShuffle()}
-          disabled={shuffling}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[12px] font-medium text-[#6B7280] transition-colors disabled:opacity-50"
-        >
-          {shuffling ? <Loader2 size={12} className="animate-spin" /> : <Shuffle size={12} strokeWidth={2} />}
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => void handleShuffle()} disabled={shuffling}>
+          {shuffling ? <Loader2 className="animate-spin" aria-hidden /> : <Shuffle aria-hidden />}
           Shuffle
-        </button>
+        </Button>
       </div>
-      {actionMessage && <p className="text-[11.5px] text-[#9CA3AF]">{actionMessage}</p>}
+      {actionMessage && (
+        <p role="status" className="text-caption text-muted-foreground">
+          {actionMessage}
+        </p>
+      )}
 
       {slots.length > 0 && (
-        <div className="flex flex-col gap-2">
+        <ul className="flex flex-col divide-y divide-border rounded-card border border-border bg-surface-raised">
           {slots.map((slot) => (
-            <div
-              key={slot.id}
-              className={[
-                "flex items-center gap-3 p-3 rounded-xl border bg-white transition-colors",
-                slot.active ? "border-[#E5E3DE]" : "border-[#E5E3DE] opacity-60",
-              ].join(" ")}
-            >
+            <li key={slot.id} className={cn("flex items-center gap-3 px-3 py-2.5", !slot.active && "opacity-60")}>
               <PlatformBadge platform={slot.platform} />
-              <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                <p className="text-[13px] font-medium text-[#0A0A0A] truncate">
+              <div className="flex min-w-0 flex-1 flex-col">
+                <p className="truncate text-label font-medium text-foreground tabular-nums">
                   {DAY_ABBR[slot.dayOfWeek]} · {formatTimeOfDay(slot.timeOfDay)}
                 </p>
-                <p className="text-[11px] text-[#9CA3AF]">{PLATFORM_META[slot.platform].label}</p>
+                <p className="text-caption text-muted-foreground">{PLATFORM_META[slot.platform].label}</p>
               </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
+              <div className="flex shrink-0 items-center">
                 <button
+                  type="button"
                   onClick={() => onToggleActive(slot)}
                   title={slot.active ? "Pause" : "Resume"}
-                  className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F4F2EC] transition-colors"
+                  aria-label={slot.active ? "Pause" : "Resume"}
+                  className={iconAction}
                 >
-                  {slot.active ? <Pause size={13} strokeWidth={2} /> : <Play size={13} strokeWidth={2} />}
+                  {slot.active ? <Pause aria-hidden /> : <Play aria-hidden />}
+                </button>
+                <button type="button" onClick={() => onStartEdit(slot)} title="Edit" aria-label="Edit" className={iconAction}>
+                  <Pencil aria-hidden />
                 </button>
                 <button
-                  onClick={() => onStartEdit(slot)}
-                  title="Edit"
-                  className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F4F2EC] transition-colors"
-                >
-                  <Pencil size={13} strokeWidth={2} />
-                </button>
-                <button
+                  type="button"
                   onClick={() => onDelete(slot.id)}
                   title="Delete"
-                  className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.08)] transition-colors"
+                  aria-label="Delete"
+                  className={cn(iconAction, "hover:bg-danger-soft hover:text-danger")}
                 >
-                  <Trash2 size={13} strokeWidth={2} />
+                  <Trash2 aria-hidden />
                 </button>
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
       {!formOpen ? (
-        <button
-          onClick={onStartNew}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.03)] hover:bg-[rgba(124,58,237,0.08)] text-[13px] font-medium text-[#7C3AED] transition-colors"
-        >
-          <Plus size={14} strokeWidth={2.2} />
+        <Button variant="outline" onClick={onStartNew} className="border-dashed border-brand/40 text-brand hover:bg-brand-soft">
+          <Plus aria-hidden />
           New Queue Slot
-        </button>
+        </Button>
       ) : (
-        <div className="flex flex-col gap-3 p-4 rounded-xl border border-[#E5E3DE] bg-white">
-          <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">
-            {editingId ? "Edit slot" : "New slot"}
-          </p>
+        <div className="flex flex-col gap-3 rounded-card border border-border bg-surface-raised p-4">
+          <h3 className="text-label font-semibold text-foreground">{editingId ? "Edit slot" : "New slot"}</h3>
 
-          <div className="flex items-center gap-1">
+          <div role="group" aria-label="Day" className="grid grid-cols-7 gap-1">
             {DAY_ABBR.map((label, d) => (
               <button
                 key={d}
+                type="button"
+                aria-pressed={day === d}
+                aria-label={label}
                 onClick={() => onDayChange(d)}
-                className={[
-                  "flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-colors",
-                  day === d ? "bg-[#7C3AED] text-white" : "bg-[#F4F2EC] text-[#9CA3AF] hover:text-[#4B5563]",
-                ].join(" ")}
+                className="h-9 rounded-control-sm bg-surface-muted text-caption font-semibold text-muted-foreground transition-colors duration-(--motion-fast) hover:text-foreground aria-pressed:bg-brand aria-pressed:text-brand-foreground"
               >
                 {label[0]}
               </button>
@@ -200,13 +193,15 @@ export function QueueSettingsPanel({
             type="time"
             value={time}
             onChange={(e) => onTimeChange(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
+            aria-label="Time"
+            className={fieldClasses}
           />
 
           <select
             value={platform}
             onChange={(e) => onPlatformChange(e.target.value as Platform)}
-            className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
+            aria-label="Platform"
+            className={fieldClasses}
           >
             {PLATFORM_ORDER.map((p) => (
               <option key={p} value={p}>
@@ -217,31 +212,24 @@ export function QueueSettingsPanel({
           </select>
 
           {error && (
-            <div className="px-3 py-2 rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[12px] text-[rgba(239,68,68,0.9)]">
+            <p role="alert" className="rounded-control-sm border border-danger/25 bg-danger-soft px-3 py-2 text-caption text-danger">
               {error}
-            </div>
+            </p>
           )}
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={onSubmit}
-              disabled={submitting}
-              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[12.5px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 transition-colors"
-            >
+            <Button variant="brand" className="flex-1" onClick={onSubmit} disabled={submitting}>
               {submitting ? (
-                <Loader2 size={13} className="animate-spin" strokeWidth={2.2} />
+                <Loader2 className="animate-spin" aria-hidden />
               ) : editingId ? (
                 "Save Slot"
               ) : (
                 "Add Slot"
               )}
-            </button>
-            <button
-              onClick={onCancelForm}
-              className="px-3.5 py-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[12px] font-medium text-[#6B7280] transition-colors"
-            >
+            </Button>
+            <Button variant="ghost" onClick={onCancelForm}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}

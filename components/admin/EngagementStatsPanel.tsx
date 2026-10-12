@@ -54,20 +54,20 @@ export function EngagementStatsPanel({ sequenceId, stepId }: { sequenceId: strin
     const s = steps.find((x) => x.stepId === stepId)
     if (!s || s.overall.sent === 0) return null
     return (
-      <div className="pt-3 border-t border-[#2A2A2A] space-y-1.5">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">Engagement</p>
-        <p className="text-[12px] text-[#B0B0B0]">
+      <div className="pt-3 border-t border-border space-y-1.5">
+        <p className="text-caption font-semibold text-muted-foreground">Engagement</p>
+        <p className="text-caption text-muted-foreground">
           {s.overall.sent} sent · {pct(s.overall.openRate)} opened · {pct(s.overall.clickRate)} clicked
           {s.overall.bounced > 0 ? ` · ${s.overall.bounced} bounced` : ""}
         </p>
         {s.hasVariant && s.variantA && s.variantB && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11.5px] text-[#B0B0B0]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-caption text-muted-foreground">
             <p>
-              <span className="font-semibold text-white">Variant A</span> — {s.variantA.sent} sent ·{" "}
+              <span className="font-semibold text-foreground">Variant A</span> — {s.variantA.sent} sent ·{" "}
               {pct(s.variantA.openRate)} open · {pct(s.variantA.clickRate)} click
             </p>
             <p>
-              <span className="font-semibold text-white">Variant B</span> — {s.variantB.sent} sent ·{" "}
+              <span className="font-semibold text-foreground">Variant B</span> — {s.variantB.sent} sent ·{" "}
               {pct(s.variantB.openRate)} open · {pct(s.variantB.clickRate)} click
             </p>
           </div>
@@ -105,7 +105,7 @@ export function EngagementStatsPanel({ sequenceId, stepId }: { sequenceId: strin
                 <td className={`${tableCls.td} tabular-nums`}>
                   {s.overall.sent > 0 ? pct(s.overall.clickRate) : "—"}
                 </td>
-                <td className={`${tableCls.td} text-[#8A8A8A]`}>
+                <td className={`${tableCls.td} text-muted-foreground`}>
                   {s.hasVariant && s.variantA && s.variantB
                     ? `A: ${pct(s.variantA.openRate)} · B: ${pct(s.variantB.openRate)}`
                     : "—"}

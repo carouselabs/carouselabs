@@ -94,20 +94,20 @@ export function LemonSqueezyButton({
         onClick={handleUpgrade}
         disabled={loading}
         className={[
-          "self-start inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all disabled:opacity-60 w-full",
+          "self-start inline-flex h-11 w-full items-center justify-center gap-2 rounded-control px-5 text-label font-semibold text-white transition-colors duration-(--motion-fast) disabled:opacity-60",
           variant === "amber"
-            ? "bg-[#F59E0B] hover:bg-[#D97706] shadow-[0_0_24px_rgba(245,158,11,0.25)]"
-            : "bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.3)]",
+            ? "bg-warning hover:bg-warning/90"
+            : "bg-brand hover:bg-brand-hover",
         ].join(" ")}
       >
         {loading ? (
-          <Loader2 size={14} className="animate-spin" />
+          <Loader2 size={14} className="animate-spin motion-reduce:animate-none" aria-hidden />
         ) : (
-          <Sparkles size={14} strokeWidth={2} />
+          <Sparkles size={14} strokeWidth={2} aria-hidden />
         )}
         {label}
       </button>
-      {error && <p className="text-[12px] text-[rgba(239,68,68,0.9)]">{error}</p>}
+      {error && <p className="text-caption text-danger">{error}</p>}
     </div>
   )
 }

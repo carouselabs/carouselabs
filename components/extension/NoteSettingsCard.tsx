@@ -32,11 +32,11 @@ const LENGTH_OPTIONS: { preset: LengthPreset; label: string }[] = [
 const EMPTY_PROFILE: LinkedinProfile = { name: "", headline: "", currentRole: "", about: "", url: "", capturedAt: 0 }
 
 const inputClass =
-  "w-full rounded-xl border border-[#E5E3DE] bg-white px-3.5 py-2.5 text-[13px] text-[#0A0A0A] placeholder:text-[#9CA3AF] outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/15"
+  "w-full rounded-control border border-border bg-surface-raised px-3.5 py-2.5 text-label text-foreground placeholder:text-muted-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
 
 const optionClass = (active: boolean) =>
-  `flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-[13px] ${
-    active ? "border-[#7C3AED] bg-[rgba(124,58,237,0.04)]" : "border-[#E5E3DE] bg-white"
+  `flex cursor-pointer items-start gap-2.5 rounded-control border p-3 text-label ${
+    active ? "border-brand bg-brand-soft" : "border-border bg-surface-raised"
   }`
 
 export function NoteSettingsCard() {
@@ -121,23 +121,23 @@ export function NoteSettingsCard() {
 
   if (!loaded) {
     return (
-      <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5 text-[13px] text-[#9CA3AF]">
+      <div className="rounded-card border border-border bg-surface-raised p-5 text-label text-muted-foreground">
         {error ?? "Loading note settings…"}
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-5 rounded-2xl border border-[#E5E3DE] bg-white p-5">
+    <div className="flex flex-col gap-5 rounded-card border border-border bg-surface-raised p-5">
       <div className="flex flex-col gap-1">
-        <h3 className="text-[14px] font-semibold text-[#0A0A0A]">Every connection note</h3>
-        <p className="text-[12.5px] text-[#6B7280]">
+        <h3 className="text-label font-semibold text-foreground">Every connection note</h3>
+        <p className="text-caption text-muted-foreground">
           What the note says about you, and how long it is. Applies whichever profile you pick below.
         </p>
       </div>
 
       <div className="flex flex-col gap-2">
-        <p className="text-[12.5px] font-semibold text-[#0A0A0A]">Your context</p>
+        <p className="text-caption font-semibold text-foreground">Your context</p>
         {CONTEXT_OPTIONS.map((o) => (
           <label key={o.choice} className={optionClass(choice === o.choice)}>
             <input
@@ -148,8 +148,8 @@ export function NoteSettingsCard() {
               onChange={() => setChoice(o.choice)}
             />
             <span className="flex flex-col gap-0.5">
-              <span className="font-medium text-[#0A0A0A]">{o.title}</span>
-              <span className="text-[12px] text-[#6B7280]">{o.hint}</span>
+              <span className="font-medium text-foreground">{o.title}</span>
+              <span className="text-caption text-muted-foreground">{o.hint}</span>
             </span>
           </label>
         ))}
@@ -157,7 +157,7 @@ export function NoteSettingsCard() {
 
       {choice === "custom" && (
         <label className="flex flex-col gap-2">
-          <span className="text-[12.5px] font-semibold text-[#0A0A0A]">Your purpose</span>
+          <span className="text-caption font-semibold text-foreground">Your purpose</span>
           <textarea
             className={`${inputClass} resize-y`}
             rows={2}
@@ -170,8 +170,8 @@ export function NoteSettingsCard() {
       )}
 
       {choice === "profile" && (
-        <div className="flex flex-col gap-3 rounded-xl border border-dashed border-[#E5E3DE] p-4">
-          <p className="text-[12px] text-[#6B7280]">
+        <div className="flex flex-col gap-3 rounded-control border border-dashed border-border p-4">
+          <p className="text-caption text-muted-foreground">
             The extension fills this in when you click <span className="font-medium">Read my profile</span> on your
             own LinkedIn page. You can correct it here.
           </p>
@@ -196,8 +196,8 @@ export function NoteSettingsCard() {
       )}
 
       <div className="flex flex-col gap-2">
-        <p className="text-[12.5px] font-semibold text-[#0A0A0A]">
-          Note length <span className="font-normal text-[#9CA3AF]">— LinkedIn allows 300; notes stay under {NOTE_MAX}</span>
+        <p className="text-caption font-semibold text-foreground">
+          Note length <span className="font-normal text-muted-foreground">— LinkedIn allows 300; notes stay under {NOTE_MAX}</span>
         </p>
         <div className="flex flex-wrap items-center gap-2">
           {LENGTH_OPTIONS.map((o) => (
@@ -206,10 +206,10 @@ export function NoteSettingsCard() {
               type="button"
               onClick={() => choosePreset(o.preset)}
               className={[
-                "rounded-full px-3.5 py-1.5 text-[12.5px] font-medium transition-colors",
+                "rounded-full px-3.5 py-1.5 text-caption font-medium transition-colors",
                 preset === o.preset
-                  ? "bg-[#1A1A1A] text-white"
-                  : "border border-[#E5E3DE] bg-white text-[#6B7280] hover:text-[#0A0A0A]",
+                  ? "bg-primary text-white"
+                  : "border border-border bg-surface-raised text-muted-foreground hover:text-foreground",
               ].join(" ")}
             >
               {o.label}
@@ -225,7 +225,7 @@ export function NoteSettingsCard() {
               value={minText}
               onChange={(e) => setMinText(e.target.value)}
             />
-            <span className="text-[12.5px] text-[#9CA3AF]">to</span>
+            <span className="text-caption text-muted-foreground">to</span>
             <input
               type="number"
               className={`${inputClass} w-28`}
@@ -233,13 +233,13 @@ export function NoteSettingsCard() {
               value={maxText}
               onChange={(e) => setMaxText(e.target.value)}
             />
-            <span className="text-[12.5px] text-[#9CA3AF]">characters</span>
+            <span className="text-caption text-muted-foreground">characters</span>
           </div>
         )}
       </div>
 
       {(problem || error) && (
-        <p className="text-[12.5px] text-[#DC2626]">{error ?? problem}</p>
+        <p className="text-caption text-danger">{error ?? problem}</p>
       )}
 
       <div className="flex items-center gap-3">
@@ -247,13 +247,13 @@ export function NoteSettingsCard() {
           type="button"
           disabled={saving || !!problem}
           onClick={save}
-          className="inline-flex items-center gap-2 rounded-xl bg-[#7C3AED] px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-[#6D28D9] disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-control bg-brand px-5 py-2.5 text-label font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
         >
           {saving && <Loader2 size={14} className="animate-spin" />}
           Save note settings
         </button>
         {saved && (
-          <span className="inline-flex items-center gap-1 text-[12px] text-[#15803D]">
+          <span className="inline-flex items-center gap-1 text-caption text-success">
             <Check size={12} /> Saved — the extension uses this from its next note
           </span>
         )}

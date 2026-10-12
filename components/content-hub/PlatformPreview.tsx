@@ -35,17 +35,17 @@ export function PlatformPreview({ platform, caption, imageUrl, userName }: Platf
 
   if (platform === "linkedin") {
     return (
-      <div className="rounded-xl border border-[#E5E3DE] bg-white overflow-hidden">
+      <div className="overflow-hidden rounded-card border border-border bg-surface-raised shadow-card">
         <div className="flex items-center gap-2.5 p-3.5 pb-2.5">
-          <div className="w-11 h-11 rounded-full bg-[#0A66C2] flex items-center justify-center text-white text-[15px] font-bold flex-shrink-0">
+          <div className="w-11 h-11 rounded-full bg-[#0A66C2] flex items-center justify-center text-white text-body font-bold flex-shrink-0">
             {(userName?.[0] ?? "U").toUpperCase()}
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="text-[13.5px] font-semibold text-[#0A0A0A] truncate leading-tight">
+            <span className="text-label font-semibold text-foreground truncate leading-tight">
               {userName || "You"}
             </span>
-            <span className="text-[11.5px] text-[#6B7280] leading-tight">Your headline here</span>
-            <span className="text-[11px] text-[#9CA3AF] flex items-center gap-1 leading-tight mt-0.5">
+            <span className="text-caption text-muted-foreground leading-tight">Your headline here</span>
+            <span className="text-caption text-muted-foreground flex items-center gap-1 leading-tight mt-0.5">
               Now · <Globe size={10} strokeWidth={2.2} />
             </span>
           </div>
@@ -53,14 +53,15 @@ export function PlatformPreview({ platform, caption, imageUrl, userName }: Platf
 
         <div className="px-3.5 pb-2.5">
           {trimmed ? (
-            <p className="text-[13.5px] text-[#0A0A0A] leading-[1.5] whitespace-pre-wrap break-words">
+            <p className="text-label text-foreground leading-[1.5] whitespace-pre-wrap break-words">
               {displayCaption}
               {isTruncated && !expanded && (
                 <>
                   …{" "}
                   <button
+                    type="button"
                     onClick={() => setExpanded(true)}
-                    className="text-[#6B7280] font-medium hover:underline"
+                    className="text-muted-foreground font-medium hover:underline"
                   >
                     see more
                   </button>
@@ -68,25 +69,25 @@ export function PlatformPreview({ platform, caption, imageUrl, userName }: Platf
               )}
             </p>
           ) : (
-            <p className="text-[13.5px] text-[#ADA99F] italic">No caption yet</p>
+            <p className="text-label text-muted-foreground italic">No caption yet</p>
           )}
         </div>
 
         {imageUrl && (
-          <div className="w-full bg-[#F4F2EC]">
+          <div className="w-full bg-surface">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={imageUrl} alt="" className="w-full h-auto max-h-80 object-cover" />
           </div>
         )}
 
-        <div className="flex items-center justify-around px-2 py-1.5 border-t border-[#E5E3DE] mt-1">
+        <div className="flex items-center justify-around px-2 py-1.5 border-t border-border mt-1">
           {[
             { icon: ThumbsUp, label: "Like" },
             { icon: MessageCircle, label: "Comment" },
             { icon: Repeat2, label: "Repost" },
             { icon: Send, label: "Send" },
           ].map(({ icon: Icon, label }) => (
-            <span key={label} className="flex items-center gap-1.5 px-2 py-1.5 text-[11.5px] text-[#6B7280]">
+            <span key={label} className="flex items-center gap-1.5 px-2 py-1.5 text-caption text-muted-foreground">
               <Icon size={15} strokeWidth={1.8} />
               <span className="hidden sm:inline">{label}</span>
             </span>
@@ -99,37 +100,37 @@ export function PlatformPreview({ platform, caption, imageUrl, userName }: Platf
   // Generic approximation for every other platform — honestly labeled, not
   // claiming pixel fidelity to that platform's real feed.
   return (
-    <div className="rounded-xl border border-[#E5E3DE] bg-white overflow-hidden">
+    <div className="overflow-hidden rounded-card border border-border bg-surface-raised shadow-card">
       <div className="flex items-center gap-2.5 p-3.5 pb-2.5">
         <PlatformBadge platform={platform} size={36} />
         <div className="flex flex-col min-w-0">
-          <span className="text-[13.5px] font-semibold text-[#0A0A0A] truncate leading-tight">
+          <span className="text-label font-semibold text-foreground truncate leading-tight">
             {userName || "You"}
           </span>
-          <span className="text-[11px] text-[#9CA3AF] leading-tight">
+          <span className="text-caption text-muted-foreground leading-tight">
             {meta.label} preview (approximate)
           </span>
         </div>
       </div>
       <div className="px-3.5 pb-2.5">
         {trimmed ? (
-          <p className="text-[13.5px] text-[#0A0A0A] leading-[1.5] whitespace-pre-wrap break-words">
+          <p className="text-label text-foreground leading-[1.5] whitespace-pre-wrap break-words">
             {displayCaption}
             {isTruncated && !expanded && (
               <>
                 …{" "}
-                <button onClick={() => setExpanded(true)} className="text-[#6B7280] font-medium hover:underline">
+                <button type="button" onClick={() => setExpanded(true)} className="text-muted-foreground font-medium hover:underline">
                   see more
                 </button>
               </>
             )}
           </p>
         ) : (
-          <p className="text-[13.5px] text-[#ADA99F] italic">No caption yet</p>
+          <p className="text-label text-muted-foreground italic">No caption yet</p>
         )}
       </div>
       {imageUrl && (
-        <div className="w-full bg-[#F4F2EC]">
+        <div className="w-full bg-surface">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={imageUrl} alt="" className="w-full h-auto max-h-80 object-cover" />
         </div>

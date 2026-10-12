@@ -2,9 +2,18 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* <html> always carries .dark today, so `dark:` classes are effectively always
+   on. Three legacy files still rely on that (start page, Start Page settings,
+   Tap & Hold maker), so it stays until those screens migrate. The redesigned
+   kit never uses `dark:`: it reads semantic tokens, which switch with
+   [data-theme] below. */
 @custom-variant dark (&:is(.dark *));
+@custom-variant theme-dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/* ── Token → utility mapping (values switch with the theme) ─────────── */
 @theme inline {
+  /* shadcn-compatible names: registry components (shadcn, Magic UI, React
+     Bits) expect these, with `accent` as the quiet hover surface. */
   --color-background:           var(--background);
   --color-foreground:           var(--foreground);
   --color-card:                 var(--card);
@@ -13,6 +22,7 @@
   --color-popover-foreground:   var(--popover-foreground);
   --color-primary:              var(--primary);
   --color-primary-foreground:   var(--primary-foreground);
+  --color-primary-hover:        var(--primary-hover);
   --color-secondary:            var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted:                var(--muted);
@@ -26,11 +36,47 @@
   --color-ring:                 var(--ring);
   --color-sidebar:              var(--sidebar);
   --color-sidebar-foreground:   var(--sidebar-foreground);
-  --color-success:              var(--success);
   --color-text-primary:         var(--text-primary);
   --color-text-secondary:       var(--text-secondary);
+
+  /* Redesign surfaces and roles */
+  --color-surface:              var(--surface);
+  --color-surface-raised:       var(--surface-raised);
+  --color-surface-muted:        var(--surface-muted);
+  --color-control-border:       var(--control-border);
+  --color-brand:                var(--brand);
+  --color-brand-hover:          var(--brand-hover);
+  --color-brand-soft:           var(--brand-soft);
+  --color-brand-foreground:     var(--brand-foreground);
+  --color-success:              var(--success);
+  --color-success-soft:         var(--success-soft);
+  --color-warning:              var(--warning);
+  --color-warning-soft:         var(--warning-soft);
+  --color-danger:               var(--danger);
+  --color-danger-soft:          var(--danger-soft);
+  --color-danger-foreground:    var(--danger-foreground);
+  --color-overlay:              var(--overlay);
+  --color-skeleton:             var(--skeleton);
+  --color-chart-1:              var(--chart-1);
+  --color-chart-2:              var(--chart-2);
+  --color-chart-3:              var(--chart-3);
+  --color-chart-4:              var(--chart-4);
+  --color-chart-5:              var(--chart-5);
+
+  /* Elevation switches with the theme (lighter shadows on cream, borders
+     carry more of the depth in dark). */
+  --shadow-card:                var(--elevation-1);
+  --shadow-popover:             var(--elevation-2);
+  --shadow-dialog:              var(--elevation-3);
+
   --font-sans:                  var(--font-inter), system-ui, sans-serif;
   --font-mono:                  var(--font-geist-mono), monospace;
+  /* Redesign fonts: loaded by lib/fonts.ts only where a migrated layout
+     applies them, so these fall back cleanly elsewhere. */
+  --font-ui:                    var(--font-geist, var(--font-inter, system-ui)), system-ui, sans-serif;
+  --font-display:               var(--font-instrument-serif, Georgia), Georgia, "Times New Roman", serif;
+
+  /* Legacy radius scale used by today's hand-styled pages — unchanged. */
   --radius-sm:  calc(var(--radius) * 0.6);
   --radius-md:  calc(var(--radius) * 0.8);
   --radius-lg:  var(--radius);
@@ -38,58 +84,183 @@
   --radius-2xl: calc(var(--radius) * 1.8);
 }
 
-/* ── CarouseLabs design tokens — cream + charcoal ───────────────── */
-:root {
-  --background:          #F9F7F2;
-  --foreground:          #0A0A0A;
-  --card:                #FFFFFF;
-  --card-foreground:     #0A0A0A;
-  --popover:             #FFFFFF;
-  --popover-foreground:  #0A0A0A;
-  --primary:             #1A1A1A;
-  --primary-foreground:  #FFFFFF;
-  --secondary:           #ECEAE4;
-  --secondary-foreground:#0A0A0A;
-  --muted:               #ECEAE4;
-  --muted-foreground:    #6B7280;
-  --accent:              #F1EFE9;
-  --accent-foreground:   #0A0A0A;
-  --accent-light:        #6B7280;
-  --destructive:         #EF4444;
-  --border:              #E5E3DE;
-  --input:               #E5E3DE;
-  --ring:                #1A1A1A;
-  --sidebar:             #FFFFFF;
-  --sidebar-foreground:  #0A0A0A;
-  --success:             #059669;
-  --text-primary:        #0A0A0A;
-  --text-secondary:      #6B7280;
-  --radius:              0.75rem;
+/* ── Static redesign scales ─────────────────────────────────────────── */
+@theme {
+  /* Named type scale (size / line height / tracking) */
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.125rem;
+  --text-label: 0.875rem;
+  --text-label--line-height: 1.25rem;
+  --text-body: 1rem;
+  --text-body--line-height: 1.5rem;
+  --text-body-lg: 1.125rem;
+  --text-body-lg--line-height: 1.75rem;
+  --text-lead: 1.25rem;
+  --text-lead--line-height: 1.875rem;
+  --text-title-sm: 1.5rem;
+  --text-title-sm--line-height: 2rem;
+  --text-title-sm--letter-spacing: -0.02em;
+  --text-title: 2rem;
+  --text-title--line-height: 2.5rem;
+  --text-title--letter-spacing: -0.025em;
+  --text-section: clamp(2rem, 1.45rem + 2.35vw, 3.25rem);
+  --text-section--line-height: 1.12;
+  --text-section--letter-spacing: -0.03em;
+  --text-display: clamp(2.625rem, 1.6rem + 4.4vw, 4.75rem);
+  --text-display--line-height: 1.04;
+  --text-display--letter-spacing: -0.035em;
+
+  /* Shape: semantic names so the legacy rounded-* scale stays untouched */
+  --radius-detail: 4px;
+  --radius-control-sm: 8px;
+  --radius-control: 12px;
+  --radius-card: 16px;
+  --radius-showcase: 24px;
+
+  /* Layout widths (max-w-*) */
+  --container-form: 35rem;
+  --container-reading: 45rem;
+  --container-marketing: 75rem;
+  --container-showcase: 82.5rem;
+
+  /* Motion easing (ease-*) */
+  --ease-entry: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* Invalid-submit nudge (onboarding Continue). Off with reduced motion. */
+  --animate-shake: shake 0.4s ease-in-out;
+  @keyframes shake {
+    10%, 90% { transform: translateX(-1px); }
+    20%, 80% { transform: translateX(2px); }
+    30%, 50%, 70% { transform: translateX(-4px); }
+    40%, 60% { transform: translateX(4px); }
+  }
 }
 
-/* Mirror tokens so shadcn's .dark class (set on <html>) also matches */
-.dark {
+/* ── Light theme (default; also re-applies inside a dark subtree) ─── */
+:root, [data-theme="light"] {
   --background:          #F9F7F2;
-  --foreground:          #0A0A0A;
-  --card:                #FFFFFF;
-  --card-foreground:     #0A0A0A;
-  --popover:             #FFFFFF;
-  --popover-foreground:  #0A0A0A;
-  --primary:             #1A1A1A;
-  --primary-foreground:  #FFFFFF;
-  --secondary:           #ECEAE4;
-  --secondary-foreground:#0A0A0A;
-  --muted:               #ECEAE4;
-  --muted-foreground:    #6B7280;
-  --accent:              #F1EFE9;
-  --accent-foreground:   #0A0A0A;
-  --destructive:         #EF4444;
-  --border:              #E5E3DE;
-  --input:               #E5E3DE;
-  --ring:                #1A1A1A;
-  --sidebar:             #FFFFFF;
-  --sidebar-foreground:  #0A0A0A;
+  --foreground:          #211F1C;
+  --surface:             #FFFDF9;
+  --surface-raised:      #FFFFFF;
+  --surface-muted:       #F0ECE5;
+  --muted-foreground:    #67625B;
+  --border:              #DED8CD;
+  --control-border:      #8C857B;
+
+  --primary:             #211F1C;
+  --primary-foreground:  #FFFDF9;
+  --primary-hover:       #39352F;
+  --brand:               #6D28D9;
+  --brand-hover:         #5B21B6;
+  --brand-soft:          #EEE8FA;
+  --brand-foreground:    #FFFFFF;
+
+  --success:             #166534;
+  --success-soft:        #E9F5ED;
+  --warning:             #854D0E;
+  --warning-soft:        #FFF4D6;
+  --danger:              #B91C1C;
+  --danger-soft:         #FEF0EF;
+  --danger-foreground:   #FFFFFF;
+
+  --focus-ring:          #6D28D9;
+  --overlay:             rgb(33 31 28 / 0.32);
+  --skeleton:            #ECE7DF;
+  --selection:           #E4D9F8;
+  --chart-1:             #6D28D9;
+  --chart-2:             #0F766E;
+  --chart-3:             #B45309;
+  --chart-4:             #1D4ED8;
+  --chart-5:             #67625B;
+
+  --elevation-1: 0 1px 2px rgb(33 31 28 / 0.04);
+  --elevation-2: 0 4px 16px rgb(33 31 28 / 0.06), 0 1px 2px rgb(33 31 28 / 0.04);
+  --elevation-3: 0 16px 48px rgb(33 31 28 / 0.10), 0 2px 6px rgb(33 31 28 / 0.04);
+
+  /* shadcn-compatible aliases */
+  --card:                var(--surface);
+  --card-foreground:     var(--foreground);
+  --popover:             var(--surface-raised);
+  --popover-foreground:  var(--foreground);
+  --secondary:           var(--surface-muted);
+  --secondary-foreground:var(--foreground);
+  --muted:               var(--surface-muted);
+  --accent:              var(--surface-muted);
+  --accent-foreground:   var(--foreground);
+  --accent-light:        var(--muted-foreground);
+  --destructive:         var(--danger);
+  --input:               var(--control-border);
+  --ring:                var(--focus-ring);
+  --sidebar:             var(--surface);
+  --sidebar-foreground:  var(--foreground);
+  --text-primary:        var(--foreground);
+  --text-secondary:      var(--muted-foreground);
+  --radius:              0.75rem;
+
+  /* Motion durations (CSS: duration-(--motion-normal); JS: lib/motion.ts) */
+  --motion-instant: 0ms;
+  --motion-fast:    120ms;
+  --motion-normal:  180ms;
+  --motion-panel:   240ms;
+  --motion-reveal:  420ms;
+  --motion-max:     600ms;
+
+  /* Stacking layers (z-(--z-header) etc.) */
+  --z-base:    0;
+  --z-sticky:  20;
+  --z-header:  40;
+  --z-dialog:  50;
+  --z-popover: 60;
+  --z-tooltip: 70;
+  --z-toast:   80;
 }
+
+/* ── Dark theme: opt-in per subtree, never via the legacy .dark class ── */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --background:          #171614;
+  --foreground:          #F5F0E7;
+  --surface:             #201E1B;
+  --surface-raised:      #282521;
+  --surface-muted:       #24211D;
+  --muted-foreground:    #B5AFA4;
+  --border:              #3A352F;
+  --control-border:      #847B70;
+
+  --primary:             #F5F0E7;
+  --primary-foreground:  #211F1C;
+  --primary-hover:       #E3DBCE;
+  --brand:               #C4A7FF;
+  --brand-hover:         #D6C2FF;
+  --brand-soft:          #332343;
+  --brand-foreground:    #211431;
+
+  --success:             #86EFAC;
+  --success-soft:        #123421;
+  --warning:             #FACC15;
+  --warning-soft:        #3A2B13;
+  --danger:              #FCA5A5;
+  --danger-soft:         #3E2020;
+  --danger-foreground:   #211F1C;
+
+  --focus-ring:          #C4A7FF;
+  --overlay:             rgb(0 0 0 / 0.56);
+  --skeleton:            #2C2924;
+  --selection:           #4A3566;
+  --chart-1:             #C4A7FF;
+  --chart-2:             #5EEAD4;
+  --chart-3:             #FBBF24;
+  --chart-4:             #93C5FD;
+  --chart-5:             #B5AFA4;
+
+  --elevation-1: 0 1px 2px rgb(0 0 0 / 0.24);
+  --elevation-2: 0 4px 16px rgb(0 0 0 / 0.32), 0 0 0 1px rgb(255 255 255 / 0.03);
+  --elevation-3: 0 16px 48px rgb(0 0 0 / 0.44), 0 0 0 1px rgb(255 255 255 / 0.04);
+}
+
+[data-theme="light"] { color-scheme: light; }
 
 @layer base {
   * {
@@ -114,6 +285,9 @@
   ::-webkit-scrollbar-track  { background: #F9F7F2; }
   ::-webkit-scrollbar-thumb  { background: rgba(0,0,0,0.18); border-radius: 9999px; }
   ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.3); }
+
+  /* Redesigned subtrees */
+  [data-theme] ::selection { background-color: var(--selection); color: var(--foreground); }
 }
 
 @layer utilities {
@@ -145,6 +319,18 @@
   .no-scrollbar::-webkit-scrollbar { width: 0; height: 0; display: none; }
 }
 
+/* Page side gutters: 20px mobile, 32px tablet, 48px desktop */
+@utility gutter-x {
+  padding-inline: 1.25rem;
+  @media (width >= 48rem) { padding-inline: 2rem; }
+  @media (width >= 64rem) { padding-inline: 3rem; }
+}
+
+/* Marketing section rhythm: ~56px on phones up to 128px on wide screens */
+@utility section-y {
+  padding-block: clamp(3.5rem, 2.25rem + 5.2vw, 8rem);
+}
+
 /* Floating hero elements */
 @keyframes float {
   0%, 100% { transform: translateY(0px); }
@@ -168,7 +354,7 @@
 [data-reveal="pending"][data-reveal-direction="left"] { transform: translateX(-40px); }
 [data-reveal="pending"][data-reveal-direction="right"] { transform: translateX(40px); }
 [data-reveal="pending"][data-reveal-direction="scale"] { transform: scale(.9); }
-:focus-visible { outline: 2px solid #7C3AED; outline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) {
   [data-reveal] { opacity: 1 !important; transform: none !important; transition: none !important; }
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }

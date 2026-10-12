@@ -2,6 +2,8 @@
 
 import { usePathname } from "next/navigation"
 
+import { cn } from "@/lib/utils"
+
 const STEPS: Record<string, number> = {
   "/onboarding/identity": 1,
   "/onboarding/industry": 2,
@@ -19,21 +21,31 @@ export function ProgressBar() {
 
   if (!current) return null
 
-  const pct = Math.round((current / TOTAL) * 100)
-
   return (
-    <div className="w-full">
-      <div className="h-[4px] w-full bg-[#E9E7E1]">
-        <div
-          className="h-full bg-[#1A1A1A] transition-all duration-500 ease-out"
-          style={{ width: `${pct}%` }}
-        />
+    <div className="flex flex-col gap-2">
+      <div
+        role="progressbar"
+        aria-label="Onboarding progress"
+        aria-valuemin={1}
+        aria-valuemax={TOTAL}
+        aria-valuenow={current}
+        aria-valuetext={`Step ${current} of ${TOTAL}`}
+        className="grid grid-cols-6 gap-1.5"
+      >
+        {Array.from({ length: TOTAL }, (_, i) => (
+          <span
+            key={i}
+            aria-hidden
+            className={cn(
+              "h-1.5 rounded-full transition-colors duration-(--motion-panel)",
+              i + 1 < current ? "bg-foreground" : i + 1 === current ? "bg-brand" : "bg-surface-muted"
+            )}
+          />
+        ))}
       </div>
-      <div className="flex justify-end px-6 pt-2.5">
-        <span className="text-xs text-[#9CA3AF] tabular-nums">
-          Step {current} of {TOTAL}
-        </span>
-      </div>
+      <span className="text-caption text-muted-foreground tabular-nums">
+        Step {current} of {TOTAL}
+      </span>
     </div>
   )
 }

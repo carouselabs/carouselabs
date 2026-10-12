@@ -22,8 +22,8 @@ export function MaintenanceBanner() {
   if (!show) return null
 
   return (
-    <div className="flex-shrink-0 flex items-center justify-center gap-2 bg-amber-400 px-4 py-2 text-center text-[13px] font-medium text-amber-950">
-      <AlertTriangle className="h-4 w-4 shrink-0" />
+    <div role="status" className="flex shrink-0 items-center justify-center gap-2 border-b border-warning/25 bg-warning-soft px-4 py-2 text-center text-label font-medium text-warning">
+      <AlertTriangle className="size-4 shrink-0" aria-hidden />
       CarouseLabs is currently under maintenance. Some features may be unavailable. We&apos;ll be
       back shortly!
     </div>

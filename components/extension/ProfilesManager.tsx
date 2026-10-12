@@ -10,8 +10,10 @@
 //
 // There is no Test button here, unlike the panel's comment builder: testing
 // generates text, and generating only happens in the extension.
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Copy, Loader2, Pencil, Plus, Star, Trash2, X } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import { NoteSettingsCard } from "./NoteSettingsCard"
 import { ConversationSettingsCard } from "./ConversationSettingsCard"
 import {
@@ -280,16 +282,16 @@ function draftFrom(kind: KindDef, profile: Profile | null, copyName = false): Dr
 // ── Form ────────────────────────────────────────────────────────────────────
 
 const inputClass =
-  "w-full rounded-xl border border-[#E5E3DE] bg-white px-3.5 py-2.5 text-[13px] text-[#0A0A0A] placeholder:text-[#9CA3AF] outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/15"
+  "w-full rounded-control border border-border bg-surface-raised px-3.5 py-2.5 text-label text-foreground placeholder:text-muted-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
 
 function FieldLabel({ label, required, hint }: { label: string; required?: boolean; hint?: string }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[12.5px] font-semibold text-[#0A0A0A]">
+      <span className="text-caption font-semibold text-foreground">
         {label}
-        {required && <span className="text-[#DC2626]"> *</span>}
+        {required && <span className="text-danger"> *</span>}
       </span>
-      {hint && <span className="text-[11.5px] leading-[1.5] text-[#9CA3AF]">{hint}</span>}
+      {hint && <span className="text-caption leading-[1.5] text-muted-foreground">{hint}</span>}
     </div>
   )
 }
@@ -325,7 +327,7 @@ function RangeInputs({
         onChange={(e) => update(e.target.value, maxText)}
         aria-label="Minimum characters"
       />
-      <span className="text-[12.5px] text-[#9CA3AF]">to</span>
+      <span className="text-caption text-muted-foreground">to</span>
       <input
         type="number"
         className={`${inputClass} w-28`}
@@ -335,7 +337,7 @@ function RangeInputs({
         onChange={(e) => update(minText, e.target.value)}
         aria-label="Maximum characters"
       />
-      <span className="text-[12.5px] text-[#9CA3AF]">characters</span>
+      <span className="text-caption text-muted-foreground">characters</span>
     </div>
   )
 }
@@ -396,18 +398,18 @@ function ProfileForm({
   }
 
   return (
-    <div className="flex flex-col gap-5 rounded-2xl border border-[#E5E3DE] bg-white p-6">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-[15px] font-bold text-[#0A0A0A]">
+    <div className="flex flex-col gap-6 rounded-showcase border border-border bg-surface-raised p-6 shadow-card sm:p-8">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="text-title-sm font-semibold text-foreground">
           {existingId ? "Edit profile" : "New profile"} · {kind.label}
-        </h3>
+        </h2>
         <button
           type="button"
           onClick={onCancel}
           aria-label="Close"
-          className="rounded-lg p-1.5 text-[#9CA3AF] hover:bg-[#F4F2EC] hover:text-[#0A0A0A]"
+          className="relative -mt-1 -mr-1 rounded-control-sm p-1.5 text-muted-foreground after:absolute after:-inset-1.5 after:content-[''] hover:bg-surface-muted hover:text-foreground"
         >
-          <X size={16} />
+          <X size={16} aria-hidden />
         </button>
       </div>
 
@@ -467,7 +469,7 @@ function ProfileForm({
               type="button"
               aria-label="Remove sample"
               onClick={() => set("samples", samples.filter((_, j) => j !== i))}
-              className="mt-2 rounded-lg p-1.5 text-[#9CA3AF] hover:bg-[#F4F2EC] hover:text-[#DC2626]"
+              className="mt-2 rounded-control-sm p-1.5 text-muted-foreground hover:bg-surface-muted hover:text-danger"
             >
               <X size={14} />
             </button>
@@ -477,17 +479,17 @@ function ProfileForm({
           <button
             type="button"
             onClick={() => set("samples", [...samples, ""])}
-            className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-dashed border-[#D1CFC8] px-3 py-1.5 text-[12px] font-medium text-[#6B7280] hover:text-[#0A0A0A]"
+            className="inline-flex w-fit items-center gap-1.5 rounded-control-sm border border-dashed border-control-border/70 px-3 py-1.5 text-caption font-medium text-muted-foreground hover:border-control-border hover:text-foreground"
           >
             <Plus size={13} /> Add sample
           </button>
         )}
       </div>
 
-      <label className="flex items-center gap-2.5 text-[13px] text-[#374151]">
+      <label className="flex items-center gap-2.5 text-label text-foreground">
         <input
           type="checkbox"
-          className="h-4 w-4 accent-[#7C3AED]"
+          className="size-4 accent-[var(--brand)]"
           checked={setAsDefault}
           onChange={(e) => setSetAsDefault(e.target.checked)}
         />
@@ -495,39 +497,83 @@ function ProfileForm({
       </label>
 
       {(error || rangeProblem) && (
-        <div className="rounded-xl border border-[#DC2626]/25 bg-[#DC2626]/5 px-4 py-3 text-[12.5px] text-[#DC2626]">
+        <div role="alert" className="rounded-control border border-danger/25 bg-danger-soft px-4 py-3 text-caption text-danger">
           {error || rangeProblem}
         </div>
       )}
 
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          disabled={saving || missing.length > 0 || !!rangeProblem}
-          onClick={save}
-          className="inline-flex items-center gap-2 rounded-xl bg-[#7C3AED] px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-[#6D28D9] disabled:opacity-50"
-        >
-          {saving && <Loader2 size={14} className="animate-spin" />}
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-5">
+        <Button variant="brand" disabled={saving || missing.length > 0 || !!rangeProblem} onClick={save} aria-busy={saving || undefined}>
+          {saving && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden />}
           {existingId ? "Save changes" : "Create profile"}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-xl px-4 py-2.5 text-[13px] font-medium text-[#6B7280] hover:text-[#0A0A0A]"
-        >
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
         {missing.length > 0 && (
-          <span className="text-[12px] text-[#9CA3AF]">Fill in {missing.map((f) => f.label).join(", ")}.</span>
+          <span className="text-caption text-muted-foreground">Fill in {missing.map((f) => f.label).join(", ")}.</span>
         )}
       </div>
     </div>
   )
 }
 
-// ── Lists ───────────────────────────────────────────────────────────────────
+// ── List + voice specimen ───────────────────────────────────────────────────
 
-function ProfileCard({
+function Badge({ tone, children }: { tone: "brand" | "warning" | "muted"; children: ReactNode }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] leading-4 font-semibold",
+        tone === "brand" && "bg-brand-soft text-brand",
+        tone === "warning" && "bg-warning-soft text-warning",
+        tone === "muted" && "bg-surface-muted text-muted-foreground"
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
+/** One profile in the list on the left. */
+function ProfileRow({
+  kind,
+  profile,
+  isDefault,
+  selected,
+  onSelect,
+}: {
+  kind: KindDef
+  profile: Profile
+  isDefault: boolean
+  selected: boolean
+  onSelect: () => void
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-current={selected ? "true" : undefined}
+        className="relative flex w-full flex-col gap-0.5 rounded-control px-3 py-2.5 text-left transition-colors duration-(--motion-fast) hover:bg-surface-muted aria-[current=true]:bg-surface-raised aria-[current=true]:shadow-card aria-[current=true]:before:absolute aria-[current=true]:before:inset-y-2.5 aria-[current=true]:before:left-0 aria-[current=true]:before:w-0.5 aria-[current=true]:before:rounded-full aria-[current=true]:before:bg-brand"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-label font-semibold text-foreground">{profile.name}</span>
+          {isDefault && <Badge tone="brand">Default</Badge>}
+          {profile.isRecommended && <Badge tone="warning">Recommended</Badge>}
+        </span>
+        <span className="truncate text-caption text-muted-foreground">{kind.summary(profile)}</span>
+      </button>
+    </li>
+  )
+}
+
+/**
+ * The selected voice, laid out like a specimen sheet: its name, who it
+ * speaks as, its settings, its rules, and the samples it learns from shown
+ * as the comments they are.
+ */
+function VoiceSpecimen({
   kind,
   profile,
   isDefault,
@@ -546,46 +592,98 @@ function ProfileCard({
 }) {
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const description = kind.description(profile)
-  const iconButton =
-    "inline-flex items-center gap-1.5 rounded-lg border border-[#E5E3DE] px-2.5 py-1.5 text-[12px] font-semibold text-[#374151] hover:bg-[#F9F7F2]"
+  const value = (key: string) => String(profile[key] ?? "").trim()
+  // The voice's own description (Who I am / How you come across / Reason).
+  const lead = kind.fields.find((f) => f.type === "textarea" && f.required)
+  const spec = kind.fields.filter((f) => f.key !== "name" && f.type !== "textarea" && value(f.key))
+  const rules = kind.fields.filter((f) => (f.key === "alwaysDo" || f.key === "neverDo") && value(f.key))
+  const samples = Array.isArray(profile.samples) ? (profile.samples as string[]).filter((x) => x.trim()) : []
 
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-[#E5E3DE] bg-white p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="text-[14px] font-semibold text-[#0A0A0A]">{profile.name}</p>
-        {profile.isRecommended && (
-          <span className="rounded-full bg-[#FEF3C7] px-2 py-0.5 text-[10.5px] font-semibold text-[#B45309]">
-            Recommended
-          </span>
+    <article
+      aria-label={profile.name}
+      className="flex flex-col gap-8 rounded-showcase border border-border bg-surface-raised p-6 shadow-card sm:p-8 lg:p-10"
+    >
+      <header className="flex flex-col gap-4">
+        {(isDefault || profile.isRecommended || profile.isSystem) && (
+          <div className="flex flex-wrap gap-1.5">
+            {isDefault && <Badge tone="brand">Default</Badge>}
+            {profile.isRecommended && <Badge tone="warning">Recommended</Badge>}
+            {profile.isSystem && <Badge tone="muted">Built-in</Badge>}
+          </div>
         )}
-        {isDefault && (
-          <span className="rounded-full bg-[rgba(124,58,237,0.1)] px-2 py-0.5 text-[10.5px] font-semibold text-[#7C3AED]">
-            Default
-          </span>
+        <h2 className="font-display text-[2.5rem] leading-[1.02] font-normal tracking-[-0.01em] text-balance text-foreground sm:text-[3.25rem]">
+          {profile.name}
+        </h2>
+        {lead && value(lead.key) && (
+          <p className="max-w-[62ch] text-body-lg text-foreground/80">{value(lead.key)}</p>
         )}
-      </div>
-      <p className="text-[12px] text-[#9CA3AF]">{kind.summary(profile)}</p>
-      {description && <p className="line-clamp-2 text-[12.5px] leading-[1.55] text-[#6B7280]">{description}</p>}
-      <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
+      </header>
+
+      {spec.length > 0 && (
+        <dl className="grid grid-cols-2 gap-x-8 gap-y-4 border-y border-border py-5 sm:grid-cols-[repeat(auto-fill,minmax(10rem,1fr))]">
+          {spec.map((f) => (
+            <div key={f.key} className="flex min-w-0 flex-col gap-1">
+              <dt className="text-caption text-muted-foreground">{f.label}</dt>
+              <dd className="text-label font-medium break-words text-foreground">{value(f.key)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      {rules.length > 0 && (
+        <div className="grid gap-6 sm:grid-cols-2">
+          {rules.map((f) => (
+            <section key={f.key} className="flex flex-col gap-1.5">
+              <h3 className="flex items-center gap-2 text-caption font-medium text-muted-foreground">
+                <span
+                  aria-hidden
+                  className={cn("size-1.5 rounded-full", f.key === "alwaysDo" ? "bg-success" : "bg-danger")}
+                />
+                {f.label}
+              </h3>
+              <p className="text-label whitespace-pre-line text-foreground">{value(f.key)}</p>
+            </section>
+          ))}
+        </div>
+      )}
+
+      {samples.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h3 className="text-caption font-medium text-muted-foreground">{kind.samplesLabel}</h3>
+          <ul className="flex flex-col gap-2.5">
+            {samples.map((sample, i) => (
+              <li
+                key={i}
+                className="max-w-[60ch] rounded-[1.25rem] rounded-tl-md bg-surface-muted px-4 py-3 text-label whitespace-pre-line text-foreground"
+              >
+                {sample}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <footer className="flex flex-wrap items-center gap-2 border-t border-border pt-5">
         {onEdit && (
-          <button type="button" onClick={onEdit} className={iconButton}>
-            <Pencil size={12} /> Edit
-          </button>
+          <Button variant="outline" size="sm" onClick={onEdit}>
+            <Pencil aria-hidden /> Edit
+          </Button>
         )}
         {!isDefault && (
-          <button type="button" onClick={onMakeDefault} className={iconButton}>
-            <Star size={12} /> Make default
-          </button>
+          <Button variant="ghost" size="sm" onClick={onMakeDefault}>
+            <Star aria-hidden /> Make default
+          </Button>
         )}
-        <button type="button" onClick={onDuplicate} className={iconButton}>
-          <Copy size={12} /> {profile.isSystem ? "Customise" : "Duplicate"}
-        </button>
+        <Button variant={onEdit ? "ghost" : "outline"} size="sm" onClick={onDuplicate}>
+          <Copy aria-hidden /> {profile.isSystem ? "Customise" : "Duplicate"}
+        </Button>
         {onDelete &&
           (confirming ? (
-            <>
-              <button
-                type="button"
+            <span className="ml-auto flex items-center gap-1">
+              <Button
+                variant="destructive"
+                size="sm"
                 disabled={deleting}
                 onClick={async () => {
                   setDeleting(true)
@@ -593,31 +691,27 @@ function ProfileCard({
                   setDeleting(false)
                   setConfirming(false)
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[#DC2626] px-2.5 py-1.5 text-[12px] font-semibold text-white hover:bg-[#B91C1C] disabled:opacity-60"
               >
-                {deleting && <Loader2 size={12} className="animate-spin" />}
+                {deleting && <Loader2 className="animate-spin" aria-hidden />}
                 Delete
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirming(false)}
-                className="px-1.5 text-[12px] font-medium text-[#6B7280] hover:text-[#0A0A0A]"
-              >
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
                 Cancel
-              </button>
-            </>
+              </Button>
+            </span>
           ) : (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon-sm"
               aria-label="Delete profile"
               onClick={() => setConfirming(true)}
-              className="ml-auto inline-flex items-center rounded-lg border border-[#E5E3DE] p-1.5 text-[#9CA3AF] hover:border-[#DC2626]/40 hover:text-[#DC2626]"
+              className="ml-auto text-muted-foreground hover:bg-danger-soft hover:text-danger"
             >
-              <Trash2 size={13} />
-            </button>
+              <Trash2 aria-hidden />
+            </Button>
           ))}
-      </div>
-    </div>
+      </footer>
+    </article>
   )
 }
 
@@ -640,6 +734,9 @@ export function KindPanel({
   const [listDefault, setListDefault] = useState<string | null>(null)
   const [editing, setEditing] = useState<Editing>(null)
   const [error, setError] = useState<string | null>(null)
+  // Which profile the panel on the right shows (null: the default).
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const detailRef = useRef<HTMLDivElement>(null)
 
   const apply = useCallback((res: ProfileList) => {
     setProfiles(res.profiles)
@@ -677,6 +774,19 @@ export function KindPanel({
     builtIn.find((p) => p.isDefault)?.id ??
     null
 
+  const selected =
+    profiles?.find((p) => p.id === selectedId) ??
+    profiles?.find((p) => p.id === defaultId) ??
+    custom[0] ??
+    builtIn[0] ??
+    null
+
+  // On narrow screens the panel sits under the list: bring it into view.
+  const reveal = () =>
+    requestAnimationFrame(() => {
+      if (!window.matchMedia("(min-width: 64rem)").matches) detailRef.current?.scrollIntoView({ block: "start" })
+    })
+
   async function makeDefault(id: string) {
     setError(null)
     try {
@@ -706,92 +816,110 @@ export function KindPanel({
   function startNew(from: Profile | null) {
     setError(null)
     setEditing({ initial: draftFrom(kind, from, !!from), existingId: null })
+    reveal()
   }
 
-  if (editing) {
-    return (
-      <ProfileForm
-        kind={kind}
-        initial={editing.initial}
-        existingId={editing.existingId}
-        onCancel={() => setEditing(null)}
-        onDone={async () => {
-          setEditing(null)
-          await load()
-          onDefaultsChanged()
-        }}
-      />
-    )
-  }
+  const rows = (list: Profile[]) => (
+    <ul className="flex flex-col gap-0.5">
+      {list.map((p) => (
+        <ProfileRow
+          key={p.id}
+          kind={kind}
+          profile={p}
+          isDefault={p.id === defaultId}
+          selected={!editing && p.id === selected?.id}
+          onSelect={() => {
+            setEditing(null)
+            setSelectedId(p.id)
+            reveal()
+          }}
+        />
+      ))}
+    </ul>
+  )
 
   return (
-    <div className="flex flex-col gap-6">
-      <p className="text-[13px] text-[#6B7280]">{kind.intro}</p>
-      {kind.id === "connection" && <NoteSettingsCard />}
-      {kind.id === "message" && profiles && (
-        <ConversationSettingsCard profiles={profiles.map((p) => ({ id: p.id, name: p.name }))} />
-      )}
+    <div className="flex flex-col gap-8">
+      <p className="max-w-2xl text-body text-muted-foreground">{kind.intro}</p>
       {error && (
-        <div className="rounded-xl border border-[#DC2626]/25 bg-[#DC2626]/5 px-4 py-3 text-[12.5px] text-[#DC2626]">
+        <div role="alert" className="rounded-control border border-danger/25 bg-danger-soft px-4 py-3 text-caption text-danger">
           {error}
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-[14px] font-semibold text-[#0A0A0A]">
-            Your profiles{" "}
-            <span className="font-normal text-[#9CA3AF]">({custom.length})</span>
-          </h3>
-          <button
-            type="button"
-            onClick={() => startNew(null)}
-            disabled={!profiles}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-[#1A1A1A] px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-black disabled:opacity-50"
-          >
-            <Plus size={14} /> New profile
-          </button>
-        </div>
-        {!profiles ? (
-          <p className="text-[13px] text-[#9CA3AF]">Loading…</p>
-        ) : custom.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[#E5E3DE] p-6 text-center text-[13px] text-[#6B7280]">
-            No custom profiles yet. Create one, or customise a built-in one below.
+      <div className="grid gap-8 lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-10">
+        <nav aria-label="Profiles" className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-6 lg:self-start">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2 pl-3">
+              <h2 className="text-label font-semibold text-foreground">
+                Your profiles{" "}
+                <span className="font-normal text-muted-foreground">({custom.length})</span>
+              </h2>
+              <Button size="xs" onClick={() => startNew(null)} disabled={!profiles}>
+                <Plus aria-hidden /> New profile
+              </Button>
+            </div>
+            {!profiles ? (
+              <p className="px-3 text-label text-muted-foreground">Loading…</p>
+            ) : custom.length === 0 ? (
+              <p className="rounded-control border border-dashed border-border px-4 py-5 text-label text-muted-foreground">
+                No custom profiles yet. Create one, or customise a built-in one below.
+              </p>
+            ) : (
+              rows(custom)
+            )}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {custom.map((p) => (
-              <ProfileCard
-                key={p.id}
+
+          {builtIn.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <h2 className="pl-3 text-label font-semibold text-foreground">Built-in</h2>
+              {rows(builtIn)}
+            </div>
+          )}
+        </nav>
+
+        <div ref={detailRef} className="min-w-0 scroll-mt-28">
+          {editing ? (
+            <ProfileForm
+              key={editing.existingId ?? "new"}
+              kind={kind}
+              initial={editing.initial}
+              existingId={editing.existingId}
+              onCancel={() => setEditing(null)}
+              onDone={async () => {
+                setEditing(null)
+                await load()
+                onDefaultsChanged()
+              }}
+            />
+          ) : (
+            selected && (
+              <VoiceSpecimen
+                key={selected.id}
                 kind={kind}
-                profile={p}
-                isDefault={p.id === defaultId}
-                onEdit={() => setEditing({ initial: draftFrom(kind, p), existingId: p.id })}
-                onDuplicate={() => startNew(p)}
-                onMakeDefault={() => makeDefault(p.id)}
-                onDelete={() => remove(p.id)}
+                profile={selected}
+                isDefault={selected.id === defaultId}
+                onEdit={
+                  selected.isSystem
+                    ? undefined
+                    : () => {
+                        setEditing({ initial: draftFrom(kind, selected), existingId: selected.id })
+                        reveal()
+                      }
+                }
+                onDuplicate={() => startNew(selected)}
+                onMakeDefault={() => makeDefault(selected.id)}
+                onDelete={selected.isSystem ? undefined : () => remove(selected.id)}
               />
-            ))}
-          </div>
-        )}
+            )
+          )}
+        </div>
       </div>
 
-      {builtIn.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <h3 className="text-[14px] font-semibold text-[#0A0A0A]">Built-in</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {builtIn.map((p) => (
-              <ProfileCard
-                key={p.id}
-                kind={kind}
-                profile={p}
-                isDefault={p.id === defaultId}
-                onDuplicate={() => startNew(p)}
-                onMakeDefault={() => makeDefault(p.id)}
-              />
-            ))}
-          </div>
-        </div>
+      {/* Settings that apply to every note / every conversation */}
+      {kind.id === "connection" && <NoteSettingsCard />}
+      {kind.id === "message" && profiles && (
+        <ConversationSettingsCard profiles={profiles.map((p) => ({ id: p.id, name: p.name }))} />
       )}
     </div>
   )
@@ -815,30 +943,28 @@ export function ProfilesManager() {
   const kind = KINDS.find((k) => k.id === kindId) ?? KINDS[0]
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center gap-2">
-        {KINDS.map((k) => (
-          <button
-            key={k.id}
-            type="button"
-            onClick={() => setKindId(k.id)}
-            className={[
-              "rounded-full px-4 py-2 text-[13px] font-medium transition-colors",
-              kindId === k.id
-                ? "bg-[#1A1A1A] text-white"
-                : "border border-[#E5E3DE] bg-white text-[#6B7280] hover:text-[#0A0A0A]",
-            ].join(" ")}
-          >
-            {k.label}
-          </button>
-        ))}
+    <div className="flex flex-col gap-8">
+      <div role="group" aria-label="Kind of writing" className="no-scrollbar -mx-6 overflow-x-auto px-6 md:mx-0 md:px-0">
+        <div className="inline-flex gap-1 rounded-full border border-border bg-surface-muted p-1">
+          {KINDS.map((k) => (
+            <button
+              key={k.id}
+              type="button"
+              aria-pressed={kindId === k.id}
+              onClick={() => setKindId(k.id)}
+              className="h-9 shrink-0 rounded-full px-4 text-label font-medium whitespace-nowrap text-muted-foreground transition-colors duration-(--motion-fast) hover:text-foreground aria-pressed:bg-surface-raised aria-pressed:text-foreground aria-pressed:shadow-card"
+            >
+              {k.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {error && <p className="text-[13px] text-[#DC2626]">{error}</p>}
+      {error && <p className="text-label text-danger">{error}</p>}
       {me ? (
         <KindPanel key={kind.id} kind={kind} me={me} onDefaultsChanged={loadMe} />
       ) : (
-        !error && <p className="text-[13px] text-[#9CA3AF]">Loading…</p>
+        !error && <p className="text-label text-muted-foreground">Loading…</p>
       )}
     </div>
   )

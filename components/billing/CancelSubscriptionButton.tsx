@@ -40,36 +40,36 @@ export function CancelSubscriptionButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="self-start px-4 py-2 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] hover:bg-[rgba(239,68,68,0.14)] text-[13px] font-semibold text-[rgba(239,68,68,0.9)] transition-colors"
+        className="self-start px-4 py-2 rounded-control-sm border border-danger/35 bg-danger-soft hover:bg-[rgba(239,68,68,0.14)] text-label font-semibold text-danger transition-colors"
       >
         Cancel Subscription
       </button>
 
       <Dialog open={open} onOpenChange={(o) => !loading && setOpen(o)}>
-        <DialogContent className="bg-[#FFFFFF] border-[#E5E3DE] text-[#0A0A0A]">
+        <DialogContent className="bg-surface-raised border-border text-foreground">
           <DialogHeader>
-            <DialogTitle className="text-[16px] font-semibold text-[#0A0A0A]">
+            <DialogTitle className="text-body font-semibold text-foreground">
               Cancel your Pro subscription?
             </DialogTitle>
-            <DialogDescription className="text-[13px] text-[#6B7280] leading-[1.55]">
+            <DialogDescription className="text-label text-muted-foreground leading-[1.55]">
               You&apos;ll keep Pro access and your remaining credits until the end of the current
               billing period. After that, your account moves to Free and unused monthly credits
               expire.
             </DialogDescription>
           </DialogHeader>
-          {error && <p className="text-[12px] text-[rgba(239,68,68,0.9)]">{error}</p>}
+          {error && <p className="text-caption text-danger">{error}</p>}
           <DialogFooter className="gap-2 sm:gap-2">
             <button
               onClick={() => setOpen(false)}
               disabled={loading}
-              className="px-4 py-2 rounded-xl text-[13px] font-medium text-[#6B7280] hover:text-[#1A1A1A] hover:bg-[#ECEAE4] transition-colors disabled:opacity-50"
+              className="px-4 py-2 rounded-control text-label font-medium text-muted-foreground hover:text-foreground hover:bg-surface-muted transition-colors disabled:opacity-50"
             >
               Keep Pro
             </button>
             <button
               onClick={handleCancel}
               disabled={loading}
-              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-[13px] font-semibold text-white bg-[#DC2626] hover:bg-[#B91C1C] transition-colors disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-5 py-2 rounded-control text-label font-semibold text-white bg-danger hover:bg-danger/90 transition-colors disabled:opacity-60"
             >
               {loading && <Loader2 size={13} className="animate-spin" />}
               {loading ? "Cancelling…" : "Cancel subscription"}

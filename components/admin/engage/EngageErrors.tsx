@@ -8,6 +8,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { AdminLineChart } from "@/components/admin/charts"
 import { fmtDateTime } from "@/components/admin/ui"
+import { Ledger } from "@/components/admin/Ledger"
 import { modelLabel } from "@/lib/ai/models"
 import { FEATURE_LABELS, PLATFORM_LABELS, type EngageFeature, type EngagePlatform } from "@/lib/engage/features"
 import { RANGE_KEYS, RANGE_LABELS, type RangeKey } from "@/lib/engage/ranges"
@@ -18,42 +19,33 @@ type PlatformView = EngagePlatform | "all"
 type Tab = "extension" | "ai"
 const PRESET_RANGES = RANGE_KEYS.filter((k) => k !== "custom") as Exclude<RangeKey, "custom">[]
 const featureName = (f: string) => FEATURE_LABELS[f as EngageFeature] ?? f
-const th = "px-3 py-2 font-semibold"
+const th = "whitespace-nowrap bg-surface-muted/60 px-3 py-2.5 font-medium"
 
-function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3.5">
-      <div className="text-[11.5px] font-medium text-[#8A8A8A]">{label}</div>
-      <div className="mt-1.5 text-[22px] font-semibold leading-none tabular-nums text-white">{value}</div>
-      {hint && <div className="mt-1.5 text-[11.5px] text-[#8A8A8A]">{hint}</div>}
-    </div>
-  )
-}
 
 function Recent({ rows, label }: { rows: RecentError[]; label: string }) {
   if (rows.length === 0) return null
   return (
-    <section className="overflow-x-auto rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]" aria-label={label}>
-      <h2 className="border-b border-[#2A2A2A] px-4 py-3 text-[13px] font-semibold text-white">{label}</h2>
-      <table className="w-full text-[12.5px]">
-        <tbody className="text-[#D0D0D0]">
+    <section className="relative overflow-x-auto rounded-card border border-border bg-surface" aria-label={label}>
+      <h2 className="border-b border-border px-4 py-3 text-label font-semibold text-foreground">{label}</h2>
+      <table className="w-full text-caption">
+        <tbody className="text-foreground/90">
           {rows.map((r) => (
-            <tr key={r.id} className="border-t border-[#232323] first:border-t-0">
-              <td className="whitespace-nowrap px-3 py-2 text-[#8A8A8A]" title={fmtDateTime(r.at)}>
+            <tr key={r.id} className="border-t border-border first:border-t-0">
+              <td className="whitespace-nowrap px-3 py-2 text-muted-foreground" title={fmtDateTime(r.at)}>
                 {fmtRelative(r.at)}
               </td>
               <td className="px-3 py-2">
                 {r.userId ? (
-                  <Link href={`/admin/engage/users/${r.userId}`} className="text-[#C4B5FD] hover:underline">
+                  <Link href={`/admin/engage/users/${r.userId}`} className="text-brand hover:underline">
                     {r.email ?? r.userId}
                   </Link>
                 ) : (
-                  <span className="text-[#8A8A8A]">Unknown</span>
+                  <span className="text-muted-foreground">Unknown</span>
                 )}
               </td>
               <td className="px-3 py-2">{featureName(r.feature)}</td>
-              <td className="px-3 py-2 font-mono text-[11.5px]">{r.what}</td>
-              <td className="px-3 py-2 text-[#8A8A8A]">{r.version ?? ""}</td>
+              <td className="px-3 py-2 font-mono text-caption">{r.what}</td>
+              <td className="px-3 py-2 text-muted-foreground">{r.version ?? ""}</td>
             </tr>
           ))}
         </tbody>
@@ -73,8 +65,8 @@ export function EngageErrors() {
     <div className="mx-auto max-w-[1400px] space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[18px] font-semibold tracking-tight text-white">Errors</h1>
-          <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">What&apos;s failing, for whom, and on which version. Days are UTC.</p>
+          <h2 className="text-lead font-semibold tracking-tight text-foreground">Errors</h2>
+          <p className="mt-0.5 text-caption text-muted-foreground">What&apos;s failing, for whom, and on which version. Days are UTC.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Segmented
@@ -101,23 +93,21 @@ export function EngageErrors() {
         </div>
       ) : (
         <>
-          <section aria-label="Error totals" className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Kpi
-              label="Extension errors"
-              value={data.extension.recording ? fmtNumber(data.extension.total) : "—"}
-              hint={data.extension.recording ? "Reported by the extensions" : "Run the Engage admin SQL"}
+          <section aria-label="Error totals" className="border-y border-border py-6">
+            <Ledger
+              size="lg"
+              className="grid-cols-2 lg:grid-cols-4"
+              items={[
+                { label: "Extension errors", value: data.extension.recording ? fmtNumber(data.extension.total) : "—", hint: data.extension.recording ? "Reported by the extensions" : "Run the Engage admin SQL" },
+                { label: "AI failures", value: data.ai.recording ? fmtNumber(data.ai.total) : "—", hint: data.ai.recording ? "Errors and time-outs" : "Run the phase C SQL" },
+                { label: "People affected", value: fmtNumber(data.people) },
+                { label: "Kinds of error", value: fmtNumber(data.extension.groups.length + data.ai.groups.length) },
+              ]}
             />
-            <Kpi
-              label="AI failures"
-              value={data.ai.recording ? fmtNumber(data.ai.total) : "—"}
-              hint={data.ai.recording ? "Errors and time-outs" : "Run the phase C SQL"}
-            />
-            <Kpi label="People affected" value={fmtNumber(data.people)} />
-            <Kpi label="Kinds of error" value={fmtNumber(data.extension.groups.length + data.ai.groups.length)} />
           </section>
 
-          <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-4" aria-labelledby="errors-trend">
-            <h2 id="errors-trend" className="mb-3 text-[13px] font-semibold text-white">
+          <section className="rounded-card border border-border bg-surface p-4" aria-labelledby="errors-trend">
+            <h2 id="errors-trend" className="mb-3 text-label font-semibold text-foreground">
               Errors per day
             </h2>
             <AdminLineChart
@@ -146,10 +136,10 @@ export function EngageErrors() {
               <EmptyState title="No extension errors in this range" />
             ) : (
               <>
-                <section className="overflow-x-auto rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]" aria-label="Extension errors by kind">
-                  <table className="w-full text-[12.5px]">
+                <section className="relative overflow-x-auto rounded-card border border-border bg-surface" aria-label="Extension errors by kind">
+                  <table className="w-full text-caption">
                     <thead>
-                      <tr className="text-left text-[11px] uppercase tracking-wide text-[#8A8A8A]">
+                      <tr className="text-left text-caption text-muted-foreground">
                         <th className={th}>Feature</th>
                         <th className={th}>What happened</th>
                         <th className={`${th} text-right`}>Times</th>
@@ -158,13 +148,13 @@ export function EngageErrors() {
                         <th className={`${th} text-right`}>Last</th>
                       </tr>
                     </thead>
-                    <tbody className="text-[#D0D0D0]">
+                    <tbody className="text-foreground/90">
                       {data.extension.groups.map((g) => (
-                        <tr key={`${g.feature}:${g.code}`} className="border-t border-[#232323]">
+                        <tr key={`${g.feature}:${g.code}`} className="border-t border-border">
                           <td className="px-3 py-2">{featureName(g.feature)}</td>
                           <td className="px-3 py-2">
                             <span className="block">{g.message}</span>
-                            <span className="font-mono text-[11px] text-[#8A8A8A]">{g.code}</span>
+                            <span className="font-mono text-caption text-muted-foreground">{g.code}</span>
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums">{fmtNumber(g.count)}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{fmtNumber(g.people)}</td>
@@ -175,7 +165,7 @@ export function EngageErrors() {
                               ))}
                             </div>
                           </td>
-                          <td className="whitespace-nowrap px-3 py-2 text-right text-[#8A8A8A]">{fmtRelative(g.lastAt)}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-right text-muted-foreground">{fmtRelative(g.lastAt)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -188,10 +178,10 @@ export function EngageErrors() {
             <EmptyState title="No AI failures in this range" />
           ) : (
             <>
-              <section className="overflow-x-auto rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]" aria-label="AI failures by kind">
-                <table className="w-full text-[12.5px]">
+              <section className="relative overflow-x-auto rounded-card border border-border bg-surface" aria-label="AI failures by kind">
+                <table className="w-full text-caption">
                   <thead>
-                    <tr className="text-left text-[11px] uppercase tracking-wide text-[#8A8A8A]">
+                    <tr className="text-left text-caption text-muted-foreground">
                       <th className={th}>Feature</th>
                       <th className={th}>Model</th>
                       <th className={th}>How</th>
@@ -200,15 +190,15 @@ export function EngageErrors() {
                       <th className={`${th} text-right`}>Last</th>
                     </tr>
                   </thead>
-                  <tbody className="text-[#D0D0D0]">
+                  <tbody className="text-foreground/90">
                     {data.ai.groups.map((g) => (
-                      <tr key={`${g.feature}:${g.model}:${g.outcome}`} className="border-t border-[#232323]">
+                      <tr key={`${g.feature}:${g.model}:${g.outcome}`} className="border-t border-border">
                         <td className="px-3 py-2">{featureName(g.feature)}</td>
                         <td className="px-3 py-2">{modelLabel(g.model)}</td>
                         <td className="px-3 py-2">{g.outcome === "timeout" ? <Pill tone="amber">Timed out</Pill> : <Pill tone="red">Error</Pill>}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{fmtNumber(g.count)}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{fmtNumber(g.people)}</td>
-                        <td className="whitespace-nowrap px-3 py-2 text-right text-[#8A8A8A]">{fmtRelative(g.lastAt)}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right text-muted-foreground">{fmtRelative(g.lastAt)}</td>
                       </tr>
                     ))}
                   </tbody>

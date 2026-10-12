@@ -2,10 +2,14 @@
 
 export function DraftRecoveryNotice({ onRestore }: { onRestore: () => void }) {
   return (
-    <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+    <div role="status" className="rounded-control border border-warning/30 bg-warning-soft p-4 text-label text-foreground">
       <p>A separate browser draft is available. The saved version takes priority when its revision has changed.</p>
-      <p className="mt-1">Restore the browser copy to review it. Your server draft changes only when you save.</p>
-      <button type="button" onClick={onRestore} className="mt-3 rounded-lg border border-amber-500 px-3 py-2 font-medium focus-visible:outline-2 focus-visible:outline-offset-2">
+      <p className="mt-1 text-muted-foreground">Restore the browser copy to review it. Your server draft changes only when you save.</p>
+      <button
+        type="button"
+        onClick={onRestore}
+        className="mt-3 inline-flex h-9 items-center rounded-control-sm border border-warning/50 bg-surface-raised px-3 font-medium text-foreground transition-colors duration-(--motion-fast) hover:bg-surface"
+      >
         Restore browser copy
       </button>
     </div>

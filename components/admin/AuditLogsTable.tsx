@@ -46,25 +46,25 @@ const ACTIONS: AdminAuditAction[] = [
 // green = grant, red = suspend, blue = plan change, yellow = settings,
 // violet = everything else (notes, broadcasts, resets).
 const ACTION_STYLES: Record<string, string> = {
-  GRANT_CREDITS: "bg-emerald-500/15 text-emerald-400",
-  BULK_GRANT_CREDITS: "bg-emerald-500/15 text-emerald-400",
-  SET_CREDITS: "bg-emerald-500/15 text-emerald-400",
-  RESET_CREDITS: "bg-[#7C3AED]/15 text-[#A78BFA]",
-  RESET_ALL_PRO_CREDITS: "bg-[#7C3AED]/15 text-[#A78BFA]",
-  CHANGE_PLAN: "bg-sky-500/15 text-sky-400",
-  BULK_CHANGE_PLAN: "bg-sky-500/15 text-sky-400",
-  SUSPEND_USER: "bg-red-500/15 text-red-400",
-  BULK_SUSPEND_USER: "bg-red-500/15 text-red-400",
-  UNSUSPEND_USER: "bg-emerald-500/15 text-emerald-400",
-  UPDATE_NOTE: "bg-[#7C3AED]/15 text-[#A78BFA]",
-  UPDATE_SETTINGS: "bg-amber-500/15 text-amber-400",
-  SEND_BROADCAST: "bg-amber-500/15 text-amber-400",
+  GRANT_CREDITS: "bg-success/15 text-success",
+  BULK_GRANT_CREDITS: "bg-success/15 text-success",
+  SET_CREDITS: "bg-success/15 text-success",
+  RESET_CREDITS: "bg-brand/15 text-brand",
+  RESET_ALL_PRO_CREDITS: "bg-brand/15 text-brand",
+  CHANGE_PLAN: "bg-chart-4/15 text-chart-4",
+  BULK_CHANGE_PLAN: "bg-chart-4/15 text-chart-4",
+  SUSPEND_USER: "bg-danger/15 text-danger",
+  BULK_SUSPEND_USER: "bg-danger/15 text-danger",
+  UNSUSPEND_USER: "bg-success/15 text-success",
+  UPDATE_NOTE: "bg-brand/15 text-brand",
+  UPDATE_SETTINGS: "bg-warning/15 text-warning",
+  SEND_BROADCAST: "bg-warning/15 text-warning",
 }
 
 function ActionBadge({ action }: { action: string }) {
   return (
     <span
-      className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${ACTION_STYLES[action] ?? "bg-[#2A2A2A] text-[#B0B0B0]"}`}
+      className={`inline-flex rounded-full px-2 py-0.5 text-caption font-semibold ${ACTION_STYLES[action] ?? "bg-surface-raised text-muted-foreground"}`}
     >
       {action.replaceAll("_", " ")}
     </span>
@@ -141,7 +141,7 @@ export function AuditLogsTable() {
   }
 
   const dateInputCls =
-    "h-9 rounded-lg border border-[#2A2A2A] bg-[#141414] px-3 text-[13px] text-white outline-none focus:border-[#7C3AED] [color-scheme:dark]"
+    "h-9 rounded-control-sm border border-border bg-background px-3 text-label text-foreground outline-none focus:border-brand [color-scheme:dark]"
 
   return (
     <div className="space-y-4">
@@ -178,7 +178,7 @@ export function AuditLogsTable() {
           }}
           className={dateInputCls}
         />
-        <span className="text-[12px] text-[#6A6A6A]">to</span>
+        <span className="text-caption text-muted-foreground/80">to</span>
         <input
           type="date"
           value={to}
@@ -188,7 +188,7 @@ export function AuditLogsTable() {
           }}
           className={dateInputCls}
         />
-        {data && <span className="text-[12px] text-[#6A6A6A]">{data.total} entries</span>}
+        {data && <span className="text-caption text-muted-foreground/80">{data.total} entries</span>}
         <div className="ml-auto">
           <AdminButton variant="secondary" onClick={exportAll} loading={exporting}>
             Export CSV
@@ -227,14 +227,14 @@ export function AuditLogsTable() {
                   </td>
                   <td className={tableCls.td}>
                     {l.targetUserId ? (
-                      <Link href={`/admin/users/${l.targetUserId}`} className="text-[#A78BFA] hover:underline">
+                      <Link href={`/admin/users/${l.targetUserId}`} className="text-brand hover:underline">
                         {l.targetEmail ?? l.targetUserId}
                       </Link>
                     ) : (
                       (l.targetEmail ?? "—")
                     )}
                   </td>
-                  <td className={`${tableCls.td} max-w-[420px] truncate text-[#8A8A8A]`} title={l.details}>
+                  <td className={`${tableCls.td} max-w-[420px] truncate text-muted-foreground`} title={l.details}>
                     {l.details}
                   </td>
                 </tr>
@@ -245,7 +245,7 @@ export function AuditLogsTable() {
       )}
 
       {data && (
-        <div className="flex items-center justify-between text-[12px] text-[#8A8A8A]">
+        <div className="flex items-center justify-between text-caption text-muted-foreground">
           <span>
             Page {data.page} of {data.totalPages}
           </span>

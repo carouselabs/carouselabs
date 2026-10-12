@@ -1,19 +1,15 @@
 // components/history/HistoryCard.tsx
 "use client"
 
-import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Pin, Trash2, Copy, RotateCcw, ArrowRight, Loader2 } from "lucide-react"
 import { ProgressBadge } from "./ProgressBadge"
 import { continueHref, type HistoryEntry } from "@/lib/hooks/useHistory"
-import type { RawCategory } from "@/lib/ai/parsers/ideas"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { CATEGORY_PILL, PILL } from "@/components/shared/categoryTone"
 
-const CATEGORY_COLORS: Record<RawCategory, { color: string; bg: string }> = {
-  "Latest News": { color: "#2563EB", bg: "rgba(147,197,253,0.10)" },
-  "Trending": { color: "#059669", bg: "rgba(110,231,183,0.10)" },
-  "Industry": { color: "#1A1A1A", bg: "rgba(196,181,253,0.10)" },
-  "Random": { color: "#D97706", bg: "rgba(252,211,77,0.10)" },
-}
+const ICON_BUTTON = "text-muted-foreground hover:text-foreground"
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -39,98 +35,89 @@ interface HistoryCardProps {
 
 export function HistoryCard({ entry, onPin, onDelete, onDuplicate, isDuplicating = false }: HistoryCardProps) {
   const router = useRouter()
-  const [hovered, setHovered] = useState(false)
-  const cat = CATEGORY_COLORS[entry.idea.category]
 
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="group relative flex flex-col gap-3 p-4 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] hover:border-[rgba(26,26,26,0.3)] hover:bg-[rgba(26,26,26,0.04)] transition-all duration-150"
-    >
+    <div className="flex flex-col gap-2.5 py-5">
       {/* Top row: pills + pin */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span
-            className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full tracking-wide"
-            style={{ color: cat.color, backgroundColor: cat.bg }}
-          >
-            {entry.idea.category}
-          </span>
+          <span className={cn(PILL, CATEGORY_PILL[entry.idea.category])}>{entry.idea.category}</span>
           <ProgressBadge status={entry.status} />
           {entry.hasDraft && (
-            <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full tracking-wide text-[#059669] bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)]">
+            <span className={cn(PILL, "border border-success/25 bg-success-soft text-success")}>
               Draft saved
             </span>
           )}
         </div>
 
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={() => onPin(entry.ideaId, !entry.isPinned)}
           title={entry.isPinned ? "Unpin" : "Pin to top"}
-          className={[
-            "flex-shrink-0 p-1.5 rounded-lg transition-colors cursor-pointer",
-            entry.isPinned
-              ? "text-[#1A1A1A] bg-[rgba(26,26,26,0.12)]"
-              : "text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#ECEAE4]",
-          ].join(" ")}
+          aria-label={entry.isPinned ? "Unpin" : "Pin to top"}
+          aria-pressed={entry.isPinned}
+          className={cn("-mt-1.5 -mr-1.5", entry.isPinned ? "bg-surface-muted text-foreground" : ICON_BUTTON)}
         >
-          <Pin size={14} strokeWidth={2} fill={entry.isPinned ? "currentColor" : "none"} />
-        </button>
+          <Pin className={cn(entry.isPinned && "fill-current")} aria-hidden />
+        </Button>
       </div>
 
       {/* Hook */}
-      <h3 className="text-[14px] font-semibold text-[#0A0A0A] leading-[1.4]">
+      <h3 className="text-body font-semibold text-pretty text-foreground md:text-body-lg">
         {entry.idea.hook}
       </h3>
 
-      {/* Caption preview on hover */}
-      {hovered && entry.captionPreview && (
-        <p className="text-[12px] text-[#9CA3AF] leading-[1.5] italic">
+      {/* Caption preview — always shown, one line, so rows never shift
+          under the pointer (it used to appear on hover and push the list). */}
+      {entry.captionPreview && (
+        <p className="line-clamp-1 text-label text-muted-foreground italic">
           “{entry.captionPreview}…”
         </p>
       )}
 
       {/* Footer: time + actions */}
-      <div className="flex items-center justify-between gap-3 pt-0.5">
-        <span className="text-[11px] text-[#ADA99F]">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 pt-0.5">
+        <span className="text-caption text-muted-foreground">
           Last visited {timeAgo(entry.lastVisitedAt)}
         </span>
 
-        <div className="flex items-center gap-1.5">
-          <button
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => onDuplicate(entry.ideaId)}
             disabled={isDuplicating}
             title="Duplicate as new session"
-            className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#ECEAE4] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Duplicate as new session"
+            className={ICON_BUTTON}
           >
-            {isDuplicating ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
-              <Copy size={13} strokeWidth={2} />
-            )}
-          </button>
-          <button
+            {isDuplicating ? <Loader2 className="animate-spin" aria-hidden /> : <Copy aria-hidden />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => router.push(`/idea/${entry.ideaId}`)}
             title="Start over from breakdown"
-            className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#ECEAE4] transition-colors cursor-pointer"
+            aria-label="Start over from breakdown"
+            className={ICON_BUTTON}
           >
-            <RotateCcw size={13} strokeWidth={2} />
-          </button>
-          <button
+            <RotateCcw aria-hidden />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => onDelete(entry.ideaId)}
             title="Delete from history"
-            className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.08)] transition-colors cursor-pointer"
+            aria-label="Delete from history"
+            className="text-muted-foreground hover:bg-danger-soft hover:text-danger"
           >
-            <Trash2 size={13} strokeWidth={2} />
-          </button>
-          <button
-            onClick={() => router.push(continueHref(entry.status, entry.ideaId))}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1A1A1A] hover:bg-[#000000] text-[12px] font-semibold text-white shadow-[0_0_18px_rgba(26,26,26,0.2)] transition-colors cursor-pointer"
-          >
+            <Trash2 aria-hidden />
+          </Button>
+          <Button size="sm" onClick={() => router.push(continueHref(entry.status, entry.ideaId))} className="ml-1">
             Continue
-            <ArrowRight size={12} strokeWidth={2.4} />
-          </button>
+            <ArrowRight aria-hidden />
+          </Button>
         </div>
       </div>
     </div>

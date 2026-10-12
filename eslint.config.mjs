@@ -10,6 +10,7 @@ const eslintConfig = defineConfig([
     // Default ignores of eslint-config-next:
     ".next/**",
     ".next-audit/**",
+    ".next-redesign/**",
     "**/dist/**",
     "**/dist-store/**",
     "**/dist-x/**",

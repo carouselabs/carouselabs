@@ -87,7 +87,7 @@ export function TemplatePicker({
         <button
           type="button"
           onClick={() => void openPicker()}
-          className="inline-flex items-center gap-1 text-[11px] font-medium text-[#8A8A8A] hover:text-white transition-colors"
+          className="inline-flex items-center gap-1 text-caption font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
           <FileText className="h-3 w-3" />
           Load Template
@@ -95,7 +95,7 @@ export function TemplatePicker({
         <button
           type="button"
           onClick={() => setSaveOpen(true)}
-          className="inline-flex items-center gap-1 text-[11px] font-medium text-[#8A8A8A] hover:text-white transition-colors"
+          className="inline-flex items-center gap-1 text-caption font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
           <Save className="h-3 w-3" />
           Save as Template
@@ -104,15 +104,15 @@ export function TemplatePicker({
 
       <Modal open={open} onClose={() => setOpen(false)} title="Load Template">
         {templates === null ? (
-          <p className="text-[12.5px] text-[#8A8A8A]">Loading…</p>
+          <p className="text-caption text-muted-foreground">Loading…</p>
         ) : templates.length === 0 ? (
-          <p className="text-[12.5px] text-[#8A8A8A]">No saved templates yet.</p>
+          <p className="text-caption text-muted-foreground">No saved templates yet.</p>
         ) : (
           <div className="space-y-1.5 max-h-80 overflow-y-auto">
             {templates.map((t) => (
               <div
                 key={t.id}
-                className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] p-2.5 hover:border-[#7C3AED] transition-colors"
+                className="flex items-center gap-2 rounded-control-sm border border-border p-2.5 hover:border-brand transition-colors"
               >
                 <button
                   type="button"
@@ -122,13 +122,13 @@ export function TemplatePicker({
                   }}
                   className="flex-1 min-w-0 text-left"
                 >
-                  <p className="text-[13px] font-medium text-white truncate">{t.name}</p>
-                  <p className="text-[11px] text-[#8A8A8A] truncate">{t.subject}</p>
+                  <p className="text-label font-medium text-foreground truncate">{t.name}</p>
+                  <p className="text-caption text-muted-foreground truncate">{t.subject}</p>
                 </button>
                 <button
                   type="button"
                   onClick={() => void handleDelete(t.id)}
-                  className="flex-shrink-0 text-[11px] text-[#8A8A8A] hover:text-red-400 transition-colors"
+                  className="flex-shrink-0 text-caption text-muted-foreground hover:text-danger transition-colors"
                 >
                   Delete
                 </button>

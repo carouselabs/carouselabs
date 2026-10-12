@@ -57,8 +57,8 @@ export function EngageSessions() {
   return (
     <div className="mx-auto max-w-[1400px] space-y-4">
       <div>
-        <h1 className="text-[18px] font-semibold tracking-tight text-white">Sessions</h1>
-        <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">Every browser signed in to CarouseLabs Engage, for LinkedIn or X.</p>
+        <h2 className="text-lead font-semibold tracking-tight text-foreground">Sessions</h2>
+        <p className="mt-0.5 text-caption text-muted-foreground">Every browser signed in to CarouseLabs Engage, for LinkedIn or X.</p>
       </div>
 
       <form
@@ -106,10 +106,10 @@ export function EngageSessions() {
       ) : data.rows.length === 0 ? (
         <EmptyState title="No sessions match" />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]">
-          <table className="w-full text-left text-[12.5px]" aria-label="Sessions">
+        <div className="relative overflow-x-auto rounded-card border border-border bg-surface">
+          <table className="w-full text-left text-caption" aria-label="Sessions">
             <thead>
-              <tr className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+              <tr className="text-caption font-semibold text-muted-foreground">
                 <th className="px-4 py-2.5">User</th>
                 <th className="px-4 py-2.5">Extension</th>
                 <th className="px-4 py-2.5">Browser</th>
@@ -118,20 +118,20 @@ export function EngageSessions() {
                 <th className="px-4 py-2.5" />
               </tr>
             </thead>
-            <tbody className="text-[#D0D0D0]">
+            <tbody className="text-foreground/90">
               {data.rows.map((s) => (
-                <tr key={s.id} className="border-t border-[#232323]">
+                <tr key={s.id} className="border-t border-border">
                   <td className="px-4 py-2.5">
-                    <Link href={`/admin/engage/users/${s.userId}`} className="text-[#C4B5FD] hover:underline">
+                    <Link href={`/admin/engage/users/${s.userId}`} className="text-brand hover:underline">
                       {s.email}
                     </Link>
                   </td>
                   <td className="px-4 py-2.5">
-                    {PLATFORM_LABELS[s.platform]} <span className="tabular-nums text-[#8A8A8A]">{s.version ?? ""}</span>
+                    {PLATFORM_LABELS[s.platform]} <span className="tabular-nums text-muted-foreground">{s.version ?? ""}</span>
                   </td>
-                  <td className="px-4 py-2.5 text-[#B0B0B0]">{s.device ?? "Browser"}</td>
-                  <td className="whitespace-nowrap px-4 py-2.5 text-[#B0B0B0]">{fmtDate(s.createdAt)}</td>
-                  <td className="whitespace-nowrap px-4 py-2.5 text-[#B0B0B0]" title={fmtDateTime(s.lastUsedAt)}>
+                  <td className="px-4 py-2.5 text-muted-foreground">{s.device ?? "Browser"}</td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">{fmtDate(s.createdAt)}</td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground" title={fmtDateTime(s.lastUsedAt)}>
                     {fmtRelative(s.lastUsedAt)}
                   </td>
                   <td className="px-4 py-2.5 text-right">
@@ -154,7 +154,7 @@ export function EngageSessions() {
               ))}
             </tbody>
           </table>
-          <div className="flex items-center justify-between border-t border-[#2A2A2A] px-4 py-2.5 text-[12px] text-[#8A8A8A]">
+          <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-caption text-muted-foreground">
             <span className="tabular-nums">
               {fmtNumber(from)}–{fmtNumber(to)} of {fmtNumber(data.total)}
             </span>
@@ -178,16 +178,16 @@ export function EngageSessions() {
             if (reason.trim().length >= 3) void signOut()
           }}
         >
-          <p className="text-[12.5px] leading-relaxed text-[#B0B0B0]">
+          <p className="text-caption leading-relaxed text-muted-foreground">
             {signingOut?.email}&apos;s {signingOut ? PLATFORM_LABELS[signingOut.platform] : ""} extension in {signingOut?.device ?? "this browser"} is signed
             out at once. They can sign in again; pause their access to stop that.
           </p>
           <label className="block space-y-1">
-            <span className="block text-[12px] text-[#B0B0B0]">Reason (for the audit log)</span>
+            <span className="block text-caption text-muted-foreground">Reason (for the audit log)</span>
             <AdminInput className="w-full" maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Lost laptop" />
           </label>
           {dialogError && (
-            <p role="alert" className="text-[12.5px] text-red-300">
+            <p role="alert" className="text-caption text-danger">
               {dialogError}
             </p>
           )}

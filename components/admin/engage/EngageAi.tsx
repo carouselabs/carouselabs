@@ -10,6 +10,7 @@ import Link from "next/link"
 import { AdminLineChart } from "@/components/admin/charts"
 import { AdminButton, AdminInput, AdminSelect, Modal } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
+import { Ledger } from "@/components/admin/Ledger"
 import { AI_MODEL_KEYS, AI_MODELS, modelLabel, type AiModelKey, type ModelPrice } from "@/lib/ai/models"
 import {
   FEATURE_LABELS,
@@ -49,17 +50,8 @@ const PRESET_RANGES = RANGE_KEYS.filter((k) => k !== "custom") as Exclude<RangeK
 const pct = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : "—")
 const secs = (ms: number | null | undefined) => (ms === null || ms === undefined ? "—" : `${(ms / 1000).toFixed(1)}s`)
 
-function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3.5">
-      <div className="text-[11.5px] font-medium text-[#8A8A8A]">{label}</div>
-      <div className="mt-1.5 text-[22px] font-semibold leading-none tabular-nums text-white">{value}</div>
-      {hint && <div className="mt-1.5 text-[11.5px] text-[#8A8A8A]">{hint}</div>}
-    </div>
-  )
-}
 
-const th = "px-3 py-2 font-semibold"
+const th = "whitespace-nowrap bg-surface-muted/60 px-3 py-2.5 font-medium"
 const td = "px-3 py-2 tabular-nums"
 
 type Dialog =
@@ -123,8 +115,8 @@ export function EngageAi() {
     <div className="mx-auto max-w-[1400px] space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[18px] font-semibold tracking-tight text-white">AI</h1>
-          <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">
+          <h2 className="text-lead font-semibold tracking-tight text-foreground">AI</h2>
+          <p className="mt-0.5 text-caption text-muted-foreground">
             What the AI costs and how it performs, from every call the extensions make. Days are UTC.
           </p>
         </div>
@@ -172,23 +164,25 @@ export function EngageAi() {
               body="Run scripts/engage-admin-phase-c.sql in Supabase. From then on, every AI call the extensions make shows here."
             />
           )}
-          <section aria-label="AI totals" className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
-            <Kpi
-              label="AI cost"
-              value={fmtDollars(t!.cost)}
-              hint={t!.unpricedModels.length > 0 ? `No price yet for ${t!.unpricedModels.map(modelLabel).join(", ")}` : "At the prices set"}
+          <section aria-label="AI totals" className="border-y border-border py-6">
+            <Ledger
+              size="lg"
+              className="grid-cols-2 sm:grid-cols-4 2xl:grid-cols-7"
+              items={[
+                { label: "AI cost", value: fmtDollars(t!.cost), hint: t!.unpricedModels.length > 0 ? `No price yet for ${t!.unpricedModels.map(modelLabel).join(", ")}` : "At the prices set" },
+                { label: "AI calls", value: fmtNumber(t!.calls), hint: `${fmtNumber(t!.ok)} answered` },
+                { label: "Tokens in", value: fmtNumber(t!.inputTokens) },
+                { label: "Tokens out", value: fmtNumber(t!.outputTokens) },
+                { label: "Average time", value: secs(t!.avgMs), hint: "Per call" },
+                { label: "Backup used", value: pct(t!.fallback, t!.calls), hint: "Calls by the backup model" },
+                { label: "Failed", value: pct(t!.failed, t!.calls), hint: "Errors and time-outs" },
+              ]}
             />
-            <Kpi label="AI calls" value={fmtNumber(t!.calls)} hint={`${fmtNumber(t!.ok)} answered`} />
-            <Kpi label="Tokens in" value={fmtNumber(t!.inputTokens)} />
-            <Kpi label="Tokens out" value={fmtNumber(t!.outputTokens)} />
-            <Kpi label="Average time" value={secs(t!.avgMs)} hint="Per call" />
-            <Kpi label="Backup used" value={pct(t!.fallback, t!.calls)} hint="Calls by the backup model" />
-            <Kpi label="Failed" value={pct(t!.failed, t!.calls)} hint="Errors and time-outs" />
           </section>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-4" aria-labelledby="ai-cost-trend">
-              <h2 id="ai-cost-trend" className="mb-3 text-[13px] font-semibold text-white">
+            <section className="rounded-card border border-border bg-surface p-4" aria-labelledby="ai-cost-trend">
+              <h2 id="ai-cost-trend" className="mb-3 text-label font-semibold text-foreground">
                 Cost per day ($)
               </h2>
               <AdminLineChart
@@ -199,24 +193,24 @@ export function EngageAi() {
                 series={[{ key: "cost", label: "Cost ($)", color: "#8B5CF6" }]}
               />
             </section>
-            <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-4" aria-labelledby="ai-calls-trend">
-              <h2 id="ai-calls-trend" className="mb-3 text-[13px] font-semibold text-white">
+            <section className="rounded-card border border-border bg-surface p-4" aria-labelledby="ai-calls-trend">
+              <h2 id="ai-calls-trend" className="mb-3 text-label font-semibold text-foreground">
                 AI calls per day
               </h2>
               <AdminLineChart data={usage!.series.map((d) => ({ ...d }))} xKey="date" height={220} series={[{ key: "calls", label: "AI calls", color: "#0D9488" }]} />
             </section>
           </div>
 
-          <section className="overflow-x-auto rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]" aria-labelledby="ai-by-feature">
-            <h2 id="ai-by-feature" className="border-b border-[#2A2A2A] px-4 py-3 text-[13px] font-semibold text-white">
+          <section className="relative overflow-x-auto rounded-card border border-border bg-surface" aria-labelledby="ai-by-feature">
+            <h2 id="ai-by-feature" className="border-b border-border px-4 py-3 text-label font-semibold text-foreground">
               By feature and model
             </h2>
             {usage!.byFeature.length === 0 ? (
-              <p className="px-4 py-6 text-center text-[12.5px] text-[#8A8A8A]">No AI calls in this range.</p>
+              <p className="px-4 py-6 text-center text-caption text-muted-foreground">No AI calls in this range.</p>
             ) : (
-              <table className="w-full text-[12.5px]">
+              <table className="w-full text-caption">
                 <thead>
-                  <tr className="text-left text-[11px] uppercase tracking-wide text-[#8A8A8A]">
+                  <tr className="text-left text-caption text-muted-foreground">
                     <th className={th}>Feature</th>
                     <th className={th}>Model</th>
                     <th className={`${th} text-right`}>Calls</th>
@@ -231,18 +225,18 @@ export function EngageAi() {
                     <th className={`${th} text-right`}>First words</th>
                   </tr>
                 </thead>
-                <tbody className="text-[#D0D0D0]">
+                <tbody className="text-foreground/90">
                   {usage!.byFeature.map((r) => (
-                    <tr key={`${r.feature}:${r.model}`} className="border-t border-[#232323]">
+                    <tr key={`${r.feature}:${r.model}`} className="border-t border-border">
                       <td className="px-3 py-2">{FEATURE_LABELS[r.feature] ?? r.feature}</td>
                       <td className="px-3 py-2">{modelLabel(r.model)}</td>
                       <td className={`${td} text-right`}>{fmtNumber(r.calls)}</td>
                       <td className={`${td} text-right`}>{fmtNumber(r.fallback)}</td>
-                      <td className={`${td} text-right ${r.failed > 0 ? "text-red-300" : ""}`}>{fmtNumber(r.failed)}</td>
+                      <td className={`${td} text-right ${r.failed > 0 ? "text-danger" : ""}`}>{fmtNumber(r.failed)}</td>
                       <td className={`${td} text-right`}>{fmtNumber(r.refused)}</td>
                       <td className={`${td} text-right`}>{fmtNumber(r.inputTokens)}</td>
                       <td className={`${td} text-right`}>{fmtNumber(r.outputTokens)}</td>
-                      <td className={`${td} text-right`}>{r.cost === null ? <span className="text-[#8A8A8A]">no price</span> : fmtDollars(r.cost)}</td>
+                      <td className={`${td} text-right`}>{r.cost === null ? <span className="text-muted-foreground">no price</span> : fmtDollars(r.cost)}</td>
                       <td className={`${td} text-right`}>{secs(r.avgMs)}</td>
                       <td className={`${td} text-right`}>{secs(r.p95Ms)}</td>
                       <td className={`${td} text-right`}>{secs(r.avgFirstTokenMs)}</td>
@@ -253,27 +247,27 @@ export function EngageAi() {
             )}
           </section>
 
-          <section className="overflow-x-auto rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]" aria-labelledby="ai-top-users">
-            <h2 id="ai-top-users" className="border-b border-[#2A2A2A] px-4 py-3 text-[13px] font-semibold text-white">
+          <section className="relative overflow-x-auto rounded-card border border-border bg-surface" aria-labelledby="ai-top-users">
+            <h2 id="ai-top-users" className="border-b border-border px-4 py-3 text-label font-semibold text-foreground">
               Who costs the most
             </h2>
             {usage!.topUsers.length === 0 ? (
-              <p className="px-4 py-6 text-center text-[12.5px] text-[#8A8A8A]">No AI calls in this range.</p>
+              <p className="px-4 py-6 text-center text-caption text-muted-foreground">No AI calls in this range.</p>
             ) : (
-              <table className="w-full text-[12.5px]">
+              <table className="w-full text-caption">
                 <thead>
-                  <tr className="text-left text-[11px] uppercase tracking-wide text-[#8A8A8A]">
+                  <tr className="text-left text-caption text-muted-foreground">
                     <th className={th}>User</th>
                     <th className={`${th} text-right`}>Calls</th>
                     <th className={`${th} text-right`}>Tokens</th>
                     <th className={`${th} text-right`}>Cost</th>
                   </tr>
                 </thead>
-                <tbody className="text-[#D0D0D0]">
+                <tbody className="text-foreground/90">
                   {usage!.topUsers.map((u) => (
-                    <tr key={u.userId} className="border-t border-[#232323]">
+                    <tr key={u.userId} className="border-t border-border">
                       <td className="px-3 py-2">
-                        <Link href={`/admin/engage/users/${u.userId}`} className="text-[#C4B5FD] hover:underline">
+                        <Link href={`/admin/engage/users/${u.userId}`} className="text-brand hover:underline">
                           {u.email ?? u.userId}
                         </Link>
                       </td>
@@ -289,23 +283,23 @@ export function EngageAi() {
         </>
       ) : tab === "models" ? (
         <div className="grid gap-4 xl:grid-cols-2">
-          <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]" aria-labelledby="ai-models">
-            <header className="border-b border-[#2A2A2A] px-4 py-3">
-              <h2 id="ai-models" className="text-[13px] font-semibold text-white">
+          <section className="rounded-card border border-border bg-surface" aria-labelledby="ai-models">
+            <header className="border-b border-border px-4 py-3">
+              <h2 id="ai-models" className="text-label font-semibold text-foreground">
                 Model per feature
               </h2>
-              <p className="mt-0.5 text-[12px] text-[#8A8A8A]">
+              <p className="mt-0.5 text-caption text-muted-foreground">
                 The model each feature tries first. If it fails or refuses, the other one writes instead.
               </p>
             </header>
             {(["linkedin", "x"] as const).map((p) => (
               <div key={p}>
-                <p className="border-t border-[#232323] bg-[#161616] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A] first:border-t-0">
+                <p className="border-t border-border bg-background px-4 py-1.5 text-caption font-semibold text-muted-foreground first:border-t-0">
                   {PLATFORM_LABELS[p]} extension
                 </p>
                 {PLATFORM_FEATURES[p].map((f) => (
-                  <div key={f} className="flex flex-wrap items-center gap-3 border-t border-[#232323] px-4 py-2.5">
-                    <span className="min-w-[160px] flex-1 text-[12.5px] text-[#D0D0D0]">{FEATURE_LABELS[f]}</span>
+                  <div key={f} className="flex flex-wrap items-center gap-3 border-t border-border px-4 py-2.5">
+                    <span className="min-w-[160px] flex-1 text-caption text-foreground/90">{FEATURE_LABELS[f]}</span>
                     <AdminSelect
                       aria-label={`${FEATURE_LABELS[f]} model`}
                       value={models![f]}
@@ -324,22 +318,22 @@ export function EngageAi() {
             ))}
           </section>
 
-          <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]" aria-labelledby="ai-prices">
-            <header className="border-b border-[#2A2A2A] px-4 py-3">
-              <h2 id="ai-prices" className="text-[13px] font-semibold text-white">
+          <section className="rounded-card border border-border bg-surface" aria-labelledby="ai-prices">
+            <header className="border-b border-border px-4 py-3">
+              <h2 id="ai-prices" className="text-label font-semibold text-foreground">
                 Prices
               </h2>
-              <p className="mt-0.5 text-[12px] text-[#8A8A8A]">
+              <p className="mt-0.5 text-caption text-muted-foreground">
                 Dollars per million tokens, from each provider&apos;s price list. Cost figures use these, past ones included.
               </p>
             </header>
             {priceModels.map((id) => {
               const price = prices?.[id]
               return (
-                <div key={id} className="flex flex-wrap items-center gap-3 border-t border-[#232323] px-4 py-2.5 first:border-t-0">
-                  <span className="min-w-[160px] flex-1 text-[12.5px] text-[#D0D0D0]">{modelLabel(id)}</span>
-                  <span className="text-[12.5px] tabular-nums text-[#B0B0B0]">
-                    {price ? `$${price.input} in · $${price.output} out` : <span className="text-amber-300">Not set</span>}
+                <div key={id} className="flex flex-wrap items-center gap-3 border-t border-border px-4 py-2.5 first:border-t-0">
+                  <span className="min-w-[160px] flex-1 text-caption text-foreground/90">{modelLabel(id)}</span>
+                  <span className="text-caption tabular-nums text-muted-foreground">
+                    {price ? `$${price.input} in · $${price.output} out` : <span className="text-warning">Not set</span>}
                   </span>
                   <AdminButton
                     variant="secondary"
@@ -355,7 +349,7 @@ export function EngageAi() {
             })}
           </section>
           {!data.settingsReady && (
-            <p className="text-[12.5px] text-amber-200 xl:col-span-2">Run scripts/engage-admin-phase-b.sql in Supabase before changing models or prices.</p>
+            <p className="text-caption text-warning xl:col-span-2">Run scripts/engage-admin-phase-b.sql in Supabase before changing models or prices.</p>
           )}
         </div>
       ) : prompts.error ? (
@@ -364,22 +358,22 @@ export function EngageAi() {
         <SkeletonBlock className="h-[300px]" />
       ) : (
         <section className="space-y-3" aria-label="Prompts">
-          <p className="text-[12.5px] text-[#8A8A8A]">
+          <p className="text-caption text-muted-foreground">
             What each feature sends the AI, built from a made-up profile, post and conversation. To change a prompt, ask for it in
             the code, where it&apos;s tested before it goes live.
           </p>
           {prompts.data.prompts.map((p) => (
-            <details key={p.id} className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]">
-              <summary className="cursor-pointer px-4 py-3 text-[13px] font-semibold text-white">
-                {p.label} <span className="ml-1 text-[12px] font-normal text-[#8A8A8A]">· {FEATURE_LABELS[p.feature]}</span>
+            <details key={p.id} className="rounded-card border border-border bg-surface">
+              <summary className="cursor-pointer px-4 py-3 text-label font-semibold text-foreground">
+                {p.label} <span className="ml-1 text-caption font-normal text-muted-foreground">· {FEATURE_LABELS[p.feature]}</span>
               </summary>
-              <div className="grid gap-3 border-t border-[#2A2A2A] p-4 lg:grid-cols-2">
+              <div className="grid gap-3 border-t border-border p-4 lg:grid-cols-2">
                 {(["system", "user"] as const).map((part) => (
                   <div key={part} className="min-w-0">
-                    <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+                    <h3 className="mb-1.5 text-caption font-semibold text-muted-foreground">
                       {part === "system" ? "Instructions" : "Content sent"}
                     </h3>
-                    <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-[#111] p-3 text-[11.5px] leading-relaxed text-[#D0D0D0]">
+                    <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-background p-3 text-caption leading-relaxed text-foreground/90">
                       {p[part]}
                     </pre>
                   </div>
@@ -416,7 +410,7 @@ export function EngageAi() {
           }}
         >
           {dialog?.kind === "model" && (
-            <p className="text-[12.5px] leading-relaxed text-[#B0B0B0]">
+            <p className="text-caption leading-relaxed text-muted-foreground">
               Within 10 seconds, {FEATURE_LABELS[dialog.feature]} tries {AI_MODELS[dialog.key].label} first, with{" "}
               {AI_MODELS[dialog.key === "luna" ? "haiku" : "luna"].label} as backup. Compare both on the Usage tab afterwards.
             </p>
@@ -424,21 +418,21 @@ export function EngageAi() {
           {dialog?.kind === "price" && (
             <div className="flex flex-wrap gap-3">
               <label className="block space-y-1">
-                <span className="block text-[12px] text-[#B0B0B0]">$ per million tokens in</span>
+                <span className="block text-caption text-muted-foreground">$ per million tokens in</span>
                 <AdminInput className="w-32" inputMode="decimal" value={dialog.input} onChange={(e) => setDialog({ ...dialog, input: e.target.value })} />
               </label>
               <label className="block space-y-1">
-                <span className="block text-[12px] text-[#B0B0B0]">$ per million tokens out</span>
+                <span className="block text-caption text-muted-foreground">$ per million tokens out</span>
                 <AdminInput className="w-32" inputMode="decimal" value={dialog.output} onChange={(e) => setDialog({ ...dialog, output: e.target.value })} />
               </label>
             </div>
           )}
           <label className="block space-y-1">
-            <span className="block text-[12px] text-[#B0B0B0]">Reason (for the audit log)</span>
+            <span className="block text-caption text-muted-foreground">Reason (for the audit log)</span>
             <AdminInput className="w-full" maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Haiku was faster this week" />
           </label>
           {dialogError && (
-            <p role="alert" className="text-[12.5px] text-red-300">
+            <p role="alert" className="text-caption text-danger">
               {dialogError}
             </p>
           )}

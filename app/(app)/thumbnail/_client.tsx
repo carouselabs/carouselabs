@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react"
 import {
-  Sparkles,
   Upload,
   Send,
   Download,
@@ -583,7 +582,6 @@ export function ThumbnailClient() {
                 onClick={() => void handleAnalyzeStart()}
                 disabled={!referenceImage || !videoContent.trim()}
               >
-                <Sparkles aria-hidden />
                 Analyze &amp; Start
               </Button>
             </div>
@@ -865,7 +863,6 @@ export function ThumbnailClient() {
                 Start Over
               </Button>
               <Button variant="brand" onClick={() => void handleGenerate()}>
-                <Sparkles aria-hidden />
                 Generate Thumbnail — 15 credits
               </Button>
             </ActionBar>

@@ -12,6 +12,7 @@ import { AlertCircle, ArrowLeft, Check, History, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { controlClasses } from "@/components/ui/input"
+import { PlatformLogo } from "@/components/brand/PlatformLogo"
 import { CAPTION_PLATFORMS } from "@/lib/captionPlatforms"
 import { CAPTION_TEMPLATES } from "@/lib/captionTemplates"
 
@@ -133,17 +134,27 @@ export function ChoiceHeader({ title, description }: { title: React.ReactNode; d
 
 /** One option on a setup step. Picking it moves the flow on, as before. */
 export function ChoiceCard({
-  emoji,
+  icon,
+  art,
+  aside,
   title,
   subtitle,
+  steps,
   meta,
   onClick,
   disabled,
   className,
 }: {
-  emoji?: string
+  /** A logo or mark above the title. */
+  icon?: React.ReactNode
+  /** A small diagram of the option, on a plate across the top. */
+  art?: React.ReactNode
+  /** A figure pinned to the top-right corner (read after the title). */
+  aside?: React.ReactNode
   title: React.ReactNode
   subtitle?: React.ReactNode
+  /** A framework's parts, drawn as a rail instead of "A → B → C". */
+  steps?: readonly string[]
   meta?: React.ReactNode
   onClick: () => void
   disabled?: boolean
@@ -155,21 +166,125 @@ export function ChoiceCard({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "group flex flex-col items-start gap-2 rounded-card border border-border bg-surface p-4 text-left transition-[border-color,background-color,box-shadow] duration-(--motion-fast) enabled:hover:border-brand/60 enabled:hover:bg-surface-raised enabled:hover:shadow-card disabled:cursor-not-allowed disabled:opacity-55 md:p-5",
+        "group relative flex flex-col items-start gap-2 rounded-card border border-border bg-surface p-4 text-left transition-[border-color,background-color,box-shadow] duration-(--motion-fast) enabled:hover:border-control-border enabled:hover:bg-surface-raised enabled:hover:shadow-card disabled:cursor-not-allowed disabled:opacity-55 md:p-5",
         className
       )}
     >
-      {emoji && (
-        <span aria-hidden className="text-[26px] leading-none">
-          {emoji}
+      {art && (
+        <span
+          aria-hidden
+          className="mb-2 grid h-24 w-full place-items-center rounded-control bg-surface-muted text-muted-foreground transition-colors duration-(--motion-fast) group-enabled:group-hover:bg-brand-soft group-enabled:group-hover:text-foreground"
+        >
+          {art}
         </span>
       )}
-      <span className="text-label font-semibold text-foreground transition-colors duration-(--motion-fast) group-enabled:group-hover:text-brand">
+      {icon && <span className="mb-3 flex">{icon}</span>}
+      <span className={cn("text-label font-semibold text-foreground transition-colors duration-(--motion-fast) group-enabled:group-hover:text-brand", aside && !icon && "pr-20")}>
         {title}
       </span>
+      {aside && <span className="absolute top-4 right-4 md:top-5 md:right-5">{aside}</span>}
       {meta}
       {subtitle && <span className="text-caption text-muted-foreground">{subtitle}</span>}
+      {steps && <StepRail steps={steps} />}
     </button>
+  )
+}
+
+/** A framework's parts in order: dots on a thin rail, the first one lit. */
+export function StepRail({ steps }: { steps: readonly string[] }) {
+  return (
+    <ol className="relative mt-1 flex flex-col gap-1.5 pl-4 before:absolute before:top-2 before:bottom-2 before:left-[3px] before:w-px before:bg-border">
+      {steps.map((s, i) => (
+        <li key={`${i}-${s}`} className="relative text-caption text-muted-foreground">
+          <span
+            aria-hidden
+            className={cn(
+              "absolute top-[0.45em] -left-4 size-[7px] rounded-full border",
+              i === 0 ? "border-brand bg-brand" : "border-control-border bg-surface group-enabled:group-hover:bg-surface-raised"
+            )}
+          />
+          {s}
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+/** A platform's character limit as a figure, for a platform choice card. */
+export function CharLimit({ value }: { value: number }) {
+  return (
+    <span className="flex flex-col items-end leading-none">
+      <span className="font-display text-[1.75rem] leading-none text-foreground tabular-nums">{value.toLocaleString()}</span>{" "}
+      <span className="mt-1 text-caption leading-none text-muted-foreground">chars</span>
+    </span>
+  )
+}
+
+/** The diagrams on the structure choices — what each option does, drawn. */
+export function StructureArt({ kind }: { kind: "auto" | "custom" | "template" | "reference" }) {
+  const line = "fill-current opacity-45"
+  return (
+    <svg viewBox="0 0 120 64" width="120" height="64" fill="none" aria-hidden>
+      {kind === "auto" && (
+        <>
+          {/* loose parts, put in order */}
+          <rect x="10" y="12" width="22" height="6" rx="3" className={line} transform="rotate(-9 21 15)" />
+          <rect x="16" y="29" width="18" height="6" rx="3" className={line} transform="rotate(7 25 32)" />
+          <rect x="8" y="45" width="24" height="6" rx="3" className={line} transform="rotate(-4 20 48)" />
+          <path d="M46 32h18m-5-5 5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-60" />
+          <rect x="76" y="8" width="36" height="48" rx="5" className="fill-surface stroke-current opacity-90" strokeWidth="1.25" />
+          <rect x="83" y="17" width="22" height="6" rx="3" className="fill-brand" />
+          <rect x="83" y="29" width="18" height="6" rx="3" className={line} />
+          <rect x="83" y="41" width="14" height="6" rx="3" className={line} />
+        </>
+      )}
+      {kind === "custom" && (
+        <>
+          <rect x="18" y="8" width="84" height="48" rx="5" className="fill-surface stroke-current opacity-90" strokeWidth="1.25" />
+          <rect x="27" y="17" width="58" height="6" rx="3" className={line} />
+          <rect x="27" y="29" width="46" height="6" rx="3" className={line} />
+          <rect x="27" y="41" width="26" height="6" rx="3" className={line} />
+          <rect x="57" y="38" width="2" height="12" rx="1" className="fill-brand" />
+        </>
+      )}
+      {kind === "template" && (
+        <>
+          {[
+            [26, 6],
+            [62, 6],
+            [26, 34],
+            [62, 34],
+          ].map(([x, y], i) => (
+            <g key={i}>
+              <rect
+                x={x}
+                y={y}
+                width="32"
+                height="24"
+                rx="4"
+                className={i === 1 ? "fill-surface stroke-brand" : "fill-surface stroke-current opacity-70"}
+                strokeWidth={i === 1 ? 1.75 : 1.25}
+              />
+              <rect x={x + 6} y={y + 7} width="16" height="4" rx="2" className={i === 1 ? "fill-brand" : line} />
+              <rect x={x + 6} y={y + 14} width="11" height="4" rx="2" className={line} />
+            </g>
+          ))}
+        </>
+      )}
+      {kind === "reference" && (
+        <>
+          {/* the picture, and the same layout taken from it */}
+          <rect x="12" y="8" width="38" height="48" rx="4" className="fill-surface stroke-current opacity-90" strokeWidth="1.25" />
+          <circle cx="40" cy="19" r="4" className={line} />
+          <path d="m16 50 11-14 7 8 5-5 9 11z" className={line} />
+          <path d="M56 32h10m-4-4 4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-60" />
+          <rect x="72" y="8" width="38" height="48" rx="4" className="fill-surface stroke-current opacity-90" strokeWidth="1.25" />
+          <rect x="78" y="14" width="26" height="20" rx="2.5" className="fill-brand opacity-85" />
+          <rect x="78" y="40" width="22" height="4" rx="2" className={line} />
+          <rect x="78" y="48" width="14" height="4" rx="2" className={line} />
+        </>
+      )}
+    </svg>
   )
 }
 
@@ -283,7 +398,12 @@ export function RestoredTag() {
 
 export function PlatformTag({ platformId }: { platformId: string }) {
   const p = CAPTION_PLATFORMS.find((p) => p.id === platformId)
-  return <span className={cn(tagClasses, "bg-brand-soft text-brand")}>{p ? `${p.emoji} ${p.name}` : platformId}</span>
+  return (
+    <span className={cn(tagClasses, "border border-border bg-surface text-foreground")}>
+      {p && <PlatformLogo platform={p.id} size={14} />}
+      {p ? p.name : platformId}
+    </span>
+  )
 }
 
 /** The caption structure chosen in setup (absent on restored sessions). */
@@ -296,13 +416,9 @@ export function StructureTag({
 }) {
   return (
     <span className={cn(tagClasses, "bg-brand-soft text-brand")}>
-      {mode === "auto" && "🤖 Auto structure"}
-      {mode === "custom" && "✍️ Custom structure"}
-      {mode === "template" &&
-        (() => {
-          const t = CAPTION_TEMPLATES.find((t) => t.id === templateId)
-          return t ? `${t.emoji} ${t.name}` : "📋 Template"
-        })()}
+      {mode === "auto" && "Auto structure"}
+      {mode === "custom" && "Custom structure"}
+      {mode === "template" && (CAPTION_TEMPLATES.find((t) => t.id === templateId)?.name ?? "Template")}
     </span>
   )
 }

@@ -1,9 +1,9 @@
 "use client"
 
 import { useRef, useState } from "react"
-import Link from "next/link"
-import { Pencil, ArrowRight, AlertCircle } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 import { GenerateBar } from "@/components/dashboard/GenerateBar"
+import { OwnIdeaSheet } from "@/components/dashboard/OwnIdeaSheet"
 import { IdeaFeed, IdeaRowsSkeleton } from "@/components/dashboard/IdeaFeed"
 import { IdeaDetail } from "@/components/dashboard/IdeaCard"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -134,33 +134,13 @@ export default function DashboardPage() {
     </div>
   )
 
-  const ownIdea = (
-    <Link
-      href="/own-idea"
-      className="group flex items-center gap-3.5 rounded-control border border-dashed border-brand/40 bg-brand-soft/40 px-4 py-3.5 transition-colors duration-(--motion-fast) hover:border-brand hover:bg-brand-soft"
-    >
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-control-sm bg-brand-soft text-brand">
-        <Pencil className="size-4" aria-hidden />
-      </span>
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-label font-semibold text-foreground">Work on Own Idea</span>
-        <span className="text-caption text-muted-foreground">
-          Already know what to post? Skip trending and build from your own idea.
-        </span>
-      </span>
-      <ArrowRight
-        className="ml-auto size-4 shrink-0 text-brand transition-transform duration-(--motion-fast) group-hover:translate-x-0.5"
-        aria-hidden
-      />
-    </Link>
-  )
-
-  const brief = (
+  const brief = (variant: "hero" | "bar") => (
     <GenerateBar
       value={topicInput}
       onChange={setTopicInput}
       onGenerate={handleGenerate}
       isLoading={isGenerating}
+      variant={variant}
     />
   )
 
@@ -173,7 +153,7 @@ export default function DashboardPage() {
       {!isGenerating && <ReferralReminderBanner />}
 
       {showIntro ? (
-        <section className="mx-auto flex w-full max-w-2xl flex-col gap-8 pt-2 md:pt-[6vh]">
+        <section className="mx-auto flex w-full max-w-3xl flex-col gap-8 pt-2 md:pt-[6vh]">
           {error ? (
             errorBox
           ) : (
@@ -185,18 +165,18 @@ export default function DashboardPage() {
               </p>
             </div>
           )}
-          <div className="rounded-card border border-border bg-surface p-5 shadow-card md:p-6">{brief}</div>
-          {ownIdea}
+          <div className="rounded-card border border-border bg-surface p-5 shadow-card md:p-8">{brief("hero")}</div>
+          <OwnIdeaSheet />
         </section>
       ) : (
         <>
-          <div className="border-b border-border pb-6">{brief}</div>
+          <div className="border-b border-border pb-6">{brief("bar")}</div>
           {errorBox}
 
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:gap-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,27rem)] xl:gap-14">
             <div className="flex min-w-0 flex-col gap-5">
               {/* Work on Own Idea — always first, before trending ideas */}
-              {!isGenerating && ownIdea}
+              {!isGenerating && <OwnIdeaSheet compact />}
 
               {isGenerating ? (
                 <div role="status" aria-label="Generating…">

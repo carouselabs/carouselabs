@@ -21,7 +21,7 @@ export function StudioPlanCard({ plan, cta, isCurrent = false }: { plan: PlanDef
       <div className="flex flex-col gap-3">
         <div className="flex min-h-6 items-center justify-between gap-2">
           <p className={cn("text-label font-semibold", highlighted ? "text-brand" : "text-foreground")}>{plan.name}</p>
-          {plan.badge && <span className="rounded-full bg-brand-soft px-2.5 py-0.5 text-caption font-medium text-brand">⭐ {plan.badge}</span>}
+          {plan.badge && <span className="rounded-full bg-brand-soft px-2.5 py-0.5 text-caption font-medium text-brand">{plan.badge}</span>}
           {isCurrent && <span className="rounded-full bg-surface-muted px-2.5 py-0.5 text-caption font-medium">Current Plan</span>}
         </div>
         <p className="flex items-baseline gap-1.5">

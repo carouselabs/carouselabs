@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { PlatformLogo } from "@/components/brand/PlatformLogo"
 import { buttonVariants } from "@/components/ui/button"
 import { EXTENSION_CHECKOUT_PATH, EXTENSION_PLAN, X_EXTENSION_CHECKOUT_PATH, X_EXTENSION_PLAN } from "@/lib/plans"
 
@@ -155,8 +156,9 @@ export function EngageSection() {
               aria-pressed={active === value}
               aria-controls={`engage-${value}`}
               onClick={() => setActive(value)}
-              className="h-10 rounded-full px-4 text-label whitespace-nowrap sm:px-5 font-medium text-muted-foreground transition-colors hover:text-foreground aria-pressed:bg-foreground aria-pressed:text-background"
+              className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-label whitespace-nowrap sm:px-5 font-medium text-muted-foreground transition-colors hover:text-foreground aria-pressed:bg-foreground aria-pressed:text-background"
             >
+              <PlatformLogo platform={value} size={16} />
               {label}
             </button>
           ))}
@@ -203,7 +205,7 @@ export function EngageSection() {
           <div className="flex flex-col gap-8">
             <div className="flex flex-col gap-4">
               <p className="inline-flex items-center gap-1.5 text-label font-medium text-foreground">
-                <span aria-hidden className="font-semibold">𝕏</span>
+                <PlatformLogo platform="x" size={14} />
                 New — CarouseLabs Engage for X
               </p>
               <h2 className="text-title font-semibold text-balance lg:text-[2.625rem] lg:leading-[1.1]">Replies and Messages on X — Written in Your Voice</h2>

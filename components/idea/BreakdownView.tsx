@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Sparkles, ArrowLeft } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import { buttonVariants } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorNotice } from "@/components/create/CreateKit"
@@ -70,9 +70,6 @@ export function BreakdownView({ ideaId, initialBreakdown, onGeneratingChange }: 
   if (invalidTopic) {
     return (
       <div className="mx-auto flex max-w-md flex-col items-center gap-5 rounded-card border border-border bg-surface px-6 py-12 text-center">
-        <div className="flex size-12 items-center justify-center rounded-control bg-surface-muted text-foreground">
-          <Sparkles className="size-5" strokeWidth={1.8} aria-hidden />
-        </div>
         <div className="flex flex-col gap-2">
           <h2 className="text-body-lg font-semibold text-foreground">
             That&apos;s not a content topic

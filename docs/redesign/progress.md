@@ -360,3 +360,21 @@ Screenshots (git-ignored): `audit-artifacts/redesign/phase-5b/`.
 
 **Not verified:** the real admin with real data (needs the admin account).
 
+## Follow-up: real logos, no emoji, dashboard (2026-10-12)
+
+Owner's review of the live site: logos and several screens still looked generic (emoji on the platform picker, the shield Admin badge, the dashboard topic box and "Work on Own Idea" card).
+
+**Built**
+
+- **Platform logos:** `components/brand/PlatformLogo.tsx` draws the real LinkedIn, Instagram, X, Facebook, Threads and Pinterest marks (Simple Icons paths, CC0) in their brand colours; X and Threads follow the text colour so they work on dark. Used on the caption / image / carousel platform picker, the selected-platform tag, every Content Hub badge (was a letter or a camera icon) and the landing Engage switch and X line.
+- **Platform picker:** 3 columns (6 platforms, no gaps); the character limit is a serif figure in the corner instead of a violet pill.
+- **Structure choices:** small drawn diagrams on a plate (AI arranging parts, your own lines with a caret, a template grid, a picture and its layout) instead of the 🤖 ✍️ 📋 🖼️ emoji, in all three flows.
+- **Templates:** caption frameworks and carousel slide structures show their parts as a step rail instead of an emoji and "A → B → C".
+- **Dashboard:** the topic is a large serif field; "Tailored to your profile" now heads the suggestions, which are a list of rows (a tap fills the topic and is marked). "Work on Own Idea" is a ruled notepad sheet with a violet margin line (compact above the idea feed). The feed keeps the chip row.
+- **Admin badge:** the shield is replaced by a small drawing of the console (window with its sidebar lit) — a dark chip in the app header, an outline chip in the admin topbar.
+- **Other emoji removed:** onboarding and Settings role / goal rows, the "Most popular"-style plan badge star, the carousel LinkedIn warning (now a warning icon), leaderboard medals (gold / silver / bronze discs with the rank).
+- **Sparkle icons removed** from Generate buttons (caption, image, carousel, own idea, thumbnail), the dashboard, the "not a content topic" screen and the brand banner (now a violet dot).
+
+**Verified:** typecheck pass; lint 0 errors (same old warnings); unit tests 272 of 272; screenshots of every changed screen at 390 and 1440 with example data, no page errors or overflow (`audit-artifacts/redesign/generic-fix/`, git-ignored).
+
+**Open:** the site logo (`app/icon.png`, `app/favicon.ico`) is still the Next.js starter's triangle — waiting for the owner's logo file.

@@ -5,12 +5,11 @@
 // /api/intern/leaderboard and re-sorts in place. The viewer's own row stays
 // highlighted regardless of which period is selected.
 import { useEffect, useState } from "react"
+import { RankMark } from "@/components/intern/RankMark"
 
 type Period = "all" | "month" | "week"
 type Entry = { id: string; name: string; totalPoints: number }
 type DateRange = { start: string; end: string }
-
-const MEDALS = ["🥇", "🥈", "🥉"]
 
 const PERIODS: { key: Period; label: string }[] = [
   { key: "all", label: "All-Time" },
@@ -90,9 +89,7 @@ export function LeaderboardCard({ internId }: { internId: string }) {
                   isMe ? "bg-brand/[0.06] border border-brand/30" : "border border-transparent"
                 }`}
               >
-                <span className="w-6 shrink-0 text-center text-label leading-none">
-                  {MEDALS[i] ?? <span className="text-caption font-semibold text-muted-foreground tabular-nums">{i + 1}</span>}
-                </span>
+                <RankMark rank={i + 1} />
                 <span
                   className={`text-label flex-1 min-w-0 truncate ${
                     isMe ? "font-semibold text-brand" : "font-medium text-foreground"

@@ -207,7 +207,6 @@ export default function ProfileSettingsPage() {
                       : "border-border bg-surface text-muted-foreground hover:border-border hover:text-foreground",
                   ].join(" ")}
                 >
-                  <span className="text-base">{r.emoji}</span>
                   <span className="text-label font-medium">{r.label}</span>
                 </button>
               ))}
@@ -398,7 +397,6 @@ export default function ProfileSettingsPage() {
                         : "border-border bg-surface hover:border-border",
                     ].join(" ")}
                   >
-                    <span className="text-lg mt-0.5 select-none">{goal.emoji}</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className={`text-label font-medium ${selected ? "text-foreground" : "text-muted-foreground"}`}>

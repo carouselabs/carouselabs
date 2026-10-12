@@ -88,7 +88,6 @@ export default function GoalsPage() {
                 onClick={() => toggle(goal.id)}
                 className="flex min-w-0 flex-1 items-start gap-4 px-5 py-4 text-left"
               >
-                <span aria-hidden className="mt-0.5 text-xl leading-none select-none">{goal.emoji}</span>
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="text-body font-medium text-foreground">{goal.label}</span>

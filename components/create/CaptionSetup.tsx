@@ -8,7 +8,8 @@ import { controlClasses } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { CAPTION_PLATFORMS } from "@/lib/captionPlatforms"
 import { CATEGORY_ORDER, getTemplatesByCategory } from "@/lib/captionTemplates"
-import { CategoryChips, ChoiceCard, ChoiceHeader, PlatformTag, StepColumn } from "./CreateKit"
+import { PlatformLogo } from "@/components/brand/PlatformLogo"
+import { CategoryChips, CharLimit, ChoiceCard, ChoiceHeader, PlatformTag, StepColumn, StructureArt } from "./CreateKit"
 
 export type CaptionSetupStep = "platform-select" | "structure-select" | "custom-input" | "template-select"
 
@@ -53,24 +54,20 @@ export function CaptionSetup({
         </div>
       )}
 
-      {/* ── Platform selection: 8 cards ──────────────────────── */}
+      {/* ── Platform selection: 6 cards ──────────────────────── */}
       {step === "platform-select" && (
         <>
           <ChoiceHeader
             title={platformQuestion}
             description={<>We&apos;ll tailor the tone, length, and style to match.</>}
           />
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             {CAPTION_PLATFORMS.map((platform) => (
               <ChoiceCard
                 key={platform.id}
-                emoji={platform.emoji}
+                icon={<PlatformLogo platform={platform.id} size={32} />}
+                aside={<CharLimit value={platform.charLimit} />}
                 title={platform.name}
-                meta={
-                  <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[11px] leading-4 font-semibold text-brand tabular-nums">
-                    {platform.charLimit.toLocaleString()} chars
-                  </span>
-                }
                 subtitle={platform.guidance}
                 onClick={() => onSelectPlatform(platform.id)}
               />
@@ -84,28 +81,28 @@ export function CaptionSetup({
         <>
           <ChoiceHeader title="How should your caption be structured?" />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {[
+            {([
               {
-                emoji: "🤖",
+                art: "auto",
                 title: "Auto (AI Chooses)",
                 subtitle:
                   "AI analyzes the topic and automatically selects or combines the best caption structure.",
                 onClick: onSelectAuto,
               },
               {
-                emoji: "✍️",
+                art: "custom",
                 title: "Define Your Own",
                 subtitle: "Tell us exactly how you want your caption structured.",
                 onClick: onSelectCustom,
               },
               {
-                emoji: "📋",
+                art: "template",
                 title: "Choose a Template",
                 subtitle: "Pick from proven caption frameworks.",
                 onClick: onSelectTemplateMode,
               },
-            ].map((opt) => (
-              <ChoiceCard key={opt.title} emoji={opt.emoji} title={opt.title} subtitle={opt.subtitle} onClick={opt.onClick} />
+            ] as const).map((opt) => (
+              <ChoiceCard key={opt.title} art={<StructureArt kind={opt.art} />} title={opt.title} subtitle={opt.subtitle} onClick={opt.onClick} />
             ))}
           </div>
         </>
@@ -144,9 +141,8 @@ export function CaptionSetup({
             {(getTemplatesByCategory()[selectedCategory] ?? []).map((template) => (
               <ChoiceCard
                 key={template.id}
-                emoji={template.emoji}
                 title={template.name}
-                subtitle={template.structure.join(" → ")}
+                steps={template.structure}
                 onClick={() => onTemplatePick(template.id)}
               />
             ))}

@@ -14,7 +14,6 @@ import {
   Plus,
   Search,
   Settings,
-  ShieldCheck,
   Sparkles,
   User,
   UserRound,
@@ -33,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useCurrentUser, type CurrentUser } from "@/lib/hooks/useCurrentUser"
+import { ConsoleMark } from "@/components/brand/ConsoleMark"
 import { useInternAccess } from "@/lib/hooks/useInternAccess"
 import { useIdeaSessionStore } from "@/lib/store/ideaSessionStore"
 import { useCreditStore } from "@/lib/store/creditStore"
@@ -442,9 +442,9 @@ export function AppChrome({
             {isAdmin && (
               <Link
                 href="/admin"
-                className="hidden h-7 items-center gap-1 rounded-full bg-brand-soft px-2.5 text-caption font-semibold text-brand transition-colors hover:bg-brand-soft/70 md:inline-flex"
+                className="hidden h-7 items-center gap-1.5 rounded-control-sm bg-foreground px-2.5 text-caption font-semibold text-background transition-opacity duration-(--motion-fast) hover:opacity-85 md:inline-flex"
               >
-                <ShieldCheck className="size-3.5" aria-hidden />
+                <ConsoleMark />
                 Admin
               </Link>
             )}

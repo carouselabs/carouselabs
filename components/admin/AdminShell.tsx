@@ -21,7 +21,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ArrowLeft,
-  ShieldCheck,
   ScrollText,
   Megaphone,
   Search,
@@ -40,6 +39,7 @@ import {
   X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ConsoleMark } from "@/components/brand/ConsoleMark"
 import { GlobalSearch } from "@/components/admin/GlobalSearch"
 import { useStoredState } from "@/components/admin/useStoredState"
 
@@ -277,8 +277,8 @@ export function AdminShell({
               <Menu className="size-5" aria-hidden />
             </button>
             <h1 className="truncate text-body font-semibold tracking-[-0.01em]">{pageTitle(pathname)}</h1>
-            <span className="hidden shrink-0 items-center gap-1 rounded-full bg-brand-soft px-2.5 py-0.5 text-caption font-medium text-brand sm:inline-flex">
-              <ShieldCheck className="size-3" aria-hidden />
+            <span className="hidden shrink-0 items-center gap-1.5 rounded-control-sm border border-border px-2 py-0.5 text-caption font-medium text-muted-foreground sm:inline-flex">
+              <ConsoleMark className="size-3" />
               Admin
             </span>
           </div>

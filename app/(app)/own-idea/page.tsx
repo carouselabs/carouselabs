@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, ArrowRight, Sparkles, Loader2, Pencil, AlertCircle } from "lucide-react"
+import { ArrowLeft, ArrowRight, Loader2, Pencil, AlertCircle } from "lucide-react"
 import { countWords, truncateToWords } from "@/lib/wordCount"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -222,11 +222,7 @@ export default function OwnIdeaPage() {
                 )}
 
                 <Button variant="brand" size="lg" onClick={handleGenerate} disabled={!structure.trim()} className="mt-2 self-start">
-                  {isGenerating ? (
-                    <Loader2 className="animate-spin" aria-hidden />
-                  ) : (
-                    <Sparkles aria-hidden />
-                  )}
+                  {isGenerating && <Loader2 className="animate-spin" aria-hidden />}
                   Generate →
                 </Button>
               </>

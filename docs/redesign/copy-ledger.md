@@ -220,3 +220,16 @@ What moved, no wording changed:
 | "Intern sections" | Name of the intern profile tab list | no |
 | "{label}: {value}" | Screen-reader name of a figure that's a link (e.g. "Paid: 96") | no |
 
+## Follow-up: real logos, no emoji (2026-10-12)
+
+No sentence was reworded. Emoji that sat in front of labels were removed (the words stay):
+
+| Before | After | Where |
+| --- | --- | --- |
+| "🤖 Auto structure", "✍️ Custom structure", "📋 Template", "{emoji} {template name}" | "Auto structure", "Custom structure", "Template", "{template name}" | Structure tag in the create flows |
+| "{emoji} {platform}" | platform logo + "{platform}" | Platform tag |
+| "⚠️ Heads up — LinkedIn will show these…" | warning icon + the same sentence | Carousel post dialog |
+| "⭐ {badge}" | "{badge}" | Plan card badge |
+| 🥇 🥈 🥉 | "1", "2", "3" on gold / silver / bronze discs (screen readers: "Rank 1") | Intern leaderboard, admin interns |
+
+Moved, same words: "Tailored to your profile" now labels the suggestion list on the dashboard (it named the topic field before); the platform card shows "3,000" and "chars" on two lines.

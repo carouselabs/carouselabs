@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { AlertTriangle, CheckCircle2, Info, Sparkles, XIcon, OctagonAlert } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Info, XIcon, OctagonAlert } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -14,7 +14,7 @@ const tones: Record<BannerTone, { box: string; icon: React.ReactNode }> = {
   },
   brand: {
     box: "border-[color-mix(in_oklab,var(--brand),transparent_75%)] bg-brand-soft",
-    icon: <Sparkles className="size-4 text-brand" aria-hidden />,
+    icon: <span aria-hidden className="grid size-4 place-items-center"><span className="size-2 rounded-full bg-brand" /></span>,
   },
   success: {
     box: "border-[color-mix(in_oklab,var(--success),transparent_75%)] bg-success-soft",

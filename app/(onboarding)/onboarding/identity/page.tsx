@@ -42,7 +42,6 @@ export default function IdentityPage() {
           <OptionCard
             key={r.id}
             value={r.id}
-            icon={<span className="text-lg leading-none">{r.emoji}</span>}
             title={r.label}
             layout="row"
             className="sm:p-4"

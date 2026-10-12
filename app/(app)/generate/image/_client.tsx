@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Sparkles, Copy, Check, Download, RefreshCw, Loader2, Save } from "lucide-react"
+import { Copy, Check, Download, RefreshCw, Loader2, Save } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { controlClasses } from "@/components/ui/input"
@@ -12,6 +12,7 @@ import {
   CaptionSkeleton,
   CategoryChips,
   ChoiceCard,
+  StructureArt,
   ChoiceHeader,
   CreateToolbar,
   ErrorNotice,
@@ -965,7 +966,6 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
                   onChange={setUseVoiceGuidelines}
                 />
                 <Button size="lg" onClick={() => void streamCaption()}>
-                  <Sparkles aria-hidden />
                   Generate Caption
                 </Button>
               </div>
@@ -1120,25 +1120,25 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
                 />
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <ChoiceCard
-                    emoji="🤖"
+                    art={<StructureArt kind="auto" />}
                     title="Let AI Decide"
                     subtitle="AI analyzes your content and picks the best visual structure automatically."
                     onClick={handleSelectImageAuto}
                   />
                   <ChoiceCard
-                    emoji="✍️"
+                    art={<StructureArt kind="custom" />}
                     title={<>I&apos;ll Define It</>}
                     subtitle="Describe exactly how you want the image structured."
                     onClick={handleSelectImageCustomMode}
                   />
                   <ChoiceCard
-                    emoji="📋"
+                    art={<StructureArt kind="template" />}
                     title="Choose a Template"
                     subtitle="Pick from 20 proven visual structures."
                     onClick={handleSelectImageTemplateMode}
                   />
                   <ChoiceCard
-                    emoji="🖼️"
+                    art={<StructureArt kind="reference" />}
                     title={<>Follow My Reference Image&apos;s Structure</>}
                     subtitle={
                       referenceImage
@@ -1277,7 +1277,6 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
                         )}
                       >
                         <Button size="lg" onClick={() => void generateImageForOwnIdea().catch(() => {})}>
-                          <Sparkles aria-hidden />
                           Generate Image
                         </Button>
                       </div>

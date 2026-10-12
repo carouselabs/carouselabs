@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Sparkles, Loader2, PanelRightClose, PanelRightOpen, RefreshCw } from "lucide-react"
+import { Loader2, PanelRightClose, PanelRightOpen, RefreshCw } from "lucide-react"
 import { CAPTION_TEMPLATES, CATEGORY_ORDER } from "@/lib/captionTemplates"
 import { isValidPlatform, validatePostForPlatform } from "@/lib/platforms"
 import { cn } from "@/lib/utils"
@@ -496,7 +496,7 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
                   onChange={setUseVoiceGuidelines}
                 />
                 <Button size="lg" onClick={() => void generate(tone).catch(() => {})} disabled={isGenerating}>
-                  {isGenerating ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
+                  {isGenerating && <Loader2 className="animate-spin" aria-hidden />}
                   {isGenerating ? "Generating…" : "Generate Caption"}
                 </Button>
               </div>

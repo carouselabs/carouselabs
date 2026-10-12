@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Sparkles, Copy, Check, Loader2, Save } from "lucide-react"
+import { Copy, Check, Loader2, Save, TriangleAlert } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { controlClasses } from "@/components/ui/input"
@@ -13,6 +13,7 @@ import {
   CaptionSkeleton,
   CategoryChips,
   ChoiceCard,
+  StructureArt,
   ChoiceHeader,
   CreateToolbar,
   ErrorNotice,
@@ -1074,7 +1075,6 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
                   onChange={setUseVoiceGuidelines}
                 />
                 <Button size="lg" onClick={() => void streamCaption()}>
-                  <Sparkles aria-hidden />
                   Generate Caption
                 </Button>
               </div>
@@ -1229,25 +1229,25 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
                 />
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <ChoiceCard
-                    emoji="🤖"
+                    art={<StructureArt kind="auto" />}
                     title="Let AI Decide"
                     subtitle="AI analyzes your content and picks the best slide structure automatically."
                     onClick={handleSelectCarouselAuto}
                   />
                   <ChoiceCard
-                    emoji="✍️"
+                    art={<StructureArt kind="custom" />}
                     title={<>I&apos;ll Define It</>}
                     subtitle="Describe exactly how you want the carousel structured."
                     onClick={handleSelectCarouselCustomMode}
                   />
                   <ChoiceCard
-                    emoji="📋"
+                    art={<StructureArt kind="template" />}
                     title="Choose a Template"
                     subtitle="Pick from 30 proven slide structures."
                     onClick={handleSelectCarouselTemplateMode}
                   />
                   <ChoiceCard
-                    emoji="🖼️"
+                    art={<StructureArt kind="reference" />}
                     title={<>Follow My Reference Image&apos;s Structure</>}
                     subtitle={
                       referenceImage
@@ -1303,7 +1303,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
                     <ChoiceCard
                       key={template.id}
                       title={template.name}
-                      subtitle={template.slides.join(" → ")}
+                      steps={template.slides}
                       onClick={() => handleCarouselTemplatePick(template.id)}
                     />
                   ))}
@@ -1377,7 +1377,6 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
                       {slideImages.length === 0 && !isGeneratingSlides && !isGeneratingImages && (
                         <div className="flex min-h-80 flex-col items-center justify-center gap-4 rounded-card border border-dashed border-control-border/60 bg-surface px-6 py-12">
                           <Button size="lg" onClick={() => setConfirmOpen(true)}>
-                            <Sparkles aria-hidden />
                             Generate Carousel
                           </Button>
                         </div>
@@ -1551,9 +1550,12 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              ⚠️ Heads up — LinkedIn will show these as separate images, not swipeable
-              slides.
+            <DialogTitle className="flex items-start gap-2.5">
+              <TriangleAlert className="mt-1 size-5 shrink-0 text-warning" aria-hidden />
+              <span>
+                Heads up — LinkedIn will show these as separate images, not swipeable
+                slides.
+              </span>
             </DialogTitle>
             <DialogDescription>
               For the best carousel experience (swipeable slides), download the images and

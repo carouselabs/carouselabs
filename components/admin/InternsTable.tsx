@@ -20,6 +20,7 @@ import {
   tableCls,
 } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
+import { RankMark } from "@/components/intern/RankMark"
 
 type Progress = { percentComplete: number; daysRemaining: number; isCompleted: boolean }
 type AttendanceFlag = "good" | "warning" | "critical"
@@ -93,8 +94,6 @@ function UnreadMessageDot() {
   )
 }
 
-const MEDALS = ["🥇", "🥈", "🥉"]
-
 const STATUS_FILTERS = ["all", "active", "completed", "terminated"] as const
 type StatusFilter = (typeof STATUS_FILTERS)[number]
 
@@ -129,14 +128,7 @@ function ProgressBar({ progress }: { progress: Progress }) {
 }
 
 function RankBadge({ rank }: { rank: number }) {
-  const medal = MEDALS[rank - 1]
-  return medal ? (
-    <span className="text-body leading-none" aria-label={`Rank ${rank}`}>
-      {medal}
-    </span>
-  ) : (
-    <span className="text-caption font-semibold text-muted-foreground tabular-nums">#{rank}</span>
-  )
+  return <RankMark rank={rank} />
 }
 
 const DURATION_PRESETS = [1, 2, 3, 6]

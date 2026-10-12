@@ -144,26 +144,26 @@ export function CreditsManager() {
 
   const alertList = (list: AdminUserRow[], empty: string) => (
     <div className="space-y-2">
-      {list.length === 0 && <p className="text-[12.5px] text-[#6A6A6A]">{empty}</p>}
+      {list.length === 0 && <p className="text-caption text-muted-foreground/80">{empty}</p>}
       {list.map((u) => (
         <label
           key={u.id}
-          className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#2A2A2A] bg-[#141414] px-3.5 py-2.5 hover:border-[#3A3A3A] transition-colors"
+          className="flex cursor-pointer items-center gap-3 rounded-control-sm border border-border bg-background px-3.5 py-2.5 hover:border-control-border transition-colors"
         >
           <input
             type="checkbox"
             checked={selected.has(u.id)}
             onChange={() => toggle(u.id)}
-            className="h-4 w-4 accent-[#7C3AED]"
+            className="h-4 w-4 accent-brand"
           />
           <Link
             href={`/admin/users/${u.id}`}
-            className="text-[12.5px] text-[#A78BFA] hover:underline"
+            className="text-caption text-brand hover:underline"
             onClick={(e) => e.stopPropagation()}
           >
             {u.email}
           </Link>
-          <span className="ml-auto text-[12px] tabular-nums text-[#8A8A8A]">
+          <span className="ml-auto text-caption tabular-nums text-muted-foreground">
             {u.creditsRemaining} left · {u.creditsUsed} used
           </span>
         </label>
@@ -177,13 +177,13 @@ export function CreditsManager() {
       <div className="grid gap-6 lg:grid-cols-2">
         <AdminCard
           title={`Low credits (< ${LOW_THRESHOLD}) — ${low.length}`}
-          actions={<AlertTriangle className="h-4 w-4 text-amber-500" />}
+          actions={<AlertTriangle className="h-4 w-4 text-warning" />}
         >
           {alertList(low, "No Pro/Growth users are running low.")}
         </AdminCard>
         <AdminCard
           title={`Out of credits — ${zero.length}`}
-          actions={<AlertTriangle className="h-4 w-4 text-red-400" />}
+          actions={<AlertTriangle className="h-4 w-4 text-danger" />}
         >
           {alertList(zero, "No Pro/Growth users are at zero.")}
         </AdminCard>
@@ -203,7 +203,7 @@ export function CreditsManager() {
             <Coins className="h-3.5 w-3.5" />
             Grant to {selected.size} selected
           </AdminButton>
-          <span className="text-[11px] text-[#6A6A6A]">
+          <span className="text-caption text-muted-foreground/80">
             Tick users in the alert lists above, then grant extra credits to all of them at once.
           </span>
         </div>
@@ -236,7 +236,7 @@ export function CreditsManager() {
                 {topSpenders.map((u) => (
                   <tr key={u.id} className={tableCls.row}>
                     <td className={tableCls.td}>
-                      <Link href={`/admin/users/${u.id}`} className="text-[#A78BFA] hover:underline">
+                      <Link href={`/admin/users/${u.id}`} className="text-brand hover:underline">
                         {u.email}
                       </Link>
                     </td>
@@ -257,7 +257,7 @@ export function CreditsManager() {
       <AdminCard title="Quick actions">
         <div className="flex flex-wrap items-end gap-6">
           <div className="space-y-2">
-            <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+            <label className="text-caption font-semibold text-muted-foreground">
               Grant credits to email
             </label>
             <div className="flex gap-2">
@@ -280,7 +280,7 @@ export function CreditsManager() {
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+            <label className="text-caption font-semibold text-muted-foreground">
               Danger zone
             </label>
             <div>

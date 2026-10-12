@@ -1,11 +1,25 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import Link from "next/link"
-import { ArrowLeft, History, Sparkles, Loader2 } from "lucide-react"
-import { CAPTION_TEMPLATES, CATEGORY_ORDER, getTemplatesByCategory } from "@/lib/captionTemplates"
-import { CAPTION_PLATFORMS } from "@/lib/captionPlatforms"
+import { Sparkles, Loader2, PanelRightClose, PanelRightOpen, RefreshCw } from "lucide-react"
+import { CAPTION_TEMPLATES, CATEGORY_ORDER } from "@/lib/captionTemplates"
 import { isValidPlatform, validatePostForPlatform } from "@/lib/platforms"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { controlClasses } from "@/components/ui/input"
+import {
+  BackButton,
+  BackLink,
+  CreateToolbar,
+  ErrorNotice,
+  LoadingState,
+  PlatformChecks,
+  PlatformTag,
+  RestoredTag,
+  StructureTag,
+  Workspace,
+} from "@/components/create/CreateKit"
+import { CaptionSetup } from "@/components/create/CaptionSetup"
 import { CaptionEditor } from "@/components/generate/CaptionEditor"
 import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { ToneSelector, type Tone } from "@/components/generate/ToneSelector"
@@ -83,6 +97,11 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
   const [instruction, setInstruction] = useState("")
   // Opt-in flag: apply the user's saved voice guidelines on the next generation.
   const [useVoiceGuidelines, setUseVoiceGuidelines] = useState(false)
+  // Presentation only: the editor reports its save so Regenerate stays
+  // disabled meanwhile (it used to share a toolbar with Save), and the
+  // settings panel can be folded away on wide screens.
+  const [editorSaving, setEditorSaving] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(true)
   const bufferRef = useRef("")
   const didInit = useRef(false)
   const [writer] = useState(() => createDraftWriter(ideaId, fetch, `captionDraft_${ideaId}`))
@@ -352,386 +371,214 @@ export function CaptionClient({ ideaId, ideaHook, hasGuidelines }: CaptionClient
     completeSelection("template", null, templateId)
   }
 
-  const customWordCount = customStructure.trim()
-    ? customStructure.trim().split(/\s+/).length
-    : 0
+  const steps = ["Platform", "Structure", "Caption"]
+  const stepIndex = captionStep === "platform-select" ? 0 : captionStep === "generating" ? 2 : 1
 
   // Session-restore check still in flight — avoids flashing the
   // platform-select screen before a restored session takes over.
   if (initializing) {
-    return (
-      <div className="max-w-2xl mx-auto flex flex-col items-center justify-center min-h-[50vh] gap-3">
-        <div className="w-6 h-6 border-[3px] border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
-        <p className="text-[13px] text-[#6B7280]">Checking for a saved session...</p>
-      </div>
-    )
+    return <LoadingState label="Checking for a saved session..." />
   }
 
   // ── Structure selection screens ───────────────────────────────
   if (captionStep !== "generating") {
     return (
-      <div className="max-w-2xl mx-auto flex flex-col gap-8">
-        {/* Back — each step returns to the previous one */}
-        {captionStep === "platform-select" ? (
-          <Link
-            href={`/idea/${ideaId}`}
-            className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
-          >
-            <ArrowLeft size={13} strokeWidth={2.2} />
-            Back to breakdown
-          </Link>
-        ) : (
-          <button
-            onClick={() =>
-              setCaptionStep(
-                captionStep === "structure-select" ? "platform-select" : "structure-select",
-              )
-            }
-            className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
-          >
-            <ArrowLeft size={13} strokeWidth={2.2} />
-            {captionStep === "structure-select" ? "Back to platforms" : "Back to structure options"}
-          </button>
-        )}
-
-        {/* Idea hook */}
-        <div className="flex flex-col gap-1.5">
-          <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
-            Caption for
-          </p>
-          <p className="text-[15px] font-medium text-[#4B5563] leading-[1.4]">
-            {ideaHook}
-          </p>
-          {/* Selected platform carries through the later steps */}
-          {selectedPlatform && captionStep !== "platform-select" && (
-            <span className="mt-1 self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
-              {(() => {
-                const p = CAPTION_PLATFORMS.find((p) => p.id === selectedPlatform)
-                return p ? `${p.emoji} ${p.name}` : selectedPlatform
-              })()}
-            </span>
-          )}
-        </div>
-
-        {/* ── Platform selection: 8 cards ──────────────────────── */}
-        {captionStep === "platform-select" && (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
-                Which platform is this caption for?
-              </h2>
-              <p className="text-[13px] text-[#6B7280] leading-[1.55]">
-                We&apos;ll tailor the tone, length, and style to match.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {CAPTION_PLATFORMS.map((platform) => (
-                <button
-                  key={platform.id}
-                  onClick={() => handleSelectPlatform(platform.id)}
-                  className="group flex flex-col items-start gap-2 p-4 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
-                >
-                  <span className="text-[24px] leading-none">{platform.emoji}</span>
-                  <span className="text-[13px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
-                    {platform.name}
-                  </span>
-                  <span className="self-start text-[10px] font-semibold px-1.5 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)] tabular-nums">
-                    {platform.charLimit.toLocaleString()} chars
-                  </span>
-                  <span className="text-[11px] text-[#9CA3AF] leading-[1.5]">
-                    {platform.guidance}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Main selection: 3 large cards ────────────────────── */}
-        {captionStep === "structure-select" && (
-          <div className="flex flex-col gap-4">
-            <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
-              How should your caption be structured?
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[
-                {
-                  emoji: "🤖",
-                  title: "Auto (AI Chooses)",
-                  subtitle:
-                    "AI analyzes the topic and automatically selects or combines the best caption structure.",
-                  onClick: handleSelectAuto,
-                },
-                {
-                  emoji: "✍️",
-                  title: "Define Your Own",
-                  subtitle: "Tell us exactly how you want your caption structured.",
-                  onClick: handleSelectCustom,
-                },
-                {
-                  emoji: "📋",
-                  title: "Choose a Template",
-                  subtitle: "Pick from proven caption frameworks.",
-                  onClick: handleSelectTemplateMode,
-                },
-              ].map((opt) => (
-                <button
-                  key={opt.title}
-                  onClick={opt.onClick}
-                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
-                >
-                  <span className="text-[26px] leading-none">{opt.emoji}</span>
-                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
-                    {opt.title}
-                  </span>
-                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
-                    {opt.subtitle}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Custom structure input ───────────────────────────── */}
-        {captionStep === "custom-input" && (
-          <div className="flex flex-col gap-4">
-            <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
-              Define your caption structure
-            </h2>
-            <div className="flex flex-col gap-2">
-              <textarea
-                value={customStructure}
-                onChange={(e) => setCustomStructure(e.target.value)}
-                rows={5}
-                autoFocus
-                placeholder="Describe how you want your caption structured (e.g. Hook, then 3 quick tips, then a question at the end)"
-                className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[14px] text-[#0A0A0A] leading-[1.6] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.5)] transition-colors"
-              />
-              <p className="text-[11px] text-[#ADA99F] tabular-nums">
-                {customWordCount} {customWordCount === 1 ? "word" : "words"}
-              </p>
-            </div>
-            <button
-              onClick={handleCustomContinue}
-              disabled={!customStructure.trim()}
-              className={[
-                "self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
-                customStructure.trim()
-                  ? "bg-[#7C3AED] hover:bg-[#6D28D9] cursor-pointer shadow-[0_0_24px_rgba(124,58,237,0.28)]"
-                  : "bg-[rgba(124,58,237,0.3)] cursor-not-allowed opacity-50",
-              ].join(" ")}
-            >
-              Continue →
-            </button>
-          </div>
-        )}
-
-        {/* ── Template grid — tabbed by category ───────────────── */}
-        {captionStep === "template-select" && (
-          <div className="flex flex-col gap-4">
-            <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
-              Pick a caption framework
-            </h2>
-
-            {/* Category tabs — horizontally scrollable */}
-            <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
-              {CATEGORY_ORDER.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={[
-                    "flex-shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-all cursor-pointer",
-                    selectedCategory === cat
-                      ? "bg-[#7C3AED] text-white shadow-[0_0_16px_rgba(124,58,237,0.25)]"
-                      : "bg-[#F4F2EC] text-[#6B7280] border border-[#E9E7E1] hover:border-[rgba(124,58,237,0.4)] hover:text-[#7C3AED]",
-                  ].join(" ")}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-
-            {/* Templates for the selected category only */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {(getTemplatesByCategory()[selectedCategory] ?? []).map((template) => (
-                <button
-                  key={template.id}
-                  onClick={() => handleTemplatePick(template.id)}
-                  className="group flex flex-col items-start gap-2 p-4 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
-                >
-                  <span className="text-[20px] leading-none">{template.emoji}</span>
-                  <span className="text-[13px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
-                    {template.name}
-                  </span>
-                  <span className="text-[11px] text-[#9CA3AF] leading-[1.5]">
-                    {template.structure.join(" → ")}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+      <div>
+        <CreateToolbar
+          // Back — each step returns to the previous one
+          back={
+            captionStep === "platform-select" ? (
+              <BackLink href={`/idea/${ideaId}`}>Back to breakdown</BackLink>
+            ) : (
+              <BackButton
+                onClick={() =>
+                  setCaptionStep(captionStep === "structure-select" ? "platform-select" : "structure-select")
+                }
+              >
+                {captionStep === "structure-select" ? "Back to platforms" : "Back to structure options"}
+              </BackButton>
+            )
+          }
+          label="Caption for"
+          title={ideaHook}
+          steps={steps}
+          current={stepIndex}
+        />
+        <CaptionSetup
+          step={captionStep}
+          platformQuestion="Which platform is this caption for?"
+          selectedPlatform={selectedPlatform}
+          onSelectPlatform={handleSelectPlatform}
+          onSelectAuto={handleSelectAuto}
+          onSelectCustom={handleSelectCustom}
+          onSelectTemplateMode={handleSelectTemplateMode}
+          customStructure={customStructure}
+          onCustomStructureChange={setCustomStructure}
+          onCustomContinue={handleCustomContinue}
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+          onTemplatePick={handleTemplatePick}
+        />
       </div>
     )
   }
 
+  const hasEditor = Boolean(caption || isGenerating)
+
   return (
-    <div className="max-w-2xl mx-auto flex flex-col gap-8">
-      {browserRecovery !== null && <DraftRecoveryNotice onRestore={() => {
-        setCaption(browserRecovery)
-        persistBrowserDraft(browserRecovery, writer.revision(), true)
-        setBrowserRecovery(null)
-      }} />}
-      {/* Back */}
-      <Link
-        href={`/idea/${ideaId}`}
-        className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
-      >
-        <ArrowLeft size={13} strokeWidth={2.2} />
-        Back to breakdown
-      </Link>
-
-      {/* Idea hook */}
-      <div className="flex flex-col gap-1.5">
-        <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
-          Caption for
-        </p>
-        <p className="text-[15px] font-medium text-[#4B5563] leading-[1.4]">
-          {ideaHook}
-        </p>
-        {restored && (
-          <span className="mt-1 self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#1A1A1A] bg-[rgba(26,26,26,0.1)] border border-[rgba(26,26,26,0.2)]">
-            <History size={11} strokeWidth={2.2} />
-            Restored from last session
-          </span>
-        )}
-        {/* Chosen platform + structure — absent on restored sessions (no selection made) */}
-        {(selectedPlatform || structureMode) && (
-          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-            {selectedPlatform && (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
-                {(() => {
-                  const p = CAPTION_PLATFORMS.find((p) => p.id === selectedPlatform)
-                  return p ? `${p.emoji} ${p.name}` : selectedPlatform
-                })()}
-              </span>
-            )}
-            {structureMode && (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
-                {structureMode === "auto" && "🤖 Auto structure"}
-                {structureMode === "custom" && "✍️ Custom structure"}
-                {structureMode === "template" &&
-                  (() => {
-                    const t = CAPTION_TEMPLATES.find((t) => t.id === selectedTemplateId)
-                    return t ? `${t.emoji} ${t.name}` : "📋 Template"
-                  })()}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Tone selector — clicking triggers regeneration */}
-      <ToneSelector
-        selected={tone}
-        onSelect={handleToneSelect}
-        disabled={isGenerating || atLimit}
+    <div>
+      <CreateToolbar
+        back={<BackLink href={`/idea/${ideaId}`}>Back to breakdown</BackLink>}
+        label="Caption for"
+        title={ideaHook}
+        steps={steps}
+        current={stepIndex}
+        right={
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-expanded={panelOpen}
+            aria-controls="caption-settings"
+            onClick={() => setPanelOpen((o) => !o)}
+            className="hidden lg:inline-flex"
+          >
+            {panelOpen ? <PanelRightClose aria-hidden /> : <PanelRightOpen aria-hidden />}
+            Settings
+          </Button>
+        }
       />
 
-      {/* Error — technical parse failures become a friendly retry message */}
-      {error && (
-        <div className="flex flex-col gap-3">
-          <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
-            {friendlyGenerationError(error)}
-          </div>
-          <button
-            onClick={() => void generate(tone).catch(() => {})}
-            disabled={isGenerating}
-            className="self-start text-[13px] font-medium text-[#1A1A1A] hover:text-black transition-colors disabled:opacity-50"
-          >
-            Try Again
-          </button>
+      <h1 className="sr-only">Caption</h1>
+
+      {browserRecovery !== null && (
+        <div className="mb-6">
+          <DraftRecoveryNotice onRestore={() => {
+            setCaption(browserRecovery)
+            persistBrowserDraft(browserRecovery, writer.revision(), true)
+            setBrowserRecovery(null)
+          }} />
         </div>
       )}
 
-      {/* Opt-in voice guidelines — only rendered if the user has saved some. Set
-          BEFORE generating so the very first caption can honor the preference. */}
-      <VoiceGuidelinesToggle
-        hasGuidelines={hasGuidelines}
-        value={useVoiceGuidelines}
-        onChange={setUseVoiceGuidelines}
+      <Workspace
+        panelId="caption-settings"
+        panelLabel="Caption settings"
+        panelOpen={panelOpen}
+        canvas={
+          <>
+            {/* Restored badge + chosen platform/structure — the latter absent on
+                restored sessions (no selection made) */}
+            {(restored || selectedPlatform || structureMode) && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {restored && <RestoredTag />}
+                {selectedPlatform && <PlatformTag platformId={selectedPlatform} />}
+                {structureMode && <StructureTag mode={structureMode} templateId={selectedTemplateId} />}
+              </div>
+            )}
+
+            {/* Error — technical parse failures become a friendly retry message */}
+            {error && (
+              <ErrorNotice
+                message={friendlyGenerationError(error)}
+                onRetry={() => void generate(tone).catch(() => {})}
+                retryDisabled={isGenerating}
+              />
+            )}
+
+            {/* First generation — no caption yet. Generates directly (not counted as a
+                regeneration); the voice-guidelines toggle sits beside the button so
+                the very first caption can honor the preference. */}
+            {!hasEditor && (
+              <div className="flex flex-col items-start gap-5 rounded-card border border-dashed border-control-border/60 bg-surface px-6 py-10 md:px-10 md:py-14">
+                <VoiceGuidelinesToggle
+                  hasGuidelines={hasGuidelines}
+                  value={useVoiceGuidelines}
+                  onChange={setUseVoiceGuidelines}
+                />
+                <Button size="lg" onClick={() => void generate(tone).catch(() => {})} disabled={isGenerating}>
+                  {isGenerating ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
+                  {isGenerating ? "Generating…" : "Generate Caption"}
+                </Button>
+              </div>
+            )}
+
+            {/* Caption editor — only once generation has started or a caption
+                exists, so the empty editor doesn't appear before the first
+                "Generate Caption" click. */}
+            {hasEditor && (
+              <CaptionEditor
+                caption={caption}
+                onChange={setCaption}
+                isGenerating={isGenerating}
+                onSave={saveCaption}
+                onSavingChange={setEditorSaving}
+              />
+            )}
+
+            {/* Real platform-limit check on the generated/edited caption — same
+                validatePostForPlatform used by Content Hub's Custom Post Composer,
+                so an AI caption that happens to run long gets the same treatment
+                as one a user typed by hand. */}
+            {!isGenerating && caption.trim() && selectedPlatform && isValidPlatform(selectedPlatform) && (
+              <PlatformChecks {...validatePostForPlatform(caption, 0, selectedPlatform)} />
+            )}
+          </>
+        }
+        panel={
+          <>
+            {/* Tone selector — clicking triggers regeneration */}
+            <ToneSelector
+              selected={tone}
+              onSelect={handleToneSelect}
+              disabled={isGenerating || atLimit}
+            />
+
+            {/* Regeneration instruction + Regenerate — only once a caption exists */}
+            {hasEditor && (
+              <div className="flex flex-col gap-2.5">
+                <textarea
+                  value={instruction}
+                  onChange={(e) => setInstruction(e.target.value)}
+                  disabled={isGenerating || atLimit}
+                  rows={3}
+                  aria-label="What should change?"
+                  placeholder="What should change? (e.g. make it shorter, add more stats, make it funnier...)"
+                  className={cn(controlClasses, "resize-none px-3 py-2.5 leading-normal md:text-label")}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleRegenerate(tone)}
+                  disabled={isGenerating || atLimit || editorSaving}
+                  title="Regenerate — 1 credit"
+                  className="self-start"
+                >
+                  {isGenerating ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
+                  Regenerate — 1 credit
+                </Button>
+              </div>
+            )}
+
+            {/* Opt-in voice guidelines — only rendered if the user has saved some.
+                Before the first caption it sits beside "Generate Caption". */}
+            {hasEditor && (
+              <VoiceGuidelinesToggle
+                hasGuidelines={hasGuidelines}
+                value={useVoiceGuidelines}
+                onChange={setUseVoiceGuidelines}
+              />
+            )}
+
+            {/* Hook variations — appear after generation completes */}
+            {hooks.length > 0 && !isGenerating && (
+              <HookVariations hooks={hooks} onSelect={handleHookReplace} />
+            )}
+
+            {/* Version history — silent */}
+            <VersionHistory versions={versions} onRestore={(content) => setCaption(content)} />
+          </>
+        }
       />
-
-      {/* First generation — no caption yet. Generates directly (not counted as a
-          regeneration) so the toggle above can be set first. */}
-      {!caption && !isGenerating && (
-        <button
-          onClick={() => void generate(tone).catch(() => {})}
-          disabled={isGenerating}
-          className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} strokeWidth={2} />}
-          {isGenerating ? "Generating…" : "Generate Caption"}
-        </button>
-      )}
-
-      {/* Regeneration instruction — only relevant once a caption exists */}
-      {(caption || isGenerating) && (
-        <textarea
-          value={instruction}
-          onChange={(e) => setInstruction(e.target.value)}
-          disabled={isGenerating || atLimit}
-          rows={2}
-          placeholder="What should change? (e.g. make it shorter, add more stats, make it funnier...)"
-          className="w-full px-3.5 py-2.5 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.5] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors disabled:opacity-50"
-        />
-      )}
-
-      {/* Caption editor — only shown once generation has started or a caption
-          exists, so the empty editor + its Regenerate button don't appear before
-          the first "Generate Caption" click. */}
-      {(caption || isGenerating) && (
-      <CaptionEditor
-        caption={caption}
-        onChange={setCaption}
-        isGenerating={isGenerating}
-        onSave={saveCaption}
-        onRegenerate={() => handleRegenerate(tone)}
-        regenerateDisabled={atLimit}
-      />
-      )}
-
-      {/* Real platform-limit check on the generated/edited caption — same
-          validatePostForPlatform used by Content Hub's Custom Post Composer,
-          so an AI caption that happens to run long gets the same treatment
-          as one a user typed by hand. */}
-      {!isGenerating && caption.trim() && selectedPlatform && isValidPlatform(selectedPlatform) && (() => {
-        const { errors, warnings } = validatePostForPlatform(caption, 0, selectedPlatform)
-        if (errors.length === 0 && warnings.length === 0) return null
-        return (
-          <div className="flex flex-col gap-1">
-            {errors.map((msg, i) => (
-              <p key={`e${i}`} className="text-[12px] leading-snug text-[rgba(239,68,68,0.9)]">
-                {msg}
-              </p>
-            ))}
-            {warnings.map((msg, i) => (
-              <p key={`w${i}`} className="text-[12px] leading-snug text-[rgba(217,119,6,0.9)]">
-                {msg}
-              </p>
-            ))}
-          </div>
-        )
-      })()}
-
-      {/* Version history — silent, below the editor */}
-      <VersionHistory versions={versions} onRestore={(content) => setCaption(content)} />
-
-      {/* Hook variations — appear after generation completes */}
-      {hooks.length > 0 && !isGenerating && (
-        <HookVariations hooks={hooks} onSelect={handleHookReplace} />
-      )}
 
       {/* Regeneration limit toast */}
       <RegenerationLimit

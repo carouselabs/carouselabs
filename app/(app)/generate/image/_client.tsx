@@ -1,8 +1,33 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import Link from "next/link"
-import { ArrowLeft, Sparkles, Copy, Check, History, Download, RefreshCw, Loader2 } from "lucide-react"
+import { Sparkles, Copy, Check, Download, RefreshCw, Loader2, Save } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { controlClasses } from "@/components/ui/input"
+import {
+  ActionBar,
+  BackButton,
+  BackLink,
+  CaptionSkeleton,
+  CategoryChips,
+  ChoiceCard,
+  ChoiceHeader,
+  CreateToolbar,
+  ErrorNotice,
+  FieldLabel,
+  LoadingState,
+  PlatformChecks,
+  PlatformTag,
+  RatioCard,
+  RestoredTag,
+  StepActions,
+  StepColumn,
+  StructureTag,
+  Workspace,
+  captionFieldClasses,
+} from "@/components/create/CreateKit"
+import { CaptionSetup } from "@/components/create/CaptionSetup"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
 import { InstructionBox } from "@/components/generate/InstructionBox"
 import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
@@ -19,9 +44,8 @@ import { createDraftWriter } from "@/lib/postDraft"
 import { persistDraftValues, reconcileDraft } from "@/lib/draftRecovery"
 import { DraftRecoveryNotice } from "@/components/generate/DraftRecoveryNotice"
 import { useCreditStore } from "@/lib/store/creditStore"
-import { CAPTION_PLATFORMS } from "@/lib/captionPlatforms"
 import { isValidPlatform, validatePostForPlatform } from "@/lib/platforms"
-import { CAPTION_TEMPLATES, CATEGORY_ORDER, getTemplatesByCategory } from "@/lib/captionTemplates"
+import { CAPTION_TEMPLATES, CATEGORY_ORDER } from "@/lib/captionTemplates"
 import { IMAGE_CATEGORY_ORDER, getImageTemplatesByCategory } from "@/lib/imageStructureTemplates"
 
 type BrowserDraft = { caption: string | null; prompt: string | null; imageUrl: string | null; size: ImageSize | null }
@@ -51,8 +75,6 @@ type StructureMode = "auto" | "custom" | "template"
 // every idea.
 type ImageStructureStep = "select" | "custom" | "template" | "ready"
 type ImageStructureMode = "auto" | "custom" | "template" | "reference-only"
-
-const SKELETON_WIDTHS = ["88%", "72%", "95%", "65%", "80%", "55%", "70%", "40%"]
 
 export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: ImageClientProps) {
   const [step, setStep] = useState<Step>(1)
@@ -773,10 +795,6 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     setImageFlowStep("structure-select")
   }
 
-  const customWordCount = customStructure.trim()
-    ? customStructure.trim().split(/\s+/).length
-    : 0
-
   // ── Image structure selection handlers (own-idea flow) ────────
   // Selection complete → log it and unlock the "Generate Image" button.
   function completeImageStructureSelection(
@@ -827,884 +845,519 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     ? customImageStructure.trim().split(/\s+/).length
     : 0
 
-  // The step-4 caption + image grid. Rendered centered normally; while the image
-  // is generating it moves into a 70% left column with the LoadingGame on the right.
-  const imageGrid = (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-      {/* Left: Caption */}
-      <div className="flex flex-col gap-3">
-        <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
-          Caption
-        </p>
-        <textarea
-          value={caption}
-          onChange={(e) => handleCaptionChange(e.target.value)}
-          rows={20}
-          className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.65] resize-none focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors"
-        />
-        {countWords(caption) > 0 && (
-          <p className="text-[11px] text-[#ADA99F] tabular-nums">{countWords(caption)} words</p>
-        )}
-        {/* Same validatePostForPlatform used by Content Hub's Custom Post
-            Composer, so an AI caption that runs long gets the same
-            treatment as one a user typed by hand. */}
-        {caption.trim() && selectedPlatform && isValidPlatform(selectedPlatform) && (() => {
-          const { errors, warnings } = validatePostForPlatform(caption, imageUrl ? 1 : 0, selectedPlatform)
-          if (errors.length === 0 && warnings.length === 0) return null
-          return (
-            <div className="flex flex-col gap-1">
-              {errors.map((msg, i) => (
-                <p key={`e${i}`} className="text-[12px] leading-snug text-[rgba(239,68,68,0.9)]">
-                  {msg}
-                </p>
-              ))}
-              {warnings.map((msg, i) => (
-                <p key={`w${i}`} className="text-[12px] leading-snug text-[rgba(217,119,6,0.9)]">
-                  {msg}
-                </p>
-              ))}
-            </div>
-          )
-        })()}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleCopyCaption}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] hover:bg-[#E9E7E1] text-[12px] font-medium text-[#6B7280] transition-colors"
-          >
-            {captionCopied ? <Check size={12} /> : <Copy size={12} />}
-            {captionCopied ? "Copied!" : "Copy Caption"}
-          </button>
-          {postId && (
-            <button
-              onClick={handleSaveDraft}
-              disabled={savingDraft}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] hover:bg-[#E9E7E1] text-[12px] font-medium text-[#6B7280] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {savingDraft && <Loader2 size={12} className="animate-spin" />}
-              {savingDraft ? "Saving…" : saved && savedSnapshot === JSON.stringify({ caption, imageUrl, imagePrompt, size }) ? "Saved!" : "Save Draft"}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Right: generated image (the prompt step is bypassed) */}
-      <div className="flex flex-col gap-4">
-        {imageUrl && !isGeneratingImage && (
-          <div className="flex flex-col gap-3">
-            <ImagePreview
-              src={imageUrl}
-              alt="Generated LinkedIn image"
-              size={size ?? undefined}
-            />
-            {/* Custom instruction — only after a successful generation. Typing
-                here + clicking "Regenerate Image" applies the change. */}
-            <InstructionBox value={imageInstruction} onChange={setImageInstruction} />
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={handleDownloadImage}
-                disabled={downloading}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-colors disabled:opacity-50"
-              >
-                {downloading ? (
-                  <Loader2 size={13} className="animate-spin" strokeWidth={2.2} />
-                ) : (
-                  <Download size={13} strokeWidth={2.2} />
-                )}
-                {downloading ? "Downloading…" : "Download HD Image"}
-              </button>
-              <button
-                onClick={handleRegenerateImage}
-                disabled={atLimit}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[rgba(26,26,26,0.3)] bg-[rgba(26,26,26,0.08)] hover:bg-[rgba(26,26,26,0.14)] text-[12px] font-medium text-[#1A1A1A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <RefreshCw size={13} strokeWidth={2.2} />
-                Regenerate Image — 8 credits
-              </button>
-              <PostToLinkedInButton
-                caption={caption}
-                imageUrls={imageUrl ? [imageUrl] : []}
-                disabled={!imageUrl}
-              />
-              <ScheduleForLaterButton getPostId={getPostIdSynced} disabled={!imageUrl || !postId} />
-            </div>
-          </div>
-        )}
-
-        {isGeneratingImage && (
-          <div
-            className={[
-              "flex flex-col items-center justify-center gap-4 rounded-2xl bg-[rgba(26,26,26,0.04)] border border-[rgba(26,26,26,0.12)]",
-              size === "1:1" ? "aspect-square" : "aspect-[4/5]",
-            ].join(" ")}
-          >
-            <div className="h-10 w-10 rounded-full border-2 border-[rgba(26,26,26,0.25)] border-t-[#1A1A1A] animate-spin" />
-            <p className="text-[13px] font-medium text-[#1A1A1A]">
-              {imageGenStage === "structure" && "Deciding the best visual structure…"}
-              {imageGenStage === "prompt" && "Writing your image prompt…"}
-              {(imageGenStage === "image" || imageGenStage === null) && "Generating your image…"}
-            </p>
-            <p className="text-[11px] text-[#9CA3AF]">(this can take up to a minute)</p>
-          </div>
-        )}
-
-        {/* Single button — generates the prompt then the image in one go. No
-            instruction box before generation; it appears only after success.
-            Every idea runs the 3-stage pipeline now. */}
-        {!imageUrl && !isGeneratingImage && (
-          <button
-            onClick={() => void generateImageForOwnIdea().catch(() => {})}
-            className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
-          >
-            <Sparkles size={14} strokeWidth={2} />
-            Generate Image
-          </button>
-        )}
-      </div>
-    </div>
-  )
+  const steps = ["Platform", "Structure", "Caption", "Format", "Reference", "Image"]
+  const stepIndex =
+    imageFlowStep === "platform-select" ? 0 : imageFlowStep !== "generating" ? 1 : step + 1
 
   // Session-restore check still in flight — avoids flashing the
   // platform-select screen before a restored session takes over.
   if (initializing) {
-    return (
-      <div className="max-w-2xl mx-auto flex flex-col items-center justify-center min-h-[50vh] gap-3">
-        <div className="w-6 h-6 border-[3px] border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
-        <p className="text-[13px] text-[#6B7280]">Checking for a saved session...</p>
-      </div>
-    )
+    return <LoadingState label="Checking for a saved session..." />
   }
 
   // ── Platform + structure selection screens (every idea) ──
   if (imageFlowStep !== "generating") {
     return (
-      <div className="max-w-2xl mx-auto flex flex-col gap-8">
-        {/* Back — each step returns to the previous one */}
-        {imageFlowStep === "platform-select" ? (
-          <Link
-            href={`/idea/${ideaId}`}
-            className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
-          >
-            <ArrowLeft size={13} strokeWidth={2.2} />
-            Back to breakdown
-          </Link>
-        ) : (
-          <button
-            onClick={() =>
-              setImageFlowStep(
-                imageFlowStep === "structure-select" ? "platform-select" : "structure-select",
-              )
-            }
-            className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
-          >
-            <ArrowLeft size={13} strokeWidth={2.2} />
-            {imageFlowStep === "structure-select" ? "Back to platforms" : "Back to structure options"}
-          </button>
-        )}
-
-        {/* Idea hook */}
-        <div className="flex flex-col gap-1.5">
-          <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
-            Image + Caption for
-          </p>
-          <p className="text-[15px] font-medium text-[#4B5563] leading-[1.4]">{ideaHook}</p>
-          {selectedPlatform && imageFlowStep !== "platform-select" && (
-            <span className="mt-1 self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
-              {(() => {
-                const p = CAPTION_PLATFORMS.find((p) => p.id === selectedPlatform)
-                return p ? `${p.emoji} ${p.name}` : selectedPlatform
-              })()}
-            </span>
-          )}
-        </div>
-
-        {/* ── Platform selection: 8 cards ──────────────────────── */}
-        {imageFlowStep === "platform-select" && (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
-                Which platform is this caption for?
-              </h2>
-              <p className="text-[13px] text-[#6B7280] leading-[1.55]">
-                We&apos;ll tailor the tone, length, and style to match.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {CAPTION_PLATFORMS.map((platform) => (
-                <button
-                  key={platform.id}
-                  onClick={() => handleSelectPlatform(platform.id)}
-                  className="group flex flex-col items-start gap-2 p-4 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
-                >
-                  <span className="text-[24px] leading-none">{platform.emoji}</span>
-                  <span className="text-[13px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
-                    {platform.name}
-                  </span>
-                  <span className="self-start text-[10px] font-semibold px-1.5 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)] tabular-nums">
-                    {platform.charLimit.toLocaleString()} chars
-                  </span>
-                  <span className="text-[11px] text-[#9CA3AF] leading-[1.5]">
-                    {platform.guidance}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Main selection: 3 large cards ────────────────────── */}
-        {imageFlowStep === "structure-select" && (
-          <div className="flex flex-col gap-4">
-            <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
-              How should your caption be structured?
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[
-                {
-                  emoji: "🤖",
-                  title: "Auto (AI Chooses)",
-                  subtitle:
-                    "AI analyzes the topic and automatically selects or combines the best caption structure.",
-                  onClick: () => {
-                    setStructureMode("auto")
-                    completeSelection("auto", null, null)
-                  },
-                },
-                {
-                  emoji: "✍️",
-                  title: "Define Your Own",
-                  subtitle: "Tell us exactly how you want your caption structured.",
-                  onClick: () => {
-                    setStructureMode("custom")
-                    setImageFlowStep("custom-input")
-                  },
-                },
-                {
-                  emoji: "📋",
-                  title: "Choose a Template",
-                  subtitle: "Pick from proven caption frameworks.",
-                  onClick: () => {
-                    setStructureMode("template")
-                    setImageFlowStep("template-select")
-                  },
-                },
-              ].map((opt) => (
-                <button
-                  key={opt.title}
-                  onClick={opt.onClick}
-                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
-                >
-                  <span className="text-[26px] leading-none">{opt.emoji}</span>
-                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
-                    {opt.title}
-                  </span>
-                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">{opt.subtitle}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Custom structure input ───────────────────────────── */}
-        {imageFlowStep === "custom-input" && (
-          <div className="flex flex-col gap-4">
-            <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
-              Define your caption structure
-            </h2>
-            <div className="flex flex-col gap-2">
-              <textarea
-                value={customStructure}
-                onChange={(e) => setCustomStructure(e.target.value)}
-                rows={5}
-                autoFocus
-                placeholder="Describe how you want your caption structured (e.g. Hook, then 3 quick tips, then a question at the end)"
-                className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[14px] text-[#0A0A0A] leading-[1.6] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.5)] transition-colors"
-              />
-              <p className="text-[11px] text-[#ADA99F] tabular-nums">
-                {customWordCount} {customWordCount === 1 ? "word" : "words"}
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                if (!customStructure.trim()) return
-                completeSelection("custom", customStructure.trim(), null)
-              }}
-              disabled={!customStructure.trim()}
-              className={[
-                "self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
-                customStructure.trim()
-                  ? "bg-[#7C3AED] hover:bg-[#6D28D9] cursor-pointer shadow-[0_0_24px_rgba(124,58,237,0.28)]"
-                  : "bg-[rgba(124,58,237,0.3)] cursor-not-allowed opacity-50",
-              ].join(" ")}
-            >
-              Continue →
-            </button>
-          </div>
-        )}
-
-        {/* ── Template grid — tabbed by category ───────────────── */}
-        {imageFlowStep === "template-select" && (
-          <div className="flex flex-col gap-4">
-            <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
-              Pick a caption framework
-            </h2>
-            <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
-              {CATEGORY_ORDER.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={[
-                    "flex-shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-all cursor-pointer",
-                    selectedCategory === cat
-                      ? "bg-[#7C3AED] text-white shadow-[0_0_16px_rgba(124,58,237,0.25)]"
-                      : "bg-[#F4F2EC] text-[#6B7280] border border-[#E9E7E1] hover:border-[rgba(124,58,237,0.4)] hover:text-[#7C3AED]",
-                  ].join(" ")}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {(getTemplatesByCategory()[selectedCategory] ?? []).map((template) => (
-                <button
-                  key={template.id}
-                  onClick={() => {
-                    setSelectedTemplateId(template.id)
-                    completeSelection("template", null, template.id)
-                  }}
-                  className="group flex flex-col items-start gap-2 p-4 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
-                >
-                  <span className="text-[20px] leading-none">{template.emoji}</span>
-                  <span className="text-[13px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
-                    {template.name}
-                  </span>
-                  <span className="text-[11px] text-[#9CA3AF] leading-[1.5]">
-                    {template.structure.join(" → ")}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+      <div>
+        <CreateToolbar
+          // Back — each step returns to the previous one
+          back={
+            imageFlowStep === "platform-select" ? (
+              <BackLink href={`/idea/${ideaId}`}>Back to breakdown</BackLink>
+            ) : (
+              <BackButton
+                onClick={() =>
+                  setImageFlowStep(imageFlowStep === "structure-select" ? "platform-select" : "structure-select")
+                }
+              >
+                {imageFlowStep === "structure-select" ? "Back to platforms" : "Back to structure options"}
+              </BackButton>
+            )
+          }
+          label="Image + Caption for"
+          title={ideaHook}
+          steps={steps}
+          current={stepIndex}
+        />
+        <CaptionSetup
+          step={imageFlowStep}
+          platformQuestion="Which platform is this caption for?"
+          selectedPlatform={selectedPlatform}
+          onSelectPlatform={handleSelectPlatform}
+          onSelectAuto={() => {
+            setStructureMode("auto")
+            completeSelection("auto", null, null)
+          }}
+          onSelectCustom={() => {
+            setStructureMode("custom")
+            setImageFlowStep("custom-input")
+          }}
+          onSelectTemplateMode={() => {
+            setStructureMode("template")
+            setImageFlowStep("template-select")
+          }}
+          customStructure={customStructure}
+          onCustomStructureChange={setCustomStructure}
+          onCustomContinue={() => {
+            if (!customStructure.trim()) return
+            completeSelection("custom", customStructure.trim(), null)
+          }}
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+          onTemplatePick={(templateId) => {
+            setSelectedTemplateId(templateId)
+            completeSelection("template", null, templateId)
+          }}
+        />
       </div>
     )
   }
 
+  const isResult = step === 4 && imageStructureStep === "ready"
+  const savedNow = saved && savedSnapshot === JSON.stringify({ caption, imageUrl, imagePrompt, size })
+
   return (
-    <div className="max-w-4xl mx-auto flex flex-col gap-8">
-      {browserRecovery !== null && <DraftRecoveryNotice onRestore={() => {
-        setCaption(browserRecovery.caption ?? "")
-        setCaptionReady(Boolean(browserRecovery.caption))
-        setImagePrompt(browserRecovery.prompt ?? "")
-        setImageUrl(browserRecovery.imageUrl)
-        setSize(browserRecovery.size)
-        setSaved(false)
-        persistBrowserDraft(browserRecovery, writer.revision(), true)
-        setBrowserRecovery(null)
-      }} />}
-      <Link
-        href={`/idea/${ideaId}`}
-        className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
-      >
-        <ArrowLeft size={13} strokeWidth={2.2} />
-        Back to breakdown
-      </Link>
+    <div>
+      <CreateToolbar
+        back={<BackLink href={`/idea/${ideaId}`}>Back to breakdown</BackLink>}
+        title={ideaHook}
+        steps={steps}
+        current={stepIndex}
+      />
 
-      <p className="text-[13px] text-[#9CA3AF] leading-[1.5] max-w-2xl">{ideaHook}</p>
+      <div className={cn("mx-auto flex w-full flex-col gap-6", !isResult && "max-w-2xl")}>
+        {browserRecovery !== null && <DraftRecoveryNotice onRestore={() => {
+          setCaption(browserRecovery.caption ?? "")
+          setCaptionReady(Boolean(browserRecovery.caption))
+          setImagePrompt(browserRecovery.prompt ?? "")
+          setImageUrl(browserRecovery.imageUrl)
+          setSize(browserRecovery.size)
+          setSaved(false)
+          persistBrowserDraft(browserRecovery, writer.revision(), true)
+          setBrowserRecovery(null)
+        }} />}
 
-      {restored && (
-        <span className="self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#1A1A1A] bg-[rgba(26,26,26,0.1)] border border-[rgba(26,26,26,0.2)]">
-          <History size={11} strokeWidth={2.2} />
-          Restored from last session
-        </span>
-      )}
-
-      {/* Chosen platform + structure */}
-      {(selectedPlatform || structureMode) && (
-        <div className="flex items-center gap-1.5 flex-wrap -mt-4">
-          {selectedPlatform && (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
-              {(() => {
-                const p = CAPTION_PLATFORMS.find((p) => p.id === selectedPlatform)
-                return p ? `${p.emoji} ${p.name}` : selectedPlatform
-              })()}
-            </span>
-          )}
-          {structureMode && (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
-              {structureMode === "auto" && "🤖 Auto structure"}
-              {structureMode === "custom" && "✍️ Custom structure"}
-              {structureMode === "template" &&
-                (() => {
-                  const t = CAPTION_TEMPLATES.find((t) => t.id === selectedTemplateId)
-                  return t ? `${t.emoji} ${t.name}` : "📋 Template"
-                })()}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* ── STEP 1: Caption Generation ── */}
-      {step === 1 && (
-        <div className="flex flex-col gap-6 max-w-2xl">
-          <h1 className="text-[22px] font-bold text-[#0A0A0A]">Your Caption</h1>
-
-          {isStreamingCaption && !caption && (
-            <div className="flex flex-col gap-2.5">
-              {SKELETON_WIDTHS.map((w, i) => (
-                <div
-                  key={i}
-                  className="h-3.5 rounded-full bg-[#ECEAE4] animate-pulse"
-                  style={{ width: w }}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* First generation — no caption yet. The voice-guidelines toggle sits
-              above the button so the user can opt in before generating. */}
-          {!caption && !isStreamingCaption && (
-            <div className="flex flex-col gap-4">
-              <VoiceGuidelinesToggle
-                hasGuidelines={hasGuidelines}
-                value={useVoiceGuidelines}
-                onChange={setUseVoiceGuidelines}
-              />
-              <button
-                onClick={() => void streamCaption()}
-                className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
-              >
-                <Sparkles size={14} strokeWidth={2} />
-                Generate Caption
-              </button>
-            </div>
-          )}
-
-          {caption && (
-            <>
-              <div className="flex flex-col gap-1.5">
-                <textarea
-                  value={caption}
-                  onChange={(e) => handleCaptionChange(e.target.value)}
-                  rows={16}
-                  className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.65] resize-none focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors"
-                />
-                <div className="flex items-center justify-between text-[11px] text-[#ADA99F] tabular-nums">
-                  <span>{countWords(caption) > 0 ? `${countWords(caption)} words` : ""}</span>
-                  <span>{caption.length} chars</span>
-                </div>
-              </div>
-              <VoiceGuidelinesToggle
-                hasGuidelines={hasGuidelines}
-                value={useVoiceGuidelines}
-                onChange={setUseVoiceGuidelines}
-              />
-              <div className="flex items-end gap-2">
-                <textarea
-                  value={captionInstruction}
-                  onChange={(e) => setCaptionInstruction(e.target.value)}
-                  disabled={isStreamingCaption || atLimit}
-                  rows={2}
-                  placeholder="What should change? (e.g. make it shorter, add more stats, make it funnier...)"
-                  className="flex-1 px-3.5 py-2.5 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.5] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors disabled:opacity-50"
-                />
-                <button
-                  onClick={handleRegenerateCaption}
-                  disabled={isStreamingCaption || atLimit}
-                  className="flex-shrink-0 px-3.5 py-2 rounded-lg bg-[rgba(26,26,26,0.1)] hover:bg-[rgba(26,26,26,0.18)] border border-[rgba(26,26,26,0.2)] text-[12px] font-medium text-[#1A1A1A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Regenerate caption — 1 credit
-                </button>
-              </div>
-            </>
-          )}
-
-          {error && (
-            <div className="flex flex-col gap-3">
-              <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
-                {friendlyGenerationError(error)}
-              </div>
-              <button
-                onClick={() => void streamCaption()}
-                disabled={isStreamingCaption}
-                className="self-start text-[13px] font-medium text-[#1A1A1A] hover:text-black transition-colors disabled:opacity-50"
-              >
-                Try Again
-              </button>
-            </div>
-          )}
-
-          <button
-            onClick={() => setStep(2)}
-            disabled={!captionReady}
-            className={[
-              "self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
-              captionReady
-                ? "bg-[#1A1A1A] hover:bg-[#000000] cursor-pointer shadow-[0_0_24px_rgba(26,26,26,0.22)]"
-                : "bg-[rgba(26,26,26,0.3)] cursor-not-allowed opacity-50",
-            ].join(" ")}
-          >
-            Continue to Image →
-          </button>
-        </div>
-      )}
-
-      {/* ── STEP 2: Choose Ratio ── */}
-      {step === 2 && (
-        <div className="flex flex-col gap-6 max-w-2xl">
-          <h1 className="text-[22px] font-bold text-[#0A0A0A]">Choose your image format</h1>
-
-          <div className="grid grid-cols-2 gap-4">
-            <button
-              onClick={() => selectSize("4:5")}
-              className={[
-                "group flex flex-col items-center gap-5 p-6 rounded-2xl border transition-all duration-150 outline-none cursor-pointer",
-                size === "4:5"
-                  ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.1)] shadow-[0_0_28px_rgba(26,26,26,0.18)]"
-                  : "border-[#E5E3DE] bg-[#F4F2EC] hover:border-[rgba(26,26,26,0.3)] hover:bg-[rgba(26,26,26,0.05)]",
-              ].join(" ")}
-            >
-              <div
-                className={[
-                  "w-10 aspect-[4/5] rounded-lg transition-colors",
-                  size === "4:5"
-                    ? "bg-[rgba(26,26,26,0.35)] border border-[rgba(26,26,26,0.6)]"
-                    : "bg-[#E5E3DE] border border-[#E5E3DE] group-hover:bg-[rgba(26,26,26,0.15)] group-hover:border-[rgba(26,26,26,0.3)]",
-                ].join(" ")}
-              />
-              <div className="flex flex-col gap-1 text-center">
-                <span
-                  className={[
-                    "text-[14px] font-semibold transition-colors",
-                    size === "4:5" ? "text-[#1A1A1A]" : "text-[#374151]",
-                  ].join(" ")}
-                >
-                  4:5 Portrait
-                </span>
-                <span className="text-[12px] text-[#9CA3AF]">Instagram, LinkedIn, Facebook</span>
-              </div>
-            </button>
-
-            <button
-              onClick={() => selectSize("1:1")}
-              className={[
-                "group flex flex-col items-center gap-5 p-6 rounded-2xl border transition-all duration-150 outline-none cursor-pointer",
-                size === "1:1"
-                  ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.1)] shadow-[0_0_28px_rgba(26,26,26,0.18)]"
-                  : "border-[#E5E3DE] bg-[#F4F2EC] hover:border-[rgba(26,26,26,0.3)] hover:bg-[rgba(26,26,26,0.05)]",
-              ].join(" ")}
-            >
-              <div
-                className={[
-                  "w-12 aspect-square rounded-lg transition-colors",
-                  size === "1:1"
-                    ? "bg-[rgba(26,26,26,0.35)] border border-[rgba(26,26,26,0.6)]"
-                    : "bg-[#E5E3DE] border border-[#E5E3DE] group-hover:bg-[rgba(26,26,26,0.15)] group-hover:border-[rgba(26,26,26,0.3)]",
-                ].join(" ")}
-              />
-              <div className="flex flex-col gap-1 text-center">
-                <span
-                  className={[
-                    "text-[14px] font-semibold transition-colors",
-                    size === "1:1" ? "text-[#1A1A1A]" : "text-[#374151]",
-                  ].join(" ")}
-                >
-                  1:1 Square
-                </span>
-                <span className="text-[12px] text-[#9CA3AF]">Instagram, Twitter/X, Facebook</span>
-              </div>
-            </button>
+        {/* Restored badge + chosen platform/structure */}
+        {(restored || selectedPlatform || structureMode) && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {restored && <RestoredTag />}
+            {selectedPlatform && <PlatformTag platformId={selectedPlatform} />}
+            {structureMode && <StructureTag mode={structureMode} templateId={selectedTemplateId} />}
           </div>
+        )}
+      </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setStep(1)}
-              className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-[#9CA3AF] hover:text-[#374151] transition-colors"
-            >
-              ← Back
-            </button>
-            <button
-              onClick={() => setStep(3)}
-              disabled={!size}
-              className={[
-                "inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
-                size
-                  ? "bg-[#1A1A1A] hover:bg-[#000000] cursor-pointer shadow-[0_0_24px_rgba(26,26,26,0.22)]"
-                  : "bg-[rgba(26,26,26,0.3)] cursor-not-allowed opacity-50",
-              ].join(" ")}
-            >
-              Continue →
-            </button>
-          </div>
-        </div>
-      )}
+      <div className="mt-8">
+        {/* ── STEP 1: Caption Generation ── */}
+        {step === 1 && (
+          <StepColumn>
+            <ChoiceHeader title="Your Caption" />
 
-      {/* ── STEP 3: Reference Image ── */}
-      {step === 3 && (
-        <div className="flex flex-col gap-6 max-w-2xl">
-          <div className="flex flex-col gap-1.5">
-            <h1 className="text-[22px] font-bold text-[#0A0A0A]">
-              Upload a style reference (optional)
-            </h1>
-            <p className="text-[13px] text-[#9CA3AF]">
-              We&apos;ll match the style — not copy the image
-            </p>
-          </div>
+            {isStreamingCaption && !caption && <CaptionSkeleton />}
 
-          <ReferenceUploader
-            value={referenceImage}
-            onChange={handleReferenceChange}
-            onClear={handleReferenceClear}
-          />
-
-          {referenceNotice && (
-            <p className="text-[12px] text-[#D97706] leading-[1.5]">{referenceNotice}</p>
-          )}
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <button
-              onClick={() => setStep(2)}
-              className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-[#9CA3AF] hover:text-[#374151] transition-colors"
-            >
-              ← Back
-            </button>
-            <button
-              onClick={() => {
-                handleReferenceClear()
-                setStep(4)
-              }}
-              className="px-4 py-2.5 rounded-xl border border-[#E5E3DE] bg-[#F1EFE9] hover:bg-[#E9E7E1] text-[13px] font-medium text-[#4B5563] transition-colors"
-            >
-              Skip, generate without reference
-            </button>
-            {referenceImage && (
-              <button
-                onClick={() => setStep(4)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
-              >
-                Continue with reference →
-              </button>
+            {/* First generation — no caption yet. The voice-guidelines toggle sits
+                above the button so the user can opt in before generating. */}
+            {!caption && !isStreamingCaption && (
+              <div className="flex flex-col items-start gap-5 rounded-card border border-dashed border-control-border/60 bg-surface px-6 py-10">
+                <VoiceGuidelinesToggle
+                  hasGuidelines={hasGuidelines}
+                  value={useVoiceGuidelines}
+                  onChange={setUseVoiceGuidelines}
+                />
+                <Button size="lg" onClick={() => void streamCaption()}>
+                  <Sparkles aria-hidden />
+                  Generate Caption
+                </Button>
+              </div>
             )}
-          </div>
-        </div>
-      )}
 
-      {/* ── STEP 4: Image structure selection or Final Screen ── */}
-      {step === 4 && imageStructureStep !== "ready" && (
-        <div className="flex flex-col gap-6 max-w-2xl">
-          {imageStructureStep === "select" ? (
-            <button
-              onClick={() => setStep(3)}
-              className="self-start flex items-center gap-1.5 text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
-            >
-              <ArrowLeft size={13} strokeWidth={2.2} />
-              Back
-            </button>
-          ) : (
-            <button
-              onClick={() => setImageStructureStep("select")}
-              className="self-start flex items-center gap-1.5 text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
-            >
-              <ArrowLeft size={13} strokeWidth={2.2} />
-              Back to structure options
-            </button>
-          )}
-
-          {/* ── Main selection: 4 cards ─────────────────────────── */}
-          {imageStructureStep === "select" && (
-            <>
-              <div className="flex flex-col gap-1.5">
-                <h1 className="text-[22px] font-bold text-[#0A0A0A]">
-                  How should this image be structured?
-                </h1>
-                <p className="text-[13px] text-[#9CA3AF]">
-                  Choose the best visual format for your content.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  onClick={handleSelectImageAuto}
-                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
-                >
-                  <span className="text-[26px] leading-none">🤖</span>
-                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
-                    Let AI Decide
-                  </span>
-                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
-                    AI analyzes your content and picks the best visual structure automatically.
-                  </span>
-                </button>
-
-                <button
-                  onClick={handleSelectImageCustomMode}
-                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
-                >
-                  <span className="text-[26px] leading-none">✍️</span>
-                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
-                    I&apos;ll Define It
-                  </span>
-                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
-                    Describe exactly how you want the image structured.
-                  </span>
-                </button>
-
-                <button
-                  onClick={handleSelectImageTemplateMode}
-                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
-                >
-                  <span className="text-[26px] leading-none">📋</span>
-                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
-                    Choose a Template
-                  </span>
-                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
-                    Pick from 20 proven visual structures.
-                  </span>
-                </button>
-
-                <button
-                  onClick={handleSelectImageReferenceOnly}
-                  disabled={!referenceImage}
-                  className={[
-                    "group flex flex-col items-start gap-2.5 p-5 rounded-xl border text-left transition-all duration-150 outline-none",
-                    referenceImage
-                      ? "bg-[#F4F2EC] border-[#E9E7E1] cursor-pointer hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
-                      : "bg-[rgba(26,26,26,0.03)] border-[#E9E7E1] cursor-not-allowed opacity-50",
-                  ].join(" ")}
-                >
-                  <span className="text-[26px] leading-none">🖼️</span>
-                  <span
-                    className={[
-                      "text-[14px] font-semibold transition-colors",
-                      referenceImage ? "text-[#0A0A0A] group-hover:text-[#7C3AED]" : "text-[#6B7280]",
-                    ].join(" ")}
-                  >
-                    Follow My Reference Image&apos;s Structure
-                  </span>
-                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
-                    {referenceImage
-                      ? "Use the same layout and structure as your uploaded reference image."
-                      : "Upload a reference image first to use this option"}
-                  </span>
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* ── Custom structure input ───────────────────────────── */}
-          {imageStructureStep === "custom" && (
-            <div className="flex flex-col gap-4">
-              <h1 className="text-[22px] font-bold text-[#0A0A0A]">
-                Define your image structure
-              </h1>
-              <div className="flex flex-col gap-2">
-                <textarea
-                  value={customImageStructure}
-                  onChange={(e) => setCustomImageStructure(e.target.value)}
-                  rows={5}
-                  autoFocus
-                  placeholder="Describe how you want this image structured (e.g. split into 3 sections showing before, during, after)"
-                  className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[14px] text-[#0A0A0A] leading-[1.6] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.5)] transition-colors"
+            {caption && (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <textarea
+                    aria-label="Caption"
+                    value={caption}
+                    onChange={(e) => handleCaptionChange(e.target.value)}
+                    rows={16}
+                    className={cn(captionFieldClasses, "resize-y bg-surface-raised")}
+                  />
+                  <div className="flex items-center justify-between text-caption text-muted-foreground tabular-nums">
+                    <span>{countWords(caption) > 0 ? `${countWords(caption)} words` : ""}</span>
+                    <span>{caption.length} chars</span>
+                  </div>
+                </div>
+                <VoiceGuidelinesToggle
+                  hasGuidelines={hasGuidelines}
+                  value={useVoiceGuidelines}
+                  onChange={setUseVoiceGuidelines}
                 />
-                <p className="text-[11px] text-[#ADA99F] tabular-nums">
-                  {customImageWordCount} {customImageWordCount === 1 ? "word" : "words"}
-                </p>
-              </div>
-              <button
-                onClick={handleImageCustomContinue}
-                disabled={!customImageStructure.trim()}
-                className={[
-                  "self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
-                  customImageStructure.trim()
-                    ? "bg-[#7C3AED] hover:bg-[#6D28D9] cursor-pointer shadow-[0_0_24px_rgba(124,58,237,0.28)]"
-                    : "bg-[rgba(124,58,237,0.3)] cursor-not-allowed opacity-50",
-                ].join(" ")}
-              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <textarea
+                    value={captionInstruction}
+                    onChange={(e) => setCaptionInstruction(e.target.value)}
+                    disabled={isStreamingCaption || atLimit}
+                    rows={2}
+                    aria-label="What should change?"
+                    placeholder="What should change? (e.g. make it shorter, add more stats, make it funnier...)"
+                    className={cn(controlClasses, "flex-1 resize-none px-3 py-2.5 leading-normal md:text-label")}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={handleRegenerateCaption}
+                    disabled={isStreamingCaption || atLimit}
+                    className="shrink-0"
+                  >
+                    Regenerate caption — 1 credit
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {error && (
+              <ErrorNotice
+                message={friendlyGenerationError(error)}
+                onRetry={() => void streamCaption()}
+                retryDisabled={isStreamingCaption}
+              />
+            )}
+
+            <StepActions>
+              <Button onClick={() => setStep(2)} disabled={!captionReady} className="ml-auto">
+                Continue to Image →
+              </Button>
+            </StepActions>
+          </StepColumn>
+        )}
+
+        {/* ── STEP 2: Choose Ratio ── */}
+        {step === 2 && (
+          <StepColumn>
+            <ChoiceHeader title="Choose your image format" />
+
+            <div className="grid grid-cols-2 gap-4">
+              <RatioCard
+                ratio="4:5"
+                selected={size === "4:5"}
+                onClick={() => selectSize("4:5")}
+                title="4:5 Portrait"
+                hint="Instagram, LinkedIn, Facebook"
+              />
+              <RatioCard
+                ratio="1:1"
+                selected={size === "1:1"}
+                onClick={() => selectSize("1:1")}
+                title="1:1 Square"
+                hint="Instagram, Twitter/X, Facebook"
+              />
+            </div>
+
+            <StepActions>
+              <Button variant="ghost" onClick={() => setStep(1)}>
+                ← Back
+              </Button>
+              <Button onClick={() => setStep(3)} disabled={!size} className="ml-auto">
                 Continue →
-              </button>
-            </div>
-          )}
+              </Button>
+            </StepActions>
+          </StepColumn>
+        )}
 
-          {/* ── Template grid — tabbed by category ───────────────── */}
-          {imageStructureStep === "template" && (
-            <div className="flex flex-col gap-4">
-              <h1 className="text-[22px] font-bold text-[#0A0A0A]">
-                Pick a visual structure
-              </h1>
-              <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
-                {IMAGE_CATEGORY_ORDER.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setSelectedImageCategory(cat)}
-                    className={[
-                      "flex-shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-all cursor-pointer",
-                      selectedImageCategory === cat
-                        ? "bg-[#7C3AED] text-white shadow-[0_0_16px_rgba(124,58,237,0.25)]"
-                        : "bg-[#F4F2EC] text-[#6B7280] border border-[#E9E7E1] hover:border-[rgba(124,58,237,0.4)] hover:text-[#7C3AED]",
-                    ].join(" ")}
+        {/* ── STEP 3: Reference Image ── */}
+        {step === 3 && (
+          <StepColumn>
+            <ChoiceHeader
+              title="Upload a style reference (optional)"
+              description={<>We&apos;ll match the style — not copy the image</>}
+            />
+
+            <ReferenceUploader
+              value={referenceImage}
+              onChange={handleReferenceChange}
+              onClear={handleReferenceClear}
+            />
+
+            {referenceNotice && (
+              <p role="status" className="text-label text-warning">{referenceNotice}</p>
+            )}
+
+            <StepActions>
+              <Button variant="ghost" onClick={() => setStep(2)}>
+                ← Back
+              </Button>
+              <div className="ml-auto flex flex-wrap items-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    handleReferenceClear()
+                    setStep(4)
+                  }}
+                >
+                  Skip, generate without reference
+                </Button>
+                {referenceImage && (
+                  <Button onClick={() => setStep(4)}>Continue with reference →</Button>
+                )}
+              </div>
+            </StepActions>
+          </StepColumn>
+        )}
+
+        {/* ── STEP 4: Image structure selection or Final Screen ── */}
+        {step === 4 && imageStructureStep !== "ready" && (
+          <StepColumn>
+            {imageStructureStep === "select" ? (
+              <BackButton onClick={() => setStep(3)}>Back</BackButton>
+            ) : (
+              <BackButton onClick={() => setImageStructureStep("select")}>Back to structure options</BackButton>
+            )}
+
+            {/* ── Main selection: 4 cards ─────────────────────────── */}
+            {imageStructureStep === "select" && (
+              <>
+                <ChoiceHeader
+                  title="How should this image be structured?"
+                  description="Choose the best visual format for your content."
+                />
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <ChoiceCard
+                    emoji="🤖"
+                    title="Let AI Decide"
+                    subtitle="AI analyzes your content and picks the best visual structure automatically."
+                    onClick={handleSelectImageAuto}
+                  />
+                  <ChoiceCard
+                    emoji="✍️"
+                    title={<>I&apos;ll Define It</>}
+                    subtitle="Describe exactly how you want the image structured."
+                    onClick={handleSelectImageCustomMode}
+                  />
+                  <ChoiceCard
+                    emoji="📋"
+                    title="Choose a Template"
+                    subtitle="Pick from 20 proven visual structures."
+                    onClick={handleSelectImageTemplateMode}
+                  />
+                  <ChoiceCard
+                    emoji="🖼️"
+                    title={<>Follow My Reference Image&apos;s Structure</>}
+                    subtitle={
+                      referenceImage
+                        ? "Use the same layout and structure as your uploaded reference image."
+                        : "Upload a reference image first to use this option"
+                    }
+                    onClick={handleSelectImageReferenceOnly}
+                    disabled={!referenceImage}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* ── Custom structure input ───────────────────────────── */}
+            {imageStructureStep === "custom" && (
+              <>
+                <ChoiceHeader title="Define your image structure" />
+                <div className="flex flex-col gap-2">
+                  <textarea
+                    value={customImageStructure}
+                    onChange={(e) => setCustomImageStructure(e.target.value)}
+                    rows={5}
+                    autoFocus
+                    aria-label="Define your image structure"
+                    placeholder="Describe how you want this image structured (e.g. split into 3 sections showing before, during, after)"
+                    className={cn(controlClasses, "resize-none px-4 py-3 leading-relaxed")}
+                  />
+                  <p className="text-caption text-muted-foreground tabular-nums" aria-live="polite">
+                    {customImageWordCount} {customImageWordCount === 1 ? "word" : "words"}
+                  </p>
+                </div>
+                <Button
+                  onClick={handleImageCustomContinue}
+                  disabled={!customImageStructure.trim()}
+                  className="self-start"
+                >
+                  Continue →
+                </Button>
+              </>
+            )}
+
+            {/* ── Template grid — tabbed by category ───────────────── */}
+            {imageStructureStep === "template" && (
+              <>
+                <ChoiceHeader title="Pick a visual structure" />
+                <CategoryChips
+                  categories={IMAGE_CATEGORY_ORDER}
+                  value={selectedImageCategory}
+                  onChange={setSelectedImageCategory}
+                />
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {(getImageTemplatesByCategory()[selectedImageCategory] ?? []).map((template) => (
+                    <ChoiceCard
+                      key={template.id}
+                      title={template.name}
+                      subtitle={template.description}
+                      onClick={() => handleImageTemplatePick(template.id)}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </StepColumn>
+        )}
+
+        {isResult && (
+          <>
+            <Workspace
+              panelLabel="Caption"
+              canvas={
+                <>
+                  <BackButton onClick={() => setStep(3)} arrow={false}>
+                    ← Back
+                  </BackButton>
+
+                  {error && (
+                    <ErrorNotice
+                      message={friendlyGenerationError(error)}
+                      onRetry={() => void generateImageForOwnIdea().catch(() => {})}
+                      retryDisabled={isGeneratingImage}
+                    />
+                  )}
+
+                  <h1 className="sr-only">Image + Caption</h1>
+
+                  <div className="mx-auto flex w-full max-w-xl flex-col gap-5">
+                    {/* Generated image (the prompt step is bypassed) */}
+                    {imageUrl && !isGeneratingImage && (
+                      <>
+                        <ImagePreview
+                          src={imageUrl}
+                          alt="Generated LinkedIn image"
+                          size={size ?? undefined}
+                        />
+                        {/* Custom instruction — only after a successful generation. Typing
+                            here + clicking "Regenerate Image" applies the change. */}
+                        <InstructionBox value={imageInstruction} onChange={setImageInstruction} />
+                        <Button
+                          variant="outline"
+                          onClick={handleRegenerateImage}
+                          disabled={atLimit}
+                          className="self-start"
+                        >
+                          <RefreshCw aria-hidden />
+                          Regenerate Image — 8 credits
+                        </Button>
+                      </>
+                    )}
+
+                    {isGeneratingImage && (
+                      <div
+                        role="status"
+                        className={cn(
+                          "flex flex-col items-center justify-center gap-4 rounded-card border border-border bg-surface px-6 text-center",
+                          size === "1:1" ? "aspect-square" : "aspect-[4/5]"
+                        )}
+                      >
+                        <Loader2 className="size-9 animate-spin text-foreground motion-reduce:animate-none" aria-hidden />
+                        <p className="text-label font-medium text-foreground">
+                          {imageGenStage === "structure" && "Deciding the best visual structure…"}
+                          {imageGenStage === "prompt" && "Writing your image prompt…"}
+                          {(imageGenStage === "image" || imageGenStage === null) && "Generating your image…"}
+                        </p>
+                        <p className="text-caption text-muted-foreground">(this can take up to a minute)</p>
+                      </div>
+                    )}
+
+                    {/* Single button — generates the prompt then the image in one go. No
+                        instruction box before generation; it appears only after success.
+                        Every idea runs the 3-stage pipeline now. */}
+                    {!imageUrl && !isGeneratingImage && (
+                      <div
+                        className={cn(
+                          "flex flex-col items-center justify-center gap-4 rounded-card border border-dashed border-control-border/60 bg-surface px-6",
+                          size === "1:1" ? "aspect-square" : "aspect-[4/5]"
+                        )}
+                      >
+                        <Button size="lg" onClick={() => void generateImageForOwnIdea().catch(() => {})}>
+                          <Sparkles aria-hidden />
+                          Generate Image
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              }
+              panel={
+                <>
+                  {/* Once generation has started, the game stays here so the user can
+                      keep playing even after the image loads. */}
+                  {gameStarted && <LoadingGame />}
+
+                  <div className="flex flex-col gap-2">
+                    <FieldLabel htmlFor="image-caption">Caption</FieldLabel>
+                    <textarea
+                      id="image-caption"
+                      value={caption}
+                      onChange={(e) => handleCaptionChange(e.target.value)}
+                      rows={16}
+                      className={cn(captionFieldClasses, "resize-y bg-surface-raised")}
+                    />
+                    {countWords(caption) > 0 && (
+                      <p className="text-caption text-muted-foreground tabular-nums">{countWords(caption)} words</p>
+                    )}
+                    {/* Same validatePostForPlatform used by Content Hub's Custom Post
+                        Composer, so an AI caption that runs long gets the same
+                        treatment as one a user typed by hand. */}
+                    {caption.trim() && selectedPlatform && isValidPlatform(selectedPlatform) && (
+                      <PlatformChecks {...validatePostForPlatform(caption, imageUrl ? 1 : 0, selectedPlatform)} />
+                    )}
+                  </div>
+                </>
+              }
+            />
+
+            <div className="mt-8">
+              <ActionBar>
+                <Button variant="ghost" size="sm" onClick={handleCopyCaption}>
+                  {captionCopied ? <Check className="text-success" aria-hidden /> : <Copy aria-hidden />}
+                  {captionCopied ? "Copied!" : "Copy Caption"}
+                </Button>
+                {postId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSaveDraft}
+                    disabled={savingDraft}
+                    aria-busy={savingDraft || undefined}
+                    className={cn(savedNow && !savingDraft && "border-success/40 bg-success-soft text-success hover:bg-success-soft")}
                   >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {(getImageTemplatesByCategory()[selectedImageCategory] ?? []).map((template) => (
-                  <button
-                    key={template.id}
-                    onClick={() => handleImageTemplatePick(template.id)}
-                    className="group flex flex-col items-start gap-1.5 p-4 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
-                  >
-                    <span className="text-[13px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
-                      {template.name}
-                    </span>
-                    <span className="text-[11px] text-[#9CA3AF] leading-[1.5]">
-                      {template.description}
-                    </span>
-                  </button>
-                ))}
-              </div>
+                    {savingDraft ? <Loader2 className="animate-spin" aria-hidden /> : savedNow ? <Check aria-hidden /> : <Save aria-hidden />}
+                    {savingDraft ? "Saving…" : savedNow ? "Saved!" : "Save Draft"}
+                  </Button>
+                )}
+                {imageUrl && !isGeneratingImage && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDownloadImage}
+                      disabled={downloading}
+                      aria-busy={downloading || undefined}
+                    >
+                      {downloading ? <Loader2 className="animate-spin" aria-hidden /> : <Download aria-hidden />}
+                      {downloading ? "Downloading…" : "Download HD Image"}
+                    </Button>
+                    <ScheduleForLaterButton getPostId={getPostIdSynced} disabled={!imageUrl || !postId} />
+                    <PostToLinkedInButton
+                      caption={caption}
+                      imageUrls={imageUrl ? [imageUrl] : []}
+                      disabled={!imageUrl}
+                    />
+                  </>
+                )}
+              </ActionBar>
             </div>
-          )}
-        </div>
-      )}
-
-      {step === 4 && imageStructureStep === "ready" && (
-        <div className="flex flex-col gap-6">
-          <button
-            onClick={() => setStep(3)}
-            className="self-start text-[12px] text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
-          >
-            ← Back
-          </button>
-
-          {error && (
-            <div className="flex flex-col gap-3">
-              <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
-                {friendlyGenerationError(error)}
-              </div>
-              <button
-                onClick={() => void generateImageForOwnIdea().catch(() => {})}
-                disabled={isGeneratingImage}
-                className="self-start text-[13px] font-medium text-[#1A1A1A] hover:text-black transition-colors disabled:opacity-50"
-              >
-                Try Again
-              </button>
-            </div>
-          )}
-
-          {/* Once generation has started, keep the 2-column layout (caption+image
-              left, game right) so the user can keep playing after the image loads.
-              Before that, the normal centered grid. */}
-          {gameStarted ? (
-            <div style={{ display: "flex", gap: "2rem", alignItems: "flex-start" }}>
-              <div style={{ flex: "0 0 70%", maxWidth: "70%" }}>{imageGrid}</div>
-              <div style={{ flex: "0 0 28%", maxWidth: "28%" }}>
-                <LoadingGame />
-              </div>
-            </div>
-          ) : (
-            imageGrid
-          )}
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       {/* Regeneration limit toast */}
       <RegenerationLimit

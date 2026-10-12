@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Clock, Search } from "lucide-react"
+import { AlertCircle, Clock, Search } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
+import { EmptyState } from "@/components/patterns/EmptyState"
+import { PageHeader } from "@/components/patterns/PageHeader"
 import { HistoryCard } from "@/components/history/HistoryCard"
 import { ThumbnailHistoryCard } from "@/components/history/ThumbnailHistoryCard"
 import { CustomPostHistoryCard } from "@/components/history/CustomPostHistoryCard"
@@ -125,41 +129,35 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-[20px] font-bold text-[#0A0A0A]">History</h1>
-        <p className="text-[13px] text-[#9CA3AF]">
-          Pick up exactly where you left off on any idea.
-        </p>
-      </div>
-
-      {/* Search */}
-      <div className="relative">
-        <Search
-          size={15}
-          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]"
-        />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by idea keyword…"
-          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors"
-        />
-      </div>
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+      <PageHeader
+        title="History"
+        description="Pick up exactly where you left off on any idea."
+        actions={
+          <div className="relative w-full sm:w-72">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by idea keyword…"
+              aria-label="Search by idea keyword…"
+              density="compact"
+              className="pl-9"
+            />
+          </div>
+        }
+      />
 
       {/* Filter tabs */}
-      <div className="flex items-center gap-1.5">
+      <div role="group" aria-label="Filter" className="no-scrollbar -mx-6 flex gap-2 overflow-x-auto px-6 sm:mx-0 sm:px-0">
         {FILTERS.map((f) => (
           <button
             key={f}
+            type="button"
+            aria-pressed={filter === f}
             onClick={() => setFilter(f)}
-            className={[
-              "px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer",
-              filter === f
-                ? "bg-[rgba(26,26,26,0.15)] text-[#1A1A1A] border border-[rgba(26,26,26,0.3)]"
-                : "text-[#9CA3AF] border border-transparent hover:text-[#374151] hover:bg-[#F1EFE9]",
-            ].join(" ")}
+            className="inline-flex h-9 shrink-0 items-center rounded-full border border-border px-3.5 text-label whitespace-nowrap text-muted-foreground transition-colors duration-(--motion-fast) hover:border-control-border hover:text-foreground aria-pressed:border-foreground aria-pressed:bg-foreground aria-pressed:text-background"
           >
             {f}
           </button>
@@ -168,63 +166,63 @@ export default function HistoryPage() {
 
       {/* Error */}
       {error && (
-        <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
+        <div role="alert" className="flex items-start gap-3 rounded-control border border-danger/25 bg-danger-soft px-4 py-3 text-label text-danger">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
           {error}
         </div>
       )}
 
       {/* Loading skeleton */}
       {loading && (
-        <div className="flex flex-col gap-3">
+        <ul aria-hidden className="flex flex-col divide-y divide-border border-y border-border">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-[120px] rounded-xl bg-[#F6F4EE] border border-[#F1EFE9] animate-pulse"
-              style={{ animationDelay: `${i * 60}ms` }}
-            />
+            <li key={i} className="flex flex-col gap-3 py-5">
+              <div className="flex gap-2">
+                <Skeleton className="h-5 w-20 rounded-full" />
+                <Skeleton className="h-5 w-24 rounded-full" />
+              </div>
+              <Skeleton className="h-6 w-4/5" />
+              <Skeleton className="h-4 w-32" />
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
       {/* List */}
       {!loading && visible.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {visible.map((entry) =>
-            entry.kind === "idea" ? (
-              <HistoryCard
-                key={entry.id}
-                entry={entry}
-                onPin={handlePin}
-                onDelete={handleDelete}
-                onDuplicate={handleDuplicate}
-                isDuplicating={duplicatingId === entry.ideaId}
-              />
-            ) : entry.kind === "thumbnail" ? (
-              <ThumbnailHistoryCard key={entry.id} entry={entry} />
-            ) : (
-              <CustomPostHistoryCard key={entry.id} entry={entry} />
-            ),
-          )}
-        </div>
+        <ul aria-label="History" className="flex flex-col divide-y divide-border border-y border-border">
+          {visible.map((entry) => (
+            <li key={entry.id}>
+              {entry.kind === "idea" ? (
+                <HistoryCard
+                  entry={entry}
+                  onPin={handlePin}
+                  onDelete={handleDelete}
+                  onDuplicate={handleDuplicate}
+                  isDuplicating={duplicatingId === entry.ideaId}
+                />
+              ) : entry.kind === "thumbnail" ? (
+                <ThumbnailHistoryCard entry={entry} />
+              ) : (
+                <CustomPostHistoryCard entry={entry} />
+              )}
+            </li>
+          ))}
+        </ul>
       )}
 
       {/* Empty state */}
       {!loading && visible.length === 0 && !error && (
-        <div className="flex flex-col items-center justify-center min-h-[40vh] text-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-[rgba(26,26,26,0.1)] border border-[rgba(26,26,26,0.18)] flex items-center justify-center">
-            <Clock size={20} className="text-[#1A1A1A]" strokeWidth={1.8} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <p className="text-[15px] font-medium text-[#6B7280]">
-              {entries.length === 0 ? "No history yet" : "Nothing matches"}
-            </p>
-            <p className="text-[13px] text-[#ADA99F] max-w-xs">
-              {entries.length === 0
-                ? "Open an idea and start generating — it'll show up here so you can continue anytime."
-                : "Try a different search or filter."}
-            </p>
-          </div>
-        </div>
+        <EmptyState
+          variant={entries.length === 0 ? "first-use" : "no-results"}
+          icon={<Clock aria-hidden />}
+          title={entries.length === 0 ? "No history yet" : "Nothing matches"}
+          description={
+            entries.length === 0
+              ? "Open an idea and start generating — it'll show up here so you can continue anytime."
+              : "Try a different search or filter."
+          }
+        />
       )}
     </div>
   )

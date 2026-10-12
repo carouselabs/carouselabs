@@ -196,24 +196,26 @@ export function SequenceBuilder({ sequenceId }: { sequenceId?: string }) {
   const enrolledCount = stats?.total ?? 0
 
   return (
-    <div className="max-w-3xl space-y-6">
+    // The steps are the canvas; the sequence's settings and Save sit beside
+    // them on wide screens; engagement runs underneath.
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_26rem] xl:grid-rows-[auto_auto_auto_1fr] xl:items-start">
       <Link
         href="/admin/sequences"
-        className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#8A8A8A] hover:text-white transition-colors"
+        className="inline-flex w-fit items-center gap-1.5 text-caption font-medium text-muted-foreground hover:text-foreground transition-colors xl:col-span-2"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
         All sequences
       </Link>
 
-      <AdminCard title={isNew ? "New Sequence" : "Edit Sequence"}>
+      <AdminCard title={isNew ? "New Sequence" : "Edit Sequence"} className="min-w-0 xl:col-start-2 xl:row-start-2">
         <div className="space-y-4">
           <div className="flex flex-wrap gap-4">
             <div className="flex-1 min-w-[220px] space-y-1.5">
-              <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">Name</label>
+              <label className="text-caption font-semibold text-muted-foreground">Name</label>
               <AdminInput value={name} onChange={(e) => setName(e.target.value)} className="w-full" placeholder="Free-plan nurture" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">Status</label>
+              <label className="text-caption font-semibold text-muted-foreground">Status</label>
               <AdminSelect value={active ? "active" : "paused"} onChange={(e) => setActive(e.target.value === "active")}>
                 <option value="active">Active</option>
                 <option value="paused">Paused</option>
@@ -222,7 +224,7 @@ export function SequenceBuilder({ sequenceId }: { sequenceId?: string }) {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+            <label className="text-caption font-semibold text-muted-foreground">
               Auto-enroll segment
             </label>
             <div className="flex flex-wrap items-center gap-2">
@@ -244,7 +246,7 @@ export function SequenceBuilder({ sequenceId }: { sequenceId?: string }) {
                 />
               )}
             </div>
-            <p className="text-[11px] text-[#6A6A6A]">
+            <p className="text-caption text-muted-foreground/80">
               Every user matching this segment is enrolled automatically going forward (checked on
               signup and by a periodic sweep) — this does not retroactively email anyone who already
               matched before the sequence was created active.
@@ -253,14 +255,14 @@ export function SequenceBuilder({ sequenceId }: { sequenceId?: string }) {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+            <label className="text-caption font-semibold text-muted-foreground">
               Stop Rule
             </label>
             <AdminSelect value={stopRule} onChange={(e) => setStopRule(e.target.value)} className="w-full sm:w-64">
               <option value="">None — run all steps regardless</option>
               <option value="upgraded">Exit if user upgrades to Pro/Growth</option>
             </AdminSelect>
-            <p className="text-[11px] text-[#6A6A6A]">
+            <p className="text-caption text-muted-foreground/80">
               Only one real stop condition is wired up today. A &quot;replied to Support&quot; rule
               isn&apos;t available — there&apos;s no support-ticket system for regular users yet (only interns
               have one).
@@ -268,7 +270,7 @@ export function SequenceBuilder({ sequenceId }: { sequenceId?: string }) {
           </div>
 
           {!isNew && enrolledCount > 0 && (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-[12px] leading-relaxed text-amber-300">
+            <div className="rounded-control-sm border border-warning/30 bg-warning/10 px-3 py-2.5 text-caption leading-relaxed text-warning">
               {enrolledCount} user{enrolledCount === 1 ? " is" : "s are"} currently enrolled in this
               sequence. Adding, removing, or reordering steps can desync their progress — enrollment
               tracks a step <em>position</em>, not a specific step, so someone mid-sequence may skip or
@@ -278,19 +280,19 @@ export function SequenceBuilder({ sequenceId }: { sequenceId?: string }) {
         </div>
       </AdminCard>
 
-      <AdminCard title="Steps">
+      <AdminCard title="Steps" className="min-w-0 xl:col-start-1 xl:row-start-2 xl:row-span-3">
         <div className="space-y-4">
-          <p className="text-[11px] text-[#6A6A6A]">
+          <p className="text-caption text-muted-foreground/80">
             Available variables:{" "}
             {AVAILABLE_VARIABLES.map((v) => (
-              <code key={v.key} className="mr-1.5 text-[#8A8A8A]">{`{{${v.key}}}`}</code>
+              <code key={v.key} className="mr-1.5 text-muted-foreground">{`{{${v.key}}}`}</code>
             ))}
           </p>
 
           {steps.map((step, i) => (
-            <div key={step.key} className="rounded-lg border border-[#2A2A2A] bg-[#141414] p-4 space-y-3">
+            <div key={step.key} className="rounded-control-sm border border-border bg-background p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-[12px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+                <span className="text-caption font-semibold text-muted-foreground">
                   Step {i + 1}
                 </span>
                 <div className="flex items-center gap-1">
@@ -298,7 +300,7 @@ export function SequenceBuilder({ sequenceId }: { sequenceId?: string }) {
                     type="button"
                     onClick={() => moveStep(step.key, -1)}
                     disabled={i === 0}
-                    className="p-1 rounded text-[#8A8A8A] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     aria-label="Move up"
                   >
                     <ChevronUp className="h-3.5 w-3.5" />
@@ -307,7 +309,7 @@ export function SequenceBuilder({ sequenceId }: { sequenceId?: string }) {
                     type="button"
                     onClick={() => moveStep(step.key, 1)}
                     disabled={i === steps.length - 1}
-                    className="p-1 rounded text-[#8A8A8A] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     aria-label="Move down"
                   >
                     <ChevronDown className="h-3.5 w-3.5" />
@@ -316,7 +318,7 @@ export function SequenceBuilder({ sequenceId }: { sequenceId?: string }) {
                     type="button"
                     onClick={() => removeStep(step.key)}
                     disabled={steps.length <= 1}
-                    className="p-1 rounded text-[#8A8A8A] hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="p-1 rounded text-muted-foreground hover:text-danger disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     aria-label="Remove step"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -325,9 +327,9 @@ export function SequenceBuilder({ sequenceId }: { sequenceId?: string }) {
               </div>
 
               <div className="flex items-center gap-2">
-                <label className="text-[12px] text-[#B0B0B0]">Send</label>
+                <label className="text-caption text-muted-foreground">Send</label>
                 {i === 0 ? (
-                  <span className="text-[12px] text-white">immediately on enrollment</span>
+                  <span className="text-caption text-foreground">immediately on enrollment</span>
                 ) : (
                   <>
                     <AdminInput
@@ -337,7 +339,7 @@ export function SequenceBuilder({ sequenceId }: { sequenceId?: string }) {
                       onChange={(e) => updateStep(step.key, { delayDays: Number(e.target.value) })}
                       className="w-20"
                     />
-                    <span className="text-[12px] text-[#B0B0B0]">day(s) after step {i}</span>
+                    <span className="text-caption text-muted-foreground">day(s) after step {i}</span>
                   </>
                 )}
               </div>
@@ -350,7 +352,7 @@ export function SequenceBuilder({ sequenceId }: { sequenceId?: string }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+                  <label className="text-caption font-semibold text-muted-foreground">
                     Subject{step.subjectB ? " (A)" : ""}
                   </label>
                   <AdminInput
@@ -360,8 +362,8 @@ export function SequenceBuilder({ sequenceId }: { sequenceId?: string }) {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
-                    Subject B <span className="font-normal normal-case text-[#6A6A6A]">(optional A/B)</span>
+                  <label className="text-caption font-semibold text-muted-foreground">
+                    Subject B <span className="font-normal normal-case text-muted-foreground/80">(optional A/B)</span>
                   </label>
                   <AdminInput
                     value={step.subjectB}
@@ -374,26 +376,26 @@ export function SequenceBuilder({ sequenceId }: { sequenceId?: string }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+                  <label className="text-caption font-semibold text-muted-foreground">
                     Body{step.bodyB ? " (A)" : ""}
                   </label>
                   <textarea
                     value={step.body}
                     onChange={(e) => updateStep(step.key, { body: e.target.value })}
                     rows={6}
-                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED]"
+                    className="w-full rounded-control-sm border border-border bg-background p-3 text-label text-foreground placeholder:text-muted-foreground/80 outline-none focus:border-brand"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
-                    Body B <span className="font-normal normal-case text-[#6A6A6A]">(optional A/B)</span>
+                  <label className="text-caption font-semibold text-muted-foreground">
+                    Body B <span className="font-normal normal-case text-muted-foreground/80">(optional A/B)</span>
                   </label>
                   <textarea
                     value={step.bodyB}
                     onChange={(e) => updateStep(step.key, { bodyB: e.target.value })}
                     rows={6}
                     placeholder="Leave blank to skip A/B for this step"
-                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED]"
+                    className="w-full rounded-control-sm border border-border bg-background p-3 text-label text-foreground placeholder:text-muted-foreground/80 outline-none focus:border-brand"
                   />
                 </div>
               </div>
@@ -409,9 +411,7 @@ export function SequenceBuilder({ sequenceId }: { sequenceId?: string }) {
         </div>
       </AdminCard>
 
-      {!isNew && sequenceId && <EngagementStatsPanel sequenceId={sequenceId} />}
-
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 xl:col-start-2 xl:row-start-3 xl:self-start">
         {!isNew ? (
           <AdminButton variant="danger" onClick={() => setConfirmDeleteOpen(true)}>
             <Trash2 className="h-3.5 w-3.5" />
@@ -424,6 +424,12 @@ export function SequenceBuilder({ sequenceId }: { sequenceId?: string }) {
           {isNew ? "Create Sequence" : "Save Changes"}
         </AdminButton>
       </div>
+
+      {!isNew && sequenceId && (
+        <div className="min-w-0 xl:col-span-2 xl:row-start-5">
+          <EngagementStatsPanel sequenceId={sequenceId} />
+        </div>
+      )}
 
       <ConfirmModal
         open={confirmDeleteOpen}

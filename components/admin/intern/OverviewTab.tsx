@@ -4,22 +4,23 @@
 // extend / complete / terminate actions.
 import { useState } from "react"
 import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react"
-import { AdminButton, AdminCard, AdminSelect, ConfirmModal, Modal, StatCard, fmtDate } from "@/components/admin/ui"
+import { AdminButton, AdminCard, AdminSelect, ConfirmModal, Modal, fmtDate } from "@/components/admin/ui"
+import { Ledger } from "@/components/admin/Ledger"
 import { useToast } from "@/components/admin/Toast"
 import { formatExtensionAmount, formatInternshipDuration } from "@/lib/internDuration"
 import type { AttendanceFlag, AttendanceRecord, InternExtensionT, InternProfile } from "@/components/admin/intern/types"
 
 const STATUS_STYLES: Record<string, string> = {
-  active: "bg-emerald-500/15 text-emerald-400",
-  extended: "bg-emerald-500/15 text-emerald-400",
-  completed: "bg-blue-500/15 text-blue-400",
-  terminated: "bg-red-500/15 text-red-400",
+  active: "bg-success/15 text-success",
+  extended: "bg-success/15 text-success",
+  completed: "bg-chart-4/15 text-chart-4",
+  terminated: "bg-danger/15 text-danger",
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const style = STATUS_STYLES[status] ?? "bg-[#2A2A2A] text-[#8A8A8A]"
+  const style = STATUS_STYLES[status] ?? "bg-surface-raised text-muted-foreground"
   return (
-    <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-semibold uppercase ${style}`}>
+    <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-caption font-semibold ${style}`}>
       {status}
     </span>
   )
@@ -45,9 +46,9 @@ function attendanceRate(attendance: AttendanceRecord[]): string {
 }
 
 const FLAG_META: Record<AttendanceFlag, { label: string; color: string; bg: string; icon: typeof CheckCircle2 }> = {
-  good: { label: "Good", color: "text-emerald-400", bg: "border-emerald-500/30 bg-emerald-500/[0.06]", icon: CheckCircle2 },
-  warning: { label: "Warning", color: "text-amber-400", bg: "border-amber-500/30 bg-amber-500/[0.06]", icon: AlertTriangle },
-  critical: { label: "Critical", color: "text-red-400", bg: "border-red-500/30 bg-red-500/[0.06]", icon: XCircle },
+  good: { label: "Good", color: "text-success", bg: "border-success/30 bg-success/[0.06]", icon: CheckCircle2 },
+  warning: { label: "Warning", color: "text-warning", bg: "border-warning/30 bg-warning/[0.06]", icon: AlertTriangle },
+  critical: { label: "Critical", color: "text-danger", bg: "border-danger/30 bg-danger/[0.06]", icon: XCircle },
 }
 
 function AttendanceFlagCard({ intern, attendance }: { intern: InternProfile; attendance: AttendanceRecord[] }) {
@@ -56,18 +57,18 @@ function AttendanceFlagCard({ intern, attendance }: { intern: InternProfile; att
   const meta = FLAG_META[intern.attendanceFlag]
   const Icon = meta.icon
   return (
-    <div className={`flex items-start gap-3 rounded-xl border p-4 ${meta.bg}`}>
+    <div className={`flex items-start gap-3 rounded-control border p-4 ${meta.bg}`}>
       <Icon className={`h-5 w-5 shrink-0 ${meta.color}`} />
       <div>
-        <div className={`text-[13px] font-semibold ${meta.color}`}>Attendance: {meta.label}</div>
-        <p className="mt-1 text-[12.5px] leading-relaxed text-[#B0B0B0]">
+        <div className={`text-label font-semibold ${meta.color}`}>Attendance: {meta.label}</div>
+        <p className="mt-1 text-caption leading-relaxed text-muted-foreground">
           {total === 0
             ? "No attendance records yet."
             : `Based on ${present} present, ${absent} absent, and ${halfDay} half-day record${
                 total === 1 ? "" : "s"
               } (${attendanceRate(attendance)} attendance rate).`}
           {intern.consecutiveAbsences >= 3 && (
-            <span className="ml-1 font-semibold text-red-400">
+            <span className="ml-1 font-semibold text-danger">
               ⚠️ {intern.consecutiveAbsences} days absent in a row.
             </span>
           )}
@@ -208,7 +209,8 @@ export function OverviewTab({
 
   return (
     <div className="space-y-6">
-      <AdminCard>
+      {/* Who they are, how far along, and their numbers — one band */}
+      <section aria-label={intern.name} className="rounded-showcase border border-border bg-surface p-6 sm:p-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-4">
             {intern.photoUrl ? (
@@ -219,17 +221,17 @@ export function OverviewTab({
                 className="h-14 w-14 shrink-0 rounded-full object-cover"
               />
             ) : (
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[20px] font-bold text-[#A78BFA]">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand/20 text-lead font-bold text-brand">
                 {intern.name[0]?.toUpperCase()}
               </div>
             )}
             <div>
               <div className="flex items-center gap-2.5">
-                <h2 className="text-[17px] font-bold text-white">{intern.name}</h2>
+                <h2 className="font-display text-[2rem] leading-[1.05] tracking-[-0.01em] text-foreground sm:text-[2.5rem]">{intern.name}</h2>
                 <StatusBadge status={intern.status} />
               </div>
-              <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">{intern.email}</p>
-              <p className="mt-1 text-[12px] text-[#6A6A6A]">
+              <p className="mt-0.5 text-caption text-muted-foreground">{intern.email}</p>
+              <p className="mt-1 text-caption text-muted-foreground/80">
                 {[intern.role, intern.department].filter(Boolean).join(" · ") || "No role/department set"}
                 {intern.phone && ` · ${intern.phone}`}
               </p>
@@ -253,7 +255,7 @@ export function OverviewTab({
         </div>
 
         <div className="mt-5">
-          <div className="mb-1.5 flex items-center justify-between text-[12px] text-[#8A8A8A]">
+          <div className="mb-1.5 flex items-center justify-between text-caption text-muted-foreground">
             <span>
               {fmtDate(intern.joinDate)} → {fmtDate(intern.endDate)}
             </span>
@@ -263,44 +265,48 @@ export function OverviewTab({
                 : `${intern.progress.daysRemaining} day${intern.progress.daysRemaining === 1 ? "" : "s"} remaining`}
             </span>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-[#2A2A2A]">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-surface-raised">
             <div
-              className={`h-full rounded-full ${intern.progress.isCompleted ? "bg-[#8A8A8A]" : "bg-[#7C3AED]"}`}
+              className={`h-full rounded-full ${intern.progress.isCompleted ? "bg-muted-foreground" : "bg-brand"}`}
               style={{ width: `${intern.progress.percentComplete}%` }}
             />
           </div>
-          <div className="mt-1 text-right text-[11px] text-[#6A6A6A]">
+          <div className="mt-1 text-right text-caption text-muted-foreground/80">
             {intern.progress.percentComplete}% complete ·{" "}
             {formatInternshipDuration(new Date(intern.joinDate), new Date(intern.endDate))} total
           </div>
         </div>
-      </AdminCard>
+
+        <Ledger
+          size="lg"
+          className="mt-6 grid-cols-2 border-t border-border pt-6 lg:grid-cols-4"
+          items={[
+            { label: "Total Points", value: intern.totalPoints },
+            { label: "Attendance Rate", value: attendanceRate(attendance) },
+            {
+              label: "Leave Used",
+              value: `${intern.leaveBalance.used}/${intern.leaveBalance.total}`,
+              hint: `${intern.leaveBalance.remaining} remaining`,
+            },
+            { label: "Leaderboard Rank", value: intern.rank ? `#${intern.rank}` : "—" },
+          ]}
+        />
+      </section>
 
       <AttendanceFlagCard intern={intern} attendance={attendance} />
-
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard label="Total Points" value={intern.totalPoints} />
-        <StatCard label="Attendance Rate" value={attendanceRate(attendance)} />
-        <StatCard
-          label="Leave Used"
-          value={`${intern.leaveBalance.used}/${intern.leaveBalance.total}`}
-          hint={`${intern.leaveBalance.remaining} remaining`}
-        />
-        <StatCard label="Leaderboard Rank" value={intern.rank ? `#${intern.rank}` : "—"} />
-      </div>
 
       {extensions.length > 0 && (
         <AdminCard title={`Extension History (${extensions.length})`}>
           <ul className="space-y-2.5">
             {extensions.map((x) => (
-              <li key={x.id} className="text-[12.5px] text-[#B0B0B0]">
-                <span className="font-semibold text-white">
+              <li key={x.id} className="text-caption text-muted-foreground">
+                <span className="font-semibold text-foreground">
                   {x.addedDays >= 0 ? "+" : "−"}
                   {formatExtensionAmount(x.addedDays)}
                 </span>{" "}
                 — {fmtDate(x.previousEndDate)} → {fmtDate(x.newEndDate)}
-                {x.reason && <span className="text-[#8A8A8A]"> · &ldquo;{x.reason}&rdquo;</span>}
-                <span className="text-[#6A6A6A]">
+                {x.reason && <span className="text-muted-foreground"> · &ldquo;{x.reason}&rdquo;</span>}
+                <span className="text-muted-foreground/80">
                   {" "}
                   · by {x.extendedBy} on {fmtDate(x.createdAt)}
                 </span>
@@ -317,32 +323,32 @@ export function OverviewTab({
         title={extendDirection === "extend" ? "Extend Internship" : "Reduce Internship"}
       >
         <div className="space-y-3">
-          <div className="flex gap-1 rounded-lg bg-[#141414] p-1">
+          <div className="flex gap-1 rounded-control-sm bg-background p-1">
             {(["extend", "reduce"] as const).map((dir) => (
               <button
                 key={dir}
                 type="button"
                 onClick={() => setExtendDirection(dir)}
-                className={`flex-1 rounded-md py-1.5 text-[12px] font-semibold capitalize transition-colors ${
+                className={`flex-1 rounded-md py-1.5 text-caption font-semibold capitalize transition-colors ${
                   extendDirection === dir
                     ? dir === "extend"
-                      ? "bg-[#7C3AED] text-white"
-                      : "bg-red-600 text-white"
-                    : "text-[#8A8A8A] hover:text-white"
+                      ? "bg-brand text-brand-foreground"
+                      : "bg-danger text-danger-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {dir}
               </button>
             ))}
           </div>
-          <div className="flex gap-1 rounded-lg bg-[#141414] p-1">
+          <div className="flex gap-1 rounded-control-sm bg-background p-1">
             {(["months", "days"] as const).map((mode) => (
               <button
                 key={mode}
                 type="button"
                 onClick={() => setExtendMode(mode)}
-                className={`flex-1 rounded-md py-1.5 text-[12px] font-medium capitalize transition-colors ${
-                  extendMode === mode ? "bg-[#2A2A2A] text-white" : "text-[#8A8A8A] hover:text-white"
+                className={`flex-1 rounded-md py-1.5 text-caption font-medium capitalize transition-colors ${
+                  extendMode === mode ? "bg-surface-raised text-foreground" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 By {mode}
@@ -351,7 +357,7 @@ export function OverviewTab({
           </div>
           {extendMode === "months" ? (
             <label className="block">
-              <span className="mb-1 block text-[11px] font-medium text-[#8A8A8A]">
+              <span className="mb-1 block text-caption font-medium text-muted-foreground">
                 Months to {extendDirection}
               </span>
               <AdminSelect value={extendMonths} onChange={(e) => setExtendMonths(e.target.value)} className="w-full">
@@ -364,7 +370,7 @@ export function OverviewTab({
             </label>
           ) : (
             <label className="block">
-              <span className="mb-1 block text-[11px] font-medium text-[#8A8A8A]">
+              <span className="mb-1 block text-caption font-medium text-muted-foreground">
                 Days to {extendDirection}
               </span>
               <input
@@ -374,7 +380,7 @@ export function OverviewTab({
                 value={extendDays}
                 onChange={(e) => setExtendDays(e.target.value)}
                 placeholder="e.g. 5"
-                className="w-full rounded-lg border border-[#2A2A2A] bg-[#141414] p-2.5 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED]"
+                className="w-full rounded-control-sm border border-border bg-background p-2.5 text-label text-foreground placeholder:text-muted-foreground/80 outline-none focus:border-brand"
               />
             </label>
           )}
@@ -383,7 +389,7 @@ export function OverviewTab({
             onChange={(e) => setExtendReason(e.target.value)}
             rows={3}
             placeholder="Reason (optional)"
-            className="w-full rounded-lg border border-[#2A2A2A] bg-[#141414] p-3 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED]"
+            className="w-full rounded-control-sm border border-border bg-background p-3 text-label text-foreground placeholder:text-muted-foreground/80 outline-none focus:border-brand"
           />
           <div className="flex justify-end gap-2">
             <AdminButton variant="secondary" onClick={() => setExtendOpen(false)}>
@@ -413,7 +419,7 @@ export function OverviewTab({
       {/* Terminate modal (needs a reason, so it's a full Modal not ConfirmModal) */}
       <Modal open={terminateOpen} onClose={() => setTerminateOpen(false)} title="Terminate internship">
         <div className="space-y-3">
-          <p className="text-[13px] leading-relaxed text-[#B0B0B0]">
+          <p className="text-label leading-relaxed text-muted-foreground">
             {intern.name}&apos;s status will change to &ldquo;terminated&rdquo; and they&apos;ll lose access to
             applying for new leave. A reason is required.
           </p>
@@ -422,7 +428,7 @@ export function OverviewTab({
             onChange={(e) => setTerminateReason(e.target.value)}
             rows={3}
             placeholder="Reason for termination (required)"
-            className="w-full rounded-lg border border-[#2A2A2A] bg-[#141414] p-3 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED]"
+            className="w-full rounded-control-sm border border-border bg-background p-3 text-label text-foreground placeholder:text-muted-foreground/80 outline-none focus:border-brand"
           />
           <div className="flex justify-end gap-2">
             <AdminButton variant="secondary" onClick={() => setTerminateOpen(false)}>

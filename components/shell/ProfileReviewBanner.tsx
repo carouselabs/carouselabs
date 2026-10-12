@@ -38,13 +38,13 @@ export function ProfileReviewBanner({ show }: { show: boolean }) {
   }
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 bg-[rgba(124,58,237,0.08)] border-b border-[rgba(124,58,237,0.2)] text-[13px] text-[#0A0A0A]">
-      <Info size={15} className="text-[#7C3AED] flex-shrink-0" />
-      <p className="flex-1 min-w-0">
+    <div className="flex shrink-0 items-center gap-3 border-b border-brand/20 bg-brand-soft px-4 py-2.5 text-label text-foreground">
+      <Info size={16} className="shrink-0 text-brand" aria-hidden />
+      <p className="min-w-0 flex-1">
         We&apos;ve set up your profile based on our conversation — please{" "}
         <Link
           href="/settings/profile"
-          className="font-medium text-[#7C3AED] hover:underline inline-flex items-center gap-1.5"
+          className="inline-flex items-center gap-1.5 font-medium text-brand underline-offset-4 hover:underline"
         >
           review and update it
           <NavigatingIndicator />
@@ -53,7 +53,7 @@ export function ProfileReviewBanner({ show }: { show: boolean }) {
       </p>
       <button
         onClick={handleDismiss}
-        className="flex-shrink-0 text-[#9CA3AF] hover:text-[#0A0A0A] transition-colors"
+        className="relative shrink-0 rounded-detail text-muted-foreground transition-colors duration-(--motion-fast) after:absolute after:-inset-3 after:content-[''] hover:text-foreground"
         aria-label="Dismiss"
       >
         <X size={15} />

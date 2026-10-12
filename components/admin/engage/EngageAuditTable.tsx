@@ -22,9 +22,9 @@ interface Entry {
 }
 
 function Value({ value }: { value: unknown }) {
-  if (value === null || value === undefined) return <span className="text-[#8A8A8A]">—</span>
+  if (value === null || value === undefined) return <span className="text-muted-foreground">—</span>
   const text = typeof value === "object" ? JSON.stringify(value) : String(value)
-  return <code className="break-all rounded bg-[#141414] px-1.5 py-0.5 font-mono text-[11px] text-[#D0D0D0]">{text === "{}" ? "none" : text}</code>
+  return <code className="break-all rounded bg-background px-1.5 py-0.5 font-mono text-caption text-foreground/90">{text === "{}" ? "none" : text}</code>
 }
 
 export function EngageAuditTable() {
@@ -46,8 +46,8 @@ export function EngageAuditTable() {
     <div className="mx-auto max-w-[1400px] space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[18px] font-semibold tracking-tight text-white">Engage audit log</h1>
-          <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">Every change an admin made to someone&apos;s Engage access. Entries can&apos;t be edited or deleted.</p>
+          <h2 className="text-lead font-semibold tracking-tight text-foreground">Engage audit log</h2>
+          <p className="mt-0.5 text-caption text-muted-foreground">Every change an admin made to someone&apos;s Engage access. Entries can&apos;t be edited or deleted.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <AdminInput aria-label="Filter by user email" className="w-[260px]" placeholder="Filter by user email" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -66,9 +66,9 @@ export function EngageAuditTable() {
       ) : data.entries.length === 0 ? (
         <EmptyState title={query ? "No changes for this user" : "No Engage changes yet"} />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]">
-          <table className="w-full text-left text-[12.5px]">
-            <thead className="bg-[#161616] text-[11px] uppercase tracking-wide text-[#8A8A8A]">
+        <div className="relative overflow-x-auto rounded-card border border-border bg-surface">
+          <table className="w-full text-left text-caption">
+            <thead className="bg-background text-caption text-muted-foreground">
               <tr>
                 <th className="px-4 py-2.5 font-semibold">When</th>
                 <th className="px-3 py-2.5 font-semibold">Change</th>
@@ -77,13 +77,13 @@ export function EngageAuditTable() {
                 <th className="px-4 py-2.5 font-semibold">Admin</th>
               </tr>
             </thead>
-            <tbody className="text-[#D0D0D0]">
+            <tbody className="text-foreground/90">
               {data.entries.map((e) => (
-                <tr key={e.id} className="border-t border-[#232323] align-top">
-                  <td className="whitespace-nowrap px-4 py-2.5 text-[#B0B0B0]">{fmtDateTime(e.createdAt)}</td>
+                <tr key={e.id} className="border-t border-border align-top">
+                  <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">{fmtDateTime(e.createdAt)}</td>
                   <td className="max-w-[320px] px-3 py-2.5">
-                    <div className="text-white">{e.details}</div>
-                    {e.reason && <div className="text-[11.5px] text-[#8A8A8A]">“{e.reason}”</div>}
+                    <div className="text-foreground">{e.details}</div>
+                    {e.reason && <div className="text-caption text-muted-foreground">“{e.reason}”</div>}
                   </td>
                   <td className="px-3 py-2.5">
                     {e.targetUserId ? (
@@ -97,22 +97,22 @@ export function EngageAuditTable() {
                   <td className="max-w-[360px] px-3 py-2.5">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <Value value={e.oldValue} />
-                      <span aria-hidden className="text-[#8A8A8A]">
+                      <span aria-hidden className="text-muted-foreground">
                         →
                       </span>
                       <span className="sr-only">became</span>
                       <Value value={e.newValue} />
                     </div>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-2.5 text-[#B0B0B0]">
+                  <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">
                     {e.adminEmail}
-                    {e.ipAddress && <div className="text-[11.5px] text-[#8A8A8A]">{e.ipAddress}</div>}
+                    {e.ipAddress && <div className="text-caption text-muted-foreground">{e.ipAddress}</div>}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <div className="flex items-center justify-between border-t border-[#2A2A2A] px-4 py-2.5 text-[12px] text-[#8A8A8A]">
+          <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-caption text-muted-foreground">
             <span>{fmtNumber(data.total)} changes</span>
             <div className="flex gap-1">
               <AdminButton variant="ghost" disabled={page <= 1} onClick={() => setPage(page - 1)}>

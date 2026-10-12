@@ -50,16 +50,17 @@ export function ScheduleForLaterButton({ getPostId, disabled }: ScheduleForLater
       <button
         onClick={() => void handleClick()}
         disabled={disabled || loading}
-        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-[#7C3AED] bg-[rgba(124,58,237,0.08)] hover:bg-[rgba(124,58,237,0.14)] border border-[rgba(124,58,237,0.25)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        aria-busy={loading || undefined}
+        className="inline-flex h-9 items-center gap-1.5 rounded-control-sm border border-brand/30 bg-brand-soft px-3 text-label font-semibold whitespace-nowrap text-brand transition-colors duration-(--motion-fast) hover:border-brand/50 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {loading ? (
-          <Loader2 size={13} className="animate-spin" strokeWidth={2.2} />
+          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
         ) : (
-          <CalendarClock size={13} strokeWidth={2.2} />
+          <CalendarClock className="size-4" aria-hidden />
         )}
         {loading ? "Saving…" : "Schedule for Later"}
       </button>
-      {error && <p role="alert" className="text-[11px] text-[rgba(239,68,68,0.9)]">{error}</p>}
+      {error && <p role="alert" className="max-w-56 text-caption text-danger">{error}</p>}
     </div>
   )
 }

@@ -8,6 +8,7 @@
 import { useCallback, useRef, useState } from "react"
 import { Upload, X, Loader2, ImageIcon } from "lucide-react"
 import { PLATFORM_LIMITS, PLATFORM_META, maxImagesForPlatforms, type Platform } from "@/lib/platforms"
+import { cn } from "@/lib/utils"
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024 // 8MB source file cap, before compression
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"]
@@ -138,24 +139,23 @@ export function CustomPostImageUploader({ images, onAdd, onRemove, platforms }: 
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
-        Images{" "}
-        <span className="normal-case tracking-normal font-normal text-[#C4C0B6]">
-          {buildImagesSuffix(platforms)}
-        </span>
+      <p className="text-caption font-medium text-muted-foreground">
+        Images <span className="font-normal text-muted-foreground/80">{buildImagesSuffix(platforms)}</span>
       </p>
 
       {images.length > 0 && (
         <div className="grid grid-cols-4 gap-2">
           {images.map((url) => (
-            <div key={url} className="relative aspect-square rounded-lg overflow-hidden border border-[#E5E3DE]">
+            <div key={url} className="relative aspect-square overflow-hidden rounded-control-sm border border-border">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="" className="w-full h-full object-cover" />
+              <img src={url} alt="" className="h-full w-full object-cover" />
               <button
+                type="button"
                 onClick={() => onRemove(url)}
-                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[rgba(0,0,0,0.65)] flex items-center justify-center hover:bg-[rgba(0,0,0,0.85)] transition-colors"
+                aria-label="Remove image"
+                className="absolute top-1 right-1 flex size-6 items-center justify-center rounded-full bg-foreground/70 text-background transition-colors duration-(--motion-fast) hover:bg-foreground/90"
               >
-                <X size={10} className="text-white" strokeWidth={2.5} />
+                <X className="size-3" strokeWidth={2.5} aria-hidden />
               </button>
             </div>
           ))}
@@ -163,7 +163,8 @@ export function CustomPostImageUploader({ images, onAdd, onRemove, platforms }: 
       )}
 
       {canAddMore && (
-        <div
+        <button
+          type="button"
           onDragOver={(e) => {
             e.preventDefault()
             setIsDragging(true)
@@ -171,44 +172,45 @@ export function CustomPostImageUploader({ images, onAdd, onRemove, platforms }: 
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
           onClick={() => !uploading && inputRef.current?.click()}
-          className={`flex flex-col items-center justify-center gap-2 h-20 rounded-xl border border-dashed transition-all duration-150 ${
-            uploading ? "cursor-wait" : "cursor-pointer"
-          } ${
+          aria-disabled={uploading || undefined}
+          className={cn(
+            "flex h-24 flex-col items-center justify-center gap-2 rounded-card border border-dashed px-4 text-center transition-colors duration-(--motion-fast)",
+            uploading ? "cursor-wait" : "cursor-pointer",
             isDragging
-              ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.08)]"
-              : "border-[#E5E3DE] bg-[#F6F4EE] hover:border-[#D6D3CC] hover:bg-[#F4F2EC]"
-          }`}
+              ? "border-brand/60 bg-brand-soft"
+              : "border-control-border bg-surface-raised hover:border-brand/50 hover:bg-brand-soft/40"
+          )}
         >
           {uploading ? (
             <>
-              <Loader2 size={14} className="text-[#ADA99F] animate-spin" />
-              <p className="text-[11.5px] text-[#9CA3AF]">Uploading…</p>
+              <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
+              <span className="text-caption text-muted-foreground">Uploading…</span>
             </>
           ) : (
             <>
               {images.length === 0 ? (
-                <Upload size={14} className="text-[#ADA99F]" strokeWidth={1.8} />
+                <Upload className="size-4 text-muted-foreground" strokeWidth={1.8} aria-hidden />
               ) : (
-                <ImageIcon size={14} className="text-[#ADA99F]" strokeWidth={1.8} />
+                <ImageIcon className="size-4 text-muted-foreground" strokeWidth={1.8} aria-hidden />
               )}
-              <p className="text-[11.5px] text-[#9CA3AF]">
+              <span className="text-caption text-muted-foreground">
                 Drag images or click to upload · JPEG, PNG, WEBP
-              </p>
+              </span>
             </>
           )}
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            multiple
-            disabled={uploading}
-            className="hidden"
-            onChange={handleInputChange}
-          />
-        </div>
+        </button>
       )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        disabled={uploading}
+        className="hidden"
+        onChange={handleInputChange}
+      />
 
-      {error && <p className="text-[11px] text-[rgba(239,68,68,0.9)]">{error}</p>}
+      {error && <p role="alert" className="text-caption text-danger">{error}</p>}
     </div>
   )
 }

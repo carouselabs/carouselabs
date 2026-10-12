@@ -17,6 +17,7 @@ const TYPE_META: Record<string, { label: string; color: string }> = {
   CAROUSEL: { label: "Carousel", color: CHART_COLORS.violet },
   SINGLE_IMAGE: { label: "Image", color: CHART_COLORS.teal },
   TEXT_ONLY: { label: "Caption", color: CHART_COLORS.amber },
+  THUMBNAIL: { label: "Thumbnail", color: CHART_COLORS.rose },
 }
 
 export function AnalyticsCharts() {
@@ -37,14 +38,17 @@ export function AnalyticsCharts() {
       })
   }, [toast])
 
-  if (failed) return <p className="text-[13px] text-[#8A8A8A]">Couldn&apos;t load analytics.</p>
+  if (failed) return <p className="text-label text-muted-foreground">Couldn&apos;t load analytics.</p>
   if (!data) return <Spinner label="Loading analytics…" />
 
-  const donutData = data.postsByType.map((t) => ({
-    name: TYPE_META[t.format]?.label ?? t.format,
-    value: t.count,
-    color: TYPE_META[t.format]?.color ?? CHART_COLORS.violet,
-  }))
+  // Four named slices at most; any other format (e.g. custom posts) folds
+  // into one neutral "Other" slice rather than reusing a colour.
+  const named = data.postsByType.filter((t) => TYPE_META[t.format])
+  const otherCount = data.postsByType.filter((t) => !TYPE_META[t.format]).reduce((a, t) => a + t.count, 0)
+  const donutData = [
+    ...named.map((t) => ({ name: TYPE_META[t.format].label, value: t.count, color: TYPE_META[t.format].color })),
+    ...(otherCount > 0 ? [{ name: "Other", value: otherCount, color: CHART_COLORS.other }] : []),
+  ]
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -58,7 +62,7 @@ export function AnalyticsCharts() {
 
       <AdminCard title="Posts by type (all time)">
         {donutData.every((d) => d.value === 0) ? (
-          <p className="py-16 text-center text-[13px] text-[#6A6A6A]">No posts yet</p>
+          <p className="py-16 text-center text-label text-muted-foreground/80">No posts yet</p>
         ) : (
           <AdminDonut data={donutData} />
         )}
@@ -86,7 +90,7 @@ export function AnalyticsCharts() {
             { key: "freeUsers", label: "Free", color: CHART_COLORS.teal },
           ]}
         />
-        <p className="mt-2 text-[11px] text-[#6A6A6A]">
+        <p className="mt-2 text-caption text-muted-foreground/80">
           Pro counts are approximated by the subscription row&apos;s creation date (upgrade
           timestamps aren&apos;t stored). Credit series are derived from post formats — there is no
           per-charge ledger.

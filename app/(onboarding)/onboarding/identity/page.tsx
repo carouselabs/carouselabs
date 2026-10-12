@@ -4,6 +4,8 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useOnboardingStore } from "@/lib/store/onboardingStore"
 import { StepNav } from "@/components/onboarding/StepNav"
+import { OptionCard, OptionCardGroup } from "@/components/patterns/OptionCard"
+import { cn } from "@/lib/utils"
 
 const ROLES = [
   { id: "founder", label: "Founder / Entrepreneur", emoji: "🚀" },
@@ -23,31 +25,30 @@ export default function IdentityPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-[#0A0A0A] mb-1">Which best describes you?</h1>
-      <p className="text-sm text-[#6B7280] mb-8">
+      <h1 id="identity-title" className="text-title-sm font-semibold">Which best describes you?</h1>
+      <p className="mt-1 mb-8 text-body text-muted-foreground">
         This helps us tailor your content strategy.
       </p>
 
-      <div
-        className={`flex flex-col gap-2.5 p-1 -m-1 rounded-xl ${
-          attemptedSubmit && !role ? "ring-1 ring-red-400" : ""
-        }`}
+      <OptionCardGroup
+        value={role || null}
+        onValueChange={(value) => setRole(value as string)}
+        aria-labelledby="identity-title"
+        aria-invalid={attemptedSubmit && !role ? true : undefined}
+        columns={2}
+        className={cn("rounded-card", attemptedSubmit && !role && "ring-2 ring-danger ring-offset-4 ring-offset-background")}
       >
         {ROLES.map((r) => (
-          <button
+          <OptionCard
             key={r.id}
-            onClick={() => setRole(r.id)}
-            className={`flex items-center gap-4 px-5 py-3.5 rounded-xl border text-left transition-all ${
-              role === r.id
-                ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.1)] text-[#0A0A0A]"
-                : "border-[#E5E3DE] bg-[#F6F4EE] text-[#4B5563] hover:border-[#DEDBD4] hover:text-[#0A0A0A]"
-            }`}
-          >
-            <span className="text-lg">{r.emoji}</span>
-            <span className="text-sm font-medium">{r.label}</span>
-          </button>
+            value={r.id}
+            icon={<span className="text-lg leading-none">{r.emoji}</span>}
+            title={r.label}
+            layout="row"
+            className="sm:p-4"
+          />
         ))}
-      </div>
+      </OptionCardGroup>
 
       <StepNav
         onContinue={() => router.push("/onboarding/industry")}

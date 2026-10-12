@@ -183,7 +183,7 @@ export function TasksTable() {
     setRoleVal: (v: string) => void,
   ) => (
     <div className="space-y-2">
-      <div className="flex rounded-lg border border-[#2A2A2A] bg-[#141414] p-1">
+      <div className="flex rounded-control-sm border border-border bg-background p-1">
         {(
           [
             { key: "all", label: "All Roles" },
@@ -191,11 +191,12 @@ export function TasksTable() {
           ] as const
         ).map((o) => (
           <button
+            aria-pressed={scopeVal === o.key}
             key={o.key}
             type="button"
             onClick={() => setScopeVal(o.key)}
-            className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-              scopeVal === o.key ? "bg-[#7C3AED] text-white" : "text-[#8A8A8A] hover:text-white"
+            className={`flex-1 rounded-md px-3 py-1.5 text-caption font-semibold transition-colors ${
+              scopeVal === o.key ? "bg-surface-raised text-foreground shadow-card" : "text-muted-foreground hover:text-foreground"
             }`}
           >
             {o.label}
@@ -224,7 +225,7 @@ export function TasksTable() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <span className="text-[12px] text-[#6A6A6A]">
+        <span className="text-caption text-muted-foreground/80">
           {tasks.length} task{tasks.length === 1 ? "" : "s"}
         </span>
         <div className="ml-auto">
@@ -249,8 +250,8 @@ export function TasksTable() {
         <div className="space-y-5">
           {groups.map((g) => (
             <div key={g.label} className="space-y-2">
-              <h3 className="text-[11.5px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
-                {g.label} <span className="text-[#5A5A5A]">({g.tasks.length})</span>
+              <h3 className="text-caption font-semibold text-muted-foreground">
+                {g.label} <span className="text-muted-foreground/80">({g.tasks.length})</span>
               </h3>
               <div className={tableCls.wrap}>
                 <table className={tableCls.table}>
@@ -266,15 +267,15 @@ export function TasksTable() {
                   <tbody>
                     {g.tasks.map((t) => (
                       <tr key={t.id} className={tableCls.row}>
-                        <td className={`${tableCls.td} text-white`}>{t.name}</td>
+                        <td className={`${tableCls.td} text-foreground`}>{t.name}</td>
                         <td className={`${tableCls.td} tabular-nums`}>{t.points}</td>
                         <td className={tableCls.td}>
                           {t.active ? (
-                            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-400">
+                            <span className="rounded-full bg-success/15 px-2 py-0.5 text-caption font-semibold text-success">
                               ACTIVE
                             </span>
                           ) : (
-                            <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[11px] font-medium text-[#8A8A8A]">
+                            <span className="rounded-full bg-surface-raised px-2 py-0.5 text-caption font-medium text-muted-foreground">
                               INACTIVE
                             </span>
                           )}

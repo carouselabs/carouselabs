@@ -113,7 +113,7 @@ export function QuickActions() {
             Search
           </AdminButton>
         </div>
-        <div className="h-6 w-px bg-[#2A2A2A]" />
+        <div className="h-6 w-px bg-surface-raised" />
         <AdminButton onClick={() => setModal("credits")}>
           <Coins className="h-3.5 w-3.5" />
           Grant Credits
@@ -144,7 +144,7 @@ export function QuickActions() {
             onChange={(e) => setAmount(e.target.value)}
             className="w-full"
           />
-          <p className="text-[11px] text-[#6A6A6A]">
+          <p className="text-caption text-muted-foreground/80">
             Added as extra credits on top of the monthly allowance (never expire).
           </p>
           <div className="flex justify-end gap-2 pt-1">
@@ -166,7 +166,7 @@ export function QuickActions() {
             onChange={(e) => setEmail(e.target.value)}
             className="w-full"
           />
-          <p className="text-[11px] text-[#6A6A6A]">
+          <p className="text-caption text-muted-foreground/80">
             Sets plan to PRO with a fresh 1000-credit monthly allowance.
           </p>
           <div className="flex justify-end gap-2 pt-1">
@@ -188,7 +188,7 @@ export function QuickActions() {
             onChange={(e) => setEmail(e.target.value)}
             className="w-full"
           />
-          <p className="text-[11px] text-[#6A6A6A]">
+          <p className="text-caption text-muted-foreground/80">
             Sets plan to GROWTH with a fresh 2000-credit monthly allowance.
           </p>
           <div className="flex justify-end gap-2 pt-1">

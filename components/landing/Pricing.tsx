@@ -1,8 +1,10 @@
 import Link from "next/link"
-import { ArrowRight } from "lucide-react"
-import { AnimatedSection } from "@/components/marketing/AnimatedSection"
-import { PlanCard } from "@/components/marketing/PlanCard"
-import { ExtensionCTA, ExtensionPlanCard } from "@/components/marketing/ExtensionPlanCard"
+import { ArrowRight, Plus } from "lucide-react"
+
+import { cn } from "@/lib/utils"
+import { buttonVariants } from "@/components/ui/button"
+import { StudioPlanCard } from "@/components/pricing/StudioPlanCard"
+import { EngagePlanCard } from "@/components/pricing/EngagePlanCard"
 import {
   FREE_PLAN,
   PRO_PLAN,
@@ -23,134 +25,96 @@ import {
 const PRO_CHECKOUT_URL = process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL
 const GROWTH_CHECKOUT_URL = process.env.NEXT_PUBLIC_LEMONSQUEEZY_GROWTH_CHECKOUT_URL
 
-function FreeCTA() {
-  return (
-    <Link
-      href="/sign-up"
-      className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-[#E5E3DE] bg-white hover:bg-[#F9F7F2] text-[13.5px] font-semibold text-[#0A0A0A] transition-colors"
-    >
-      Get Started Free
-    </Link>
-  )
-}
-
-function CheckoutCTA({
-  label,
-  variant,
-  url,
-}: {
-  label: string
-  variant: "purple" | "amber"
-  url: string | undefined
-}) {
+function CheckoutCTA({ label, url, primary = false }: { label: string; url: string | undefined; primary?: boolean }) {
+  const className = cn(buttonVariants({ variant: primary ? "default" : "outline" }), "w-full")
   if (!url) {
     return (
-      <Link
-        href="/sign-up"
-        className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-[13.5px] font-semibold text-white transition-colors"
-      >
+      <Link href="/sign-up" className={className}>
         {label}
-        <ArrowRight size={14} strokeWidth={2.5} />
+        <ArrowRight aria-hidden />
       </Link>
     )
   }
   return (
-    <a
-      href={url}
-      className={[
-        "w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[13.5px] font-semibold text-white transition-all",
-        variant === "purple"
-          ? "bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_8px_30px_rgba(124,58,237,0.35)]"
-          : "bg-[#F59E0B] hover:bg-[#D97706] shadow-[0_8px_30px_rgba(245,158,11,0.25)]",
-      ].join(" ")}
-    >
+    <a href={url} className={className}>
       {label}
-      <ArrowRight size={14} strokeWidth={2.5} />
+      <ArrowRight aria-hidden />
     </a>
   )
 }
 
 export function Pricing() {
   return (
-    <section id="pricing" className="py-24 px-6">
-      <div className="max-w-6xl mx-auto flex flex-col gap-16">
-        <AnimatedSection className="flex flex-col gap-4 text-center">
-          <p className="text-[11px] font-semibold text-[#7C3AED] uppercase tracking-widest">
-            Pricing
-          </p>
-          <h2 className="text-[clamp(1.75rem,4vw,2.75rem)] font-bold tracking-[-0.02em] text-[#0A0A0A]">
-            Simple, honest pricing
-          </h2>
-          <p className="max-w-sm mx-auto text-[15px] text-[#6B7280] leading-[1.65]">
-            Start free. Upgrade when you&apos;re ready to publish consistently.
-          </p>
-        </AnimatedSection>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-5 items-stretch">
-          <AnimatedSection delay={0} className="h-full">
-            <PlanCard plan={FREE_PLAN} cta={<FreeCTA />} />
-          </AnimatedSection>
-
-          <AnimatedSection delay={0.1} className="h-full">
-            <PlanCard
-              plan={PRO_PLAN}
-              cta={<CheckoutCTA label="Start Creating" variant="purple" url={PRO_CHECKOUT_URL} />}
-            />
-          </AnimatedSection>
-
-          <AnimatedSection delay={0.2} className="h-full">
-            <PlanCard
-              plan={GROWTH_PLAN}
-              cta={<CheckoutCTA label="Go Growth" variant="amber" url={GROWTH_CHECKOUT_URL} />}
-            />
-          </AnimatedSection>
+    <section id="pricing" aria-labelledby="pricing-title" className="scroll-mt-20 border-t border-border font-ui">
+      <div className="mx-auto flex max-w-showcase flex-col gap-12 gutter-x section-y">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-end lg:gap-16">
+          <div className="flex flex-col gap-4">
+            <p className="text-label font-medium text-brand">Pricing</p>
+            <h2 id="pricing-title" className="text-section font-semibold text-balance">Simple, honest pricing</h2>
+            <p className="text-body-lg text-muted-foreground">Start free. Upgrade when you&apos;re ready to publish consistently.</p>
+          </div>
+          {/* How credits work */}
+          <div className="flex flex-col gap-2 rounded-card border border-border bg-surface p-5">
+            <p className="text-label font-semibold">How credits work</p>
+            {CREDIT_COST_LINES.map((line) => (
+              <p key={line} className="text-label text-muted-foreground tabular-nums">
+                {line}
+              </p>
+            ))}
+          </div>
         </div>
 
-        {/* The Chrome extension — a separate product, so it sits under the
+        <div className="grid gap-4 md:grid-cols-3">
+          <StudioPlanCard
+            plan={FREE_PLAN}
+            cta={
+              <Link href="/sign-up" className={cn(buttonVariants({ variant: "outline" }), "w-full")}>
+                Get Started Free
+              </Link>
+            }
+          />
+          <StudioPlanCard plan={PRO_PLAN} cta={<CheckoutCTA label="Start Creating" url={PRO_CHECKOUT_URL} primary />} />
+          <StudioPlanCard plan={GROWTH_PLAN} cta={<CheckoutCTA label="Go Growth" url={GROWTH_CHECKOUT_URL} />} />
+        </div>
+
+        {/* The Chrome extensions — separate products, so they sit under the
             web plans rather than in their row. Visitors here are signed out
             (the home page redirects signed-in users), so the checkout route
             takes them through sign-up first. */}
-        <AnimatedSection>
-          <ExtensionPlanCard
-            cta={<ExtensionCTA href={EXTENSION_CHECKOUT_PATH} label={`Get the extension — $${EXTENSION_PLAN.price}/month`} />}
+        <div className="grid gap-4 md:grid-cols-2">
+          <EngagePlanCard
+            plan={EXTENSION_PLAN}
+            cta={
+              <a href={EXTENSION_CHECKOUT_PATH} className={buttonVariants({ size: "lg" })}>
+                Get the extension — ${EXTENSION_PLAN.price}/month
+              </a>
+            }
           />
-        </AnimatedSection>
-
-        {/* CarouseLabs Engage for X: a second extension, sold separately. */}
-        <AnimatedSection>
-          <ExtensionPlanCard
+          <EngagePlanCard
             plan={X_EXTENSION_PLAN}
-            tone="black"
-            cta={<ExtensionCTA tone="black" href={X_EXTENSION_CHECKOUT_PATH} label={`Get Engage for X — $${X_EXTENSION_PLAN.price}/month`} />}
+            cta={
+              <a href={X_EXTENSION_CHECKOUT_PATH} className={buttonVariants({ size: "lg" })}>
+                Get Engage for X — ${X_EXTENSION_PLAN.price}/month
+              </a>
+            }
           />
-        </AnimatedSection>
-
-        {/* How credits work */}
-        <AnimatedSection className="max-w-2xl mx-auto w-full text-center flex flex-col gap-2 p-6 rounded-2xl bg-[#F4F2EC] border border-[#E9E7E1]">
-          <p className="text-[12px] font-semibold text-[#0A0A0A] uppercase tracking-wide">
-            How credits work
-          </p>
-          {CREDIT_COST_LINES.map((line) => (
-            <p key={line} className="text-[12.5px] text-[#6B7280] leading-relaxed">
-              {line}
-            </p>
-          ))}
-        </AnimatedSection>
+        </div>
 
         {/* FAQ */}
-        <AnimatedSection className="max-w-2xl mx-auto w-full flex flex-col gap-6">
-          <h3 className="text-[15px] font-bold text-[#0A0A0A] text-center">
-            Pricing questions, answered
-          </h3>
-          <div className="flex flex-col gap-4">
+        <div className="grid gap-8 border-t border-border pt-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-16">
+          <h3 className="text-title-sm font-semibold text-balance">Pricing questions, answered</h3>
+          <div className="flex flex-col divide-y divide-border border-y border-border">
             {PRICING_FAQ.map((item) => (
-              <div key={item.question} className="p-5 rounded-xl bg-white border border-[#E5E3DE]">
-                <p className="text-[13.5px] font-semibold text-[#0A0A0A] mb-1.5">{item.question}</p>
-                <p className="text-[13px] text-[#6B7280] leading-relaxed">{item.answer}</p>
-              </div>
+              <details key={item.question} className="group py-1">
+                <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 py-3 text-body font-medium [&::-webkit-details-marker]:hidden">
+                  {item.question}
+                  <Plus className="size-4 shrink-0 text-muted-foreground transition-transform duration-(--motion-normal) group-open:rotate-45" aria-hidden />
+                </summary>
+                <p className="pb-4 text-body text-muted-foreground">{item.answer}</p>
+              </details>
             ))}
           </div>
-        </AnimatedSection>
+        </div>
       </div>
     </section>
   )

@@ -5,9 +5,16 @@
 // hands an item off to the Custom Post composer (see
 // app/(app)/content-hub/_client.tsx's boardItemId deep-link handling) — no
 // AI generation, no credit charge, same as any other Custom Post.
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, ImageIcon, LinkIcon, StickyNote, Trash2, Loader2, Plus, ExternalLink } from "lucide-react"
+import { ImageIcon, LinkIcon, StickyNote, Trash2, Loader2, Plus, ExternalLink } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { controlClasses } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
+import { PageHeader } from "@/components/patterns/PageHeader"
+import { EmptyState } from "@/components/patterns/EmptyState"
+import { BackLink } from "@/components/create/CreateKit"
 
 type ItemType = "link" | "image" | "note"
 
@@ -52,65 +59,122 @@ function timeAgo(iso: string): string {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(iso))
 }
 
-function IdeaCard({ item, onDelete, deleting }: { item: IdeaBoardItem; onDelete: () => void; deleting: boolean }) {
+function ItemThumb({ item }: { item: IdeaBoardItem }) {
+  const Icon = TYPE_ICON[item.type]
+  if (item.type === "image") {
+    return (
+      <span className="size-11 shrink-0 overflow-hidden rounded-control-sm border border-border bg-surface-muted">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={item.content} alt="" className="h-full w-full object-cover" />
+      </span>
+    )
+  }
+  return (
+    <span
+      className={cn(
+        "flex size-11 shrink-0 items-center justify-center rounded-control-sm",
+        item.type === "note" ? "bg-warning-soft text-warning" : "bg-brand-soft text-brand"
+      )}
+    >
+      <Icon className="size-4" aria-hidden />
+    </span>
+  )
+}
+
+/** One saved idea in the list: what it is, where it came from, when. */
+function IdeaRow({ item, selected, onSelect }: { item: IdeaBoardItem; selected: boolean; onSelect: () => void }) {
+  const headline = item.title || (item.type === "note" ? item.content : safeHostname(item.content))
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-current={selected || undefined}
+      className={cn(
+        "group flex w-full items-center gap-3 rounded-card p-2.5 text-left transition-colors duration-(--motion-fast) hover:bg-surface-raised",
+        selected && "bg-surface-raised shadow-card"
+      )}
+    >
+      <ItemThumb item={item} />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="line-clamp-1 text-label font-medium text-foreground">{headline}</span>
+        <span className="truncate text-caption text-muted-foreground">
+          {TYPE_LABEL[item.type]} · Saved {timeAgo(item.createdAt)}
+        </span>
+      </span>
+    </button>
+  )
+}
+
+/** The chosen idea in full, with the way into the composer. */
+function IdeaDetail({ item, onDelete, deleting }: { item: IdeaBoardItem; onDelete: () => void; deleting: boolean }) {
   const Icon = TYPE_ICON[item.type]
   return (
-    <div className="flex flex-col gap-3 p-4 rounded-xl border border-[#E5E3DE] bg-white">
-      <div className="flex items-start justify-between gap-2">
-        <span className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold px-2 py-0.5 rounded-full tracking-wide text-[#7C3AED] bg-[rgba(124,58,237,0.1)]">
-          <Icon size={11} strokeWidth={2.2} />
+    <article className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-2.5 py-0.5 font-medium text-brand">
+          <Icon className="size-3" aria-hidden />
           {TYPE_LABEL[item.type]}
         </span>
-        <button
-          onClick={onDelete}
-          disabled={deleting}
-          title="Delete"
-          className="p-1 rounded-lg text-[#9CA3AF] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.08)] transition-colors disabled:opacity-50"
-        >
-          {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} strokeWidth={2} />}
-        </button>
+        <span>Saved {timeAgo(item.createdAt)}</span>
+        {item.sourceUrl && (
+          <a
+            href={item.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-w-0 items-center gap-1 truncate rounded-detail transition-colors duration-(--motion-fast) hover:text-brand"
+          >
+            <ExternalLink className="size-3 shrink-0" aria-hidden />
+            {safeHostname(item.sourceUrl)}
+          </a>
+        )}
       </div>
 
       {item.type === "image" ? (
-        <div className="aspect-video rounded-lg overflow-hidden border border-[#E5E3DE] bg-[#F4F2EC]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.content} alt={item.title ?? ""} className="w-full h-full object-cover" />
+        <div className="flex flex-col gap-4">
+          {item.title && <h2 className="text-title-sm font-semibold text-foreground">{item.title}</h2>}
+          <div className="overflow-hidden rounded-card border border-border bg-surface-muted">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={item.content} alt={item.title ?? ""} className="max-h-[28rem] w-full object-contain" />
+          </div>
+        </div>
+      ) : item.type === "note" ? (
+        <div className="flex flex-col gap-3">
+          {item.title && <h2 className="text-body-lg font-semibold text-foreground">{item.title}</h2>}
+          <p className="font-display text-[1.5rem] leading-[1.4] break-words whitespace-pre-wrap text-foreground sm:text-[1.75rem]">
+            {item.content}
+          </p>
         </div>
       ) : (
-        <p className="text-[13px] text-[#374151] leading-[1.5] line-clamp-4 break-words">
-          {item.title && (
-            <>
-              <span className="font-semibold text-[#0A0A0A]">{item.title}</span>
-              <br />
-            </>
-          )}
-          {item.content}
-        </p>
+        <div className="flex flex-col gap-2">
+          {item.title && <h2 className="text-title-sm font-semibold text-balance text-foreground">{item.title}</h2>}
+          <a
+            href={item.content}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-start gap-1.5 rounded-detail text-label break-all text-brand underline-offset-4 hover:underline"
+          >
+            {item.content}
+            <ExternalLink className="mt-1 size-3.5 shrink-0" aria-hidden />
+          </a>
+        </div>
       )}
 
-      <div className="flex items-center justify-between gap-2 mt-auto">
-        <div className="flex flex-col min-w-0">
-          {item.sourceUrl && (
-            <a
-              href={item.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[11px] text-[#9CA3AF] hover:text-[#7C3AED] truncate transition-colors"
-            >
-              <ExternalLink size={10} />
-              {safeHostname(item.sourceUrl)}
-            </a>
-          )}
-          <span className="text-[11px] text-[#ADA99F]">Saved {timeAgo(item.createdAt)}</span>
-        </div>
-        <Link
-          href={`/content-hub?boardItemId=${item.id}`}
-          className="flex-shrink-0 px-3 py-1.5 rounded-lg text-[11.5px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] transition-colors"
-        >
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-5">
+        <Link href={`/content-hub?boardItemId=${item.id}`} className={buttonVariants({ variant: "brand" })}>
           Turn into Post
         </Link>
+        <Button
+          variant="ghost"
+          onClick={onDelete}
+          disabled={deleting}
+          title="Delete"
+          aria-label="Delete"
+          className="text-muted-foreground hover:bg-danger-soft hover:text-danger"
+        >
+          {deleting ? <Loader2 className="animate-spin" aria-hidden /> : <Trash2 aria-hidden />}
+        </Button>
       </div>
-    </div>
+    </article>
   )
 }
 
@@ -119,6 +183,9 @@ export default function IdeasBoardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  // Which idea the detail column shows; falls back to the newest.
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const detailRef = useRef<HTMLDivElement>(null)
 
   const [formOpen, setFormOpen] = useState(false)
   const [formType, setFormType] = useState<ItemType>("note")
@@ -180,7 +247,9 @@ export default function IdeasBoardPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to save")
-      setItems((prev) => [(data as { item: IdeaBoardItem }).item, ...prev])
+      const saved = (data as { item: IdeaBoardItem }).item
+      setItems((prev) => [saved, ...prev])
+      setSelectedId(saved.id)
       setFormOpen(false)
       setFormContent("")
       setFormTitle("")
@@ -192,135 +261,146 @@ export default function IdeasBoardPage() {
     }
   }
 
+  const selected = items.find((i) => i.id === selectedId) ?? items[0] ?? null
+
+  function select(id: string) {
+    setSelectedId(id)
+    // Below the two-column layout the detail sits under the list — bring it into view.
+    if (!window.matchMedia("(min-width: 64rem)").matches) {
+      requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }))
+    }
+  }
+
   return (
-    <div className="max-w-5xl mx-auto flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <Link
-          href="/content-hub"
-          className="inline-flex items-center gap-1 text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors w-fit"
-        >
-          <ArrowLeft size={13} strokeWidth={2.2} />
-          Content Hub
-        </Link>
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex flex-col gap-1">
-            <h1 className="text-[20px] font-bold text-[#0A0A0A]">Ideas Board</h1>
-            <p className="text-[13px] text-[#9CA3AF]">
-              Save links, images, and notes for later — capture them here or with the browser extension.
-            </p>
-          </div>
-          <button
-            onClick={() => setFormOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_18px_rgba(124,58,237,0.25)] transition-colors"
-          >
-            <Plus size={14} strokeWidth={2.4} />
-            Save an Idea
-          </button>
-        </div>
+    <div className="mx-auto flex w-full max-w-showcase flex-col gap-6">
+      <div className="flex flex-col gap-3">
+        <BackLink href="/content-hub">Content Hub</BackLink>
+        <PageHeader
+          title="Ideas Board"
+          description="Save links, images, and notes for later — capture them here or with the browser extension."
+          actions={
+            <Button variant={formOpen ? "outline" : "default"} aria-expanded={formOpen} onClick={() => setFormOpen((v) => !v)}>
+              <Plus aria-hidden />
+              Save an Idea
+            </Button>
+          }
+        />
       </div>
 
       {formOpen && (
-        <div className="flex flex-col gap-3 p-4 rounded-xl border border-[#E5E3DE] bg-white">
-          <div className="flex items-center gap-1.5">
-            {(["note", "link", "image"] as ItemType[]).map((t) => (
-              <button
-                key={t}
-                onClick={() => setFormType(t)}
-                className={[
-                  "px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors",
-                  formType === t
-                    ? "bg-[#7C3AED] text-white"
-                    : "bg-[#F4F2EC] text-[#9CA3AF] hover:text-[#4B5563]",
-                ].join(" ")}
-              >
-                {TYPE_LABEL[t]}
-              </button>
-            ))}
+        <div className="flex flex-col gap-3 rounded-showcase border border-border bg-surface-raised p-4 shadow-card sm:p-5">
+          <div role="group" aria-label="Kind of idea" className="inline-flex self-start rounded-control border border-border bg-surface p-1">
+            {(["note", "link", "image"] as ItemType[]).map((t) => {
+              const Icon = TYPE_ICON[t]
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  aria-pressed={formType === t}
+                  onClick={() => setFormType(t)}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-control-sm px-3 text-label font-medium text-muted-foreground transition-colors duration-(--motion-fast) hover:text-foreground aria-pressed:bg-surface-raised aria-pressed:text-foreground aria-pressed:shadow-card"
+                >
+                  <Icon className="size-3.5" aria-hidden />
+                  {TYPE_LABEL[t]}
+                </button>
+              )
+            })}
           </div>
           <input
             value={formTitle}
             onChange={(e) => setFormTitle(e.target.value)}
             placeholder="Title (optional)"
-            className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
+            aria-label="Title (optional)"
+            className={cn(controlClasses, "h-11 px-3")}
           />
           {formType === "note" ? (
             <textarea
               value={formContent}
               onChange={(e) => setFormContent(e.target.value)}
               placeholder="Write your note…"
-              rows={3}
-              className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors resize-y"
+              aria-label="Write your note…"
+              rows={4}
+              className={cn(controlClasses, "resize-y px-3 py-2.5 leading-relaxed")}
             />
           ) : (
             <input
               value={formContent}
               onChange={(e) => setFormContent(e.target.value)}
               placeholder={formType === "image" ? "https://example.com/image.jpg" : "https://example.com/article"}
-              className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
+              aria-label={formType === "image" ? "https://example.com/image.jpg" : "https://example.com/article"}
+              className={cn(controlClasses, "h-11 px-3")}
             />
           )}
           {formError && (
-            <div className="px-3 py-2 rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[12px] text-[rgba(239,68,68,0.9)]">
+            <p role="alert" className="rounded-control-sm border border-danger/25 bg-danger-soft px-3 py-2 text-caption text-danger">
               {formError}
-            </div>
+            </p>
           )}
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => void handleSubmit()}
-              disabled={submitting}
-              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[12.5px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 transition-colors"
-            >
-              {submitting ? <Loader2 size={13} className="animate-spin" /> : "Save"}
-            </button>
-            <button
-              onClick={() => setFormOpen(false)}
-              className="px-3.5 py-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[12px] font-medium text-[#6B7280] transition-colors"
-            >
+            <Button variant="brand" onClick={() => void handleSubmit()} disabled={submitting} className="min-w-28">
+              {submitting ? <Loader2 className="animate-spin" aria-hidden /> : "Save"}
+            </Button>
+            <Button variant="ghost" onClick={() => setFormOpen(false)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {error && (
-        <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
+        <div role="alert" className="rounded-card border border-danger/25 bg-danger-soft px-4 py-3 text-label text-danger">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-[180px] rounded-xl bg-[#F6F4EE] border border-[#F1EFE9] animate-pulse"
-              style={{ animationDelay: `${i * 60}ms` }}
-            />
-          ))}
+        <div aria-hidden className="grid gap-8 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:gap-12">
+          <div className="flex flex-col gap-1">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 p-2.5">
+                <Skeleton className="size-11" />
+                <div className="flex flex-1 flex-col gap-2">
+                  <Skeleton className="h-3.5 w-4/5" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden flex-col gap-4 lg:flex">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-3/4" />
+          </div>
         </div>
       ) : items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center min-h-[30vh] text-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-[rgba(124,58,237,0.1)] border border-[rgba(124,58,237,0.2)] flex items-center justify-center">
-            <StickyNote size={20} className="text-[#7C3AED]" strokeWidth={1.8} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <p className="text-[15px] font-medium text-[#6B7280]">Nothing saved yet</p>
-            <p className="text-[13px] text-[#ADA99F] max-w-xs">
-              Save a link, image, or note above, or right-click anything on the web with the CarouseLabs Ideas
-              browser extension.
-            </p>
-          </div>
-        </div>
+        <EmptyState
+          icon={<StickyNote />}
+          title="Nothing saved yet"
+          description="Save a link, image, or note above, or right-click anything on the web with the CarouseLabs Ideas browser extension."
+        />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {items.map((item) => (
-            <IdeaCard
-              key={item.id}
-              item={item}
-              onDelete={() => void handleDelete(item.id)}
-              deleting={deletingId === item.id}
-            />
-          ))}
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:gap-12">
+          <nav aria-label="Ideas" className="lg:max-h-[calc(100dvh-14rem)] lg:overflow-y-auto lg:pr-1">
+            <ul className="flex flex-col gap-1">
+              {items.map((item) => (
+                <li key={item.id}>
+                  <IdeaRow item={item} selected={selected?.id === item.id} onSelect={() => select(item.id)} />
+                </li>
+              ))}
+            </ul>
+          </nav>
+          <div ref={detailRef} className="min-w-0 scroll-mt-6">
+            {selected && (
+              <div className="rounded-showcase border border-border bg-surface p-5 shadow-card sm:p-8 lg:sticky lg:top-0">
+                <IdeaDetail
+                  key={selected.id}
+                  item={selected}
+                  onDelete={() => void handleDelete(selected.id)}
+                  deleting={deletingId === selected.id}
+                />
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

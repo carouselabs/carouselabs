@@ -2,11 +2,14 @@
 
 import { useState, useRef, useCallback } from "react"
 import { Upload, X, Loader2 } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface ReferenceUploaderProps {
   value: string | null
   onChange: (base64: string, mediaType: string) => void
   onClear: () => void
+  /** "canvas": a wide 16:9 drop zone and preview, for flows built around the reference. */
+  size?: "compact" | "canvas"
 }
 
 // Downscale + re-encode to JPEG before uploading. Reference images are only
@@ -51,7 +54,8 @@ async function compressImage(
   })
 }
 
-export function ReferenceUploader({ value, onChange, onClear }: ReferenceUploaderProps) {
+export function ReferenceUploader({ value, onChange, onClear, size = "compact" }: ReferenceUploaderProps) {
+  const canvas = size === "canvas"
   const [isDragging, setIsDragging] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -100,20 +104,25 @@ export function ReferenceUploader({ value, onChange, onClear }: ReferenceUploade
   if (value && previewUrl) {
     return (
       <div className="flex flex-col gap-2">
-        <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
-          Reference Style
-        </p>
-        <div className="flex items-start gap-3">
-          <div className="relative w-24 h-24 rounded-xl overflow-hidden border border-[#E5E3DE] flex-shrink-0">
-            <img src={previewUrl} alt="Reference" className="w-full h-full object-cover" />
+        <p className="text-caption font-medium text-muted-foreground">Reference Style</p>
+        <div className={cn("flex items-start gap-3", canvas && "flex-col")}>
+          <div
+            className={cn(
+              "relative shrink-0 overflow-hidden border border-border",
+              canvas ? "aspect-video w-full rounded-card bg-surface-muted shadow-card" : "size-24 rounded-control"
+            )}
+          >
+            <img src={previewUrl} alt="Reference" className={cn("h-full w-full", canvas ? "object-contain" : "object-cover")} />
             <button
+              type="button"
               onClick={handleClear}
-              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[rgba(0,0,0,0.65)] flex items-center justify-center hover:bg-[rgba(0,0,0,0.85)] transition-colors"
+              aria-label="Remove reference"
+              className="absolute top-1 right-1 flex size-6 items-center justify-center rounded-full bg-foreground/75 text-background transition-colors duration-(--motion-fast) after:absolute after:-inset-2 after:content-[''] hover:bg-foreground"
             >
-              <X size={10} className="text-white" strokeWidth={2.5} />
+              <X className="size-3" strokeWidth={2.5} aria-hidden />
             </button>
           </div>
-          <p className="text-[12px] text-[#9CA3AF] leading-[1.55] mt-1">
+          <p className={cn("text-label text-muted-foreground", !canvas && "mt-1")}>
             Claude will match this visual style when generating the image prompt.
           </p>
         </div>
@@ -123,13 +132,12 @@ export function ReferenceUploader({ value, onChange, onClear }: ReferenceUploade
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
-        Reference Style{" "}
-        <span className="normal-case tracking-normal font-normal text-[#C4C0B6]">
-          (optional)
-        </span>
+      <p className="text-caption font-medium text-muted-foreground">
+        Reference Style <span className="font-normal">(optional)</span>
       </p>
-      <div
+      {/* A real button, so the upload can be reached and opened from the keyboard. */}
+      <button
+        type="button"
         onDragOver={(e) => {
           e.preventDefault()
           setIsDragging(true)
@@ -137,36 +145,39 @@ export function ReferenceUploader({ value, onChange, onClear }: ReferenceUploade
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
         onClick={() => !isProcessing && inputRef.current?.click()}
-        className={`flex flex-col items-center justify-center gap-2 h-24 rounded-xl border border-dashed transition-all duration-150 ${
-          isProcessing ? "cursor-wait" : "cursor-pointer"
-        } ${
+        aria-busy={isProcessing || undefined}
+        className={cn(
+          "flex w-full flex-col items-center justify-center gap-2 border border-dashed px-4 text-center transition-colors duration-(--motion-fast)",
+          canvas ? "aspect-video rounded-card" : "h-28 rounded-control",
+          isProcessing ? "cursor-wait" : "cursor-pointer",
           isDragging
-            ? "border-[rgba(26,26,26,0.55)] bg-[rgba(26,26,26,0.08)]"
-            : "border-[#E5E3DE] bg-[#F6F4EE] hover:border-[#D6D3CC] hover:bg-[#F4F2EC]"
-        }`}
+            ? "border-brand bg-brand-soft/60"
+            : "border-control-border/70 bg-surface hover:border-control-border hover:bg-surface-raised"
+        )}
       >
         {isProcessing ? (
           <>
-            <Loader2 size={15} className="text-[#ADA99F] animate-spin" />
-            <p className="text-[12px] text-[#9CA3AF]">Processing image…</p>
+            <Loader2 className="size-4 animate-spin text-muted-foreground motion-reduce:animate-none" aria-hidden />
+            <span className="text-label text-muted-foreground">Processing image…</span>
           </>
         ) : (
           <>
-            <Upload size={15} className="text-[#ADA99F]" strokeWidth={1.8} />
-            <p className="text-[12px] text-[#9CA3AF]">
+            <Upload className={cn("text-muted-foreground", canvas ? "size-6" : "size-4")} strokeWidth={1.8} aria-hidden />
+            <span className="text-label text-muted-foreground">
               Drag an image or click to upload a style reference
-            </p>
+            </span>
           </>
         )}
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*"
-          disabled={isProcessing}
-          className="hidden"
-          onChange={handleInputChange}
-        />
-      </div>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        disabled={isProcessing}
+        className="hidden"
+        onChange={handleInputChange}
+        tabIndex={-1}
+      />
     </div>
   )
 }

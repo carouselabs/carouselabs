@@ -18,14 +18,14 @@ import {
 type Option = { id: string; name: string }
 
 export const selectClass =
-  "w-full rounded-xl border border-[#E5E3DE] bg-white px-3.5 py-2.5 text-[13px] text-[#0A0A0A] outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/15 disabled:opacity-60"
+  "w-full rounded-control border border-border bg-surface-raised px-3.5 py-2.5 text-label text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/15 disabled:opacity-60"
 
 export function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-2 md:gap-6 py-4 border-b border-[#F0EEE8] last:border-0">
+    <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-2 md:gap-6 py-4 border-b border-border last:border-0">
       <div className="flex flex-col gap-0.5">
-        <p className="text-[13px] font-semibold text-[#0A0A0A]">{label}</p>
-        {hint && <p className="text-[12px] text-[#9CA3AF] leading-[1.5]">{hint}</p>}
+        <p className="text-label font-semibold text-foreground">{label}</p>
+        {hint && <p className="text-caption text-muted-foreground leading-[1.5]">{hint}</p>}
       </div>
       <div className="max-w-md">{children}</div>
     </div>
@@ -110,20 +110,20 @@ export function ExtensionSettingsForm() {
 
   const status = (key: keyof ExtSettings) =>
     saving === key ? (
-      <span className="inline-flex items-center gap-1 text-[11.5px] text-[#9CA3AF]">
+      <span className="inline-flex items-center gap-1 text-caption text-muted-foreground">
         <Loader2 size={11} className="animate-spin" /> Saving
       </span>
     ) : saved === key ? (
-      <span className="inline-flex items-center gap-1 text-[11.5px] text-[#15803D]">
+      <span className="inline-flex items-center gap-1 text-caption text-success">
         <Check size={11} /> Saved
       </span>
     ) : null
 
   if (!settings) {
     return error ? (
-      <p className="text-[13px] text-[#DC2626]">{error}</p>
+      <p className="text-label text-danger">{error}</p>
     ) : (
-      <p className="text-[13px] text-[#9CA3AF]">Loading settings…</p>
+      <p className="text-label text-muted-foreground">Loading settings…</p>
     )
   }
 
@@ -131,9 +131,9 @@ export function ExtensionSettingsForm() {
 
   return (
     <div className="flex flex-col gap-4">
-      {error && <p className="text-[13px] text-[#DC2626]">{error}</p>}
+      {error && <p className="text-label text-danger">{error}</p>}
 
-      <div className="rounded-2xl border border-[#E5E3DE] bg-white px-5">
+      <div className="rounded-card border border-border bg-surface-raised px-5">
         <Row label="Default language" hint="What the extension writes in unless a voice profile says otherwise.">
           <div className="flex items-center gap-3">
             <select
@@ -193,7 +193,7 @@ export function ExtensionSettingsForm() {
           label="Insert button"
           hint="Whether the extension shows Insert, which types the text straight into LinkedIn. Copy always stays."
         >
-          <label className="flex items-center gap-3 text-[13px] text-[#374151]">
+          <label className="flex items-center gap-3 text-label text-foreground">
             <input
               type="checkbox"
               className="h-4 w-4 accent-[#7C3AED]"
@@ -208,9 +208,9 @@ export function ExtensionSettingsForm() {
 
       </div>
 
-      <p className="text-[12px] text-[#9CA3AF]">
+      <p className="text-caption text-muted-foreground">
         Connection note context, note length and each conversation&apos;s reason are under{" "}
-        <a href="/extension/profiles" className="font-medium text-[#7C3AED] hover:underline">
+        <a href="/extension/profiles" className="font-medium text-brand hover:underline">
           Custom tones
         </a>
         .

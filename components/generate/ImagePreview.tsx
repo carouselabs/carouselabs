@@ -15,10 +15,10 @@ export function ImagePreview({ src, alt }: ImagePreviewProps) {
   const [loaded, setLoaded] = useState(false)
 
   return (
-    <div className="relative w-full rounded-2xl overflow-hidden border border-[#E9E7E1]">
+    <div className="relative w-full overflow-hidden rounded-card border border-border bg-surface shadow-card">
       {/* Placeholder keeps the frame from collapsing to 0px before the natural
           image height is known. */}
-      {!loaded && <div className="w-full h-64 bg-[#F4F2EC] animate-pulse" />}
+      {!loaded && <div className="h-64 w-full animate-pulse bg-skeleton motion-reduce:animate-none" />}
       <img
         src={src}
         alt={alt}

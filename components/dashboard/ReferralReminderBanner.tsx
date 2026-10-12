@@ -43,23 +43,23 @@ export function ReferralReminderBanner() {
       : "Know someone who'd love CarouseLabs? Share your referral link and earn 8% commission."
 
   return (
-    <div className="flex items-center gap-3.5 p-4 rounded-xl bg-[rgba(124,58,237,0.04)] border border-[rgba(124,58,237,0.25)]">
-      <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-[rgba(124,58,237,0.10)] flex items-center justify-center">
-        <Gift size={15} className="text-[#7C3AED]" strokeWidth={2} />
-      </div>
-      <p className="flex-1 min-w-0 text-[13px] text-[#374151] leading-[1.4]">{message}</p>
+    <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2 rounded-control border border-brand/25 bg-brand-soft/50 px-4 py-3 sm:flex-nowrap">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-control-sm bg-brand-soft text-brand">
+        <Gift className="size-4" aria-hidden />
+      </span>
+      <p className="min-w-0 flex-1 text-label text-foreground">{message}</p>
       <Link
         href="/settings/referrals"
-        className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-[#7C3AED] hover:bg-[#6D28D9] text-[12.5px] font-semibold text-white transition-colors"
+        className="inline-flex h-8 shrink-0 items-center rounded-control-sm bg-brand px-3 text-caption font-semibold text-brand-foreground transition-colors duration-(--motion-fast) hover:bg-brand-hover"
       >
         {data.hasReferrals && (data.earnedThisMonth ?? 0) > 0 ? "View Referrals" : "Get Your Link"}
       </Link>
       <button
         onClick={() => setDismissed(true)}
         aria-label="Dismiss"
-        className="flex-shrink-0 text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+        className="relative shrink-0 rounded-detail text-muted-foreground transition-colors duration-(--motion-fast) after:absolute after:-inset-3 after:content-[''] hover:text-foreground"
       >
-        <X size={15} strokeWidth={2} />
+        <X className="size-4" aria-hidden />
       </button>
     </div>
   )

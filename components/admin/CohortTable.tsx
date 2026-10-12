@@ -80,16 +80,16 @@ export function CohortTable() {
                 <td className={tableCls.td}>{fmtWeek(r.weekStart, r.weekEnd)}</td>
                 <td className={`${tableCls.td} tabular-nums`}>{r.newUsers}</td>
                 <td className={`${tableCls.td} tabular-nums`}>
-                  {r.postedWeek1} <span className="text-[#6A6A6A]">({pct(r.postedWeek1, r.newUsers)})</span>
+                  {r.postedWeek1} <span className="text-muted-foreground/80">({pct(r.postedWeek1, r.newUsers)})</span>
                 </td>
                 <td className={`${tableCls.td} tabular-nums`}>
-                  {r.postedWeek2} <span className="text-[#6A6A6A]">({pct(r.postedWeek2, r.newUsers)})</span>
+                  {r.postedWeek2} <span className="text-muted-foreground/80">({pct(r.postedWeek2, r.newUsers)})</span>
                 </td>
                 <td className={`${tableCls.td} tabular-nums`}>
                   {r.convertedToPro}{" "}
-                  <span className="text-[#6A6A6A]">({pct(r.convertedToPro, r.newUsers)})</span>
+                  <span className="text-muted-foreground/80">({pct(r.convertedToPro, r.newUsers)})</span>
                 </td>
-                <td className={`${tableCls.td} tabular-nums font-semibold text-white`} style={retentionCellStyle(r.retentionPct)}>
+                <td className={`${tableCls.td} tabular-nums font-semibold text-foreground`} style={retentionCellStyle(r.retentionPct)}>
                   {r.retentionPct}%
                 </td>
               </tr>
@@ -97,7 +97,7 @@ export function CohortTable() {
           </tbody>
         </table>
       </div>
-      <p className="mt-3 text-[11px] leading-relaxed text-[#6A6A6A]">
+      <p className="mt-3 text-caption leading-relaxed text-muted-foreground/80">
         &quot;Week 1&quot;/&quot;week 2&quot; are measured relative to each user&apos;s own signup date.
         Retention % = posted-in-week-2 ÷ cohort size. &quot;Converted to Pro&quot; reflects current plan
         status (there&apos;s no upgrade-timestamp column yet, so a true 30-day conversion window isn&apos;t

@@ -28,10 +28,10 @@ const TYPE_LABEL: Record<ScheduledEmailRow["type"], string> = {
 }
 
 const STATUS_STYLES: Record<ScheduledEmailRow["status"], string> = {
-  queued: "bg-blue-500/15 text-blue-400",
-  sending: "bg-amber-500/15 text-amber-400",
-  sent: "bg-emerald-500/15 text-emerald-400",
-  failed: "bg-red-500/15 text-red-400",
+  queued: "bg-chart-4/15 text-chart-4",
+  sending: "bg-warning/15 text-warning",
+  sent: "bg-success/15 text-success",
+  failed: "bg-danger/15 text-danger",
 }
 
 function recipientSummary(row: ScheduledEmailRow): string {
@@ -171,12 +171,12 @@ export function ScheduledEmailsList() {
                   <td className={tableCls.td}>{recipientSummary(r)}</td>
                   <td className={tableCls.td}>
                     <span
-                      className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${STATUS_STYLES[r.status]}`}
+                      className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-caption font-semibold ${STATUS_STYLES[r.status]}`}
                     >
                       {r.status}
                     </span>
                     {r.status === "sent" && (
-                      <span className="ml-2 text-[11px] text-[#6A6A6A]">
+                      <span className="ml-2 text-caption text-muted-foreground/80">
                         {r.sentCount ?? 0} sent{r.failedCount ? `, ${r.failedCount} failed` : ""}
                       </span>
                     )}
@@ -187,13 +187,13 @@ export function ScheduledEmailsList() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => openReschedule(r)}
-                          className="text-[12px] font-medium text-[#8A8A8A] hover:text-white transition-colors"
+                          className="text-caption font-medium text-muted-foreground hover:text-foreground transition-colors"
                         >
                           Reschedule
                         </button>
                         <button
                           onClick={() => setCanceling(r)}
-                          className="text-[12px] font-medium text-red-400 hover:text-red-300 transition-colors"
+                          className="text-caption font-medium text-danger hover:text-danger transition-colors"
                         >
                           Cancel
                         </button>
@@ -209,7 +209,7 @@ export function ScheduledEmailsList() {
 
       <Modal open={!!rescheduling} onClose={() => setRescheduling(null)} title="Reschedule">
         <div className="space-y-4">
-          <p className="text-[13px] text-[#B0B0B0]">
+          <p className="text-label text-muted-foreground">
             Pick a new send time for &ldquo;{rescheduling?.subject}&rdquo;.
           </p>
           <AdminInput

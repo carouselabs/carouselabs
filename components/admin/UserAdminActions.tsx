@@ -3,7 +3,7 @@
 // Admin actions panel on the user profile page: grant/set/reset credits,
 // change plan, admin note, suspend toggle. Calls the /api/admin/users/[id]/*
 // routes then router.refresh() so the server-rendered page re-reads the DB.
-import { useState } from "react"
+import { useId, useState } from "react"
 import { useRouter } from "next/navigation"
 import { AdminButton, AdminCard, AdminInput, AdminSelect, ConfirmModal } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
@@ -57,19 +57,21 @@ export function UserAdminActions({
   }
 
   const base = `/api/admin/users/${userId}`
+  const id = useId()
 
   return (
     <AdminCard title="Admin Actions">
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-1">
         {/* Grant credits */}
         <div className="space-y-2">
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+          <label htmlFor={`${id}-grant`} className="text-caption font-medium text-muted-foreground">
             Grant extra credits
           </label>
           <div className="flex gap-2">
             <AdminInput
               type="number"
               min={1}
+              id={`${id}-grant`}
               value={grantAmount}
               onChange={(e) => setGrantAmount(e.target.value)}
               className="w-28"
@@ -92,13 +94,14 @@ export function UserAdminActions({
 
         {/* Set credits total */}
         <div className="space-y-2">
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+          <label htmlFor={`${id}-set`} className="text-caption font-medium text-muted-foreground">
             Set monthly allowance
           </label>
           <div className="flex gap-2">
             <AdminInput
               type="number"
               min={1}
+              id={`${id}-set`}
               value={setTotal}
               onChange={(e) => setSetTotal(e.target.value)}
               className="w-28"
@@ -122,11 +125,12 @@ export function UserAdminActions({
 
         {/* Change plan */}
         <div className="space-y-2">
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+          <label htmlFor={`${id}-plan`} className="text-caption font-medium text-muted-foreground">
             Plan
           </label>
           <div className="flex gap-2">
             <AdminSelect
+              id={`${id}-plan`}
               value={planSel}
               onChange={(e) => setPlanSel(e.target.value as "FREE" | "PRO" | "GROWTH")}
             >
@@ -147,9 +151,7 @@ export function UserAdminActions({
 
         {/* Reset monthly */}
         <div className="space-y-2">
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
-            Monthly reset
-          </label>
+          <p className="text-caption font-medium text-muted-foreground">Monthly reset</p>
           <div>
             <AdminButton variant="secondary" loading={busy === "reset"} onClick={() => setConfirm("reset")}>
               Reset to plan default
@@ -159,9 +161,7 @@ export function UserAdminActions({
 
         {/* Suspend */}
         <div className="space-y-2">
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
-            Account status
-          </label>
+          <p className="text-caption font-medium text-muted-foreground">Account status</p>
           <div>
             <AdminButton
               variant={suspended ? "secondary" : "danger"}
@@ -174,16 +174,17 @@ export function UserAdminActions({
         </div>
 
         {/* Note */}
-        <div className="space-y-2 md:col-span-2 xl:col-span-3">
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+        <div className="space-y-2 md:col-span-2 xl:col-span-1">
+          <label htmlFor={`${id}-note`} className="text-caption font-medium text-muted-foreground">
             Admin note
           </label>
           <textarea
+            id={`${id}-note`}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={3}
             placeholder="Internal note about this user…"
-            className="w-full rounded-lg border border-[#2A2A2A] bg-[#141414] p-3 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED]"
+            className="w-full rounded-control border border-control-border bg-surface p-3 text-label text-foreground placeholder:text-muted-foreground/80 transition-colors duration-(--motion-fast) focus-visible:border-brand"
           />
           <AdminButton
             variant="secondary"

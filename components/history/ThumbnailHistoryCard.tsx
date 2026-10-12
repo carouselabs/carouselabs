@@ -5,6 +5,9 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Download, Loader2, ImageIcon, Copy } from "lucide-react"
 import type { ThumbnailHistoryEntry } from "@/lib/hooks/useHistory"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { PILL } from "@/components/shared/categoryTone"
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -73,69 +76,72 @@ export function ThumbnailHistoryCard({ entry }: ThumbnailHistoryCardProps) {
     }
   }
 
+  const text = entry.videoContent || "Untitled thumbnail"
+
+  // The whole row opens the full image (new tab); the buttons sit above that link.
   return (
-    <a
-      href={entry.imageUrl || undefined}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group relative flex gap-4 p-4 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] hover:border-[rgba(26,26,26,0.3)] hover:bg-[rgba(26,26,26,0.04)] transition-all duration-150"
-    >
-      <div className="shrink-0 w-24 aspect-video rounded-lg overflow-hidden border border-[#E5E3DE] bg-white">
+    <div className="group relative flex gap-4 py-5">
+      <div className="aspect-video w-24 shrink-0 overflow-hidden rounded-control-sm border border-border bg-surface-raised sm:w-32">
         {entry.imageUrl ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={entry.imageUrl}
             alt="Generated thumbnail"
-            className="w-full h-full object-cover"
+            className="h-full w-full object-cover"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <ImageIcon size={16} className="text-[#ADA99F]" />
+          <div className="flex h-full w-full items-center justify-center">
+            <ImageIcon className="size-4 text-muted-foreground" aria-hidden />
           </div>
         )}
       </div>
 
-      <div className="flex-1 min-w-0 flex flex-col gap-2">
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex items-start justify-between gap-3">
-          <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full tracking-wide text-[#7C3AED] bg-[rgba(124,58,237,0.1)]">
-            Thumbnail
-          </span>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button
+          <span className={cn(PILL, "bg-brand-soft text-brand")}>Thumbnail</span>
+          <div className="relative z-10 -mt-1.5 -mr-1.5 flex shrink-0 items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={(e) => void handleDuplicate(e)}
               disabled={duplicating}
               title="Duplicate"
-              className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#ECEAE4] transition-colors cursor-pointer disabled:opacity-50"
+              aria-label="Duplicate"
+              className="text-muted-foreground hover:text-foreground"
             >
-              {duplicating ? (
-                <Loader2 size={13} className="animate-spin" strokeWidth={2} />
-              ) : (
-                <Copy size={13} strokeWidth={2} />
-              )}
-            </button>
-            <button
+              {duplicating ? <Loader2 className="animate-spin" aria-hidden /> : <Copy aria-hidden />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={(e) => void handleDownload(e)}
               disabled={downloading}
               title="Download"
-              className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#ECEAE4] transition-colors cursor-pointer disabled:opacity-50"
+              aria-label="Download"
+              className="text-muted-foreground hover:text-foreground"
             >
-              {downloading ? (
-                <Loader2 size={13} className="animate-spin" strokeWidth={2} />
-              ) : (
-                <Download size={13} strokeWidth={2} />
-              )}
-            </button>
+              {downloading ? <Loader2 className="animate-spin" aria-hidden /> : <Download aria-hidden />}
+            </Button>
           </div>
         </div>
 
-        <p className="text-[13px] text-[#374151] leading-[1.4] line-clamp-2">
-          {entry.videoContent || "Untitled thumbnail"}
-        </p>
+        {entry.imageUrl ? (
+          <a
+            href={entry.imageUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="line-clamp-2 rounded-detail text-label text-foreground underline-offset-4 after:absolute after:inset-0 after:content-[''] group-hover:underline"
+          >
+            {text}
+          </a>
+        ) : (
+          <p className="line-clamp-2 text-label text-foreground">{text}</p>
+        )}
 
-        <span className="text-[11px] text-[#ADA99F] mt-auto">
+        <span className="mt-auto text-caption text-muted-foreground">
           Generated {timeAgo(entry.createdAt)}
         </span>
       </div>
-    </a>
+    </div>
   )
 }

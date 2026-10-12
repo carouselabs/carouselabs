@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { useOnboardingStore } from "@/lib/store/onboardingStore"
 import { StepNav } from "@/components/onboarding/StepNav"
 import { WordLimitedField } from "@/components/WordLimitedField"
+import { controlClasses } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 
 const SENIORITY = [
   "Entry-level",
@@ -42,49 +44,49 @@ export default function AudiencePage() {
       ? `Please fill in ${missingFields.length === 1 ? missingFields[0] : missingFields.slice(0, -1).join(", ") + " and " + missingFields[missingFields.length - 1]} to continue.`
       : ""
 
+  const field = cn(controlClasses, "h-12 px-4")
+
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-[#0A0A0A] mb-1">Who are you writing for?</h1>
-      <p className="text-sm text-[#6B7280] mb-8">
+      <h1 className="text-title-sm font-semibold">Who are you writing for?</h1>
+      <p className="mt-1 mb-8 text-body text-muted-foreground">
         Define your ideal reader so we can shape your content&apos;s angle.
       </p>
 
-      <div className="space-y-6">
-        <div>
-          <label className="block text-xs font-medium text-[#6B7280] mb-2 uppercase tracking-wide">
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="audience-role" className="text-label font-medium">
             Their Job Role
           </label>
           <WordLimitedField
             as="input"
+            id="audience-role"
+            invalid={highlight(!audienceRole)}
             value={audienceRole}
             onChange={setAudienceRole}
             maxWords={5}
             warnWithin={2}
             placeholder="e.g. Marketing Manager, CTO, Founder…"
-            className={`w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors ${
-              highlight(!audienceRole) ? "border-red-400" : "border-[#E5E3DE]"
-            }`}
+            className={field}
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-[#6B7280] mb-3 uppercase tracking-wide">
+        <div className="flex flex-col gap-2">
+          <p id="audience-seniority" className="text-label font-medium">
             Seniority Level
-          </label>
+          </p>
           <div
-            className={`flex flex-wrap gap-2 p-1 -m-1 rounded-xl ${
-              highlight(!audienceSeniority) ? "ring-1 ring-red-400" : ""
-            }`}
+            role="group"
+            aria-labelledby="audience-seniority"
+            className={cn("-m-1 flex flex-wrap gap-2 rounded-card p-1", highlight(!audienceSeniority) && "ring-2 ring-danger")}
           >
             {SENIORITY.map((opt) => (
               <button
                 key={opt}
+                type="button"
+                aria-pressed={audienceSeniority === opt}
                 onClick={() => setAudienceSeniority(audienceSeniority === opt ? "" : opt)}
-                className={`px-4 py-2 rounded-full border text-sm transition-colors ${
-                  audienceSeniority === opt
-                    ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.12)] text-[#1A1A1A]"
-                    : "border-[#E5E3DE] text-[#6B7280] hover:border-[#DEDBD4] hover:text-[#1A1A1A]"
-                }`}
+                className="h-10 rounded-full border border-border bg-surface px-4 text-label text-foreground transition-colors hover:border-control-border aria-pressed:border-foreground aria-pressed:bg-foreground aria-pressed:text-background"
               >
                 {opt}
               </button>
@@ -92,37 +94,37 @@ export default function AudiencePage() {
           </div>
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-[#6B7280] mb-2 uppercase tracking-wide">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="audience-industry" className="text-label font-medium">
             Their Industry
           </label>
           <WordLimitedField
             as="input"
+            id="audience-industry"
+            invalid={highlight(!audienceIndustry.trim())}
             value={audienceIndustry}
             onChange={setAudienceIndustry}
             maxWords={5}
             warnWithin={2}
             placeholder="e.g. B2B SaaS, Healthcare, Finance…"
-            className={`w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors ${
-              highlight(!audienceIndustry.trim()) ? "border-red-400" : "border-[#E5E3DE]"
-            }`}
+            className={field}
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-[#6B7280] mb-2 uppercase tracking-wide">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="audience-problem" className="text-label font-medium">
             Core Problem They Face
           </label>
           <WordLimitedField
             as="textarea"
+            id="audience-problem"
+            invalid={highlight(!coreProblem.trim())}
             value={coreProblem}
             onChange={setCoreProblem}
             maxWords={200}
             rows={3}
             placeholder="e.g. Struggling to generate leads on LinkedIn, building a brand without time…"
-            className={`w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors resize-none ${
-              highlight(!coreProblem.trim()) ? "border-red-400" : "border-[#E5E3DE]"
-            }`}
+            className={cn(controlClasses, "resize-none px-4 py-3")}
           />
         </div>
       </div>

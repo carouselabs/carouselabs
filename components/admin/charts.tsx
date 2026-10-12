@@ -1,9 +1,12 @@
 "use client"
 
 // Dark-themed recharts wrappers for the admin panel.
-// Categorical palette validated for CVD + contrast on the #1A1A1A card
-// surface (fixed assignment order — never cycled):
-//   violet #8B5CF6 → teal #0D9488 → amber #D97706
+// Categorical palette validated (lightness band, chroma, colour-blind
+// separation across all pairs, 3:1 contrast) on the dark card surface
+// #201E1B (the design system's dark --surface). Fixed assignment order —
+// never cycled: violet #8B5CF6 → teal #0D9488 → amber #D97706 → rose #E11D48.
+// Anything past four folds into a neutral "Other". Chart chrome (axes, grid,
+// tooltip) uses the dark theme's text and border values.
 import {
   ResponsiveContainer,
   LineChart,
@@ -24,17 +27,22 @@ export const CHART_COLORS = {
   violet: "#8B5CF6",
   teal: "#0D9488",
   amber: "#D97706",
+  rose: "#E11D48",
+  /** The folded "Other" slice only — never a series of its own. */
+  other: "#8A847A",
 } as const
 
-const AXIS = { fill: "#8A8A8A", fontSize: 11 }
-const GRID = "#2A2A2A"
+// Dark theme values (app/globals.css [data-theme="dark"]).
+const SURFACE = "#201E1B"
+const AXIS = { fill: "#B5AFA4", fontSize: 11 }
+const GRID = "#3A352F"
 
 const tooltipStyle = {
-  backgroundColor: "#1F1F1F",
-  border: "1px solid #2A2A2A",
-  borderRadius: 8,
+  backgroundColor: "#282521",
+  border: "1px solid #3A352F",
+  borderRadius: 10,
   fontSize: 12,
-  color: "#fff",
+  color: "#F5F0E7",
 }
 
 // Accepts unknown because recharts types tooltip labels as ReactNode.
@@ -67,7 +75,7 @@ export function AdminLineChart({
         <XAxis dataKey={xKey} tick={AXIS} tickFormatter={shortDate} tickLine={false} axisLine={{ stroke: GRID }} minTickGap={28} />
         <YAxis tick={AXIS} tickLine={false} axisLine={false} allowDecimals={decimals} />
         <Tooltip contentStyle={tooltipStyle} labelFormatter={shortDate} cursor={{ stroke: GRID }} />
-        {series.length > 1 && <Legend wrapperStyle={{ fontSize: 12, color: "#B0B0B0" }} />}
+        {series.length > 1 && <Legend wrapperStyle={{ fontSize: 12, color: "#B5AFA4" }} />}
         {series.map((s) => (
           <Line
             key={s.key}
@@ -77,7 +85,7 @@ export function AdminLineChart({
             stroke={s.color}
             strokeWidth={2}
             dot={false}
-            activeDot={{ r: 4, stroke: "#1A1A1A", strokeWidth: 2 }}
+            activeDot={{ r: 4, stroke: SURFACE, strokeWidth: 2 }}
           />
         ))}
       </LineChart>
@@ -106,7 +114,7 @@ export function AdminBarChart({
         <CartesianGrid stroke={GRID} vertical={false} />
         <XAxis dataKey={xKey} tick={AXIS} tickFormatter={shortDate} tickLine={false} axisLine={{ stroke: GRID }} minTickGap={28} />
         <YAxis tick={AXIS} tickLine={false} axisLine={false} allowDecimals={false} />
-        <Tooltip contentStyle={tooltipStyle} labelFormatter={shortDate} cursor={{ fill: "#232323" }} />
+        <Tooltip contentStyle={tooltipStyle} labelFormatter={shortDate} cursor={{ fill: "#24211D" }} />
         <Bar dataKey={yKey} name={label} fill={color} radius={[4, 4, 0, 0]} maxBarSize={18} />
       </BarChart>
     </ResponsiveContainer>
@@ -132,11 +140,14 @@ export function AdminDonut({
           nameKey="name"
           innerRadius="55%"
           outerRadius="80%"
-          stroke="#1A1A1A"
+          stroke={SURFACE}
           strokeWidth={2}
-          label={({ name, value }) =>
-            total > 0 ? `${name} ${Math.round(((value as number) / total) * 100)}%` : name
-          }
+          // Labels wear the text colour; the slice beside them carries identity.
+          label={({ name, value, x, y, textAnchor }) => (
+            <text x={x} y={y} textAnchor={textAnchor} dominantBaseline="central" fill="#B5AFA4" fontSize={12}>
+              {total > 0 ? `${name} ${Math.round(((value as number) / total) * 100)}%` : name}
+            </text>
+          )}
           labelLine={{ stroke: GRID }}
         >
           {data.map((d) => (
@@ -144,7 +155,7 @@ export function AdminDonut({
           ))}
         </Pie>
         <Tooltip contentStyle={tooltipStyle} />
-        <Legend wrapperStyle={{ fontSize: 12, color: "#B0B0B0" }} />
+        <Legend wrapperStyle={{ fontSize: 12, color: "#B5AFA4" }} />
       </PieChart>
     </ResponsiveContainer>
   )

@@ -1,10 +1,12 @@
 "use client"
 
+import { useRef, useState } from "react"
 import Link from "next/link"
-import { Sparkles, Pencil, ArrowRight } from "lucide-react"
-import { motion } from "framer-motion"
+import { Pencil, ArrowRight, AlertCircle } from "lucide-react"
 import { GenerateBar } from "@/components/dashboard/GenerateBar"
-import { IdeaFeed } from "@/components/dashboard/IdeaFeed"
+import { IdeaFeed, IdeaRowsSkeleton } from "@/components/dashboard/IdeaFeed"
+import { IdeaDetail } from "@/components/dashboard/IdeaCard"
+import { Skeleton } from "@/components/ui/skeleton"
 import { ReferralReminderBanner } from "@/components/dashboard/ReferralReminderBanner"
 import { useIdeaSessionStore } from "@/lib/store/ideaSessionStore"
 import type { SessionIdea } from "@/lib/store/ideaSessionStore"
@@ -32,6 +34,10 @@ export default function DashboardPage() {
     setError,
     clearIdeas,
   } = useIdeaSessionStore()
+
+  // Desktop shows the chosen idea beside the list; the first one until then.
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const detailRef = useRef<HTMLDivElement>(null)
 
   // ── Generate ──────────────────────────────────────────────────
   async function handleGenerate() {
@@ -103,116 +109,137 @@ export default function DashboardPage() {
 
   // ── Render states ─────────────────────────────────────────────
   const hasIdeas = ideas.length > 0
-  // Bar sits at the bottom while empty; once generating/has results it flies
-  // to the top and the ideas drop in beneath it.
-  const barOnTop = hasIdeas || isGenerating
+  const visible = ideas.filter((i) => !i.isDismissed)
+  const selected = visible.find((i) => i.id === selectedId) ?? visible[0] ?? null
+  // Before the first batch the brief sits under the welcome message;
+  // once generating/has results it moves to the top of the workspace.
+  const showIntro = !hasIdeas && !isGenerating
+
+  // Desktop (detail column visible): select it there. Otherwise the row asks
+  // for confirmation itself. Keyboard users are taken to the detail column.
+  function handleSelect(id: string, viaKeyboard: boolean) {
+    if (!window.matchMedia("(min-width: 64rem)").matches) return false
+    setSelectedId(id)
+    if (viaKeyboard) requestAnimationFrame(() => detailRef.current?.focus())
+    return true
+  }
+
+  const errorBox = error && (
+    <div
+      role="alert"
+      className="flex items-start gap-3 rounded-control border border-danger/25 bg-danger-soft px-4 py-3 text-label text-danger"
+    >
+      <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+      {error}
+    </div>
+  )
+
+  const ownIdea = (
+    <Link
+      href="/own-idea"
+      className="group flex items-center gap-3.5 rounded-control border border-dashed border-brand/40 bg-brand-soft/40 px-4 py-3.5 transition-colors duration-(--motion-fast) hover:border-brand hover:bg-brand-soft"
+    >
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-control-sm bg-brand-soft text-brand">
+        <Pencil className="size-4" aria-hidden />
+      </span>
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-label font-semibold text-foreground">Work on Own Idea</span>
+        <span className="text-caption text-muted-foreground">
+          Already know what to post? Skip trending and build from your own idea.
+        </span>
+      </span>
+      <ArrowRight
+        className="ml-auto size-4 shrink-0 text-brand transition-transform duration-(--motion-fast) group-hover:translate-x-0.5"
+        aria-hidden
+      />
+    </Link>
+  )
+
+  const brief = (
+    <GenerateBar
+      value={topicInput}
+      onChange={setTopicInput}
+      onGenerate={handleGenerate}
+      isLoading={isGenerating}
+    />
+  )
 
   return (
-    <div className="relative h-full">
-      <div className="relative z-10 h-full max-w-2xl mx-auto flex flex-col">
-        {/* Scrollable region — ideas drop in here (scrollbar hidden) */}
-        <div className="order-2 flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-3 py-1">
-          {/* Weekly referral-program nudge — self-contained, renders nothing
-              until it confirms it hasn't been shown yet this calendar week. */}
-          {!isGenerating && <ReferralReminderBanner />}
+    <div className="mx-auto flex w-full max-w-showcase flex-col gap-6 md:gap-8">
+      <h1 className="sr-only">Generate</h1>
 
-          {/* Work on Own Idea — always first, before trending ideas */}
-          {!isGenerating && (
-            <Link
-              href="/own-idea"
-              className="group flex items-center gap-3.5 p-4 rounded-xl bg-[rgba(124,58,237,0.04)] border border-dashed border-[rgba(124,58,237,0.35)] hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.07)] transition-all duration-150"
-            >
-              <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-[rgba(124,58,237,0.10)] flex items-center justify-center">
-                <Pencil size={15} className="text-[#7C3AED]" strokeWidth={2} />
-              </div>
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <p className="text-[14px] font-semibold text-[#0A0A0A]">
-                  Work on Own Idea
-                </p>
-                <p className="text-[12px] text-[#9CA3AF] leading-[1.4]">
-                  Already know what to post? Skip trending and build from your own idea.
-                </p>
-              </div>
-              <ArrowRight
-                size={15}
-                strokeWidth={2.2}
-                className="ml-auto flex-shrink-0 text-[#7C3AED] opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all"
-              />
-            </Link>
-          )}
+      {/* Weekly referral-program nudge — self-contained, renders nothing
+          until it confirms it hasn't been shown yet this calendar week. */}
+      {!isGenerating && <ReferralReminderBanner />}
 
-          {/* Error */}
-          {error && (
-            <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
-              {error}
+      {showIntro ? (
+        <section className="mx-auto flex w-full max-w-2xl flex-col gap-8 pt-2 md:pt-[6vh]">
+          {error ? (
+            errorBox
+          ) : (
+            <div className="flex flex-col gap-2">
+              <h2 className="text-title-sm font-semibold md:text-title">Generate your first ideas</h2>
+              <p className="max-w-md text-body text-muted-foreground">
+                Type a topic in the bar below, or leave it blank to let AI pick based on your
+                profile.
+              </p>
             </div>
           )}
+          <div className="rounded-card border border-border bg-surface p-5 shadow-card md:p-6">{brief}</div>
+          {ownIdea}
+        </section>
+      ) : (
+        <>
+          <div className="border-b border-border pb-6">{brief}</div>
+          {errorBox}
 
-          {/* Generating skeleton */}
-          {isGenerating && (
-            <div className="flex flex-col gap-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-[88px] rounded-xl bg-[#F4F2EC] border border-[#F1EFE9] animate-pulse"
-                  style={{ animationDelay: `${i * 60}ms` }}
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:gap-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,27rem)] xl:gap-14">
+            <div className="flex min-w-0 flex-col gap-5">
+              {/* Work on Own Idea — always first, before trending ideas */}
+              {!isGenerating && ownIdea}
+
+              {isGenerating ? (
+                <div role="status" aria-label="Generating…">
+                  <ol aria-hidden className="flex flex-col">
+                    <IdeaRowsSkeleton count={6} />
+                  </ol>
+                </div>
+              ) : (
+                <IdeaFeed
+                  ideas={ideas}
+                  isLoadingMore={isLoadingMore}
+                  selectedId={selected?.id ?? null}
+                  onSelect={handleSelect}
+                  onLoadMore={handleLoadMore}
+                  onPin={handlePin}
+                  onDismiss={handleDismiss}
                 />
-              ))}
+              )}
             </div>
-          )}
 
-          {/* Idea feed */}
-          {!isGenerating && hasIdeas && (
-            <IdeaFeed
-              ideas={ideas}
-              isLoadingMore={isLoadingMore}
-              onLoadMore={handleLoadMore}
-              onPin={handlePin}
-              onDismiss={handleDismiss}
-            />
-          )}
-
-          {/* Empty state — centered */}
-          {!isGenerating && !hasIdeas && !error && (
-            <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
-              <motion.div
-                initial={{ opacity: 0, y: -20, rotateX: -25, scale: 0.9 }}
-                animate={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
-                transition={{ type: "spring", stiffness: 220, damping: 18 }}
-                style={{ transformPerspective: 800 }}
-                className="w-14 h-14 rounded-2xl bg-white border border-[#E5E3DE] shadow-[0_10px_28px_rgba(10,10,10,0.06)] flex items-center justify-center"
+            {/* The chosen idea and the way in — desktop only; smaller screens
+                confirm in a dialog from the row. */}
+            <aside aria-label="Selected idea" className="hidden min-w-0 lg:block">
+              <div
+                ref={detailRef}
+                tabIndex={-1}
+                className="sticky top-6 rounded-card border border-border bg-surface p-6 shadow-card outline-none focus-visible:outline-2"
               >
-                <Sparkles size={22} className="text-[#1A1A1A]" strokeWidth={1.8} />
-              </motion.div>
-              <div className="flex flex-col gap-1">
-                <p className="text-[16px] font-semibold text-[#0A0A0A]">
-                  Generate your first ideas
-                </p>
-                <p className="text-[13px] text-[#9CA3AF] max-w-xs">
-                  Type a topic in the bar below, or leave it blank to let AI pick based on your
-                  profile.
-                </p>
+                {isGenerating || !selected ? (
+                  <div className="flex flex-col gap-3" aria-hidden>
+                    <Skeleton className="h-4 w-36" />
+                    <Skeleton className="h-7 w-full" />
+                    <Skeleton className="h-7 w-4/5" />
+                    <Skeleton className="mt-4 h-11 w-32" />
+                  </div>
+                ) : (
+                  <IdeaDetail key={selected.id} idea={selected} onPin={handlePin} />
+                )}
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Generate bar — flies to the top when results appear, sits at the
-            bottom when empty (framer animates the move) */}
-        <motion.div
-          layout="position"
-          transition={{ type: "spring", stiffness: 240, damping: 26 }}
-          style={{ transformPerspective: 1000 }}
-          className={`flex-shrink-0 ${barOnTop ? "order-1 pb-3" : "order-3 pt-3"}`}
-        >
-          <GenerateBar
-            value={topicInput}
-            onChange={setTopicInput}
-            onGenerate={handleGenerate}
-            isLoading={isGenerating}
-          />
-        </motion.div>
-      </div>
+            </aside>
+          </div>
+        </>
+      )}
     </div>
   )
 }

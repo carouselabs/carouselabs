@@ -5,7 +5,7 @@
 // here generates text; generation only happens in the extensions.
 import type { ReactNode } from "react"
 import type { Metadata } from "next"
-import { ExtensionTabs } from "@/components/extension/ExtensionTabs"
+import { ExtensionHeader } from "@/components/extension/ExtensionHeader"
 
 export const metadata: Metadata = {
   title: "Engage for LinkedIn",
@@ -14,8 +14,8 @@ export const metadata: Metadata = {
 
 export default function ExtensionLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="max-w-5xl mx-auto flex flex-col gap-8">
-      <ExtensionTabs />
+    <div className="mx-auto flex max-w-5xl flex-col gap-8">
+      <ExtensionHeader />
       {children}
     </div>
   )

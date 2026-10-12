@@ -18,13 +18,14 @@ export function AnalyticsTabs() {
 
   return (
     <div className="space-y-6">
-      <div className="inline-flex rounded-lg border border-[#2A2A2A] bg-[#141414] p-1">
+      <div className="inline-flex rounded-control-sm border border-border bg-background p-1">
         {TABS.map((t) => (
           <button
+            aria-pressed={tab === t.key}
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`rounded-md px-4 py-1.5 text-[12.5px] font-medium transition-colors ${
-              tab === t.key ? "bg-[#7C3AED] text-white" : "text-[#8A8A8A] hover:text-white"
+            className={`rounded-md px-4 py-1.5 text-caption font-medium transition-colors ${
+              tab === t.key ? "bg-surface-raised text-foreground shadow-card" : "text-muted-foreground hover:text-foreground"
             }`}
           >
             {t.label}

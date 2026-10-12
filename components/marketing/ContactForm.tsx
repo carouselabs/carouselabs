@@ -3,6 +3,9 @@
 import { useState } from "react"
 import { Loader2, Send } from "lucide-react"
 
+import { controlClasses } from "@/components/ui/input"
+import { buttonVariants } from "@/components/ui/button"
+
 const SUBJECTS = ["General", "Billing", "Technical", "Feature Request"] as const
 
 export function ContactForm() {
@@ -38,21 +41,22 @@ export function ContactForm() {
     }
   }
 
-  const fieldClass =
-    "w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#FFFDF8] text-[14px] text-[#0A0A0A] placeholder:text-[#9CA3AF] focus:outline-none focus:border-[#1A1A1A] transition-colors"
+  // Visible copy is unchanged; the sr-only labels give each field an
+  // accessible name (placeholders alone aren't one).
+  const fieldClass = `${controlClasses} px-4 py-3`
 
   if (status === "sent") {
     return (
-      <div className="flex flex-col gap-3 p-6 rounded-xl border border-[#BBF7D0] bg-[#F0FDF4]">
-        <p className="text-[15px] font-semibold text-[#15803D]">Message sent ✓</p>
-        <p className="text-[13px] text-[#6B7280] leading-[1.6]">
+      <div role="status" className="flex flex-col gap-3 rounded-card border border-[color-mix(in_oklab,var(--success),transparent_70%)] bg-success-soft p-6">
+        <p className="text-body font-semibold text-success">Message sent ✓</p>
+        <p className="text-label text-muted-foreground">
           Thanks for reaching out — we&apos;ve received your message and will reply to your email
           within 2–3 business days.
         </p>
         <button
           type="button"
           onClick={() => setStatus("idle")}
-          className="self-start mt-1 text-[13px] font-medium text-[#1A1A1A] hover:underline"
+          className="mt-1 self-start text-label font-medium text-foreground hover:underline"
         >
           Send another message
         </button>
@@ -64,8 +68,10 @@ export function ContactForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <label htmlFor="contact-name" className="sr-only">Your name</label>
         <input
+          id="contact-name"
           type="text"
           required
           value={name}
@@ -73,7 +79,9 @@ export function ContactForm() {
           placeholder="Your name"
           className={fieldClass}
         />
+        <label htmlFor="contact-email" className="sr-only">Your email</label>
         <input
+          id="contact-email"
           type="email"
           required
           value={email}
@@ -83,19 +91,23 @@ export function ContactForm() {
         />
       </div>
 
+      <label htmlFor="contact-subject" className="sr-only">Subject</label>
       <select
+        id="contact-subject"
         value={subject}
         onChange={(e) => setSubject(e.target.value as (typeof SUBJECTS)[number])}
         className={`${fieldClass} appearance-none cursor-pointer`}
       >
         {SUBJECTS.map((s) => (
-          <option key={s} value={s} className="bg-[#FFFDF8] text-[#0A0A0A]">
+          <option key={s} value={s}>
             {s}
           </option>
         ))}
       </select>
 
+      <label htmlFor="contact-message" className="sr-only">How can we help?</label>
       <textarea
+        id="contact-message"
         required
         value={message}
         onChange={(e) => setMessage(e.target.value)}
@@ -107,14 +119,15 @@ export function ContactForm() {
       <button
         type="submit"
         disabled={sending}
-        className="self-start inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#1A1A1A] hover:bg-black text-[14px] font-semibold text-white transition-colors shadow-[0_8px_30px_rgba(0,0,0,0.12)] disabled:opacity-60"
+        aria-busy={sending || undefined}
+        className={buttonVariants({ size: "lg", className: "self-start" })}
       >
         {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} strokeWidth={2.1} />}
         {sending ? "Sending…" : "Send Message"}
       </button>
 
       {status === "error" && error && (
-        <p className="text-[13px] text-[rgba(239,68,68,0.9)]">{error}</p>
+        <p role="alert" className="text-label font-medium text-danger">{error}</p>
       )}
     </form>
   )

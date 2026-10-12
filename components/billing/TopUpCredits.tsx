@@ -143,14 +143,14 @@ export function TopUpCredits({
           setReady(true)
         }}
       />
-      <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Top Up Credits</h2>
-      <div className="rounded-2xl border border-[#E5E3DE] bg-white p-5 flex flex-col gap-4">
-        <p className="text-[12.5px] text-[#6B7280]">
+      <h2 className="text-label font-semibold text-foreground">Top Up Credits</h2>
+      <div className="rounded-card border border-border bg-surface-raised p-5 flex flex-col gap-4">
+        <p className="text-caption text-muted-foreground">
           $2 per 100 credits · Expires 2 months after purchase
         </p>
 
         {hasValidExtras && (
-          <div className="px-4 py-2.5 rounded-xl bg-[#7C3AED]/5 border border-[#7C3AED]/20 text-[12.5px] text-[#6D28D9]">
+          <div className="px-4 py-2.5 rounded-control bg-brand/5 border border-brand/20 text-caption text-brand">
             You currently have <strong>{extraCredits.toLocaleString("en-US")}</strong> extra credits
             {expiry
               ? ` expiring on ${expiry.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}`
@@ -164,10 +164,10 @@ export function TopUpCredits({
               key={amount}
               onClick={() => setInput(String(amount))}
               className={[
-                "px-3.5 py-1.5 rounded-lg text-[12.5px] font-semibold tabular-nums border transition-colors",
+                "px-3.5 py-1.5 rounded-control-sm text-caption font-semibold tabular-nums border transition-colors",
                 credits === amount
-                  ? "border-[#7C3AED] bg-[#7C3AED]/10 text-[#7C3AED]"
-                  : "border-[#E5E3DE] text-[#4B5563] hover:border-[#D1D5DB] hover:bg-[#F4F2EC]",
+                  ? "border-brand bg-brand/10 text-brand"
+                  : "border-border text-muted-foreground hover:border-[#D1D5DB] hover:bg-surface-muted",
               ].join(" ")}
             >
               {amount.toLocaleString("en-US")}
@@ -176,7 +176,7 @@ export function TopUpCredits({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="topup-amount" className="text-[12px] text-[#6B7280]">
+          <label htmlFor="topup-amount" className="text-caption text-muted-foreground">
             Enter amount (multiples of 100)
           </label>
           <div className="flex items-center gap-3">
@@ -187,30 +187,30 @@ export function TopUpCredits({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="e.g. 500"
-              className="w-32 px-3 py-2 rounded-lg border border-[#E5E3DE] bg-white text-[13px] tabular-nums text-[#0A0A0A] focus:outline-none focus:border-[#7C3AED] transition-colors"
+              className="w-32 px-3 py-2 rounded-control-sm border border-border bg-surface-raised text-label tabular-nums text-foreground focus:outline-none focus:border-brand transition-colors"
             />
             {isValid && (
-              <span className="text-[13px] text-[#4B5563] tabular-nums">
+              <span className="text-label text-muted-foreground tabular-nums">
                 {credits.toLocaleString("en-US")} credits ={" "}
-                <strong className="text-[#0A0A0A]">${priceDollars!.toFixed(2)}</strong>
+                <strong className="text-foreground">${priceDollars!.toFixed(2)}</strong>
               </span>
             )}
           </div>
-          {error && <p className="text-[12px] text-[rgba(239,68,68,0.9)]">{error}</p>}
+          {error && <p className="text-caption text-danger">{error}</p>}
         </div>
 
         <button
           onClick={handleTopUp}
           disabled={!isValid || loading}
-          className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-control text-label font-semibold text-white bg-brand hover:bg-brand-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
           Top Up Now
         </button>
         {checkoutError && (
-          <p className="text-[12px] text-[rgba(239,68,68,0.9)]">{checkoutError}</p>
+          <p className="text-caption text-danger">{checkoutError}</p>
         )}
-        <p className="text-[11px] text-[#9CA3AF] leading-snug">
+        <p className="text-caption text-muted-foreground leading-snug">
           Checkout opens right here — credits are added to your account automatically after
           payment.
         </p>

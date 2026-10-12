@@ -1,5 +1,8 @@
 "use client"
 
+import { useId } from "react"
+import { cn } from "@/lib/utils"
+import { controlClasses } from "@/components/ui/input"
 import { countWords } from "@/lib/wordCount"
 
 interface InstructionBoxProps {
@@ -29,23 +32,25 @@ export function InstructionBox({
   rows = 3,
 }: InstructionBoxProps) {
   const words = countWords(value)
+  const id = useId()
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
+      <label htmlFor={id} className="text-caption font-medium text-muted-foreground">
         Custom instructions (optional)
       </label>
       <textarea
+        id={id}
         value={value}
         // Hard block past MAX_CHARS by truncating on every change.
         onChange={(e) => onChange(e.target.value.slice(0, MAX_CHARS))}
         disabled={disabled}
         rows={rows}
         placeholder={placeholder}
-        className="w-full px-3.5 py-2.5 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.5] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors disabled:opacity-50"
+        className={cn(controlClasses, "resize-none px-3 py-2.5 leading-normal md:text-label")}
       />
       {value.length > 0 && (
-        <div className="flex items-center justify-between text-[11px] text-[#ADA99F] tabular-nums">
+        <div className="flex items-center justify-between text-caption text-muted-foreground tabular-nums">
           <span>{words > 0 ? `${words} words` : ""}</span>
           <span>
             {value.length}/{MAX_CHARS}

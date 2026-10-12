@@ -41,7 +41,7 @@ export function UpgradeToGrowthButton({
 
   if (scheduled) {
     return (
-      <div className="w-full inline-flex items-center justify-center px-5 py-3 rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/10 text-[13px] font-semibold text-[#D97706] text-center">
+      <div className="w-full inline-flex items-center justify-center px-5 py-3 rounded-control border border-[#F59E0B]/30 bg-warning/10 text-label font-semibold text-warning text-center">
         Growth upgrade scheduled for {dateLabel}! No charge today.
       </div>
     )
@@ -52,15 +52,15 @@ export function UpgradeToGrowthButton({
       <button
         onClick={handleUpgrade}
         disabled={loading}
-        className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[13.5px] font-semibold text-white bg-[#F59E0B] hover:bg-[#D97706] shadow-[0_8px_30px_rgba(245,158,11,0.25)] transition-all disabled:opacity-60"
+        className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-control text-label font-semibold text-white bg-warning hover:bg-warning/90 shadow-card transition-all disabled:opacity-60"
       >
         {loading && <Loader2 size={14} className="animate-spin" />}
         {loading ? "Scheduling…" : `Upgrade to Growth — Starting ${dateLabel}`}
       </button>
       {error ? (
-        <p className="text-[11px] text-[rgba(239,68,68,0.9)] text-center leading-snug">{error}</p>
+        <p className="text-caption text-danger text-center leading-snug">{error}</p>
       ) : (
-        <p className="text-[11px] text-[#9CA3AF] text-center leading-snug">
+        <p className="text-caption text-muted-foreground text-center leading-snug">
           Your Growth plan will activate on your next renewal date. You&apos;ll be charged $45.99
           then and get 2,000 credits. No charge today.
         </p>

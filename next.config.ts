@@ -8,6 +8,14 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.resolve(__dirname),
   // Audit builds can coexist with a developer's running dev server.
   distDir: process.env.NEXT_BUILD_DIR || ".next",
+  experimental: {
+    // Turbopack's build cache (on by default since 16.3) served a stale
+    // app/globals.css on Vercel after a large change: the 2026-10-12 redesign
+    // deploy shipped the previous stylesheet with the new pages. Reproduced
+    // locally by building the old commit, then the new one on its cache.
+    // Every production build compiles from scratch instead.
+    turbopackFileSystemCacheForBuild: false,
+  },
   async headers() {
     return [
       {

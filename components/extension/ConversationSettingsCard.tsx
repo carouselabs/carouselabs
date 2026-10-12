@@ -20,7 +20,7 @@ const CHOICES: { choice: Choice; label: string }[] = [
 ]
 
 const inputClass =
-  "w-full rounded-control border border-border bg-surface-raised px-3.5 py-2.5 text-label text-foreground placeholder:text-muted-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
+  "w-full rounded-xl border border-[#E5E3DE] bg-white px-3.5 py-2.5 text-[13px] text-[#0A0A0A] placeholder:text-[#9CA3AF] outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/15"
 
 function ContactRow({
   contact,
@@ -99,32 +99,32 @@ function ContactRow({
   const toneOptions = tone && !MESSAGE_TONES.includes(tone) ? [tone, ...MESSAGE_TONES] : MESSAGE_TONES
 
   return (
-    <div className="flex flex-col gap-3 rounded-control border border-border bg-surface p-4">
+    <div className="flex flex-col gap-3 rounded-xl border border-[#E9E7E1] bg-[#FBFAF6] p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-label font-semibold text-foreground">{contact.contactName || contact.contactUrl}</p>
+        <p className="text-[13.5px] font-semibold text-[#0A0A0A]">{contact.contactName || contact.contactUrl}</p>
         <a
           href={profileLink(contact.contactUrl)}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-caption font-medium text-brand hover:underline"
+          className="inline-flex items-center gap-1 text-[11.5px] font-medium text-[#7C3AED] hover:underline"
         >
           {contact.contactUrl.startsWith("/x/") ? "X profile" : "Profile"} <ExternalLink size={11} />
         </a>
-        <span className="text-caption text-muted-foreground">· updated {shortDate(contact.updatedAt)}</span>
+        <span className="text-[11.5px] text-[#9CA3AF]">· updated {shortDate(contact.updatedAt)}</span>
         <div className="ml-auto">
           {confirming ? (
             <span className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={forget}
-                className="rounded-control-sm bg-danger px-2.5 py-1 text-caption font-semibold text-white hover:bg-danger/90"
+                className="rounded-lg bg-[#DC2626] px-2.5 py-1 text-[11.5px] font-semibold text-white hover:bg-[#B91C1C]"
               >
                 Forget
               </button>
               <button
                 type="button"
                 onClick={() => setConfirming(false)}
-                className="text-caption font-medium text-muted-foreground hover:text-foreground"
+                className="text-[11.5px] font-medium text-[#6B7280] hover:text-[#0A0A0A]"
               >
                 Cancel
               </button>
@@ -134,7 +134,7 @@ function ContactRow({
               type="button"
               aria-label={`Forget ${contact.contactName || contact.contactUrl}`}
               onClick={() => setConfirming(true)}
-              className="inline-flex items-center rounded-control-sm border border-border bg-surface-raised p-1.5 text-muted-foreground hover:border-danger/40 hover:text-danger"
+              className="inline-flex items-center rounded-lg border border-[#E5E3DE] bg-white p-1.5 text-[#9CA3AF] hover:border-[#DC2626]/40 hover:text-[#DC2626]"
             >
               <Trash2 size={13} />
             </button>
@@ -149,10 +149,10 @@ function ContactRow({
             type="button"
             onClick={() => chooseKind(c.choice)}
             className={[
-              "rounded-full px-3 py-1.5 text-caption font-medium transition-colors",
+              "rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors",
               choice === c.choice
-                ? "bg-primary text-white"
-                : "border border-border bg-surface-raised text-muted-foreground hover:text-foreground",
+                ? "bg-[#1A1A1A] text-white"
+                : "border border-[#E5E3DE] bg-white text-[#6B7280] hover:text-[#0A0A0A]",
             ].join(" ")}
           >
             {c.label}
@@ -188,7 +188,7 @@ function ContactRow({
           />
         )}
         {choice === "flow" && (
-          <p className="self-center text-caption text-muted-foreground">
+          <p className="self-center text-[12.5px] text-[#6B7280]">
             No stated reason — each message just continues the conversation naturally.
           </p>
         )}
@@ -202,7 +202,7 @@ function ContactRow({
         </select>
       </div>
 
-      {(problem || error) && changed && <p className="text-caption text-danger">{error ?? problem}</p>}
+      {(problem || error) && changed && <p className="text-[12px] text-[#DC2626]">{error ?? problem}</p>}
 
       {changed && (
         <div className="flex items-center gap-3">
@@ -210,7 +210,7 @@ function ContactRow({
             type="button"
             disabled={saving || !!problem}
             onClick={save}
-            className="inline-flex items-center gap-2 rounded-control-sm bg-brand px-4 py-2 text-caption font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#7C3AED] px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-[#6D28D9] disabled:opacity-50"
           >
             {saving && <Loader2 size={13} className="animate-spin" />}
             Save
@@ -218,7 +218,7 @@ function ContactRow({
         </div>
       )}
       {saved && !changed && (
-        <span className="inline-flex items-center gap-1 text-caption text-success">
+        <span className="inline-flex items-center gap-1 text-[12px] text-[#15803D]">
           <Check size={12} /> Saved — used the next time you open this chat in the extension
         </span>
       )}
@@ -243,18 +243,18 @@ export function ConversationSettingsCard({ profiles }: { profiles: { id: string;
   }, [])
 
   return (
-    <div className="flex flex-col gap-4 rounded-card border border-border bg-surface-raised p-5">
+    <div className="flex flex-col gap-4 rounded-2xl border border-[#E5E3DE] bg-white p-5">
       <div className="flex flex-col gap-1">
-        <h3 className="text-label font-semibold text-foreground">Your conversations</h3>
-        <p className="text-caption text-muted-foreground">
+        <h3 className="text-[14px] font-semibold text-[#0A0A0A]">Your conversations</h3>
+        <p className="text-[12.5px] text-[#6B7280]">
           The reason and tone the extension remembers for each person. Change one here and it&apos;s used the next
           time you open that chat.
         </p>
       </div>
-      {error && <p className="text-caption text-danger">{error}</p>}
-      {!contacts && !error && <p className="text-caption text-muted-foreground">Loading…</p>}
+      {error && <p className="text-[12.5px] text-[#DC2626]">{error}</p>}
+      {!contacts && !error && <p className="text-[12.5px] text-[#9CA3AF]">Loading…</p>}
       {contacts?.length === 0 && (
-        <div className="rounded-control border border-dashed border-border p-5 text-center text-caption text-muted-foreground">
+        <div className="rounded-xl border border-dashed border-[#E5E3DE] p-5 text-center text-[12.5px] text-[#6B7280]">
           None yet. Open a LinkedIn chat in the extension and pick a reason, and it shows up here.
         </div>
       )}

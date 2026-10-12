@@ -24,9 +24,9 @@ export function useToast() {
 }
 
 const ICONS: Record<ToastType, ReactNode> = {
-  success: <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />,
-  error: <XCircle className="h-4 w-4 shrink-0 text-danger" />,
-  info: <Info className="h-4 w-4 shrink-0 text-brand" />,
+  success: <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />,
+  error: <XCircle className="h-4 w-4 text-red-400 shrink-0" />,
+  info: <Info className="h-4 w-4 text-[#A78BFA] shrink-0" />,
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -42,11 +42,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div role="status" aria-live="polite" className="fixed right-4 bottom-4 z-(--z-toast) flex max-w-sm flex-col gap-2 sm:right-6 sm:bottom-6">
+      <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 max-w-sm">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className="flex items-center gap-2.5 rounded-control border border-border bg-surface-raised px-4 py-3 text-label text-foreground shadow-popover"
+            className="flex items-center gap-2.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3 text-[13px] text-white shadow-xl animate-in"
             style={{ animation: "adminToastIn 150ms ease-out" }}
           >
             {ICONS[t.type]}

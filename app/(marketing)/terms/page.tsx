@@ -49,7 +49,7 @@ export default function TermsPage() {
           To use most features you must create an account. You agree to provide accurate, current
           information and to keep it up to date. You are responsible for:
         </p>
-        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-muted-foreground">
+        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-[#1A1A1A]">
           <li>Maintaining the confidentiality of your login credentials.</li>
           <li>All activity that occurs under your account.</li>
           <li>
@@ -69,13 +69,13 @@ export default function TermsPage() {
 
       <LegalSection heading="4. Subscriptions and payments">
         <p>
-          CarouseLabs offers a free plan and a paid <span className="text-foreground font-medium">Pro</span>{" "}
-          plan priced at <span className="text-foreground font-medium">$24.99 per month (USD)</span>. Pro is
+          CarouseLabs offers a free plan and a paid <span className="text-[#0A0A0A] font-medium">Pro</span>{" "}
+          plan priced at <span className="text-[#0A0A0A] font-medium">$24.99 per month (USD)</span>. Pro is
           billed in advance on a recurring monthly basis and renews automatically until cancelled. By
           subscribing, you authorize us and our payment processor to charge your payment method for
           each billing cycle, including applicable taxes.
         </p>
-        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-muted-foreground">
+        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-[#1A1A1A]">
           <li>Plans include monthly content credits and may offer one-time extra-credit purchases.</li>
           <li>
             You can cancel at any time from your billing settings; access continues until the end of
@@ -93,13 +93,13 @@ export default function TermsPage() {
 
       <LegalSection heading="5. Intellectual property">
         <p>
-          <span className="text-foreground font-medium">Our property.</span> The CarouseLabs name, logo,
+          <span className="text-[#0A0A0A] font-medium">Our property.</span> The CarouseLabs name, logo,
           software, design, and all underlying technology are owned by CarouseLabs and protected by
           intellectual-property laws. These Terms grant you a limited, non-exclusive, non-transferable
           right to use the Service; they do not grant you any right to our trademarks or source code.
         </p>
         <p>
-          <span className="text-foreground font-medium">Your content and generated output.</span> You
+          <span className="text-[#0A0A0A] font-medium">Your content and generated output.</span> You
           retain ownership of the inputs you submit. As between you and CarouseLabs, and to the extent
           permitted by applicable law and the underlying AI providers&apos; terms, the content you
           generate using the Service belongs to you. You are free to use, publish, and commercialize
@@ -111,7 +111,7 @@ export default function TermsPage() {
 
       <LegalSection heading="6. Prohibited uses">
         <p>You agree not to use CarouseLabs to:</p>
-        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-muted-foreground">
+        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-[#1A1A1A]">
           <li>Create content that is unlawful, defamatory, harassing, hateful, or discriminatory.</li>
           <li>Generate sexually explicit material involving minors or any illegal content.</li>
           <li>Infringe the intellectual-property, privacy, or publicity rights of others.</li>
@@ -173,7 +173,7 @@ export default function TermsPage() {
       <LegalSection heading="11. Contact">
         <p>
           Questions about these Terms? Email us at{" "}
-          <a href="mailto:support@carouselabs.com" className="text-foreground hover:underline">
+          <a href="mailto:support@carouselabs.com" className="text-[#1A1A1A] hover:underline">
             support@carouselabs.com
           </a>
           .

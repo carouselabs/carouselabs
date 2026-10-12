@@ -68,12 +68,12 @@ export function GrantAccessModal({
     <Modal open={open} onClose={onClose} title={userId ? "Grant free access" : "Add user"}>
       <form onSubmit={submit} className="space-y-4">
         {userId ? (
-          <p className="text-caption text-muted-foreground">
-            Unlimited Engage for <span className="font-medium text-foreground">{fixedEmail}</span>, without a subscription.
+          <p className="text-[12.5px] text-[#B0B0B0]">
+            Unlimited Engage for <span className="font-medium text-white">{fixedEmail}</span>, without a subscription.
           </p>
         ) : (
           <label className="block space-y-1.5">
-            <span className="text-caption font-medium text-muted-foreground">Email</span>
+            <span className="text-[12px] font-medium text-[#B0B0B0]">Email</span>
             <AdminInput
               type="email"
               required
@@ -83,14 +83,14 @@ export function GrantAccessModal({
               onChange={(e) => setEmail(e.target.value)}
               placeholder="name@company.com"
             />
-            <span className="block text-caption text-muted-foreground">
+            <span className="block text-[11.5px] text-[#8A8A8A]">
               Not signed up yet? The access waits and starts when they sign up with this email.
             </span>
           </label>
         )}
 
         <label className="block space-y-1.5">
-          <span className="text-caption font-medium text-muted-foreground">Extension</span>
+          <span className="text-[12px] font-medium text-[#B0B0B0]">Extension</span>
           <AdminSelect aria-label="Extension" className="w-full" value={platform} onChange={(e) => setPlatform(e.target.value as GrantPlatform)}>
             {GRANT_PLATFORMS.map((p) => (
               <option key={p} value={p}>
@@ -102,7 +102,7 @@ export function GrantAccessModal({
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block space-y-1.5">
-            <span className="text-caption font-medium text-muted-foreground">For how long</span>
+            <span className="text-[12px] font-medium text-[#B0B0B0]">For how long</span>
             <AdminSelect className="w-full" value={duration} onChange={(e) => setDuration(e.target.value as GrantDuration)}>
               {GRANT_DURATIONS.map((d) => (
                 <option key={d} value={d}>
@@ -113,14 +113,14 @@ export function GrantAccessModal({
           </label>
           {duration === "custom" && (
             <label className="block space-y-1.5">
-              <span className="text-caption font-medium text-muted-foreground">Until (end of day, UTC)</span>
+              <span className="text-[12px] font-medium text-[#B0B0B0]">Until (end of day, UTC)</span>
               <AdminInput type="date" required className="w-full" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
             </label>
           )}
         </div>
 
         <label className="block space-y-1.5">
-          <span className="text-caption font-medium text-muted-foreground">Reason (kept in the audit log)</span>
+          <span className="text-[12px] font-medium text-[#B0B0B0]">Reason (kept in the audit log)</span>
           <AdminInput
             required
             minLength={3}
@@ -132,13 +132,13 @@ export function GrantAccessModal({
           />
         </label>
 
-        <label className="flex items-center gap-2 text-caption text-foreground/90">
-          <input type="checkbox" className="h-4 w-4 accent-brand" checked={sendInvite} onChange={(e) => setSendInvite(e.target.checked)} />
+        <label className="flex items-center gap-2 text-[12.5px] text-[#D0D0D0]">
+          <input type="checkbox" className="h-4 w-4 accent-[#7C3AED]" checked={sendInvite} onChange={(e) => setSendInvite(e.target.checked)} />
           Email them that they have access
         </label>
 
         {error && (
-          <p role="alert" className="text-caption text-danger">
+          <p role="alert" className="text-[12.5px] text-red-400">
             {error}
           </p>
         )}

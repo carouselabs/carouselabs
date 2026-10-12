@@ -1,43 +1,42 @@
 // Shared Clerk appearance for the sign-in / sign-up pages, matching the
-// redesign tokens (app/globals.css, light theme). Clerk's `variables` need
-// literal colors, so the token values are repeated here — keep them in step.
-// fontFamily is "inherit" so the card picks up Geist from the auth layout.
+// marketing site's cream + charcoal (Onest) theme. fontFamily is "inherit" so
+// the card picks up the Onest font set on the auth layout wrapper.
 export const authAppearance = {
   variables: {
-    colorPrimary: "#211F1C",
-    colorText: "#211F1C",
-    colorTextSecondary: "#67625B",
-    colorBackground: "#FFFDF9",
+    colorPrimary: "#1A1A1A",
+    colorText: "#0A0A0A",
+    colorTextSecondary: "#6B7280",
+    colorBackground: "#FFFDF8",
     colorInputBackground: "#FFFFFF",
-    colorInputText: "#211F1C",
-    colorNeutral: "#211F1C",
-    colorDanger: "#B91C1C",
+    colorInputText: "#0A0A0A",
+    colorNeutral: "#0A0A0A",
+    colorDanger: "#DC2626",
     borderRadius: "12px",
     fontFamily: "inherit",
   },
   elements: {
     rootBox: "w-full max-w-[400px]",
-    card: "bg-surface border border-border rounded-showcase shadow-popover",
+    card: "bg-[#FFFDF8] border border-[#E5E3DE] rounded-2xl shadow-[0_16px_50px_rgba(10,10,10,0.08)]",
     cardBox: "shadow-none",
-    headerTitle: "text-foreground font-semibold",
-    headerSubtitle: "text-muted-foreground",
+    headerTitle: "text-[#0A0A0A] font-semibold",
+    headerSubtitle: "text-[#6B7280]",
     socialButtonsBlockButton:
-      "min-h-11 border border-control-border bg-surface-raised hover:bg-surface-muted text-foreground transition-colors",
-    socialButtonsBlockButtonText: "text-foreground font-medium",
-    dividerLine: "bg-border",
-    dividerText: "text-muted-foreground",
-    formFieldLabel: "text-foreground",
+      "border border-[#E5E3DE] bg-white hover:bg-[#F3F1EB] text-[#0A0A0A] transition-colors",
+    socialButtonsBlockButtonText: "text-[#0A0A0A] font-medium",
+    dividerLine: "bg-[#E5E3DE]",
+    dividerText: "text-[#9CA3AF]",
+    formFieldLabel: "text-[#374151]",
     formFieldInput:
-      "min-h-11 bg-surface-raised border-control-border text-foreground focus-within:border-brand rounded-control",
+      "bg-white border-[#E5E3DE] text-[#0A0A0A] focus-within:border-[#1A1A1A] rounded-lg",
     formButtonPrimary:
-      "min-h-11 bg-primary hover:bg-primary-hover text-primary-foreground rounded-control transition-colors shadow-none normal-case",
-    footerActionText: "text-muted-foreground",
-    footerActionLink: "text-foreground hover:text-brand font-semibold",
-    identityPreviewText: "text-foreground",
-    identityPreviewEditButton: "text-foreground",
-    formResendCodeLink: "text-foreground",
-    otpCodeFieldInput: "bg-surface-raised border-control-border text-foreground",
-    alertText: "text-foreground",
-    formFieldInputShowPasswordButton: "text-muted-foreground hover:text-foreground",
+      "bg-[#1A1A1A] hover:bg-black text-white rounded-lg transition-colors shadow-none normal-case",
+    footerActionText: "text-[#6B7280]",
+    footerActionLink: "text-[#1A1A1A] hover:text-black font-semibold",
+    identityPreviewText: "text-[#0A0A0A]",
+    identityPreviewEditButton: "text-[#1A1A1A]",
+    formResendCodeLink: "text-[#1A1A1A]",
+    otpCodeFieldInput: "bg-white border-[#E5E3DE] text-[#0A0A0A]",
+    alertText: "text-[#374151]",
+    formFieldInputShowPasswordButton: "text-[#6B7280] hover:text-[#0A0A0A]",
   },
 }

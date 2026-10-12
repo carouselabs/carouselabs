@@ -44,10 +44,10 @@ type Dialog =
 
 function Section({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-card border border-border bg-surface" aria-label={title}>
-      <header className="border-b border-border px-4 py-3">
-        <h2 className="text-label font-semibold text-foreground">{title}</h2>
-        <p className="mt-0.5 text-caption text-muted-foreground">{description}</p>
+    <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]" aria-label={title}>
+      <header className="border-b border-[#2A2A2A] px-4 py-3">
+        <h2 className="text-[13px] font-semibold text-white">{title}</h2>
+        <p className="mt-0.5 text-[12px] text-[#8A8A8A]">{description}</p>
       </header>
       {children}
     </section>
@@ -56,8 +56,8 @@ function Section({ title, description, children }: { title: string; description:
 
 function Row({ label, status, action }: { label: string; status: React.ReactNode; action: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 border-t border-border px-4 py-2.5 first:border-t-0">
-      <span className="min-w-[160px] flex-1 text-caption text-foreground/90">{label}</span>
+    <div className="flex flex-wrap items-center gap-3 border-t border-[#232323] px-4 py-2.5 first:border-t-0">
+      <span className="min-w-[160px] flex-1 text-[12.5px] text-[#D0D0D0]">{label}</span>
       <span className="flex-1">{status}</span>
       {action}
     </div>
@@ -129,8 +129,8 @@ export function EngageControls() {
   return (
     <div className="mx-auto max-w-[1100px] space-y-5">
       <div>
-        <h2 className="text-lead font-semibold tracking-tight text-foreground">Controls</h2>
-        <p className="mt-0.5 text-caption text-muted-foreground">
+        <h1 className="text-[18px] font-semibold tracking-tight text-white">Controls</h1>
+        <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">
           Switches for everyone using the extensions. A change reaches everyone within 10 seconds and is kept in the
           Engage audit log.
         </p>
@@ -149,7 +149,7 @@ export function EngageControls() {
       >
         {PLATFORMS.map((platform) => (
           <div key={platform}>
-            <p className="border-t border-border bg-background px-4 py-1.5 text-caption font-semibold text-muted-foreground first:border-t-0">
+            <p className="border-t border-[#232323] bg-[#161616] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A] first:border-t-0">
               {PLATFORM_LABELS[platform]} extension
             </p>
             {PLATFORM_FEATURES[platform].map((f) => {
@@ -164,7 +164,7 @@ export function EngageControls() {
                     ) : (
                       <span className="flex flex-col items-start gap-1">
                         <Pill tone="red">Paused for everyone</Pill>
-                        {s.message && <span className="text-caption text-muted-foreground">“{s.message}”</span>}
+                        {s.message && <span className="text-[11.5px] text-[#8A8A8A]">“{s.message}”</span>}
                       </span>
                     )
                   }
@@ -184,7 +184,7 @@ export function EngageControls() {
             })}
           </div>
         ))}
-        {savedNote("features") && <p className="border-t border-border px-4 py-2 text-caption text-muted-foreground">{savedNote("features")}</p>}
+        {savedNote("features") && <p className="border-t border-[#232323] px-4 py-2 text-[11.5px] text-[#8A8A8A]">{savedNote("features")}</p>}
       </Section>
 
       <Section
@@ -213,33 +213,33 @@ export function EngageControls() {
         title="Extension versions"
         description="Browsers signed in and used in the last 30 days. A minimum version asks anyone older to update before they can write; it's off until you set one."
       >
-        <div className="grid gap-px bg-surface-muted lg:grid-cols-2">
+        <div className="grid gap-px bg-[#232323] lg:grid-cols-2">
           {PLATFORMS.map((platform) => {
             const rows = versionsFor(platform)
             const min = settings.minVersion[platform]
             return (
-              <div key={platform} className="bg-surface p-4" aria-label={`${PLATFORM_LABELS[platform]} versions`} role="group">
+              <div key={platform} className="bg-[#1A1A1A] p-4" aria-label={`${PLATFORM_LABELS[platform]} versions`} role="group">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-caption font-semibold text-foreground">{PLATFORM_LABELS[platform]} extension</h3>
-                  <span className="block text-caption text-muted-foreground">
-                    Minimum: {min ? <Pill tone="amber">{min}</Pill> : <span className="text-muted-foreground">none</span>}
+                  <h3 className="text-[12.5px] font-semibold text-white">{PLATFORM_LABELS[platform]} extension</h3>
+                  <span className="block text-[12px] text-[#B0B0B0]">
+                    Minimum: {min ? <Pill tone="amber">{min}</Pill> : <span className="text-[#8A8A8A]">none</span>}
                   </span>
                 </div>
                 {rows.length === 0 ? (
-                  <p className="py-3 text-caption text-muted-foreground">No one used it in the last 30 days.</p>
+                  <p className="py-3 text-[12px] text-[#8A8A8A]">No one used it in the last 30 days.</p>
                 ) : (
-                  <table className="w-full text-caption">
+                  <table className="w-full text-[12.5px]">
                     <thead>
-                      <tr className="text-left text-caption text-muted-foreground">
+                      <tr className="text-left text-[11px] uppercase tracking-wide text-[#8A8A8A]">
                         <th className="py-1.5 font-semibold">Version</th>
                         <th className="py-1.5 text-right font-semibold">Browsers</th>
                         <th className="py-1.5 text-right font-semibold">People</th>
                         <th className="py-1.5 text-right font-semibold">Last seen</th>
                       </tr>
                     </thead>
-                    <tbody className="text-foreground/90">
+                    <tbody className="text-[#D0D0D0]">
                       {rows.map((v) => (
-                        <tr key={v.version ?? "none"} className="border-t border-border">
+                        <tr key={v.version ?? "none"} className="border-t border-[#232323]">
                           <td className="py-1.5">
                             {versionLabel(v.version)}
                             {min && isOutdated(v.version, min) && (
@@ -250,7 +250,7 @@ export function EngageControls() {
                           </td>
                           <td className="py-1.5 text-right tabular-nums">{fmtNumber(v.browsers)}</td>
                           <td className="py-1.5 text-right tabular-nums">{fmtNumber(v.people)}</td>
-                          <td className="py-1.5 text-right text-muted-foreground" title={fmtDateTime(v.lastSeenAt)}>
+                          <td className="py-1.5 text-right text-[#8A8A8A]" title={fmtDateTime(v.lastSeenAt)}>
                             {fmtRelative(v.lastSeenAt)}
                           </td>
                         </tr>
@@ -272,7 +272,7 @@ export function EngageControls() {
             )
           })}
         </div>
-        {savedNote("minVersion") && <p className="border-t border-border px-4 py-2 text-caption text-muted-foreground">{savedNote("minVersion")}</p>}
+        {savedNote("minVersion") && <p className="border-t border-[#232323] px-4 py-2 text-[11.5px] text-[#8A8A8A]">{savedNote("minVersion")}</p>}
       </Section>
 
       <Modal
@@ -312,11 +312,11 @@ export function EngageControls() {
         >
           {dialog?.kind === "pause" && (
             <>
-              <p className="text-caption leading-relaxed text-muted-foreground">
+              <p className="text-[12.5px] leading-relaxed text-[#B0B0B0]">
                 Nobody can use it until you turn it back on. Within 10 seconds, everyone who tries sees this message:
               </p>
               <label className="block space-y-1">
-                <span className="block text-caption text-muted-foreground">Message people see (optional)</span>
+                <span className="block text-[12px] text-[#B0B0B0]">Message people see (optional)</span>
                 <AdminInput
                   className="w-full"
                   maxLength={PAUSE_MESSAGE_MAX}
@@ -328,10 +328,10 @@ export function EngageControls() {
             </>
           )}
           {dialog?.kind === "resume" && (
-            <p className="text-caption leading-relaxed text-muted-foreground">Everyone can use it again within 10 seconds.</p>
+            <p className="text-[12.5px] leading-relaxed text-[#B0B0B0]">Everyone can use it again within 10 seconds.</p>
           )}
           {dialog?.kind === "insert" && (
-            <p className="text-caption leading-relaxed text-muted-foreground">
+            <p className="text-[12.5px] leading-relaxed text-[#B0B0B0]">
               {dialog.enabled
                 ? "Insert comes back for everyone who has it switched on in their own settings."
                 : "The Insert button disappears for everyone in this extension. Copy keeps working."}
@@ -339,15 +339,15 @@ export function EngageControls() {
           )}
           {dialog?.kind === "minVersion" && (
             <>
-              <p className="text-caption leading-relaxed text-muted-foreground">
+              <p className="text-[12.5px] leading-relaxed text-[#B0B0B0]">
                 Anyone on an older version sees “Please update” instead of writing, until Chrome updates their extension.
               </p>
               <label className="block space-y-1">
-                <span className="block text-caption text-muted-foreground">Oldest version allowed</span>
+                <span className="block text-[12px] text-[#B0B0B0]">Oldest version allowed</span>
                 <AdminInput className="w-40" value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.3.0" />
               </label>
               {candidateValid ? (
-                <p role="status" className="text-caption text-warning">
+                <p role="status" className="text-[12.5px] text-amber-200">
                   {(() => {
                     const n = wouldStop(dialog.platform, candidate)
                     const newest = versionsFor(dialog.platform).find((v) => v.version)?.version
@@ -356,21 +356,21 @@ export function EngageControls() {
                   })()}
                 </p>
               ) : (
-                <p className="text-caption text-muted-foreground">Use a version like 1.3.0.</p>
+                <p className="text-[12px] text-[#8A8A8A]">Use a version like 1.3.0.</p>
               )}
             </>
           )}
           {dialog?.kind === "clearMinVersion" && (
-            <p className="text-caption leading-relaxed text-muted-foreground">Every version can write again.</p>
+            <p className="text-[12.5px] leading-relaxed text-[#B0B0B0]">Every version can write again.</p>
           )}
 
           <label className="block space-y-1">
-            <span className="block text-caption text-muted-foreground">Reason (for the audit log)</span>
+            <span className="block text-[12px] text-[#B0B0B0]">Reason (for the audit log)</span>
             <AdminInput className="w-full" maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. X changed its reply box" />
           </label>
 
           {dialogError && (
-            <p role="alert" className="text-caption text-danger">
+            <p role="alert" className="text-[12.5px] text-red-300">
               {dialogError}
             </p>
           )}

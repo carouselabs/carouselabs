@@ -86,14 +86,14 @@ function ReasonDialog({
           }
         }}
       >
-        <div className="text-caption leading-relaxed text-muted-foreground">{body}</div>
+        <div className="text-[12.5px] leading-relaxed text-[#B0B0B0]">{body}</div>
         {children}
         <label className="block space-y-1.5">
-          <span className="text-caption font-medium text-muted-foreground">Reason (kept in the audit log)</span>
+          <span className="text-[12px] font-medium text-[#B0B0B0]">Reason (kept in the audit log)</span>
           <AdminInput required minLength={3} maxLength={500} autoFocus className="w-full" value={reason} onChange={(e) => setReason(e.target.value)} />
         </label>
         {error && (
-          <p role="alert" className="text-caption text-danger">
+          <p role="alert" className="text-[12.5px] text-red-400">
             {error}
           </p>
         )}
@@ -112,9 +112,9 @@ function ReasonDialog({
 
 function SummaryCell({ label, children, tone }: { label: string; children: ReactNode; tone?: "warn" | "bad" }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 border-l border-border pl-4">
-      <dt className="text-caption font-medium text-muted-foreground">{label}</dt>
-      <dd className={`text-label font-semibold ${tone === "bad" ? "text-danger" : tone === "warn" ? "text-warning" : "text-foreground"}`}>{children}</dd>
+    <div className="min-w-[120px] flex-1 px-4 py-3">
+      <div className="text-[10.5px] font-semibold uppercase tracking-wide text-[#8A8A8A]">{label}</div>
+      <div className={`mt-1 text-[13.5px] font-semibold ${tone === "bad" ? "text-red-300" : tone === "warn" ? "text-amber-300" : "text-white"}`}>{children}</div>
     </div>
   )
 }
@@ -180,24 +180,18 @@ export function EngageUserDetail({ userId }: { userId: string }) {
   const activeSessions = data.sessions.filter((s) => !s.revokedAt)
 
   return (
-    <div className="mx-auto flex max-w-[1200px] flex-col gap-5">
-      <Link
-        href="/admin/engage/users"
-        className="inline-flex w-fit items-center gap-1 rounded-detail text-caption text-muted-foreground transition-colors duration-(--motion-fast) hover:text-foreground"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-        Engage users
-      </Link>
-
-      {/* Who they are, what they can do, and their numbers — one band */}
-      <section aria-label={user.name ?? user.email} className="rounded-showcase border border-border bg-surface p-6 sm:p-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 flex-col gap-2">
-          <h2 className="font-display text-[2rem] leading-[1.05] tracking-[-0.01em] break-words text-foreground sm:text-[2.5rem]">{user.name ?? user.email}</h2>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-muted-foreground">
+    <div className="mx-auto max-w-[1200px] space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <Link href="/admin/engage/users" className="inline-flex items-center gap-1 text-[12px] text-[#8A8A8A] hover:text-white">
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+            Engage users
+          </Link>
+          <h1 className="truncate text-[18px] font-semibold tracking-tight text-white">{user.name ?? user.email}</h1>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#8A8A8A]">
             {user.name && <span>{user.email}</span>}
             <button
-              className="inline-flex items-center gap-1 font-mono text-caption hover:text-foreground"
+              className="inline-flex items-center gap-1 font-mono text-[11.5px] hover:text-white"
               onClick={() => navigator.clipboard.writeText(user.id).then(() => toast("User ID copied", "success"))}
               title="Copy user ID"
             >
@@ -205,7 +199,7 @@ export function EngageUserDetail({ userId }: { userId: string }) {
               <Copy className="h-3 w-3" aria-hidden />
             </button>
             <span>Joined {fmtDate(user.createdAt)}</span>
-            <Link href={`/admin/users/${user.id}`} className="text-brand hover:underline">
+            <Link href={`/admin/users/${user.id}`} className="text-[#A78BFA] hover:underline">
               Website account
             </Link>
           </div>
@@ -238,7 +232,7 @@ export function EngageUserDetail({ userId }: { userId: string }) {
       </div>
 
       {/* The answer in seconds: status, access, expiry, and each feature's use against its limit. */}
-      <dl aria-label="Access summary" className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-border pt-6 sm:grid-cols-3 lg:grid-cols-5">
+      <section aria-label="Access summary" className="flex flex-wrap divide-x divide-[#2A2A2A] rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]">
         <SummaryCell label="Status" tone={access.status === "active" ? undefined : "bad"}>
           {access.status === "active" ? "Active" : access.status === "suspended" ? "Engage paused" : "Account suspended"}
         </SummaryCell>
@@ -249,7 +243,7 @@ export function EngageUserDetail({ userId }: { userId: string }) {
             tone={p.paywall.access === "free" && p.paywall.freeRemaining === 0 ? "warn" : undefined}
           >
             {p.label}
-            <span className="block text-caption font-normal text-muted-foreground">
+            <span className="block text-[11.5px] font-normal text-[#8A8A8A]">
               {p.paywall.access === "free"
                 ? `${p.paywall.freeUsed} / ${access.freeGenerations.effective} free used`
                 : p.expires}
@@ -278,11 +272,10 @@ export function EngageUserDetail({ userId }: { userId: string }) {
             </span>
           </SummaryCell>
         )}
-      </dl>
       </section>
 
       {access.status === "suspended" && data.control?.suspendReason && (
-        <p className="rounded-control-sm border border-danger/35 bg-danger-soft px-4 py-2.5 text-caption text-danger">
+        <p className="rounded-lg border border-[#5A2030] bg-[#2A1218] px-4 py-2.5 text-[12.5px] text-red-200">
           Paused by {data.control.suspendedBy} on {fmtDate(data.control.suspendedAt)}: {data.control.suspendReason}
         </p>
       )}
@@ -302,43 +295,43 @@ export function EngageUserDetail({ userId }: { userId: string }) {
 
       {tab === "access" && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <section className="rounded-card border border-border bg-surface">
-            <header className="flex items-center justify-between border-b border-border px-4 py-3">
-              <h2 className="text-label font-semibold text-foreground">Features and limits</h2>
+          <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]">
+            <header className="flex items-center justify-between border-b border-[#2A2A2A] px-4 py-3">
+              <h2 className="text-[13px] font-semibold text-white">Features and limits</h2>
               <AdminButton variant="ghost" onClick={() => setDialog("edit")}>
                 Edit
               </AdminButton>
             </header>
-            <table className="w-full text-caption">
+            <table className="w-full text-[12.5px]">
               <thead>
-                <tr className="text-left text-caption text-muted-foreground">
+                <tr className="text-left text-[11px] uppercase tracking-wide text-[#8A8A8A]">
                   <th className="px-4 py-2 font-semibold">Setting</th>
                   <th className="px-2 py-2 font-semibold">Plan</th>
                   <th className="px-2 py-2 font-semibold">Override</th>
                   <th className="px-4 py-2 text-right font-semibold">Effective</th>
                 </tr>
               </thead>
-              <tbody className="text-foreground/90">
+              <tbody className="text-[#D0D0D0]">
                 {ENGAGE_FEATURES.map((f) => (
-                  <tr key={f} className="border-t border-border">
+                  <tr key={f} className="border-t border-[#232323]">
                     <td className="px-4 py-2">{FEATURE_LABELS[f]}</td>
-                    <td className="px-2 py-2 text-muted-foreground">On</td>
-                    <td className="px-2 py-2">{access.features[f].override ? <Pill tone="amber">{access.features[f].override === "on" ? "On" : "Off"}</Pill> : <span className="text-muted-foreground">—</span>}</td>
-                    <td className="px-4 py-2 text-right font-medium">{access.features[f].enabled ? "On" : <span className="text-danger">{access.features[f].paused ? "Paused for everyone" : "Off"}</span>}</td>
+                    <td className="px-2 py-2 text-[#8A8A8A]">On</td>
+                    <td className="px-2 py-2">{access.features[f].override ? <Pill tone="amber">{access.features[f].override === "on" ? "On" : "Off"}</Pill> : <span className="text-[#8A8A8A]">—</span>}</td>
+                    <td className="px-4 py-2 text-right font-medium">{access.features[f].enabled ? "On" : <span className="text-red-300">{access.features[f].paused ? "Paused for everyone" : "Off"}</span>}</td>
                   </tr>
                 ))}
                 {(Object.keys(access.limits) as Array<keyof typeof access.limits>).map((k) => (
-                  <tr key={k} className="border-t border-border">
+                  <tr key={k} className="border-t border-[#232323]">
                     <td className="px-4 py-2">{k === "dailyCap" ? "Daily cap (rolling 24 h)" : `${FEATURE_LABELS[k.split(".")[0] as (typeof ENGAGE_FEATURES)[number]]} / ${k.split(".")[1]}`}</td>
-                    <td className="px-2 py-2 tabular-nums text-muted-foreground">{formatLimit(access.limits[k].plan)}</td>
-                    <td className="px-2 py-2 tabular-nums">{access.limits[k].override === null ? <span className="text-muted-foreground">—</span> : <Pill tone="amber">{formatLimit(access.limits[k].override)}</Pill>}</td>
+                    <td className="px-2 py-2 tabular-nums text-[#8A8A8A]">{formatLimit(access.limits[k].plan)}</td>
+                    <td className="px-2 py-2 tabular-nums">{access.limits[k].override === null ? <span className="text-[#8A8A8A]">—</span> : <Pill tone="amber">{formatLimit(access.limits[k].override)}</Pill>}</td>
                     <td className="px-4 py-2 text-right font-medium tabular-nums">{formatLimit(access.limits[k].effective)}</td>
                   </tr>
                 ))}
-                <tr className="border-t border-border">
+                <tr className="border-t border-[#232323]">
                   <td className="px-4 py-2">Free generations</td>
-                  <td className="px-2 py-2 tabular-nums text-muted-foreground">{access.freeGenerations.plan}</td>
-                  <td className="px-2 py-2 tabular-nums">{access.freeGenerations.override === null ? <span className="text-muted-foreground">—</span> : <Pill tone="amber">{access.freeGenerations.override}</Pill>}</td>
+                  <td className="px-2 py-2 tabular-nums text-[#8A8A8A]">{access.freeGenerations.plan}</td>
+                  <td className="px-2 py-2 tabular-nums">{access.freeGenerations.override === null ? <span className="text-[#8A8A8A]">—</span> : <Pill tone="amber">{access.freeGenerations.override}</Pill>}</td>
                   <td className="px-4 py-2 text-right font-medium tabular-nums">{access.freeGenerations.effective}</td>
                 </tr>
               </tbody>
@@ -346,17 +339,17 @@ export function EngageUserDetail({ userId }: { userId: string }) {
           </section>
 
           <div className="space-y-4">
-            <section className="rounded-card border border-border bg-surface">
-              <header className="flex items-center justify-between border-b border-border px-4 py-3">
-                <h2 className="text-label font-semibold text-foreground">Free access grants</h2>
+            <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]">
+              <header className="flex items-center justify-between border-b border-[#2A2A2A] px-4 py-3">
+                <h2 className="text-[13px] font-semibold text-white">Free access grants</h2>
                 <AdminButton variant="ghost" onClick={() => setDialog("grant")}>
                   Grant
                 </AdminButton>
               </header>
               {data.grants.length === 0 ? (
-                <p className="px-4 py-6 text-center text-caption text-muted-foreground">No grants. Free access you give appears here.</p>
+                <p className="px-4 py-6 text-center text-[12.5px] text-[#8A8A8A]">No grants. Free access you give appears here.</p>
               ) : (
-                <ul className="divide-y divide-border">
+                <ul className="divide-y divide-[#232323]">
                   {data.grants.map((g) => (
                     <li key={g.id} className="space-y-1 px-4 py-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -364,7 +357,7 @@ export function EngageUserDetail({ userId }: { userId: string }) {
                           <Pill tone={g.state === "active" ? "violet" : g.state === "revoked" ? "red" : "gray"}>
                             {g.state === "active" ? "Active" : g.state === "revoked" ? "Revoked" : g.state === "expired" ? "Expired" : "Scheduled"}
                           </Pill>
-                          <span className="text-caption text-foreground">{g.endsAt ? `Until ${fmtDate(g.endsAt)}` : "Lifetime"}</span>
+                          <span className="text-[12.5px] text-white">{g.endsAt ? `Until ${fmtDate(g.endsAt)}` : "Lifetime"}</span>
                         </div>
                         {g.state === "active" && (
                           <div className="flex gap-1">
@@ -379,8 +372,8 @@ export function EngageUserDetail({ userId }: { userId: string }) {
                           </div>
                         )}
                       </div>
-                      <p className="text-caption text-muted-foreground">“{g.reason}”</p>
-                      <p className="text-caption text-muted-foreground">
+                      <p className="text-[12px] text-[#B0B0B0]">“{g.reason}”</p>
+                      <p className="text-[11.5px] text-[#8A8A8A]">
                         Granted by {g.grantedBy} on {fmtDate(g.createdAt)}
                         {g.revokedAt && ` · revoked by ${g.revokedBy} on ${fmtDate(g.revokedAt)}${g.revokeReason ? `: ${g.revokeReason}` : ""}`}
                       </p>
@@ -390,27 +383,27 @@ export function EngageUserDetail({ userId }: { userId: string }) {
               )}
             </section>
 
-            <section className="rounded-card border border-border bg-surface px-4 py-3">
-              <h2 className="mb-2 text-label font-semibold text-foreground">Subscriptions (Lemon Squeezy)</h2>
+            <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3">
+              <h2 className="mb-2 text-[13px] font-semibold text-white">Subscriptions (Lemon Squeezy)</h2>
               <div className="space-y-3">
                 {plans.map((p) => (
                   <div key={p.platform} aria-label={`${p.name} subscription`}>
-                    <h3 className="mb-1 text-caption font-semibold text-foreground/90">{p.name}</h3>
+                    <h3 className="mb-1 text-[12px] font-semibold text-[#D0D0D0]">{p.name}</h3>
                     {p.sub ? (
-                      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-caption">
-                        <dt className="text-muted-foreground">Status</dt>
-                        <dd className="text-foreground">{p.sub.status}</dd>
-                        <dt className="text-muted-foreground">Started</dt>
-                        <dd className="text-foreground">{fmtDate(p.sub.createdAt)}</dd>
-                        <dt className="text-muted-foreground">{p.sub.status === "cancelled" ? "Ends" : "Renews"}</dt>
-                        <dd className="text-foreground">{fmtDate(p.sub.status === "cancelled" ? p.sub.endsAt : p.sub.renewsAt)}</dd>
+                      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px]">
+                        <dt className="text-[#8A8A8A]">Status</dt>
+                        <dd className="text-white">{p.sub.status}</dd>
+                        <dt className="text-[#8A8A8A]">Started</dt>
+                        <dd className="text-white">{fmtDate(p.sub.createdAt)}</dd>
+                        <dt className="text-[#8A8A8A]">{p.sub.status === "cancelled" ? "Ends" : "Renews"}</dt>
+                        <dd className="text-white">{fmtDate(p.sub.status === "cancelled" ? p.sub.endsAt : p.sub.renewsAt)}</dd>
                       </dl>
                     ) : (
-                      <p className="text-caption text-muted-foreground">Never subscribed.</p>
+                      <p className="text-[12.5px] text-[#8A8A8A]">Never subscribed.</p>
                     )}
                   </div>
                 ))}
-                <p className="text-caption text-muted-foreground">Billing is separate from free access you grant.</p>
+                <p className="text-[11.5px] text-[#8A8A8A]">Billing is separate from free access you grant.</p>
               </div>
             </section>
           </div>
@@ -419,8 +412,8 @@ export function EngageUserDetail({ userId }: { userId: string }) {
 
       {tab === "usage" && (
         <div className="space-y-4">
-          <section className="rounded-card border border-border bg-surface p-4">
-            <h2 className="mb-3 text-label font-semibold text-foreground">Generations per day, last 30 days</h2>
+          <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            <h2 className="mb-3 text-[13px] font-semibold text-white">Generations per day, last 30 days</h2>
             <AdminLineChart
               data={data.usage.series as Record<string, unknown>[]}
               xKey="date"
@@ -432,27 +425,27 @@ export function EngageUserDetail({ userId }: { userId: string }) {
               ].map((f) => ({ key: f, label: FEATURE_LABELS[f], color: FEATURE_COLORS[f] }))}
             />
           </section>
-          <section className="relative overflow-x-auto rounded-card border border-border bg-surface">
-            <table className="w-full text-caption">
+          <section className="overflow-x-auto rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]">
+            <table className="w-full text-[12.5px]">
               <thead>
-                <tr className="text-left text-caption text-muted-foreground">
+                <tr className="text-left text-[11px] uppercase tracking-wide text-[#8A8A8A]">
                   <th className="px-4 py-2.5 font-semibold">Kind</th>
                   <th className="px-3 py-2.5 text-right font-semibold">Today</th>
                   <th className="px-3 py-2.5 text-right font-semibold">This month</th>
                   <th className="px-4 py-2.5 text-right font-semibold">Month limit</th>
                 </tr>
               </thead>
-              <tbody className="text-foreground/90">
+              <tbody className="text-[#D0D0D0]">
                 {USAGE_KINDS.map((k) => {
                   const isFeature = (ENGAGE_FEATURES as readonly string[]).includes(k)
                   const today = data.usage.counters.day[k] ?? (isFeature ? data.usage.historyToday[k as (typeof ENGAGE_FEATURES)[number]] : undefined)
                   const month = data.usage.counters.month[k] ?? (isFeature ? data.usage.historyMonth[k as (typeof ENGAGE_FEATURES)[number]] : undefined)
                   return (
-                    <tr key={k} className="border-t border-border">
+                    <tr key={k} className="border-t border-[#232323]">
                       <td className="px-4 py-2">{USAGE_KIND_LABELS[k]}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmtNumber(today ?? 0)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmtNumber(month ?? 0)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                      <td className="px-4 py-2 text-right tabular-nums text-[#8A8A8A]">
                         {isFeature ? formatLimit(access.limits[`${k as (typeof ENGAGE_FEATURES)[number]}.month`].effective) : "—"}
                       </td>
                     </tr>
@@ -460,7 +453,7 @@ export function EngageUserDetail({ userId }: { userId: string }) {
                 })}
               </tbody>
             </table>
-            <p className="border-t border-border px-4 py-2 text-caption text-muted-foreground">
+            <p className="border-t border-[#232323] px-4 py-2 text-[11.5px] text-[#8A8A8A]">
               Counts every generation allowed since this admin went live; before that, generations kept in history. Days are UTC.
             </p>
           </section>
@@ -469,19 +462,19 @@ export function EngageUserDetail({ userId }: { userId: string }) {
 
       {tab === "activity" && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <section className="rounded-card border border-border bg-surface">
-            <h2 className="border-b border-border px-4 py-3 text-label font-semibold text-foreground">Recent generations</h2>
+          <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]">
+            <h2 className="border-b border-[#2A2A2A] px-4 py-3 text-[13px] font-semibold text-white">Recent generations</h2>
             {data.activity.generations.length === 0 ? (
-              <p className="px-4 py-6 text-center text-caption text-muted-foreground">Nothing generated yet.</p>
+              <p className="px-4 py-6 text-center text-[12.5px] text-[#8A8A8A]">Nothing generated yet.</p>
             ) : (
-              <ul className="divide-y divide-border">
+              <ul className="divide-y divide-[#232323]">
                 {data.activity.generations.map((h) => (
-                  <li key={h.id} className="flex items-center justify-between gap-3 px-4 py-2 text-caption">
-                    <span className="text-foreground/90">
+                  <li key={h.id} className="flex items-center justify-between gap-3 px-4 py-2 text-[12.5px]">
+                    <span className="text-[#D0D0D0]">
                       {GENERATION_LABELS[h.kind] ?? "Comment"}
-                      {h.profileName && <span className="text-muted-foreground"> · {h.profileName}</span>}
+                      {h.profileName && <span className="text-[#8A8A8A]"> · {h.profileName}</span>}
                     </span>
-                    <span className="flex shrink-0 items-center gap-2 text-muted-foreground">
+                    <span className="flex shrink-0 items-center gap-2 text-[#8A8A8A]">
                       {h.action !== "NONE" && <Pill tone="green">{h.action === "COPIED" ? "Copied" : "Inserted"}</Pill>}
                       {fmtDateTime(h.createdAt)}
                     </span>
@@ -489,21 +482,21 @@ export function EngageUserDetail({ userId }: { userId: string }) {
                 ))}
               </ul>
             )}
-            <p className="border-t border-border px-4 py-2 text-caption text-muted-foreground">What was written isn&apos;t shown here, only that it happened.</p>
+            <p className="border-t border-[#232323] px-4 py-2 text-[11.5px] text-[#8A8A8A]">What was written isn&apos;t shown here, only that it happened.</p>
           </section>
-          <section className="rounded-card border border-border bg-surface">
-            <h2 className="border-b border-border px-4 py-3 text-label font-semibold text-foreground">Admin changes</h2>
+          <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]">
+            <h2 className="border-b border-[#2A2A2A] px-4 py-3 text-[13px] font-semibold text-white">Admin changes</h2>
             {data.activity.admin.length === 0 ? (
-              <p className="px-4 py-6 text-center text-caption text-muted-foreground">No admin has changed this user.</p>
+              <p className="px-4 py-6 text-center text-[12.5px] text-[#8A8A8A]">No admin has changed this user.</p>
             ) : (
-              <ul className="divide-y divide-border">
+              <ul className="divide-y divide-[#232323]">
                 {data.activity.admin.map((a) => (
-                  <li key={a.id} className="space-y-0.5 px-4 py-2.5 text-caption">
+                  <li key={a.id} className="space-y-0.5 px-4 py-2.5 text-[12.5px]">
                     <div className="flex justify-between gap-3">
-                      <span className="text-foreground">{a.details}</span>
-                      <span className="shrink-0 text-muted-foreground">{fmtDateTime(a.createdAt)}</span>
+                      <span className="text-white">{a.details}</span>
+                      <span className="shrink-0 text-[#8A8A8A]">{fmtDateTime(a.createdAt)}</span>
                     </div>
-                    <div className="text-caption text-muted-foreground">
+                    <div className="text-[11.5px] text-[#8A8A8A]">
                       {a.adminEmail}
                       {a.reason && ` · “${a.reason}”`}
                     </div>
@@ -513,15 +506,15 @@ export function EngageUserDetail({ userId }: { userId: string }) {
             )}
           </section>
           {data.errors.length > 0 && (
-            <section className="rounded-card border border-border bg-surface lg:col-span-2">
-              <h2 className="border-b border-border px-4 py-3 text-label font-semibold text-foreground">Errors the extension reported</h2>
-              <ul className="divide-y divide-border">
+            <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] lg:col-span-2">
+              <h2 className="border-b border-[#2A2A2A] px-4 py-3 text-[13px] font-semibold text-white">Errors the extension reported</h2>
+              <ul className="divide-y divide-[#232323]">
                 {data.errors.map((e) => (
-                  <li key={e.id} className="flex justify-between gap-3 px-4 py-2 text-caption">
-                    <span className="text-foreground/90">
-                      <span className="font-mono text-caption text-warning">{e.code}</span> {e.message}
+                  <li key={e.id} className="flex justify-between gap-3 px-4 py-2 text-[12.5px]">
+                    <span className="text-[#D0D0D0]">
+                      <span className="font-mono text-[11.5px] text-amber-300">{e.code}</span> {e.message}
                     </span>
-                    <span className="shrink-0 text-muted-foreground">
+                    <span className="shrink-0 text-[#8A8A8A]">
                       {e.extensionVersion ?? "?"} · {fmtDateTime(e.createdAt)}
                     </span>
                   </li>
@@ -533,9 +526,9 @@ export function EngageUserDetail({ userId }: { userId: string }) {
       )}
 
       {tab === "browsers" && (
-        <section className="rounded-card border border-border bg-surface">
-          <header className="flex items-center justify-between border-b border-border px-4 py-3">
-            <h2 className="text-label font-semibold text-foreground">Signed-in browsers</h2>
+        <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]">
+          <header className="flex items-center justify-between border-b border-[#2A2A2A] px-4 py-3">
+            <h2 className="text-[13px] font-semibold text-white">Signed-in browsers</h2>
             {activeSessions.length > 0 && (
               <AdminButton variant="ghost" onClick={() => setDialog("signout")}>
                 <LogOut className="h-3.5 w-3.5" aria-hidden />
@@ -546,9 +539,9 @@ export function EngageUserDetail({ userId }: { userId: string }) {
           {data.sessions.length === 0 ? (
             <EmptyState title="Never signed in to the extension" />
           ) : (
-            <table className="w-full text-caption">
+            <table className="w-full text-[12.5px]">
               <thead>
-                <tr className="text-left text-caption text-muted-foreground">
+                <tr className="text-left text-[11px] uppercase tracking-wide text-[#8A8A8A]">
                   <th className="px-4 py-2 font-semibold">Browser</th>
                   <th className="px-3 py-2 font-semibold">Version</th>
                   <th className="px-3 py-2 font-semibold">Signed in</th>
@@ -556,13 +549,13 @@ export function EngageUserDetail({ userId }: { userId: string }) {
                   <th className="px-4 py-2" />
                 </tr>
               </thead>
-              <tbody className="text-foreground/90">
+              <tbody className="text-[#D0D0D0]">
                 {data.sessions.map((s) => (
-                  <tr key={s.id} className="border-t border-border">
+                  <tr key={s.id} className="border-t border-[#232323]">
                     <td className="px-4 py-2">{s.device ?? "Browser"}</td>
-                    <td className="px-3 py-2 tabular-nums">{s.extensionVersion ?? <span className="text-muted-foreground">Before 1.3.0</span>}</td>
+                    <td className="px-3 py-2 tabular-nums">{s.extensionVersion ?? <span className="text-[#8A8A8A]">Before 1.3.0</span>}</td>
                     <td className="px-3 py-2">{fmtDate(s.createdAt)}</td>
-                    <td className="px-3 py-2">{s.revokedAt ? <span className="text-muted-foreground">Signed out {fmtDate(s.revokedAt)}</span> : fmtRelative(s.lastUsedAt)}</td>
+                    <td className="px-3 py-2">{s.revokedAt ? <span className="text-[#8A8A8A]">Signed out {fmtDate(s.revokedAt)}</span> : fmtRelative(s.lastUsedAt)}</td>
                     <td className="px-4 py-2 text-right">
                       {!s.revokedAt && (
                         <AdminButton variant="ghost" onClick={() => setSignOutToken(s.id)}>
@@ -707,10 +700,10 @@ function NotesAndTags({
 
   return (
     <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-      <section className="rounded-card border border-border bg-surface">
-        <h2 className="border-b border-border px-4 py-3 text-label font-semibold text-foreground">Internal notes</h2>
+      <section className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]">
+        <h2 className="border-b border-[#2A2A2A] px-4 py-3 text-[13px] font-semibold text-white">Internal notes</h2>
         <form
-          className="space-y-2 border-b border-border p-4"
+          className="space-y-2 border-b border-[#232323] p-4"
           onSubmit={(e) => {
             e.preventDefault()
             if (!note.trim()) return
@@ -719,32 +712,32 @@ function NotesAndTags({
         >
           <textarea
             aria-label="New note"
-            className="min-h-[72px] w-full rounded-control-sm border border-border bg-background px-3 py-2 text-label text-foreground outline-none placeholder:text-muted-foreground/80 focus:border-brand"
+            className="min-h-[72px] w-full rounded-lg border border-[#2A2A2A] bg-[#141414] px-3 py-2 text-[13px] text-white outline-none placeholder:text-[#5A5A5A] focus:border-[#7C3AED]"
             placeholder="e.g. Granted Pro access until Oct 30 for partnership testing."
             value={note}
             maxLength={5000}
             onChange={(e) => setNote(e.target.value)}
           />
           <div className="flex items-center justify-between">
-            <span className="text-caption text-muted-foreground">Only admins see notes.</span>
+            <span className="text-[11.5px] text-[#8A8A8A]">Only admins see notes.</span>
             <AdminButton type="submit" loading={busy} disabled={!note.trim()}>
               Add note
             </AdminButton>
           </div>
         </form>
         {notes.length === 0 ? (
-          <p className="px-4 py-6 text-center text-caption text-muted-foreground">No notes yet.</p>
+          <p className="px-4 py-6 text-center text-[12.5px] text-[#8A8A8A]">No notes yet.</p>
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-[#232323]">
             {notes.map((n) => (
               <li key={n.id} className="space-y-1 px-4 py-3">
-                <p className="whitespace-pre-wrap text-caption text-foreground/90">{n.body}</p>
-                <div className="flex items-center justify-between text-caption text-muted-foreground">
+                <p className="whitespace-pre-wrap text-[12.5px] text-[#D0D0D0]">{n.body}</p>
+                <div className="flex items-center justify-between text-[11.5px] text-[#8A8A8A]">
                   <span>
                     {n.authorEmail} · {fmtDateTime(n.createdAt)}
                   </span>
                   <button
-                    className="hover:text-danger"
+                    className="hover:text-red-300"
                     onClick={() => void run(() => adminSend(`/api/admin/engage/users/${userId}/notes?noteId=${n.id}`, "DELETE"), "Note deleted")}
                   >
                     Delete
@@ -755,16 +748,16 @@ function NotesAndTags({
           </ul>
         )}
       </section>
-      <section className="space-y-3 rounded-card border border-border bg-surface p-4">
-        <h2 className="text-label font-semibold text-foreground">Tags</h2>
+      <section className="space-y-3 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+        <h2 className="text-[13px] font-semibold text-white">Tags</h2>
         <div className="flex flex-wrap gap-1.5">
-          {tags.length === 0 && <span className="text-caption text-muted-foreground">No tags.</span>}
+          {tags.length === 0 && <span className="text-[12px] text-[#8A8A8A]">No tags.</span>}
           {tags.map((t) => (
-            <span key={t} className="inline-flex items-center gap-1 rounded-full bg-surface-muted py-0.5 pl-2 pr-1 text-caption text-foreground/90">
+            <span key={t} className="inline-flex items-center gap-1 rounded-full bg-[#262626] py-0.5 pl-2 pr-1 text-[11.5px] text-[#D0D0D0]">
               {t}
               <button
                 aria-label={`Remove tag ${t}`}
-                className="rounded-full p-0.5 hover:bg-surface-raised"
+                className="rounded-full p-0.5 hover:bg-[#3A3A3A]"
                 onClick={() => void run(() => adminSend(`/api/admin/engage/users/${userId}/tags?tag=${encodeURIComponent(t)}`, "DELETE"), "Tag removed")}
               >
                 <X className="h-3 w-3" aria-hidden />

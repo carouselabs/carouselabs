@@ -1,11 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { AlertCircle, Bookmark, Search } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
-import { EmptyState } from "@/components/patterns/EmptyState"
-import { PageHeader } from "@/components/patterns/PageHeader"
+import { Bookmark, Search } from "lucide-react"
 import { PinnedCard, type PinnedIdea } from "@/components/pinned/PinnedCard"
 
 export default function PinnedPage() {
@@ -51,69 +47,77 @@ export default function PinnedPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
-      <PageHeader
-        title="Your Content Wishlist"
-        description="Ideas saved for later. No session starts until you click Generate."
-        actions={
-          <div className="relative w-full sm:w-72">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search your wishlist…"
-              aria-label="Search your wishlist…"
-              density="compact"
-              className="pl-9"
-            />
-          </div>
-        }
-      />
+    <div className="max-w-4xl mx-auto flex flex-col gap-8">
+      {/* Header */}
+      <div className="flex flex-col gap-2">
+        <h1 className="text-[24px] font-bold text-[#0A0A0A] tracking-[-0.4px]">
+          Your Content Wishlist
+        </h1>
+        <p className="text-[14px] text-[#6B7280] leading-[1.5]">
+          Ideas saved for later. No session starts until you click Generate.
+        </p>
+      </div>
+
+      {/* Search */}
+      <div className="relative max-w-md">
+        <Search
+          size={15}
+          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]"
+        />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search your wishlist…"
+          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors"
+        />
+      </div>
 
       {/* Error */}
       {error && (
-        <div role="alert" className="flex items-start gap-3 rounded-control border border-danger/25 bg-danger-soft px-4 py-3 text-label text-danger">
-          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+        <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
           {error}
         </div>
       )}
 
       {/* Loading skeleton */}
       {loading && (
-        <ul aria-hidden className="flex flex-col divide-y divide-border border-y border-border">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <li key={i} className="flex flex-col gap-3 py-5">
-              <Skeleton className="h-5 w-40 rounded-full" />
-              <Skeleton className="h-6 w-3/4" />
-            </li>
+            <div
+              key={i}
+              className="h-[168px] rounded-2xl bg-[#F6F4EE] border border-[#F1EFE9] animate-pulse"
+              style={{ animationDelay: `${i * 60}ms` }}
+            />
           ))}
-        </ul>
+        </div>
       )}
 
-      {/* List */}
+      {/* Grid */}
       {!loading && visible.length > 0 && (
-        <ul aria-label="Pinned ideas" className="flex flex-col divide-y divide-border border-y border-border">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {visible.map((idea) => (
-            <li key={idea.id}>
-              <PinnedCard idea={idea} onRemove={handleRemove} />
-            </li>
+            <PinnedCard key={idea.id} idea={idea} onRemove={handleRemove} />
           ))}
-        </ul>
+        </div>
       )}
 
       {/* Empty state */}
       {!loading && visible.length === 0 && !error && (
-        <EmptyState
-          variant={ideas.length === 0 ? "first-use" : "no-results"}
-          icon={<Bookmark aria-hidden />}
-          title={ideas.length === 0 ? "No ideas pinned yet" : "Nothing matches"}
-          description={
-            ideas.length === 0
-              ? "Go to Generate and pin ideas you want to save."
-              : "Try a different search."
-          }
-        />
+        <div className="flex flex-col items-center justify-center min-h-[36vh] text-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-[rgba(26,26,26,0.1)] border border-[rgba(26,26,26,0.18)] flex items-center justify-center">
+            <Bookmark size={20} className="text-[#1A1A1A]" strokeWidth={1.8} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <p className="text-[15px] font-medium text-[#6B7280]">
+              {ideas.length === 0 ? "No ideas pinned yet" : "Nothing matches"}
+            </p>
+            <p className="text-[13px] text-[#ADA99F] max-w-xs">
+              {ideas.length === 0
+                ? "Go to Generate and pin ideas you want to save."
+                : "Try a different search."}
+            </p>
+          </div>
+        </div>
       )}
     </div>
   )

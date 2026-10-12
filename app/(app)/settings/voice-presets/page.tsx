@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Plus, Pencil, Trash2, Check, Loader2 } from "lucide-react"
-import { SettingsHeader } from "@/components/settings/SettingsHeader"
-import { SettingsSection } from "@/components/settings/SettingsSection"
+import { SettingsTabs } from "@/components/settings/SettingsTabs"
 import { SavedToast } from "@/components/settings/SavedToast"
 import { countWords } from "@/lib/wordCount"
 import {
@@ -135,16 +134,18 @@ export default function VoicePresetsPage() {
   const atMax = presets.length >= MAX_VOICE_PRESETS
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-8">
-      <SettingsHeader />
+    <div className="max-w-2xl mx-auto flex flex-col gap-8">
+      <SettingsTabs />
 
-      <SettingsSection
-        title="Voice Presets"
-        description={<>Save named tone combinations to reuse. Up to {MAX_VOICE_PRESETS}.</>}
-      >
+      <div className="flex flex-col gap-1">
+        <h2 className="text-[15px] font-semibold text-[#0A0A0A]">Voice Presets</h2>
+        <p className="text-[12.5px] text-[#9CA3AF]">
+          Save named tone combinations to reuse. Up to {MAX_VOICE_PRESETS}.
+        </p>
+      </div>
 
       {error && (
-        <div className="px-4 py-3 rounded-control bg-danger-soft border border-danger/25 text-label text-danger">
+        <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
           {error}
         </div>
       )}
@@ -152,7 +153,7 @@ export default function VoicePresetsPage() {
       {loading ? (
         <div className="flex flex-col gap-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-[64px] rounded-control bg-surface border border-border animate-pulse" />
+            <div key={i} className="h-[64px] rounded-xl bg-[#F6F4EE] border border-[#F1EFE9] animate-pulse" />
           ))}
         </div>
       ) : (
@@ -161,17 +162,17 @@ export default function VoicePresetsPage() {
           {presets.map((preset) => (
             <div
               key={preset.id}
-              className="flex items-center justify-between gap-3 p-4 rounded-control border border-border bg-surface"
+              className="flex items-center justify-between gap-3 p-4 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC]"
             >
               <div className="flex flex-col gap-1.5 min-w-0">
-                <p className="text-label font-semibold text-foreground truncate">
+                <p className="text-[14px] font-semibold text-[#0A0A0A] truncate">
                   {preset.name}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {preset.tones.map((t) => (
                     <span
                       key={t}
-                      className="px-2 py-0.5 rounded-full bg-surface-muted border border-control-border text-foreground text-[11px] font-medium"
+                      className="px-2 py-0.5 rounded-full bg-[rgba(26,26,26,0.12)] border border-[rgba(26,26,26,0.22)] text-[#1A1A1A] text-[10.5px] font-medium"
                     >
                       {toneLabel(t)}
                     </span>
@@ -182,7 +183,7 @@ export default function VoicePresetsPage() {
                 <button
                   onClick={() => startEdit(preset)}
                   disabled={deletingId === preset.id}
-                  className="p-2 rounded-control-sm text-muted-foreground hover:text-foreground hover:bg-surface-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="p-2 rounded-lg text-[#9CA3AF] hover:text-[#1A1A1A] hover:bg-[#ECEAE4] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   aria-label="Edit preset"
                 >
                   <Pencil size={14} strokeWidth={2} />
@@ -190,7 +191,7 @@ export default function VoicePresetsPage() {
                 <button
                   onClick={() => void deletePreset(preset.id)}
                   disabled={deletingId === preset.id}
-                  className="p-2 rounded-control-sm text-muted-foreground hover:text-danger hover:bg-danger-soft transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="p-2 rounded-lg text-[#9CA3AF] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.08)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   aria-label="Delete preset"
                 >
                   {deletingId === preset.id ? (
@@ -205,23 +206,23 @@ export default function VoicePresetsPage() {
 
           {/* Empty state */}
           {presets.length === 0 && !editing && (
-            <p className="text-label text-muted-foreground py-2">
+            <p className="text-[13px] text-[#9CA3AF] py-2">
               No presets yet. Add one to reuse your favorite tone combinations.
             </p>
           )}
 
           {/* Inline editor (add / edit) */}
           {editing && (
-            <div className="flex flex-col gap-4 p-4 rounded-control border border-control-border bg-surface-muted">
+            <div className="flex flex-col gap-4 p-4 rounded-xl border border-[rgba(26,26,26,0.3)] bg-[rgba(26,26,26,0.04)]">
               <input
                 value={editing.name}
                 onChange={(e) => setEditing({ ...editing, name: e.target.value })}
                 placeholder="Preset name — e.g. Founder Story Mode"
                 autoFocus
-                className="w-full px-4 py-2.5 rounded-control-sm bg-surface border border-border text-foreground placeholder-[#ADA99F] text-label focus:outline-none focus:border-foreground transition-colors"
+                className="w-full px-4 py-2.5 rounded-lg bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-[13px] focus:outline-none focus:border-[#1A1A1A] transition-colors"
               />
               <div className="flex flex-col gap-2">
-                <p className="text-caption font-medium text-muted-foreground">
+                <p className="text-[11px] font-medium text-[#9CA3AF] uppercase tracking-wide">
                   Tones
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -239,10 +240,10 @@ export default function VoicePresetsPage() {
                           })
                         }
                         className={[
-                          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-caption transition-colors",
+                          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[12px] transition-colors",
                           selected
-                            ? "border-foreground bg-surface-muted text-foreground"
-                            : "border-border text-muted-foreground hover:border-control-border hover:text-foreground",
+                            ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.14)] text-[#1A1A1A]"
+                            : "border-[#E5E3DE] text-[#6B7280] hover:border-[#D6D3CC] hover:text-[#1A1A1A]",
                         ].join(" ")}
                       >
                         {selected && <Check size={11} strokeWidth={2.5} />}
@@ -256,7 +257,7 @@ export default function VoicePresetsPage() {
                 <button
                   onClick={() => void saveEditing()}
                   disabled={!editing.name.trim() || editing.tones.length === 0 || savingPreset}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-control-sm bg-primary hover:bg-primary-hover text-caption font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#1A1A1A] hover:bg-[#000000] text-[12px] font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {savingPreset && <Loader2 size={12} className="animate-spin" />}
                   {savingPreset ? "Saving…" : "Save preset"}
@@ -264,7 +265,7 @@ export default function VoicePresetsPage() {
                 <button
                   onClick={() => setEditing(null)}
                   disabled={savingPreset}
-                  className="px-4 py-2 rounded-control-sm text-caption font-medium text-muted-foreground hover:text-foreground hover:bg-surface-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-4 py-2 rounded-lg text-[12px] font-medium text-[#6B7280] hover:text-[#1A1A1A] hover:bg-[#ECEAE4] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
@@ -277,7 +278,7 @@ export default function VoicePresetsPage() {
             <button
               onClick={startAdd}
               disabled={atMax}
-              className="inline-flex items-center gap-2 self-start px-4 py-2.5 rounded-control border border-control-border bg-surface-muted hover:bg-surface-muted text-label font-medium text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 self-start px-4 py-2.5 rounded-xl border border-[rgba(26,26,26,0.3)] bg-[rgba(26,26,26,0.08)] hover:bg-[rgba(26,26,26,0.14)] text-[13px] font-medium text-[#1A1A1A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Plus size={14} strokeWidth={2.2} />
               {atMax ? `Max ${MAX_VOICE_PRESETS} presets` : "Add preset"}
@@ -286,24 +287,31 @@ export default function VoicePresetsPage() {
         </div>
       )}
 
-      </SettingsSection>
-
       {/* ── Voice Guidelines ── */}
       {!loading && (
-        <SettingsSection title="Voice Guidelines" description="Write detailed instructions for how your captions should sound — your tone, phrases you use, phrases you avoid, writing style, examples of your best posts. The more detail you provide, the better the AI will match your voice.">
+        <div className="flex flex-col gap-4 pt-8 border-t border-[#F1EFE9]">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-[15px] font-semibold text-[#0A0A0A]">Voice Guidelines</h2>
+            <p className="text-[12.5px] text-[#9CA3AF] leading-[1.5]">
+              Write detailed instructions for how your captions should sound — your tone,
+              phrases you use, phrases you avoid, writing style, examples of your best posts.
+              The more detail you provide, the better the AI will match your voice.
+            </p>
+          </div>
+
           <textarea
             value={voiceGuidelines}
             onChange={(e) => setVoiceGuidelines(e.target.value)}
             placeholder="Describe your voice in detail — the tone you use, the phrases you love, the ones you avoid, how you structure posts, and paste a few of your best-performing posts as examples…"
-            className="w-full min-h-[300px] px-4 py-3.5 rounded-control border border-border bg-surface text-label text-foreground leading-[1.6] resize-y placeholder:text-muted-foreground focus:outline-none focus:border-foreground transition-colors"
+            className="w-full min-h-[300px] px-4 py-3.5 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.6] resize-y placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(26,26,26,0.5)] transition-colors"
           />
 
           <div className="flex flex-col gap-1">
-            <p className="text-caption text-muted-foreground tabular-nums">
+            <p className="text-[12px] text-[#9CA3AF] tabular-nums">
               {guidelineWords} {guidelineWords === 1 ? "word" : "words"}
             </p>
             {guidelineWords >= 1 && guidelineWords < VOICE_GUIDELINES_TARGET_WORDS && (
-              <p className="text-caption text-warning">
+              <p className="text-[12px] text-[rgba(217,119,6,0.9)]">
                 Add more detail for better results — aim for at least{" "}
                 {VOICE_GUIDELINES_TARGET_WORDS.toLocaleString()} words
               </p>
@@ -313,11 +321,11 @@ export default function VoicePresetsPage() {
           <button
             onClick={saveGuidelines}
             disabled={savingGuidelines}
-            className="inline-flex items-center gap-2 self-start px-4 py-2.5 rounded-control bg-primary hover:bg-primary-hover text-label font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 self-start px-4 py-2.5 rounded-xl bg-[#1A1A1A] hover:bg-[#000000] text-[13px] font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {savingGuidelines ? "Saving…" : "Save guidelines"}
           </button>
-        </SettingsSection>
+        </div>
       )}
 
       <SavedToast open={saved} onClose={() => setSaved(false)} message={savedMsg} />

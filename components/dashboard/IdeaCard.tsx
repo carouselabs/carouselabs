@@ -6,7 +6,6 @@ import { Bookmark, X, Loader2 } from "lucide-react"
 import type { SessionIdea } from "@/lib/store/ideaSessionStore"
 import type { RawCategory } from "@/lib/ai/parsers/ideas"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -16,173 +15,167 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
-const CATEGORY_STYLES: Record<RawCategory, { label: string; className: string }> = {
-  "Latest News": { label: "Latest News", className: "text-chart-4" },
-  "Trending": { label: "Trending", className: "text-success" },
-  "Industry": { label: "Industry", className: "text-foreground" },
-  "Random": { label: "Random", className: "text-chart-3" },
-}
-
-// Selecting an idea locks the session — the same warning is shown in the
-// desktop detail column and in the phone/tablet confirmation dialog.
-const LOCK_TITLE = "Ready to work on this idea?"
-const LOCK_COPY = (
-  <>
-    Once you select an idea, you&apos;ll be locked into it for this session. To pick a different idea,
-    you&apos;ll need to start a new session.
-  </>
-)
-
-function Meta({ idea, className }: { idea: SessionIdea; className?: string }) {
-  const style = CATEGORY_STYLES[idea.rawCategory]
-  return (
-    <span className={cn("font-medium", className)}>
-      <span className={style?.className}>{style?.label ?? idea.rawCategory}</span>
-      <span className="text-muted-foreground tabular-nums"> · {idea.postType}</span>
-    </span>
-  )
-}
-
-function PinButton({ idea, onPin, withLabel = false }: { idea: SessionIdea; onPin: (id: string) => void; withLabel?: boolean }) {
-  const label = idea.isPinned ? "Unpin idea" : "Pin idea"
-  return (
-    <Button
-      variant={withLabel ? "outline" : "ghost"}
-      size={withLabel ? "lg" : "icon-sm"}
-      aria-label={withLabel ? undefined : label}
-      aria-pressed={idea.isPinned}
-      onClick={() => onPin(idea.id)}
-      className={cn(!withLabel && "text-muted-foreground hover:text-foreground", idea.isPinned && "text-brand hover:text-brand")}
-    >
-      <Bookmark className={cn(idea.isPinned && "fill-current")} aria-hidden />
-      {withLabel && label}
-    </Button>
-  )
-}
-
-/** Opens the idea page; navigating there starts the breakdown generation. */
-function useOpenIdea(id: string) {
-  const router = useRouter()
-  // Generation can take a moment, so the button says it's working at once
-  // instead of looking like the click did nothing.
-  const [isNavigating, setIsNavigating] = useState(false)
-  return {
-    isNavigating,
-    open: () => {
-      setIsNavigating(true)
-      router.push(`/idea/${id}`)
-    },
-  }
-}
-
-function GoButton({ isNavigating, onClick, size = "default" }: { isNavigating: boolean; onClick: () => void; size?: "default" | "lg" }) {
-  return (
-    <Button size={size} onClick={onClick} disabled={isNavigating} aria-busy={isNavigating || undefined} className="disabled:cursor-wait disabled:opacity-80">
-      {isNavigating ? (
-        <>
-          <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden />
-          Generating…
-        </>
-      ) : (
-        <>Let&apos;s go →</>
-      )}
-    </Button>
-  )
+const CATEGORY_STYLES: Record<RawCategory, { label: string; color: string; bg: string }> = {
+  "Latest News": {
+    label: "Latest News",
+    color: "#2563EB",
+    bg: "rgba(147,197,253,0.10)",
+  },
+  "Trending": {
+    label: "Trending",
+    color: "#059669",
+    bg: "rgba(110,231,183,0.10)",
+  },
+  "Industry": {
+    label: "Industry",
+    color: "#1A1A1A",
+    bg: "rgba(196,181,253,0.10)",
+  },
+  "Random": {
+    label: "Random",
+    color: "#D97706",
+    bg: "rgba(252,211,77,0.10)",
+  },
 }
 
 interface IdeaCardProps {
   idea: SessionIdea
-  number: number
-  /** Shown in the detail column (desktop). */
-  isSelected: boolean
-  /** Desktop: show it in the detail column. Returns false when there is no column. */
-  onSelect: (id: string, viaKeyboard: boolean) => boolean
   onPin: (id: string) => void
   onDismiss: (id: string) => void
 }
 
-/** One idea in the numbered list. */
-export function IdeaCard({ idea, number, isSelected, onSelect, onPin, onDismiss }: IdeaCardProps) {
+export function IdeaCard({ idea, onPin, onDismiss }: IdeaCardProps) {
+  const router = useRouter()
+  const style = CATEGORY_STYLES[idea.rawCategory]
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const { isNavigating, open } = useOpenIdea(idea.id)
+  // Navigating to the idea page kicks off breakdown generation, which can take a
+  // moment. Track it so the confirm button gives instant "working on it" feedback
+  // instead of looking like the click did nothing.
+  const [isNavigating, setIsNavigating] = useState(false)
+
+  function handleCardClick() {
+    // Selecting an idea locks the session — confirm before committing.
+    setConfirmOpen(true)
+  }
+
+  function handleConfirm() {
+    setIsNavigating(true)
+    router.push(`/idea/${idea.id}`)
+  }
+
+  function handlePin(e: React.MouseEvent) {
+    e.stopPropagation()
+    onPin(idea.id)
+  }
+
+  function handleDismiss(e: React.MouseEvent) {
+    e.stopPropagation()
+    onDismiss(idea.id)
+  }
 
   return (
     <>
-      <div
-        className={cn(
-          // Hover/selected fill bleeds 12px into the gutter; the divider stays on the content edge.
-          "relative -mx-3 flex items-start gap-3 px-3 py-4 transition-colors duration-(--motion-fast) before:absolute before:inset-x-3 before:top-0 before:h-px before:bg-border hover:bg-surface md:gap-4 md:py-5",
-          isSelected && "lg:bg-surface lg:shadow-[inset_2px_0_0_var(--brand)]"
-        )}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleCardClick}
+      onKeyDown={(e) => e.key === "Enter" && handleCardClick()}
+      className="group relative flex flex-col gap-3 p-4 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] hover:bg-[#ECEAE4] hover:border-[#E5E3DE] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/50"
+    >
+      {/* Dismiss — top-right, visible on hover */}
+      <button
+        onClick={handleDismiss}
+        aria-label="Dismiss idea"
+        className="absolute top-3 right-3 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity text-[#ADA99F] hover:text-[#374151] hover:bg-[#E9E7E1]"
       >
-        <span className="w-6 shrink-0 pt-0.5 text-label text-muted-foreground tabular-nums md:w-7" aria-hidden>
-          {String(number).padStart(2, "0")}
+        <X size={13} strokeWidth={2.2} />
+      </button>
+
+      {/* Category pill */}
+      <span
+        className="self-start text-[11px] font-semibold px-2 py-0.5 rounded-full tracking-wide"
+        style={{ color: style.color, backgroundColor: style.bg }}
+      >
+        {style.label}
+      </span>
+
+      {/* Hook */}
+      <p className="text-[14px] font-medium text-[#0A0A0A] leading-[1.45] pr-5">
+        {idea.hook}
+      </p>
+
+      {/* Post type + CTA */}
+      <div className="flex items-center gap-2 flex-wrap mt-auto">
+        <span className="text-[11px] text-[#ADA99F] tabular-nums">
+          {idea.postType}
         </span>
+        {idea.cta && (
+          <>
+            <span className="text-[#E5E3DE]">·</span>
+            <span className="text-[11px] text-[#ADA99F]">
+              CTA: {idea.cta}
+            </span>
+          </>
+        )}
+
+        {/* Pin — always visible, pushed to right */}
         <button
-          type="button"
-          aria-current={isSelected ? "true" : undefined}
-          onClick={(e) => {
-            // No detail column on phones and tablets: confirm in a dialog instead.
-            // (detail === 0: activated from the keyboard, not a pointer.)
-            if (!onSelect(idea.id, e.detail === 0)) setConfirmOpen(true)
-          }}
-          className="flex min-w-0 flex-1 flex-col gap-1 rounded-detail text-left after:absolute after:inset-0 after:content-['']"
+          onClick={handlePin}
+          aria-label={idea.isPinned ? "Unpin idea" : "Pin idea"}
+          className={cn(
+            "ml-auto p-1.5 rounded-md transition-colors",
+            idea.isPinned
+              ? "text-[#1A1A1A]"
+              : "text-[#ADA99F] hover:text-[#4B5563] hover:bg-[#E9E7E1]",
+          )}
         >
-          <Meta idea={idea} className="text-caption" />
-          <span className="text-body font-medium text-pretty md:text-body-lg">{idea.hook}</span>
-          {idea.cta && <span className="text-caption text-muted-foreground">CTA: {idea.cta}</span>}
+          <Bookmark
+            size={14}
+            strokeWidth={2}
+            fill={idea.isPinned ? "#1A1A1A" : "none"}
+          />
         </button>
-        <div className="relative z-10 -mt-1 -mr-1.5 flex shrink-0 items-center">
-          <PinButton idea={idea} onPin={onPin} />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Dismiss idea"
-            onClick={() => onDismiss(idea.id)}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <X aria-hidden />
-          </Button>
-        </div>
-      </div>
-
-      {/* Confirmation — selecting an idea locks the session */}
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{LOCK_TITLE}</DialogTitle>
-            <DialogDescription>{LOCK_COPY}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={isNavigating}>
-              Cancel
-            </Button>
-            <GoButton isNavigating={isNavigating} onClick={open} />
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  )
-}
-
-/** The selected idea, with the session-lock warning and the way in (desktop). */
-export function IdeaDetail({ idea, onPin }: { idea: SessionIdea; onPin: (id: string) => void }) {
-  const { isNavigating, open } = useOpenIdea(idea.id)
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <Meta idea={idea} className="text-label" />
-        <p className="text-title-sm font-semibold text-balance">{idea.hook}</p>
-        {idea.cta && <p className="text-label text-muted-foreground">CTA: {idea.cta}</p>}
-      </div>
-      <div className="flex flex-col gap-1.5 border-t border-border pt-5">
-        <h2 className="text-label font-semibold">{LOCK_TITLE}</h2>
-        <p className="text-label text-muted-foreground">{LOCK_COPY}</p>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <GoButton isNavigating={isNavigating} onClick={open} size="lg" />
-        <PinButton idea={idea} onPin={onPin} withLabel />
       </div>
     </div>
+
+    {/* Confirmation — selecting an idea locks the session */}
+    <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <DialogContent className="bg-[#FFFFFF] border-[#E5E3DE] text-[#0A0A0A]">
+        <DialogHeader>
+          <DialogTitle className="text-[16px] font-semibold text-[#0A0A0A]">
+            Ready to work on this idea?
+          </DialogTitle>
+          <DialogDescription className="text-[13px] text-[#6B7280] leading-[1.55]">
+            Once you select an idea, you&apos;ll be locked into it for this
+            session. To pick a different idea, you&apos;ll need to start a new
+            session.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <button
+            onClick={() => setConfirmOpen(false)}
+            disabled={isNavigating}
+            className="px-4 py-2 rounded-xl text-[13px] font-medium text-[#6B7280] hover:text-[#1A1A1A] hover:bg-[#ECEAE4] transition-colors disabled:opacity-50 disabled:pointer-events-none"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={isNavigating}
+            className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all disabled:opacity-80 disabled:cursor-wait"
+          >
+            {isNavigating ? (
+              <>
+                <Loader2 size={14} strokeWidth={2.4} className="animate-spin" />
+                Generating…
+              </>
+            ) : (
+              <>Let&apos;s go →</>
+            )}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

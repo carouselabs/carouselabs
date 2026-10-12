@@ -1,7 +1,7 @@
 // components/generate/ToneSelector.tsx
 "use client"
 
-import { useId } from "react"
+import { cn } from "@/lib/utils"
 
 export type Tone = "Analytical" | "Candid" | "Playful" | "Authoritative" | "Story-driven"
 
@@ -20,24 +20,42 @@ interface ToneSelectorProps {
 }
 
 export function ToneSelector({ selected, onSelect, disabled }: ToneSelectorProps) {
-  const labelId = useId()
   return (
     <div className="flex flex-col gap-2.5">
-      <p id={labelId} className="text-caption font-medium text-muted-foreground">
+      <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
         Tone
       </p>
-      <div role="group" aria-labelledby={labelId} className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2">
+      <div className="flex flex-wrap gap-2">
         {TONES.map(({ value, description }) => (
           <button
             key={value}
-            type="button"
             onClick={() => onSelect(value)}
             disabled={disabled}
-            aria-pressed={selected === value}
-            className="flex flex-col items-start gap-0.5 rounded-control border border-border bg-surface px-3 py-2 text-left transition-colors duration-(--motion-fast) enabled:hover:border-control-border disabled:cursor-not-allowed disabled:opacity-45 aria-pressed:border-foreground aria-pressed:bg-surface-muted"
+            className={cn(
+              "flex flex-col items-start px-3 py-2 rounded-xl border text-left transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed",
+              selected === value
+                ? "border-[rgba(26,26,26,0.55)] bg-[rgba(26,26,26,0.12)]"
+                : "border-[#E9E7E1] bg-[#F6F4EE] hover:border-[#E5E3DE] hover:bg-[#F4F2EC]",
+            )}
           >
-            <span className="text-label font-semibold text-foreground">{value}</span>
-            <span className="text-caption text-muted-foreground">{description}</span>
+            <span
+              className={cn(
+                "text-[12px] font-semibold leading-none",
+                selected === value ? "text-[#1A1A1A]" : "text-[#4B5563]",
+              )}
+            >
+              {value}
+            </span>
+            <span
+              className={cn(
+                "text-[10px] mt-1 leading-none",
+                selected === value
+                  ? "text-[rgba(196,181,253,0.55)]"
+                  : "text-[#ADA99F]",
+              )}
+            >
+              {description}
+            </span>
           </button>
         ))}
       </div>

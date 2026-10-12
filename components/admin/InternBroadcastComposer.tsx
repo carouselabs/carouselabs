@@ -177,7 +177,7 @@ export function InternBroadcastComposer() {
       <div className="flex justify-end">
         <Link
           href="/admin/scheduled-emails"
-          className="inline-flex items-center gap-1.5 text-caption font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#8A8A8A] hover:text-white transition-colors"
         >
           <CalendarClock className="h-3.5 w-3.5" />
           View Scheduled Emails
@@ -187,8 +187,8 @@ export function InternBroadcastComposer() {
       <AdminCard title="Compose Announcement">
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-caption font-semibold text-muted-foreground">When</label>
-            <div className="flex w-fit rounded-control-sm border border-border bg-background p-1">
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">When</label>
+            <div className="flex w-fit rounded-lg border border-[#2A2A2A] bg-[#141414] p-1">
               {(
                 [
                   { key: "now", label: "Send Now" },
@@ -196,11 +196,10 @@ export function InternBroadcastComposer() {
                 ] as const
               ).map((opt) => (
                 <button
-                  aria-pressed={sendMode === opt.key}
                   key={opt.key}
                   onClick={() => setSendMode(opt.key)}
-                  className={`rounded-md px-3 py-1.5 text-caption font-semibold transition-colors ${
-                    sendMode === opt.key ? "bg-surface-raised text-foreground shadow-card" : "text-muted-foreground hover:text-foreground"
+                  className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                    sendMode === opt.key ? "bg-[#7C3AED] text-white" : "text-[#8A8A8A] hover:text-white"
                   }`}
                 >
                   {opt.label}
@@ -219,8 +218,8 @@ export function InternBroadcastComposer() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-caption font-semibold text-muted-foreground">To</label>
-            <div className="flex w-fit rounded-control-sm border border-border bg-background p-1">
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">To</label>
+            <div className="flex w-fit rounded-lg border border-[#2A2A2A] bg-[#141414] p-1">
               {(
                 [
                   { key: "all", label: "All Active Interns" },
@@ -228,11 +227,10 @@ export function InternBroadcastComposer() {
                 ] as const
               ).map((opt) => (
                 <button
-                  aria-pressed={recipientType === opt.key}
                   key={opt.key}
                   onClick={() => setRecipientType(opt.key)}
-                  className={`rounded-md px-3 py-1.5 text-caption font-semibold transition-colors ${
-                    recipientType === opt.key ? "bg-surface-raised text-foreground shadow-card" : "text-muted-foreground hover:text-foreground"
+                  className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                    recipientType === opt.key ? "bg-[#7C3AED] text-white" : "text-[#8A8A8A] hover:text-white"
                   }`}
                 >
                   {opt.label}
@@ -243,28 +241,28 @@ export function InternBroadcastComposer() {
 
           {recipientType === "specific" && (
             <div className="space-y-1.5">
-              <label className="text-caption font-semibold text-muted-foreground">
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
                 Select interns ({selectedIds.size} selected)
               </label>
-              <div className="max-h-56 overflow-y-auto rounded-control-sm border border-border bg-background">
+              <div className="max-h-56 overflow-y-auto rounded-lg border border-[#2A2A2A] bg-[#141414]">
                 {interns.length === 0 ? (
-                  <p className="p-3 text-caption text-muted-foreground/80">No interns found.</p>
+                  <p className="p-3 text-[12.5px] text-[#6A6A6A]">No interns found.</p>
                 ) : (
                   interns.map((i) => (
                     <label
                       key={i.id}
-                      className="flex cursor-pointer items-center gap-2.5 border-b border-border px-3 py-2 last:border-0 hover:bg-surface"
+                      className="flex cursor-pointer items-center gap-2.5 border-b border-[#232323] px-3 py-2 last:border-0 hover:bg-[#1A1A1A]"
                     >
                       <input
                         type="checkbox"
                         checked={selectedIds.has(i.id)}
                         onChange={() => toggleSelected(i.id)}
-                        className="h-4 w-4 accent-brand"
+                        className="h-4 w-4 accent-[#7C3AED]"
                       />
-                      <span className="text-label text-foreground">{i.name}</span>
-                      <span className="text-caption text-muted-foreground/80">{i.email}</span>
+                      <span className="text-[13px] text-white">{i.name}</span>
+                      <span className="text-[12px] text-[#6A6A6A]">{i.email}</span>
                       {!i.active && (
-                        <span className="ml-auto text-[11px] font-semibold text-muted-foreground/80">
+                        <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-[#6A6A6A]">
                           Inactive
                         </span>
                       )}
@@ -276,7 +274,7 @@ export function InternBroadcastComposer() {
           )}
 
           <div className="space-y-1.5">
-            <label className="text-caption font-semibold text-muted-foreground">Subject</label>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">Subject</label>
             <AdminInput
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
@@ -286,13 +284,13 @@ export function InternBroadcastComposer() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-caption font-semibold text-muted-foreground">Message</label>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">Message</label>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={8}
               placeholder="Write your announcement…"
-              className="w-full rounded-control-sm border border-border bg-background p-3 text-label text-foreground placeholder:text-muted-foreground/80 outline-none focus:border-brand"
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#141414] p-3 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED]"
             />
           </div>
 
@@ -311,7 +309,7 @@ export function InternBroadcastComposer() {
               {sendMode === "now" ? "Send Broadcast" : "Schedule Broadcast"}
             </AdminButton>
           </div>
-          <p className="text-caption text-muted-foreground/80">Limited to 5 announcements per hour. Test sends don&apos;t count.</p>
+          <p className="text-[11px] text-[#6A6A6A]">Limited to 5 announcements per hour. Test sends don&apos;t count.</p>
         </div>
       </AdminCard>
 

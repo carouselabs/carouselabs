@@ -19,22 +19,19 @@ export function IdeaWorkspace({ ideaId, initialBreakdown, plan }: IdeaWorkspaceP
   // generating state to keep the picker disabled from the first paint.
   const [generating, setGenerating] = useState(initialBreakdown === null)
 
-  // Read the breakdown on the left; choose what to make in a panel that
-  // stays beside it on wide screens (below it on smaller ones).
   return (
-    <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-14 xl:grid-cols-[minmax(0,1fr)_24rem]">
-      <article className="min-w-0">
-        <BreakdownView
-          ideaId={ideaId}
-          initialBreakdown={initialBreakdown}
-          onGeneratingChange={setGenerating}
-        />
-      </article>
+    <>
+      <BreakdownView
+        ideaId={ideaId}
+        initialBreakdown={initialBreakdown}
+        onGeneratingChange={setGenerating}
+      />
+
+      {/* Divider */}
+      <div className="h-px bg-[#ECEAE4]" />
 
       {/* Format picker — disabled while the breakdown is still generating */}
-      <aside aria-label="Choose Output Type" className="min-w-0 border-t border-border pt-8 lg:self-start lg:sticky lg:top-0 lg:border-t-0 lg:pt-0">
-        <FormatPicker ideaId={ideaId} plan={plan} disabled={generating} />
-      </aside>
-    </div>
+      <FormatPicker ideaId={ideaId} plan={plan} disabled={generating} />
+    </>
   )
 }

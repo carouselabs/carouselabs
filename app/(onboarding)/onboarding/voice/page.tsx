@@ -4,7 +4,6 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useOnboardingStore } from "@/lib/store/onboardingStore"
 import { StepNav } from "@/components/onboarding/StepNav"
-import { OptionCardCheckbox } from "@/components/patterns/OptionCard"
 
 const TONES = [
   {
@@ -100,35 +99,44 @@ export default function VoicePage() {
 
   return (
     <div>
-      <h1 id="voice-title" className="text-title-sm font-semibold">What&apos;s your content voice?</h1>
-      <p className="mt-1 mb-8 text-body text-muted-foreground">
+      <h1 className="text-2xl font-semibold text-[#0A0A0A] mb-1">What&apos;s your content voice?</h1>
+      <p className="text-sm text-[#6B7280] mb-8">
         Choose up to 2 tones that feel most like you.
       </p>
 
-      <div role="group" aria-labelledby="voice-title" className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-2.5">
         {TONES.map((tone) => {
           const selected = tones.includes(tone.id)
           const disabled = !selected && tones.length >= 2
           return (
-            <OptionCardCheckbox
+            <button
               key={tone.id}
-              checked={selected}
-              onCheckedChange={() => toggle(tone.id)}
+              onClick={() => toggle(tone.id)}
               disabled={disabled}
-              layout="row"
-              title={tone.label}
-              description={tone.description}
-              extra={<span className="mt-1 text-label text-muted-foreground italic">{tone.preview}</span>}
-            />
+              className={`w-full text-left px-5 py-4 rounded-xl border transition-all ${
+                selected
+                  ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.08)]"
+                  : disabled
+                  ? "border-[#F1EFE9] bg-transparent opacity-35 cursor-not-allowed"
+                  : "border-[#E5E3DE] bg-[#F6F4EE] hover:border-[#DEDBD4]"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <p className={`text-sm font-medium ${selected ? "text-[#0A0A0A]" : "text-[#4B5563]"}`}>
+                  {tone.label}
+                </p>
+                {selected && (
+                  <span className="w-4 h-4 rounded-full bg-[#1A1A1A] flex-shrink-0" />
+                )}
+              </div>
+              <p className="text-xs text-[#9CA3AF] mb-2">{tone.description}</p>
+              <p className="text-xs text-[#9CA3AF] italic font-light">{tone.preview}</p>
+            </button>
           )
         })}
       </div>
 
-      {error && (
-        <p role="alert" className="mt-4 text-label font-medium text-danger">
-          {error}
-        </p>
-      )}
+      {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
 
       <StepNav
         backHref="/onboarding/goals"

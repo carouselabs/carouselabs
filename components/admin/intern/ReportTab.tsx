@@ -71,27 +71,27 @@ export function ReportTab({
       </div>
 
       <AdminCard title="Performance Report" className="print:border-none print:bg-white print:text-black">
-        <div className="grid grid-cols-2 gap-4 border-b border-border pb-5 text-label print:border-black/10">
+        <div className="grid grid-cols-2 gap-4 border-b border-[#2A2A2A] pb-5 text-[13px] print:border-black/10">
           <div>
-            <div className="text-caption text-muted-foreground/80 print:text-black/50">Intern</div>
-            <div className="mt-1 font-semibold text-foreground print:text-black">{intern.name}</div>
-            <div className="text-muted-foreground print:text-black/70">{intern.email}</div>
-            <div className="text-muted-foreground print:text-black/70">
+            <div className="text-[11px] uppercase tracking-wide text-[#6A6A6A] print:text-black/50">Intern</div>
+            <div className="mt-1 font-semibold text-white print:text-black">{intern.name}</div>
+            <div className="text-[#8A8A8A] print:text-black/70">{intern.email}</div>
+            <div className="text-[#8A8A8A] print:text-black/70">
               {[intern.role, intern.department].filter(Boolean).join(" · ") || "—"}
             </div>
           </div>
           <div>
-            <div className="text-caption text-muted-foreground/80 print:text-black/50">
+            <div className="text-[11px] uppercase tracking-wide text-[#6A6A6A] print:text-black/50">
               Internship Period
             </div>
-            <div className="mt-1 text-foreground print:text-black">
+            <div className="mt-1 text-white print:text-black">
               {fmtDate(intern.joinDate)} → {fmtDate(intern.endDate)}
             </div>
-            <div className="text-muted-foreground print:text-black/70">
+            <div className="text-[#8A8A8A] print:text-black/70">
               {formatInternshipDuration(new Date(intern.joinDate), new Date(intern.endDate))} · status:{" "}
               {intern.status}
             </div>
-            <div className="text-muted-foreground print:text-black/70">
+            <div className="text-[#8A8A8A] print:text-black/70">
               {intern.progress.isCompleted
                 ? "Ended"
                 : `${intern.progress.percentComplete}% complete, ${intern.progress.daysRemaining} days remaining`}
@@ -99,46 +99,46 @@ export function ReportTab({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 py-5 text-label md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 py-5 text-[13px] md:grid-cols-4">
           <div>
-            <div className="text-caption text-muted-foreground/80 print:text-black/50">
+            <div className="text-[11px] uppercase tracking-wide text-[#6A6A6A] print:text-black/50">
               Total Points
             </div>
-            <div className="mt-1 text-lead font-bold tabular-nums text-foreground print:text-black">
+            <div className="mt-1 text-[20px] font-bold tabular-nums text-white print:text-black">
               {intern.totalPoints}
             </div>
           </div>
           <div>
-            <div className="text-caption text-muted-foreground/80 print:text-black/50">
+            <div className="text-[11px] uppercase tracking-wide text-[#6A6A6A] print:text-black/50">
               Attendance Rate
             </div>
-            <div className="mt-1 text-lead font-bold tabular-nums text-foreground print:text-black">
+            <div className="mt-1 text-[20px] font-bold tabular-nums text-white print:text-black">
               {attendanceRate(attendance)}
             </div>
           </div>
           <div>
-            <div className="text-caption text-muted-foreground/80 print:text-black/50">
+            <div className="text-[11px] uppercase tracking-wide text-[#6A6A6A] print:text-black/50">
               Leave Used
             </div>
-            <div className="mt-1 text-lead font-bold tabular-nums text-foreground print:text-black">
+            <div className="mt-1 text-[20px] font-bold tabular-nums text-white print:text-black">
               {intern.leaveBalance.used}/{intern.leaveBalance.total}
             </div>
           </div>
           <div>
-            <div className="text-caption text-muted-foreground/80 print:text-black/50">
+            <div className="text-[11px] uppercase tracking-wide text-[#6A6A6A] print:text-black/50">
               Leaderboard Rank
             </div>
-            <div className="mt-1 text-lead font-bold tabular-nums text-foreground print:text-black">
+            <div className="mt-1 text-[20px] font-bold tabular-nums text-white print:text-black">
               {intern.rank ? `#${intern.rank}` : "—"}
             </div>
           </div>
         </div>
 
-        <div className="grid gap-6 border-t border-border pt-5 md:grid-cols-2 print:border-black/10">
+        <div className="grid gap-6 border-t border-[#2A2A2A] pt-5 md:grid-cols-2 print:border-black/10">
           <div>
-            <h4 className="mb-3 text-caption font-semibold text-foreground print:text-black">Points by Category</h4>
+            <h4 className="mb-3 text-[12.5px] font-semibold text-white print:text-black">Points by Category</h4>
             {categories.length === 0 ? (
-              <p className="text-caption text-muted-foreground/80">No entries yet.</p>
+              <p className="text-[12.5px] text-[#6A6A6A]">No entries yet.</p>
             ) : (
               <AdminBarChart
                 data={categories}
@@ -151,9 +151,9 @@ export function ReportTab({
             )}
           </div>
           <div>
-            <h4 className="mb-3 text-caption font-semibold text-foreground print:text-black">Points Trend</h4>
+            <h4 className="mb-3 text-[12.5px] font-semibold text-white print:text-black">Points Trend</h4>
             {trend.length === 0 ? (
-              <p className="text-caption text-muted-foreground/80">No entries yet.</p>
+              <p className="text-[12.5px] text-[#6A6A6A]">No entries yet.</p>
             ) : (
               <AdminLineChart
                 data={trend}
@@ -166,18 +166,18 @@ export function ReportTab({
         </div>
 
         {reviewNotes.length > 0 && (
-          <div className="mt-6 border-t border-border pt-5 print:border-black/10">
-            <h4 className="mb-3 text-caption font-semibold text-foreground print:text-black">Review Notes</h4>
+          <div className="mt-6 border-t border-[#2A2A2A] pt-5 print:border-black/10">
+            <h4 className="mb-3 text-[12.5px] font-semibold text-white print:text-black">Review Notes</h4>
             <ul className="space-y-3">
               {reviewNotes.map((n) => (
                 <li
                   key={n.id}
-                  className="rounded-control-sm border border-brand/30 bg-brand/[0.06] p-3.5 print:border-black/20 print:bg-transparent"
+                  className="rounded-lg border border-[#7C3AED]/30 bg-[#7C3AED]/[0.06] p-3.5 print:border-black/20 print:bg-transparent"
                 >
-                  <div className="text-caption text-muted-foreground print:text-black/60">
+                  <div className="text-[11px] text-[#8A8A8A] print:text-black/60">
                     {n.addedBy} · {fmtDateTime(n.createdAt)}
                   </div>
-                  <p className="mt-1.5 whitespace-pre-wrap text-label leading-relaxed text-foreground/90 print:text-black">
+                  <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-relaxed text-[#D0D0D0] print:text-black">
                     {n.content}
                   </p>
                 </li>

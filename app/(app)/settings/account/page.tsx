@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react"
 import { useClerk } from "@clerk/nextjs"
 import { Download, Loader2, ShieldCheck } from "lucide-react"
-import { SettingsHeader } from "@/components/settings/SettingsHeader"
-import { SettingsSection } from "@/components/settings/SettingsSection"
+import { SettingsTabs } from "@/components/settings/SettingsTabs"
 import type { ProfileData } from "@/lib/profile/options"
 
 // Small self-contained toggle switch, same visual language as
@@ -26,8 +25,8 @@ function NotificationToggle({
   return (
     <label className="flex items-center justify-between gap-4 px-4 py-3.5 cursor-pointer">
       <div className="flex flex-col gap-0.5">
-        <span className="text-label font-medium text-foreground">{label}</span>
-        <span className="text-caption text-muted-foreground">{hint}</span>
+        <span className="text-[13px] font-medium text-[#1A1A1A]">{label}</span>
+        <span className="text-[11.5px] text-[#9CA3AF]">{hint}</span>
       </div>
       <button
         type="button"
@@ -36,11 +35,11 @@ function NotificationToggle({
         disabled={disabled}
         onClick={() => onChange(!checked)}
         className={`relative h-6 w-11 flex-shrink-0 rounded-full transition-colors disabled:opacity-50 ${
-          checked ? "bg-brand" : "bg-[#D1D5DB]"
+          checked ? "bg-[#7C3AED]" : "bg-[#D1D5DB]"
         }`}
       >
         <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-surface-raised shadow transition-all ${
+          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
             checked ? "left-[22px]" : "left-0.5"
           }`}
         />
@@ -219,43 +218,44 @@ export default function AccountSettingsPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-8">
-      <SettingsHeader />
+    <div className="max-w-2xl mx-auto flex flex-col gap-8">
+      <SettingsTabs />
 
       {error && (
-        <div className="px-4 py-3 rounded-control bg-danger-soft border border-danger/25 text-label text-danger">
+        <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="h-[88px] rounded-control bg-surface border border-border animate-pulse" />
+        <div className="h-[88px] rounded-xl bg-[#F6F4EE] border border-[#F1EFE9] animate-pulse" />
       ) : (
         <div className="flex flex-col gap-8">
           {/* Account info */}
-          <SettingsSection title="Account">
-<div className="rounded-control border border-border bg-surface divide-y divide-border">
+          <div className="flex flex-col gap-3">
+            <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Account</h2>
+            <div className="rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] divide-y divide-[#E9E7E1]">
               <div className="flex items-center justify-between gap-4 px-4 py-3.5">
-                <span className="text-label text-muted-foreground">Email</span>
-                <span className="text-label text-foreground truncate">{email}</span>
+                <span className="text-[13px] text-[#6B7280]">Email</span>
+                <span className="text-[13px] text-[#0A0A0A] truncate">{email}</span>
               </div>
               <div className="flex items-center justify-between gap-4 px-4 py-3.5">
-                <span className="text-label text-muted-foreground">Plan</span>
+                <span className="text-[13px] text-[#6B7280]">Plan</span>
                 <span
                   className={[
-                    "text-caption font-semibold px-2.5 py-1 rounded-full tracking-wide",
+                    "text-[11px] font-semibold px-2.5 py-1 rounded-full tracking-wide",
                     plan === "GROWTH"
                       ? "text-white bg-gradient-to-r from-[#D97706] to-[#F59E0B]"
                       : plan === "PRO"
-                        ? "text-foreground bg-surface-muted border border-control-border"
-                        : "text-muted-foreground bg-surface-muted border border-border",
+                        ? "text-[#1A1A1A] bg-[rgba(26,26,26,0.14)] border border-[rgba(26,26,26,0.3)]"
+                        : "text-[#4B5563] bg-[#ECEAE4] border border-[#E5E3DE]",
                   ].join(" ")}
                 >
                   {plan === "GROWTH" ? "Growth" : plan === "PRO" ? "Pro" : "Free"}
                 </span>
               </div>
             </div>
-          </SettingsSection>
+          </div>
 
           {/* Security — password + two-factor auth are managed entirely by
               Clerk (openUserProfile opens its own modal with Security tab
@@ -263,43 +263,45 @@ export default function AccountSettingsPage() {
               isn't offered, it needs enabling in the Clerk Dashboard under
               User & Authentication > Multi-factor — that's a config change,
               not code. */}
-          <SettingsSection title="Security">
-<div className="flex items-center justify-between gap-4 p-4 rounded-control border border-border bg-surface">
+          <div className="flex flex-col gap-3">
+            <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Security</h2>
+            <div className="flex items-center justify-between gap-4 p-4 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC]">
               <div className="flex items-center gap-3">
-                <ShieldCheck size={20} className="text-brand flex-shrink-0" strokeWidth={1.8} />
+                <ShieldCheck size={20} className="text-[#7C3AED] flex-shrink-0" strokeWidth={1.8} />
                 <div className="flex flex-col gap-0.5">
-                  <p className="text-label font-medium text-foreground">Password &amp; two-factor authentication</p>
-                  <p className="text-caption text-muted-foreground">Manage your password, 2FA, and active sessions.</p>
+                  <p className="text-[13px] font-medium text-[#1A1A1A]">Password &amp; two-factor authentication</p>
+                  <p className="text-[12px] text-[#9CA3AF]">Manage your password, 2FA, and active sessions.</p>
                 </div>
               </div>
               <button
                 onClick={() => clerk.openUserProfile()}
-                className="inline-flex items-center flex-shrink-0 px-4 py-2 rounded-control-sm border border-border bg-surface-raised hover:bg-surface-muted text-label font-medium text-foreground transition-colors"
+                className="inline-flex items-center flex-shrink-0 px-4 py-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F1EFE9] text-[13px] font-medium text-[#374151] transition-colors"
               >
                 Manage
               </button>
             </div>
-          </SettingsSection>
+          </div>
 
           {/* LinkedIn */}
-          <SettingsSection title="LinkedIn">
+          <div className="flex flex-col gap-3">
+            <h2 className="text-[14px] font-semibold text-[#0A0A0A]">LinkedIn</h2>
 
-{linkedinBanner && (
-              <div className="px-4 py-3 rounded-control bg-[rgba(10,102,194,0.08)] border border-[rgba(10,102,194,0.2)] text-label text-[#0A66C2]">
+            {linkedinBanner && (
+              <div className="px-4 py-3 rounded-xl bg-[rgba(10,102,194,0.08)] border border-[rgba(10,102,194,0.2)] text-[13px] text-[#0A66C2]">
                 {linkedinBanner}
               </div>
             )}
 
-            <div className="flex items-center justify-between gap-4 p-4 rounded-control border border-border bg-surface">
+            <div className="flex items-center justify-between gap-4 p-4 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC]">
               <div className="flex items-center gap-3">
                 <LinkedInIcon size={20} className="text-[#0A66C2] flex-shrink-0" />
                 <div className="flex flex-col gap-0.5">
                   {linkedin?.connected ? (
                     <>
-                      <p className="text-label font-medium text-foreground">
+                      <p className="text-[13px] font-medium text-[#1A1A1A]">
                         Connected as {linkedin.name ?? "LinkedIn user"}
                       </p>
-                      <p className="text-caption text-muted-foreground">
+                      <p className="text-[12px] text-[#9CA3AF]">
                         {linkedin.expired
                           ? "Connection expired — reconnect to keep posting."
                           : "Post your generated images straight to LinkedIn."}
@@ -307,10 +309,10 @@ export default function AccountSettingsPage() {
                     </>
                   ) : (
                     <>
-                      <p className="text-label font-medium text-foreground">
+                      <p className="text-[13px] font-medium text-[#1A1A1A]">
                         Connect your LinkedIn account
                       </p>
-                      <p className="text-caption text-muted-foreground">
+                      <p className="text-[12px] text-[#9CA3AF]">
                         Post generated images and carousels straight to LinkedIn.
                       </p>
                     </>
@@ -323,7 +325,7 @@ export default function AccountSettingsPage() {
                   {linkedin.expired && (
                     <a
                       href="/api/linkedin/connect"
-                      className="inline-flex items-center px-4 py-2 rounded-control-sm text-label font-semibold text-white bg-[#0A66C2] hover:bg-[#004182] transition-colors"
+                      className="inline-flex items-center px-4 py-2 rounded-lg text-[13px] font-semibold text-white bg-[#0A66C2] hover:bg-[#004182] transition-colors"
                     >
                       Reconnect
                     </a>
@@ -331,7 +333,7 @@ export default function AccountSettingsPage() {
                   <button
                     onClick={handleDisconnectLinkedIn}
                     disabled={disconnecting}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-control-sm border border-border bg-surface-muted hover:bg-surface-muted text-label font-medium text-foreground transition-colors disabled:opacity-50"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-[#E5E3DE] bg-[#F1EFE9] hover:bg-[#E9E7E1] text-[13px] font-medium text-[#374151] transition-colors disabled:opacity-50"
                   >
                     {disconnecting && <Loader2 size={14} className="animate-spin" />}
                     {disconnecting ? "Disconnecting…" : "Disconnect"}
@@ -340,18 +342,19 @@ export default function AccountSettingsPage() {
               ) : (
                 <a
                   href="/api/linkedin/connect"
-                  className="inline-flex items-center gap-2 flex-shrink-0 px-4 py-2 rounded-control-sm text-label font-semibold text-white bg-[#0A66C2] hover:bg-[#004182] transition-colors"
+                  className="inline-flex items-center gap-2 flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-semibold text-white bg-[#0A66C2] hover:bg-[#004182] transition-colors"
                 >
                   <LinkedInIcon size={14} />
                   Connect LinkedIn
                 </a>
               )}
             </div>
-          </SettingsSection>
+          </div>
 
           {/* Notifications */}
-          <SettingsSection title="Notifications">
-<div className="rounded-control border border-border bg-surface divide-y divide-border">
+          <div className="flex flex-col gap-3">
+            <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Notifications</h2>
+            <div className="rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] divide-y divide-[#E9E7E1]">
               <NotificationToggle
                 label="Post published"
                 hint="Email me when a scheduled post publishes"
@@ -374,27 +377,28 @@ export default function AccountSettingsPage() {
                 onChange={(v) => void handleToggleNotification("weeklySummary", v)}
               />
             </div>
-          </SettingsSection>
+          </div>
 
           {/* Data */}
-          <SettingsSection title="Your data">
-<div className="flex items-center justify-between gap-4 p-4 rounded-control border border-border bg-surface">
+          <div className="flex flex-col gap-3">
+            <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Your data</h2>
+            <div className="flex items-center justify-between gap-4 p-4 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC]">
               <div className="flex flex-col gap-0.5">
-                <p className="text-label font-medium text-foreground">Export my data</p>
-                <p className="text-caption text-muted-foreground">
+                <p className="text-[13px] font-medium text-[#1A1A1A]">Export my data</p>
+                <p className="text-[12px] text-[#9CA3AF]">
                   Download all your ideas and posts as JSON.
                 </p>
               </div>
               <button
                 onClick={handleExport}
                 disabled={exporting}
-                className="inline-flex items-center gap-2 flex-shrink-0 px-4 py-2 rounded-control-sm border border-border bg-surface-muted hover:bg-surface-muted text-label font-medium text-foreground transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 flex-shrink-0 px-4 py-2 rounded-lg border border-[#E5E3DE] bg-[#F1EFE9] hover:bg-[#E9E7E1] text-[13px] font-medium text-[#374151] transition-colors disabled:opacity-50"
               >
                 {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} strokeWidth={2} />}
                 {exporting ? "Exporting…" : "Export"}
               </button>
             </div>
-          </SettingsSection>
+          </div>
         </div>
       )}
     </div>

@@ -25,15 +25,15 @@ export default async function AdminInternChecklistPage({
     <div className="space-y-6">
       <Link
         href={`/admin/interns/${intern.id}`}
-        className="inline-flex items-center gap-1.5 text-caption text-muted-foreground hover:text-foreground transition-colors"
+        className="inline-flex items-center gap-1.5 text-[12.5px] text-[#8A8A8A] hover:text-white transition-colors"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
         Back to {intern.name}
       </Link>
 
       <div>
-        <h2 className="text-lead font-bold text-foreground">Daily Checklist</h2>
-        <p className="mt-0.5 text-caption text-muted-foreground">
+        <h1 className="text-[18px] font-bold text-white">Daily Checklist</h1>
+        <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">
           {intern.name} · {intern.email}
         </p>
       </div>

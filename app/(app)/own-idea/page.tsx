@@ -3,46 +3,11 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, ArrowRight, Sparkles, Loader2, Pencil, AlertCircle } from "lucide-react"
+import { ArrowLeft, ArrowRight, Sparkles, Loader2, Pencil } from "lucide-react"
 import { countWords, truncateToWords } from "@/lib/wordCount"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 
 const TITLE_WORD_LIMIT = 15
 const STRUCTURE_WORD_LIMIT = 650
-
-/** "n / limit words" under a field; turns amber at the limit. */
-function WordCount({ id, count, limit }: { id: string; count: number; limit: number }) {
-  return (
-    <p
-      id={id}
-      aria-live="polite"
-      className={cn(
-        "self-end text-caption tabular-nums",
-        count >= limit ? "font-medium text-warning" : "text-muted-foreground"
-      )}
-    >
-      {count} / {limit} words
-    </p>
-  )
-}
-
-/** Step number beside each part of the form. */
-function StepMark({ n, done }: { n: number; done?: boolean }) {
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "flex size-7 shrink-0 items-center justify-center rounded-full border text-caption font-semibold tabular-nums",
-        done ? "border-foreground bg-foreground text-background" : "border-border bg-surface text-muted-foreground"
-      )}
-    >
-      {n}
-    </span>
-  )
-}
 
 export default function OwnIdeaPage() {
   const router = useRouter()
@@ -110,16 +75,13 @@ export default function OwnIdeaPage() {
   // ── Loading state ───────────────────────────────────────────────
   if (isGenerating) {
     return (
-      <div
-        role="status"
-        className="mx-auto flex min-h-[60vh] max-w-2xl flex-col items-center justify-center gap-5 text-center"
-      >
-        <div className="size-12 animate-spin rounded-full border-2 border-brand/25 border-t-brand motion-reduce:animate-none" aria-hidden />
+      <div className="max-w-2xl mx-auto flex flex-col items-center justify-center min-h-[60vh] text-center gap-5">
+        <div className="h-12 w-12 rounded-full border-2 border-[rgba(124,58,237,0.25)] border-t-[#7C3AED] animate-spin" />
         <div className="flex flex-col gap-1.5">
-          <p className="text-body-lg font-semibold text-foreground">
+          <p className="text-[15px] font-semibold text-[#1A1A1A]">
             Building your idea…
           </p>
-          <p className="max-w-sm text-label text-muted-foreground">
+          <p className="text-[13px] text-[#9CA3AF] max-w-sm">
             We&apos;re turning your idea into a full breakdown you can generate content from.
           </p>
         </div>
@@ -129,111 +91,119 @@ export default function OwnIdeaPage() {
 
   // ── Form ────────────────────────────────────────────────────────
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-8">
+    <div className="max-w-2xl mx-auto flex flex-col gap-8">
       <Link
         href="/dashboard"
-        className="inline-flex items-center gap-1.5 self-start rounded-detail text-caption font-medium text-muted-foreground transition-colors duration-(--motion-fast) hover:text-foreground"
+        className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
       >
-        <ArrowLeft className="size-3.5" aria-hidden />
+        <ArrowLeft size={13} strokeWidth={2.2} />
         Back to dashboard
       </Link>
 
-      <div className="flex flex-col gap-3">
-        <span className="inline-flex items-center gap-1.5 self-start rounded-full bg-brand-soft px-2.5 py-0.5 text-caption font-semibold text-brand">
-          <Pencil className="size-3" aria-hidden />
+      <div className="flex flex-col gap-2">
+        <span className="self-start inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full tracking-wide text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
+          <Pencil size={11} strokeWidth={2.2} />
           Your own idea
         </span>
-        <h1 className="text-title-sm font-semibold text-balance md:text-title">
+        <h1 className="text-[26px] font-bold text-[#0A0A0A] leading-[1.3] tracking-[-0.01em]">
           What&apos;s your idea about?
         </h1>
-        <p className="text-body text-muted-foreground">
+        <p className="text-[14px] text-[#6B7280] leading-[1.55]">
           Already know what you want to post? Start with a title and we&apos;ll take it from there.
         </p>
       </div>
 
-      <ol className="flex flex-col">
-        {/* ── Step A — Title ─────────────────────────────────────── */}
-        <li className="relative flex gap-4 pb-8">
-          {/* Rail joining the two steps */}
-          <span aria-hidden className="absolute top-8 bottom-1 left-3.5 w-px bg-border" />
-          <StepMark n={1} done={showStructure} />
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <label htmlFor="own-idea-title" className="pt-0.5 text-label font-semibold text-foreground">
-              Give your idea a title
-            </label>
-            <Input
-              id="own-idea-title"
-              type="text"
-              value={title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleContinue()}
-              placeholder="e.g. 5 mistakes founders make when hiring their first team"
-              aria-describedby="own-idea-title-count"
-            />
-            <WordCount id="own-idea-title-count" count={titleWordCount} limit={TITLE_WORD_LIMIT} />
+      {/* ── Step A — Title ─────────────────────────────────────── */}
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-2">
+          <label className="text-[13px] font-medium text-[#374151]">
+            Give your idea a title
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => handleTitleChange(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleContinue()}
+            placeholder="e.g. 5 mistakes founders make when hiring their first team"
+            className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[14px] text-[#0A0A0A] leading-[1.6] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.5)] transition-colors"
+          />
+          <p
+            className={[
+              "text-[11px] tabular-nums self-end",
+              titleWordCount >= TITLE_WORD_LIMIT ? "text-[#D97706] font-medium" : "text-[#ADA99F]",
+            ].join(" ")}
+          >
+            {titleWordCount} / {TITLE_WORD_LIMIT} words
+          </p>
+        </div>
 
-            {!showStructure && (
-              <Button onClick={handleContinue} disabled={!title.trim()} className="self-start">
-                Continue
-                <ArrowRight aria-hidden />
-              </Button>
-            )}
-          </div>
-        </li>
+        {!showStructure && (
+          <button
+            onClick={handleContinue}
+            disabled={!title.trim()}
+            className={[
+              "self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
+              title.trim()
+                ? "bg-[#7C3AED] hover:bg-[#6D28D9] cursor-pointer shadow-[0_0_24px_rgba(124,58,237,0.28)]"
+                : "bg-[rgba(124,58,237,0.3)] cursor-not-allowed opacity-50",
+            ].join(" ")}
+          >
+            Continue
+            <ArrowRight size={14} strokeWidth={2.2} />
+          </button>
+        )}
 
         {/* ── Step B — Structure ─────────────────────────────────── */}
-        <li className="flex gap-4">
-          <StepMark n={2} />
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <h2
-              className={cn(
-                "pt-0.5 text-label font-semibold",
-                showStructure ? "text-foreground" : "text-muted-foreground"
-              )}
-            >
-              {showStructure ? (
-                <label htmlFor="own-idea-structure">Tell us more about your idea</label>
-              ) : (
-                "Tell us more about your idea"
-              )}
-            </h2>
-            {showStructure && (
-              <>
-                <Textarea
-                  id="own-idea-structure"
-                  value={structure}
-                  onChange={(e) => handleStructureChange(e.target.value)}
-                  rows={8}
-                  autoFocus
-                  placeholder="Describe your idea, key points, main argument, examples..."
-                  aria-describedby="own-idea-structure-count"
-                  className="min-h-48 resize-y leading-relaxed"
-                />
-                <WordCount id="own-idea-structure-count" count={wordCount} limit={STRUCTURE_WORD_LIMIT} />
+        {showStructure && (
+          <>
+            <div className="flex flex-col gap-2">
+              <h2 className="text-[16px] font-semibold text-[#0A0A0A]">
+                Tell us more about your idea
+              </h2>
+              <textarea
+                value={structure}
+                onChange={(e) => handleStructureChange(e.target.value)}
+                rows={8}
+                autoFocus
+                placeholder="Describe your idea, key points, main argument, examples..."
+                className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[14px] text-[#0A0A0A] leading-[1.6] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.5)] transition-colors"
+              />
+              <p
+                className={[
+                  "text-[11px] tabular-nums self-end",
+                  wordCount >= STRUCTURE_WORD_LIMIT ? "text-[#D97706] font-medium" : "text-[#ADA99F]",
+                ].join(" ")}
+              >
+                {wordCount} / {STRUCTURE_WORD_LIMIT} words
+              </p>
+            </div>
 
-                {error && (
-                  <div
-                    role="alert"
-                    className="flex items-start gap-3 rounded-control border border-danger/25 bg-danger-soft px-4 py-3 text-label text-danger"
-                  >
-                    <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-                    {error}
-                  </div>
-                )}
-
-                <Button variant="brand" size="lg" onClick={handleGenerate} disabled={!structure.trim()} className="mt-2 self-start">
-                  {isGenerating ? (
-                    <Loader2 className="animate-spin" aria-hidden />
-                  ) : (
-                    <Sparkles aria-hidden />
-                  )}
-                  Generate →
-                </Button>
-              </>
+            {error && (
+              <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
+                {error}
+              </div>
             )}
-          </div>
-        </li>
-      </ol>
+
+            <button
+              onClick={handleGenerate}
+              disabled={!structure.trim()}
+              className={[
+                "self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
+                structure.trim()
+                  ? "bg-[#7C3AED] hover:bg-[#6D28D9] cursor-pointer shadow-[0_0_24px_rgba(124,58,237,0.28)]"
+                  : "bg-[rgba(124,58,237,0.3)] cursor-not-allowed opacity-50",
+              ].join(" ")}
+            >
+              {isGenerating ? (
+                <Loader2 size={14} className="animate-spin" strokeWidth={2} />
+              ) : (
+                <Sparkles size={14} strokeWidth={2} />
+              )}
+              Generate →
+            </button>
+          </>
+        )}
+      </div>
     </div>
   )
 }

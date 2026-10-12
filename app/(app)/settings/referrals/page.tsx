@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Copy, Check, Users, TrendingUp, Wallet, DollarSign, Info } from "lucide-react"
-import { SettingsHeader } from "@/components/settings/SettingsHeader"
-import { SettingsSection } from "@/components/settings/SettingsSection"
+import { SettingsTabs } from "@/components/settings/SettingsTabs"
 import { SavedToast } from "@/components/settings/SavedToast"
 
 interface ReferralPayoutRow {
@@ -46,13 +45,13 @@ function StatTile({
   hint?: string
 }) {
   return (
-    <div className="flex flex-col gap-2 p-4 rounded-control border border-border bg-surface">
-      <div className="flex items-center gap-2 text-muted-foreground">
+    <div className="flex flex-col gap-2 p-4 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC]">
+      <div className="flex items-center gap-2 text-[#9CA3AF]">
         {icon}
-        <span className="text-caption font-medium">{label}</span>
+        <span className="text-[11px] font-medium uppercase tracking-wide">{label}</span>
       </div>
-      <p className="text-title-sm font-bold text-foreground tabular-nums leading-none">{value}</p>
-      {hint && <p className="text-caption text-muted-foreground">{hint}</p>}
+      <p className="text-[22px] font-bold text-[#0A0A0A] tabular-nums leading-none">{value}</p>
+      {hint && <p className="text-[11px] text-[#9CA3AF]">{hint}</p>}
     </div>
   )
 }
@@ -121,11 +120,11 @@ export default function ReferralsSettingsPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-8">
-      <SettingsHeader />
+    <div className="max-w-2xl mx-auto flex flex-col gap-8">
+      <SettingsTabs />
 
       {error && (
-        <div className="px-4 py-3 rounded-control bg-danger-soft border border-danger/25 text-label text-danger">
+        <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
           {error}
         </div>
       )}
@@ -133,30 +132,34 @@ export default function ReferralsSettingsPage() {
       {loading ? (
         <div className="flex flex-col gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-[64px] rounded-control bg-surface border border-border animate-pulse" />
+            <div key={i} className="h-[64px] rounded-xl bg-[#F6F4EE] border border-[#F1EFE9] animate-pulse" />
           ))}
         </div>
       ) : (
         stats && (
           <div className="flex flex-col gap-8">
             {/* Referral link */}
-            <SettingsSection title="Your Referral Link" description="Share this link — anyone who signs up through it gets attributed to you.">
+            <div className="flex flex-col gap-2">
+              <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Your Referral Link</h2>
+              <p className="text-[12.5px] text-[#9CA3AF]">
+                Share this link — anyone who signs up through it gets attributed to you.
+              </p>
               <div className="flex items-center gap-2">
                 <input
                   readOnly
                   value={stats.referralLink}
                   onFocus={(e) => e.target.select()}
-                  className="flex-1 min-w-0 px-4 py-2.5 rounded-control border border-border bg-surface text-label text-foreground truncate focus:outline-none"
+                  className="flex-1 min-w-0 px-4 py-2.5 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] truncate focus:outline-none"
                 />
                 <button
                   onClick={handleCopy}
-                  className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-control bg-primary hover:bg-primary-hover text-label font-semibold text-white transition-colors"
+                  className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#1A1A1A] hover:bg-[#000000] text-[13px] font-semibold text-white transition-colors"
                 >
                   {copied ? <Check size={14} /> : <Copy size={14} />}
                   {copied ? "Copied!" : "Copy"}
                 </button>
               </div>
-            </SettingsSection>
+            </div>
 
             {/* Stats */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -190,10 +193,10 @@ export default function ReferralsSettingsPage() {
             </div>
 
             {/* How payouts work */}
-            <div className="flex items-start gap-3 p-4 rounded-control bg-brand-soft border border-brand/25">
-              <Info size={16} className="text-brand flex-shrink-0 mt-0.5" strokeWidth={2} />
-              <p className="text-caption text-muted-foreground leading-[1.6]">
-                <strong className="text-foreground">How payouts work:</strong> Once your pending
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-[rgba(124,58,237,0.04)] border border-[rgba(124,58,237,0.18)]">
+              <Info size={16} className="text-[#7C3AED] flex-shrink-0 mt-0.5" strokeWidth={2} />
+              <p className="text-[12.5px] text-[#4B5563] leading-[1.6]">
+                <strong className="text-[#0A0A0A]">How payouts work:</strong> Once your pending
                 commission reaches a reasonable amount, our team will reach out to arrange payment
                 via bank transfer or PayPal. Payouts are processed manually — if you have questions
                 about your balance, contact us.
@@ -201,18 +204,25 @@ export default function ReferralsSettingsPage() {
             </div>
 
             {/* Payout details */}
-            <SettingsSection title="Payout Details" description={stats.pendingBalance > 0 && !stats.payoutDetails
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Payout Details</h2>
+                <p className="text-[12.5px] text-[#9CA3AF]">
+                  {stats.pendingBalance > 0 && !stats.payoutDetails
                     ? "You have a pending balance — add your payout details so we know where to send it."
-                    : "Optional — tell us how you'd like to be paid when it's time."}>
-              <div className="flex flex-col gap-3 p-4 rounded-control border border-border bg-surface">
+                    : "Optional — tell us how you'd like to be paid when it's time."}
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3 p-4 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC]">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-caption font-medium text-muted-foreground">
+                  <label className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wide">
                     Method
                   </label>
                   <select
                     value={payoutMethod}
                     onChange={(e) => setPayoutMethod(e.target.value as "bank" | "paypal")}
-                    className="w-full sm:w-48 px-3.5 py-2.5 rounded-control-sm border border-border bg-surface-raised text-label text-foreground focus:outline-none focus:border-foreground transition-colors"
+                    className="w-full sm:w-48 px-3.5 py-2.5 rounded-lg border border-[#E5E3DE] bg-white text-[13px] text-[#0A0A0A] focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors"
                   >
                     <option value="paypal">PayPal</option>
                     <option value="bank">Bank Transfer</option>
@@ -220,7 +230,7 @@ export default function ReferralsSettingsPage() {
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-caption font-medium text-muted-foreground">
+                  <label className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wide">
                     {payoutMethod === "paypal" ? "PayPal Email" : "Bank Account Details"}
                   </label>
                   <textarea
@@ -233,38 +243,39 @@ export default function ReferralsSettingsPage() {
                         ? "you@example.com"
                         : "Account holder name, account/IBAN number, bank name, SWIFT/routing code…"
                     }
-                    className="w-full px-3.5 py-2.5 rounded-control-sm border border-border bg-surface-raised text-label text-foreground leading-[1.55] resize-y placeholder:text-muted-foreground focus:outline-none focus:border-foreground transition-colors"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-[#E5E3DE] bg-white text-[13px] text-[#374151] leading-[1.55] resize-y placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors"
                   />
                 </div>
 
                 {payoutError && (
-                  <p className="text-caption text-danger">{payoutError}</p>
+                  <p className="text-[12px] text-[rgba(239,68,68,0.9)]">{payoutError}</p>
                 )}
 
                 <button
                   onClick={handleSavePayoutDetails}
                   disabled={!payoutDetails.trim() || savingPayout}
-                  className="self-start px-4 py-2 rounded-control-sm bg-primary hover:bg-primary-hover text-caption font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="self-start px-4 py-2 rounded-lg bg-[#1A1A1A] hover:bg-[#000000] text-[12px] font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {savingPayout ? "Saving…" : "Save"}
                 </button>
-                <p className="text-caption text-muted-foreground">
+                <p className="text-[11px] text-[#ADA99F]">
                   Only our team can see this — used solely to arrange your payout.
                 </p>
               </div>
-            </SettingsSection>
+            </div>
 
             {/* Payout history */}
-            <SettingsSection title="Payout History">
-{stats.payouts.length === 0 ? (
-                <p className="text-label text-muted-foreground">No payouts recorded yet.</p>
+            <div className="flex flex-col gap-3">
+              <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Payout History</h2>
+              {stats.payouts.length === 0 ? (
+                <p className="text-[13px] text-[#9CA3AF]">No payouts recorded yet.</p>
               ) : (
-                <div className="rounded-control border border-border bg-surface divide-y divide-border">
+                <div className="rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] divide-y divide-[#E9E7E1]">
                   {stats.payouts.map((p) => (
                     <div key={p.id} className="flex items-center justify-between gap-4 px-4 py-3.5">
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-label font-medium text-foreground">{fmtMoney(p.amount)}</span>
-                        <span className="text-caption text-muted-foreground">
+                        <span className="text-[13px] font-medium text-[#0A0A0A]">{fmtMoney(p.amount)}</span>
+                        <span className="text-[11px] text-[#9CA3AF]">
                           {fmtDate(p.createdAt)}
                           {p.method ? ` · ${p.method}` : ""}
                         </span>
@@ -273,7 +284,7 @@ export default function ReferralsSettingsPage() {
                   ))}
                 </div>
               )}
-            </SettingsSection>
+            </div>
           </div>
         )
       )}

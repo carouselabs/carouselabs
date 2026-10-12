@@ -26,14 +26,14 @@ export function UpgradeRequiredBanner({ show }: { show: boolean }) {
   if (!show) return null
 
   return (
-    <div role="status" className="flex shrink-0 items-center gap-3 border-b border-warning/25 bg-warning-soft px-4 py-2.5 text-label text-foreground">
-      <AlertTriangle size={16} className="shrink-0 text-warning" aria-hidden />
-      <p className="min-w-0 flex-1 font-medium">
+    <div className="flex items-center gap-3 px-4 py-2.5 bg-[rgba(217,119,6,0.1)] border-b border-[rgba(217,119,6,0.3)] text-[13px] text-[#0A0A0A]">
+      <AlertTriangle size={15} className="text-[#D97706] flex-shrink-0" />
+      <p className="flex-1 min-w-0 font-medium">
         You&apos;ve used all your free credits! Upgrade to Pro or Growth to keep creating.
       </p>
       <Link
         href="/settings/billing"
-        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-control-sm bg-warning px-3 text-caption font-semibold text-warning-soft transition-colors duration-(--motion-fast) hover:bg-[color-mix(in_oklab,var(--warning),var(--foreground)_18%)]"
+        className="flex-shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#D97706] hover:bg-[#B45309] text-[12.5px] font-semibold text-white transition-colors"
       >
         Upgrade Now
         <NavigatingIndicator />

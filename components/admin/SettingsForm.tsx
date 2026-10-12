@@ -2,9 +2,8 @@
 
 // /admin/settings — app-level settings form backed by /api/admin/settings.
 import { useEffect, useState } from "react"
-import { AdminButton, AdminInput, Spinner } from "@/components/admin/ui"
+import { AdminButton, AdminCard, AdminInput, Spinner } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
-import { SettingsSection } from "@/components/settings/SettingsSection"
 import type { AppSettings } from "@/lib/appSettings"
 
 function Toggle({
@@ -19,10 +18,10 @@ function Toggle({
   hint?: string
 }) {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-4 rounded-control-sm border border-border bg-background px-4 py-3">
+    <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-[#2A2A2A] bg-[#141414] px-4 py-3">
       <div>
-        <div className="text-label font-medium text-foreground">{label}</div>
-        {hint && <div className="mt-0.5 text-caption text-muted-foreground/80">{hint}</div>}
+        <div className="text-[13px] font-medium text-white">{label}</div>
+        {hint && <div className="mt-0.5 text-[11.5px] text-[#6A6A6A]">{hint}</div>}
       </div>
       <button
         type="button"
@@ -30,12 +29,12 @@ function Toggle({
         aria-checked={checked}
         onClick={() => onChange(!checked)}
         className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-          checked ? "bg-brand" : "bg-surface-raised"
+          checked ? "bg-[#7C3AED]" : "bg-[#2A2A2A]"
         }`}
       >
         <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full transition-all ${
-            checked ? "left-[22px] bg-brand-foreground" : "left-0.5 bg-muted-foreground"
+          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
+            checked ? "left-[22px]" : "left-0.5"
           }`}
         />
       </button>
@@ -69,7 +68,7 @@ export function SettingsForm() {
     step?: string,
   ) => (
     <div className="space-y-1.5">
-      <label className="text-caption font-semibold text-muted-foreground">
+      <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
         {label}
       </label>
       <AdminInput
@@ -112,21 +111,21 @@ export function SettingsForm() {
   }
 
   return (
-    <div className="flex max-w-5xl flex-col gap-8">
-      <SettingsSection title="Plans & Pricing">
+    <div className="max-w-2xl space-y-6">
+      <AdminCard title="Plans & Pricing">
         <div className="grid gap-4 sm:grid-cols-3">
           {numField("Pro price (USD/month)", "planPrice", "0.01")}
           {numField("Free plan credit limit", "freePostLimit")}
           {numField("Pro monthly credits", "proCredits")}
         </div>
-        <p className="mt-3 text-caption text-muted-foreground/80">
+        <p className="mt-3 text-[11px] text-[#6A6A6A]">
           Stored in the AppSetting table. Note: the credit engine currently reads its limits from
           code constants (lib/credits.ts) — wire it to these values when you&apos;re ready to make
           them live.
         </p>
-      </SettingsSection>
+      </AdminCard>
 
-      <SettingsSection title="Feature Flags">
+      <AdminCard title="Feature Flags">
         <div className="space-y-3">
           <Toggle
             label="Carousels for free users"
@@ -147,7 +146,7 @@ export function SettingsForm() {
             onChange={(v) => set("maintenanceMode", v)}
           />
         </div>
-      </SettingsSection>
+      </AdminCard>
 
       <AdminButton onClick={save} loading={saving}>
         Save Settings

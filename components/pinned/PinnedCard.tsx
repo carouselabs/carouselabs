@@ -2,11 +2,15 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { ArrowRight } from "lucide-react"
+import { Bookmark, ArrowRight } from "lucide-react"
 import type { RawCategory } from "@/lib/ai/parsers/ideas"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { CATEGORY_PILL, PILL } from "@/components/shared/categoryTone"
+
+const CATEGORY_COLORS: Record<RawCategory, { color: string; bg: string }> = {
+  "Latest News": { color: "#2563EB", bg: "rgba(147,197,253,0.10)" }, // blue
+  "Trending": { color: "#059669", bg: "rgba(110,231,183,0.10)" }, // green
+  "Industry": { color: "#1A1A1A", bg: "rgba(196,181,253,0.10)" }, // purple
+  "Random": { color: "#D97706", bg: "rgba(252,211,77,0.10)" }, // amber
+}
 
 export interface PinnedIdea {
   id: string
@@ -33,30 +37,50 @@ interface PinnedCardProps {
 
 export function PinnedCard({ idea, onRemove }: PinnedCardProps) {
   const router = useRouter()
+  const cat = CATEGORY_COLORS[idea.category]
 
   return (
-    <div className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:gap-8">
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        {/* Category + pinned time */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className={cn(PILL, CATEGORY_PILL[idea.category])}>{idea.category}</span>
-          <span className="text-caption text-muted-foreground">{pinnedAgo(idea.pinnedAt)}</span>
-        </div>
-
-        {/* Hook — the focal point */}
-        <h3 className="text-body font-semibold text-pretty text-foreground md:text-body-lg">
-          {idea.hook}
-        </h3>
+    <div className="group relative flex flex-col gap-4 p-5 rounded-2xl border border-[#E5E3DE] bg-[#F4F2EC] hover:border-[rgba(26,26,26,0.35)] hover:bg-[rgba(26,26,26,0.04)] transition-all duration-150">
+      {/* Top: category pill + pin marker */}
+      <div className="flex items-start justify-between gap-3">
+        <span
+          className="text-[11px] font-semibold px-2.5 py-1 rounded-full tracking-wide"
+          style={{ color: cat.color, backgroundColor: cat.bg }}
+        >
+          {idea.category}
+        </span>
+        <Bookmark size={15} className="text-[#1A1A1A] flex-shrink-0" fill="#1A1A1A" strokeWidth={1.8} />
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={() => onRemove(idea.id)} className="text-muted-foreground hover:text-foreground">
-          Remove
-        </Button>
-        <Button size="sm" onClick={() => router.push(`/idea/${idea.id}`)}>
-          Generate now
-          <ArrowRight aria-hidden />
-        </Button>
+      {/* Hook — the focal point */}
+      <h3 className="text-[17px] font-semibold text-[#0A0A0A] leading-[1.4] tracking-[-0.2px]">
+        {idea.hook}
+      </h3>
+
+      {/* Divider */}
+      <div className="h-px bg-[#ECEAE4] mt-auto" />
+
+      {/* Footer: pinned time + actions */}
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[11.5px] text-[#9CA3AF]">
+          {pinnedAgo(idea.pinnedAt)}
+        </span>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onRemove(idea.id)}
+            className="px-3 py-1.5 rounded-lg text-[12px] font-medium text-[#9CA3AF] hover:text-[#374151] hover:bg-[#ECEAE4] transition-colors"
+          >
+            Remove
+          </button>
+          <button
+            onClick={() => router.push(`/idea/${idea.id}`)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#1A1A1A] hover:bg-[#000000] text-[12px] font-semibold text-white shadow-[0_0_18px_rgba(26,26,26,0.2)] transition-colors"
+          >
+            Generate now
+            <ArrowRight size={12} strokeWidth={2.4} />
+          </button>
+        </div>
       </div>
     </div>
   )

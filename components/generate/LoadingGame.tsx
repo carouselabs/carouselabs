@@ -91,60 +91,58 @@ export function LoadingGame() {
   const targetPct = target !== null ? (target / 5) * 100 : null
 
   return (
-    <div className="flex flex-col gap-4 rounded-card border border-border bg-surface p-5 shadow-card">
-      <p className="text-center text-caption text-muted-foreground">Your image is generating. Play while you wait!</p>
-      <p className="text-center text-caption font-medium text-warning">🎁 Win the most unique prize in the world — stop on the EXACT same number!</p>
+    <div className="flex flex-col gap-4 p-6 rounded-2xl border border-[#E5E3DE] bg-[#F6F4EE]">
+      <p className="text-[12px] text-[#9CA3AF] text-center">Your image is generating. Play while you wait!</p>
+      <p className="text-[11px] text-[#F59E0B] text-center font-medium">🎁 Win the most unique prize in the world — stop on the EXACT same number!</p>
 
       <div className="text-center">
-        <p className="mb-1 text-caption text-muted-foreground">
+        <p className="text-[10px] text-[#9CA3AF] uppercase tracking-widest mb-1">
           {phase === 'set' ? 'Round 1 — Set your target (0.00 - 5.00)' : `Attempt ${attempt + 1} of 3 — Match ${target?.toFixed(2)}`}
         </p>
-        <div className="text-[56px] font-semibold leading-none tracking-[-0.03em] text-foreground tabular-nums">
+        <div className="text-[64px] font-bold text-[#0A0A0A] tabular-nums leading-none">
           {current.toFixed(2)}
         </div>
       </div>
 
-      <div className="relative h-2 overflow-hidden rounded-full bg-surface-muted">
-        <div className="h-full rounded-full bg-foreground transition-none" style={{ width: pct + '%' }} />
+      <div className="relative h-2 rounded-full bg-[#E5E3DE] overflow-hidden">
+        <div className="h-full rounded-full bg-[#1A1A1A] transition-none" style={{ width: pct + '%' }} />
         {targetPct !== null && (
-          <div className="absolute top-0 h-full w-0.5 bg-danger" style={{ left: targetPct + '%' }} />
+          <div className="absolute top-0 h-full w-0.5 bg-red-400" style={{ left: targetPct + '%' }} />
         )}
       </div>
 
       {diff !== null && (
-        <p role="status" className={`text-center text-label ${diff === 0 ? 'text-success' : 'text-danger'}`}>
+        <p className="text-center text-[13px]" style={{ color: diff === 0 ? '#10B981' : '#EF4444' }}>
           {diff === 0 ? '🎉 Perfect!' : `You stopped at ${lastStopped?.toFixed(2)} — ${diff.toFixed(2)} off`}
         </p>
       )}
 
-      <div className="flex justify-center gap-2" aria-hidden>
+      <div className="flex gap-2 justify-center">
         {dots.map((d, i) => (
-          <div
-            key={i}
-            className={`size-2.5 rounded-full border ${d === 'win' ? 'border-success bg-success' : d === 'fail' ? 'border-danger bg-danger' : 'border-control-border bg-surface-muted'}`}
-          />
+          <div key={i} className="w-2.5 h-2.5 rounded-full border border-[#C4C0B6]"
+            style={{ background: d === 'win' ? '#10B981' : d === 'fail' ? '#EF4444' : '#E5E3DE' }} />
         ))}
       </div>
 
       {gameState === 'playing' && (
-        <button type="button" onClick={handleStop}
-          className="w-full rounded-control bg-primary py-4 text-body-lg font-bold text-primary-foreground transition-colors duration-(--motion-fast) hover:bg-primary-hover">
+        <button onClick={handleStop}
+          className="w-full py-4 rounded-xl text-[15px] font-bold text-white bg-[#1A1A1A] hover:bg-[#000000] transition-colors">
           STOP
         </button>
       )}
 
       {gameState === 'won' && (
-        <div className="flex flex-col gap-2 text-center">
-          <p className="text-body font-bold text-success">🎉 You won the most unique prize in the world!</p>
-          <p className="text-caption text-muted-foreground">Our team will contact you on your registered email. Stay tuned!</p>
+        <div className="text-center flex flex-col gap-2">
+          <p className="text-[#10B981] font-bold text-[15px]">🎉 You won the most unique prize in the world!</p>
+          <p className="text-[12px] text-[#9CA3AF]">Our team will contact you on your registered email. Stay tuned!</p>
         </div>
       )}
 
       {gameState === 'lost' && (
-        <div className="flex flex-col gap-2 text-center">
-          <p className="text-label text-foreground">No attempts left!</p>
-          <button type="button" onClick={resetGame}
-            className="w-full rounded-control border border-control-border bg-surface py-3 text-label font-medium text-foreground transition-colors duration-(--motion-fast) hover:bg-surface-muted">
+        <div className="text-center flex flex-col gap-2">
+          <p className="text-[#4B5563] text-[13px]">No attempts left!</p>
+          <button onClick={resetGame}
+            className="w-full py-3 rounded-xl text-[13px] font-medium text-[#1A1A1A] border border-[#E5E3DE] hover:bg-[#ECEAE4]">
             Try Again
           </button>
         </div>

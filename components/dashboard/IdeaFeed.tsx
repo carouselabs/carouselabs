@@ -1,10 +1,8 @@
 "use client"
 
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
+import { AnimatePresence, motion } from "framer-motion"
 import { Loader2, RefreshCw } from "lucide-react"
 import { IdeaCard } from "./IdeaCard"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
 import type { SessionIdea } from "@/lib/store/ideaSessionStore"
 
 const SESSION_CAP = 30
@@ -13,103 +11,93 @@ interface IdeaFeedProps {
   // All ideas in the session (including dismissed) — used for cap calculation
   ideas: SessionIdea[]
   isLoadingMore: boolean
-  selectedId: string | null
-  onSelect: (id: string, viaKeyboard: boolean) => boolean
   onLoadMore: () => void
   onPin: (id: string) => void
   onDismiss: (id: string) => void
 }
 
-/** Placeholder rows in the list's own shape while ideas are on their way. */
-export function IdeaRowsSkeleton({ count }: { count: number }) {
-  return (
-    <>
-      {Array.from({ length: count }, (_, i) => (
-        <li key={i} className="flex gap-4 border-t border-border py-5" aria-hidden>
-          <Skeleton className="h-5 w-6" />
-          <div className="flex flex-1 flex-col gap-2">
-            <Skeleton className="h-3 w-32" />
-            <Skeleton className="h-5 w-full" />
-            <Skeleton className="h-5 w-2/3" />
-          </div>
-        </li>
-      ))}
-    </>
-  )
-}
-
-export function IdeaFeed({ ideas, isLoadingMore, selectedId, onSelect, onLoadMore, onPin, onDismiss }: IdeaFeedProps) {
-  const reduceMotion = useReducedMotion()
+export function IdeaFeed({ ideas, isLoadingMore, onLoadMore, onPin, onDismiss }: IdeaFeedProps) {
   const visible = ideas.filter((i) => !i.isDismissed)
   const total = ideas.length
   const atCap = total >= SESSION_CAP
 
   return (
-    <div className="flex flex-col">
-      <ol aria-label="Ideas" className="flex flex-col">
-        <AnimatePresence initial={!reduceMotion} mode="popLayout">
-          {visible.map((idea, i) => (
-            <motion.li
-              key={idea.id}
-              layout={reduceMotion ? false : "position"}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, transition: { duration: 0.12 } }}
-              transition={{
-                duration: reduceMotion ? 0 : 0.32,
-                ease: [0.22, 1, 0.36, 1],
-                // Stagger per batch: each idea arrives a beat after the previous
-                delay: reduceMotion ? 0 : idea.batchPosition * 0.04,
+    <div className="flex flex-col gap-3">
+      <AnimatePresence mode="popLayout">
+        {visible.map((idea, i) => (
+          <motion.div
+            key={idea.id}
+            layout
+            style={{ transformPerspective: 900 }}
+            initial={{ opacity: 0, y: -55, rotateX: -30, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95, y: 12, transition: { duration: 0.15 } }}
+            transition={{
+              type: "spring",
+              stiffness: 280,
+              damping: 22,
+              // Stagger per batch: each idea drops in a beat after the previous
+              delay: idea.batchPosition * 0.07,
+            }}
+          >
+            {/* Inner wrapper does a gentle, perpetual bob (separate transform
+                context from the drop-in above, so they never fight) */}
+            <div
+              style={{
+                animation: `floatSoft ${3.4 + (i % 4) * 0.4}s ease-in-out infinite ${(i % 5) * 0.25}s`,
               }}
             >
-              <IdeaCard
-                idea={idea}
-                number={i + 1}
-                isSelected={idea.id === selectedId}
-                onSelect={onSelect}
-                onPin={onPin}
-                onDismiss={onDismiss}
-              />
-            </motion.li>
+              <IdeaCard idea={idea} onPin={onPin} onDismiss={onDismiss} />
+            </div>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+
+      {/* Loading more skeleton rows */}
+      {isLoadingMore && (
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-[88px] rounded-xl bg-[#F6F4EE] border border-[#F1EFE9] animate-pulse"
+            />
           ))}
-        </AnimatePresence>
+        </div>
+      )}
 
-        {/* Loading more skeleton rows */}
-        {isLoadingMore && <IdeaRowsSkeleton count={3} />}
-      </ol>
+      {/* Load More button */}
+      {!atCap && total > 0 && !isLoadingMore && (
+        <button
+          onClick={onLoadMore}
+          className="mt-2 flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-[#E9E7E1] text-[13px] font-medium text-[#6B7280] hover:border-[#DEDBD4] hover:text-[#374151] hover:bg-[#F6F4EE] transition-all duration-150"
+        >
+          <RefreshCw size={13} strokeWidth={2.2} />
+          Load more ideas
+          <span className="text-[#ADA99F] text-[11px] tabular-nums">
+            {total} / {SESSION_CAP}
+          </span>
+        </button>
+      )}
 
-      <div className="flex flex-col items-start gap-2 border-t border-border pt-5">
-        {/* Load More button */}
-        {!atCap && total > 0 && !isLoadingMore && (
-          <Button variant="outline" onClick={onLoadMore}>
-            <RefreshCw aria-hidden />
-            Load more ideas
-            <span className="text-caption font-normal text-muted-foreground tabular-nums">
-              {total} / {SESSION_CAP}
-            </span>
-          </Button>
-        )}
+      {/* Spinner while loading more (bottom of existing list) */}
+      {isLoadingMore && (
+        <div className="flex items-center justify-center gap-2 py-2 text-[12px] text-[#ADA99F]">
+          <Loader2 size={13} className="animate-spin" />
+          Generating more ideas…
+        </div>
+      )}
 
-        {/* Spinner while loading more (bottom of existing list) */}
-        {isLoadingMore && (
-          <p role="status" className="flex items-center gap-2 text-label text-muted-foreground">
-            <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-            Generating more ideas…
+      {/* Session cap message */}
+      {atCap && !isLoadingMore && (
+        <div className="mt-2 flex flex-col items-center gap-1 py-4 text-center">
+          <p className="text-[13px] text-[#9CA3AF]">
+            You&apos;ve reached the {SESSION_CAP}-idea session limit.
           </p>
-        )}
-
-        {/* Session cap message */}
-        {atCap && !isLoadingMore && (
-          <div className="flex flex-col gap-0.5">
-            <p className="text-label text-foreground">
-              You&apos;ve reached the {SESSION_CAP}-idea session limit.
-            </p>
-            <p className="text-label text-muted-foreground">
-              Click &ldquo;New session&rdquo; in the top bar to start fresh.
-            </p>
-          </div>
-        )}
-      </div>
+          <p className="text-[12px] text-[#ADA99F]">
+            Click &ldquo;New session&rdquo; in the top bar to start fresh.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

@@ -253,23 +253,22 @@ export function BroadcastComposer() {
   }
 
   return (
-    // Compose on the left; what was sent beside it on wide screens.
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start">
-      <div className="flex justify-end xl:col-span-2">
+    <div className="max-w-3xl space-y-6">
+      <div className="flex justify-end">
         <Link
           href="/admin/scheduled-emails"
-          className="inline-flex items-center gap-1.5 text-caption font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#8A8A8A] hover:text-white transition-colors"
         >
           <CalendarClock className="h-3.5 w-3.5" />
           View Scheduled Emails
         </Link>
       </div>
 
-      <AdminCard title="Compose Broadcast" className="min-w-0">
+      <AdminCard title="Compose Broadcast">
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-caption font-semibold text-muted-foreground">When</label>
-            <div className="flex w-fit rounded-control-sm border border-border bg-background p-1">
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">When</label>
+            <div className="flex w-fit rounded-lg border border-[#2A2A2A] bg-[#141414] p-1">
               {(
                 [
                   { key: "now", label: "Send Now" },
@@ -277,11 +276,10 @@ export function BroadcastComposer() {
                 ] as const
               ).map((opt) => (
                 <button
-                  aria-pressed={sendMode === opt.key}
                   key={opt.key}
                   onClick={() => setSendMode(opt.key)}
-                  className={`rounded-md px-3 py-1.5 text-caption font-semibold transition-colors ${
-                    sendMode === opt.key ? "bg-surface-raised text-foreground shadow-card" : "text-muted-foreground hover:text-foreground"
+                  className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                    sendMode === opt.key ? "bg-[#7C3AED] text-white" : "text-[#8A8A8A] hover:text-white"
                   }`}
                 >
                   {opt.label}
@@ -300,7 +298,7 @@ export function BroadcastComposer() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-caption font-semibold text-muted-foreground">To</label>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">To</label>
             <div className="flex flex-wrap items-center gap-2">
               <AdminSelect
                 value={audience}
@@ -326,13 +324,13 @@ export function BroadcastComposer() {
               )}
             </div>
             {selectedSegment?.needsValue && (
-              <p className="text-caption text-muted-foreground/80">Defaults to {selectedSegment.valuePlaceholder} if left blank.</p>
+              <p className="text-[11px] text-[#6A6A6A]">Defaults to {selectedSegment.valuePlaceholder} if left blank.</p>
             )}
           </div>
 
           {audience === "custom" && (
             <div className="space-y-1.5">
-              <label className="text-caption font-semibold text-muted-foreground">
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
                 Emails (comma-separated)
               </label>
               <textarea
@@ -340,15 +338,15 @@ export function BroadcastComposer() {
                 onChange={(e) => setCustomList(e.target.value)}
                 rows={2}
                 placeholder="user1@email.com, user2@email.com"
-                className="w-full rounded-control-sm border border-border bg-background p-3 text-label text-foreground placeholder:text-muted-foreground/80 outline-none focus:border-brand"
+                className="w-full rounded-lg border border-[#2A2A2A] bg-[#141414] p-3 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED]"
               />
-              <p className="text-caption text-muted-foreground/80">{parseCustomList(customList).length} email(s) parsed</p>
+              <p className="text-[11px] text-[#6A6A6A]">{parseCustomList(customList).length} email(s) parsed</p>
             </div>
           )}
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-caption font-semibold text-muted-foreground">Subject</label>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">Subject</label>
               <div className="flex items-center gap-3">
                 <TemplatePicker
                   currentSubject={subject}
@@ -362,22 +360,22 @@ export function BroadcastComposer() {
                 <button
                   type="button"
                   onClick={() => setShowVariableMenu((v) => !v)}
-                  className="inline-flex items-center gap-1 text-caption font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-[#8A8A8A] hover:text-white transition-colors"
                 >
                   <Braces className="h-3 w-3" />
                   Insert Variable
                 </button>
                 {showVariableMenu && (
-                  <div className="absolute right-0 z-10 mt-1 w-64 rounded-card border border-border bg-surface shadow-dialog py-1">
+                  <div className="absolute right-0 z-10 mt-1 w-64 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] shadow-2xl py-1">
                     {AVAILABLE_VARIABLES.map((v) => (
                       <button
                         key={v.key}
                         type="button"
                         onClick={() => insertVariable(v.key)}
-                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-surface-muted transition-colors"
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[#232323] transition-colors"
                       >
-                        <span className="text-caption font-medium text-foreground">{`{{${v.key}}}`}</span>
-                        <span className="text-caption text-muted-foreground/80">{v.label}</span>
+                        <span className="text-[12.5px] font-medium text-white">{`{{${v.key}}}`}</span>
+                        <span className="text-[11px] text-[#6A6A6A]">{v.label}</span>
                       </button>
                     ))}
                   </div>
@@ -396,8 +394,8 @@ export function BroadcastComposer() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-caption font-semibold text-muted-foreground">
-              Body <span className="font-normal normal-case text-muted-foreground/80">— **bold**, *italic*, [link](https://…)</span>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+              Body <span className="font-normal normal-case text-[#6A6A6A]">— **bold**, *italic*, [link](https://…)</span>
             </label>
             <textarea
               ref={bodyRef}
@@ -406,10 +404,10 @@ export function BroadcastComposer() {
               onFocus={() => setLastFocused("body")}
               rows={8}
               placeholder="Write your announcement…"
-              className="w-full rounded-control-sm border border-border bg-background p-3 text-label text-foreground placeholder:text-muted-foreground/80 outline-none focus:border-brand"
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#141414] p-3 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED]"
             />
-            <p className="text-caption text-muted-foreground/80">
-              Use <code className="text-muted-foreground">{"{{firstName}}"}</code> etc. — see Insert
+            <p className="text-[11px] text-[#6A6A6A]">
+              Use <code className="text-[#8A8A8A]">{"{{firstName}}"}</code> etc. — see Insert
               Variable above for every available field. Unresolved variables (e.g. a custom-list
               email with no account) are sent as literal text.
             </p>
@@ -417,7 +415,7 @@ export function BroadcastComposer() {
 
           <div className="flex flex-wrap items-end gap-2">
             <div className="flex-1 min-w-[220px] space-y-1.5">
-              <label className="text-caption font-semibold text-muted-foreground">
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
                 Preview As (real user email)
               </label>
               <div className="flex items-center gap-2">
@@ -466,11 +464,11 @@ export function BroadcastComposer() {
               {sendMode === "now" ? "Send Broadcast" : "Schedule Broadcast"}
             </AdminButton>
           </div>
-          <p className="text-caption text-muted-foreground/80">Limited to one real broadcast per hour. Test sends don&apos;t count.</p>
+          <p className="text-[11px] text-[#6A6A6A]">Limited to one real broadcast per hour. Test sends don&apos;t count.</p>
         </div>
       </AdminCard>
 
-      <AdminCard title="Sent Broadcasts" className="min-w-0 xl:sticky xl:top-0">
+      <AdminCard title="Sent Broadcasts">
         {history === null ? (
           <Spinner label="Loading history…" />
         ) : (
@@ -495,7 +493,7 @@ export function BroadcastComposer() {
                   <tr key={h.id} className={tableCls.row}>
                     <td className={tableCls.td}>{fmtDateTime(h.createdAt)}</td>
                     <td className={tableCls.td}>{h.adminEmail}</td>
-                    <td className={`${tableCls.td} max-w-[420px] truncate text-muted-foreground`} title={h.details}>
+                    <td className={`${tableCls.td} max-w-[420px] truncate text-[#8A8A8A]`} title={h.details}>
                       {h.details}
                     </td>
                   </tr>
@@ -512,7 +510,7 @@ export function BroadcastComposer() {
         title={previewVariables ? `Email Preview — as ${previewEmail.trim()}` : "Email Preview"}
       >
         <div
-          className="max-h-[60vh] overflow-y-auto rounded-control-sm bg-white"
+          className="max-h-[60vh] overflow-y-auto rounded-lg bg-white"
           dangerouslySetInnerHTML={{
             __html: previewVariables
               ? renderBroadcastEmailHtml(

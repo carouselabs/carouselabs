@@ -36,18 +36,11 @@ const isPublicRoute = createRouteMatcher([
   "/verify-certificate(.*)", // Public intern-certificate verification page
   "/start(.*)", // Public link-in-bio Start Pages (carouselabs.com/start/[slug])
   "/l/(.*)", // Public short-link redirects (carouselabs.com/l/[slug])
-  // Redesign design-system preview. The page itself answers 404 outside
-  // `next dev` (app/(internal)/design-preview), so this only lets a signed-out
-  // local browser or screenshot run reach it.
-  "/design-preview(.*)",
   // "Buy the extension" buttons. The handler sends signed-out visitors to
   // sign-up itself (then back here), so Clerk mustn't redirect them first.
   "/checkout/extension",
   "/sitemap.xml",
   "/robots.txt",
-  // Generated link-preview images (app/(marketing)/opengraph-image.tsx) must
-  // be readable by signed-out crawlers.
-  "/opengraph-image(.*)",
   "/api/contact(.*)",
   "/api/verify-certificate(.*)", // Public — looks up a certificate by its own opaque code, no session
   "/api/start-page/click(.*)", // Public — click-tracking redirect, hit by anonymous Start Page visitors

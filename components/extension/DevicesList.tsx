@@ -36,14 +36,14 @@ export function DevicesList({ platform = "linkedin" }: { platform?: EngagePlatfo
   }
 
   if (!devices && !error) {
-    return <p className="text-caption text-muted-foreground">Loading…</p>
+    return <p className="text-[12.5px] text-[#9CA3AF]">Loading…</p>
   }
 
   return (
     <div className="flex flex-col gap-2">
-      {error && <p className="text-caption text-danger">{error}</p>}
+      {error && <p className="text-[12.5px] text-[#DC2626]">{error}</p>}
       {devices?.length === 0 && (
-        <p className="text-caption text-muted-foreground">
+        <p className="text-[12.5px] text-[#6B7280]">
           Not signed in on any browser yet. Open the extension&apos;s panel on {platform === "x" ? "X" : "LinkedIn"}{" "}
           and click Sign in.
         </p>
@@ -51,13 +51,13 @@ export function DevicesList({ platform = "linkedin" }: { platform?: EngagePlatfo
       {devices?.map((d) => (
         <div
           key={d.id}
-          className="flex items-center justify-between gap-3 rounded-control border border-border bg-surface px-4 py-3"
+          className="flex items-center justify-between gap-3 rounded-xl border border-[#E9E7E1] bg-[#FBFAF6] px-4 py-3"
         >
           <div className="flex items-center gap-3 min-w-0">
-            <Monitor size={16} className="flex-shrink-0 text-muted-foreground" />
+            <Monitor size={16} className="flex-shrink-0 text-[#9CA3AF]" />
             <div className="min-w-0">
-              <p className="truncate text-label font-medium text-foreground">{deviceName(d.device) || "Chrome"}</p>
-              <p className="text-caption text-muted-foreground">
+              <p className="truncate text-[13px] font-medium text-[#0A0A0A]">{deviceName(d.device) || "Chrome"}</p>
+              <p className="text-[11.5px] text-[#9CA3AF]">
                 Last used {dateTime(d.lastUsedAt)} · signed in {dateTime(d.createdAt)}
               </p>
             </div>
@@ -66,7 +66,7 @@ export function DevicesList({ platform = "linkedin" }: { platform?: EngagePlatfo
             type="button"
             disabled={removing === d.id}
             onClick={() => signOut(d.id)}
-            className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-control-sm border border-border bg-surface-raised px-3 py-1.5 text-caption font-semibold text-foreground hover:border-danger/40 hover:text-danger disabled:opacity-50"
+            className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-[#E5E3DE] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#374151] hover:border-[#DC2626]/40 hover:text-[#DC2626] disabled:opacity-50"
           >
             {removing === d.id && <Loader2 size={12} className="animate-spin" />}
             Sign out

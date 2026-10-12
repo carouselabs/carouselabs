@@ -5,7 +5,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { Plus } from "lucide-react"
-import { AdminButton, AdminInput, Modal, fmtDate } from "@/components/admin/ui"
+import { AdminButton, fmtDate } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
 import { GRANT_PLATFORM_LABELS, type GrantPlatform } from "@/lib/engage/grants"
 import { GrantAccessModal } from "./GrantAccessForm"
@@ -57,8 +57,8 @@ export function EngageGrantsTable() {
     <div className="mx-auto max-w-[1400px] space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lead font-semibold tracking-tight text-foreground">Free access</h2>
-          <p className="mt-0.5 text-caption text-muted-foreground">Unlimited Engage given by an admin, outside Lemon Squeezy.</p>
+          <h1 className="text-[18px] font-semibold tracking-tight text-white">Free access</h1>
+          <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">Unlimited Engage given by an admin, outside Lemon Squeezy.</p>
         </div>
         <AdminButton onClick={() => setAdding(true)}>
           <Plus className="h-3.5 w-3.5" aria-hidden />
@@ -90,9 +90,9 @@ export function EngageGrantsTable() {
           body={status === "active" ? "Use Add user, or Grant free access on a user's page." : undefined}
         />
       ) : (
-        <div className="relative overflow-x-auto rounded-card border border-border bg-surface">
-          <table className="w-full text-left text-caption">
-            <thead className="bg-background text-caption text-muted-foreground">
+        <div className="overflow-x-auto rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]">
+          <table className="w-full text-left text-[12.5px]">
+            <thead className="bg-[#161616] text-[11px] uppercase tracking-wide text-[#8A8A8A]">
               <tr>
                 <th className="px-4 py-2.5 font-semibold">Person</th>
                 <th className="px-3 py-2.5 font-semibold">Until</th>
@@ -101,18 +101,18 @@ export function EngageGrantsTable() {
                 <th className="px-4 py-2.5" />
               </tr>
             </thead>
-            <tbody className="text-foreground/90">
+            <tbody className="text-[#D0D0D0]">
               {data.grants.map((g) => (
-                <tr key={g.id} className="border-t border-border align-top">
+                <tr key={g.id} className="border-t border-[#232323] align-top">
                   <td className="px-4 py-2.5">
                     {g.userId ? (
-                      <Link href={`/admin/engage/users/${g.userId}`} className="font-medium text-foreground hover:underline">
+                      <Link href={`/admin/engage/users/${g.userId}`} className="font-medium text-white hover:underline">
                         {g.name ?? g.email}
                       </Link>
                     ) : (
-                      <span className="font-medium text-foreground">{g.email}</span>
+                      <span className="font-medium text-white">{g.email}</span>
                     )}
-                    {g.name && <div className="text-caption text-muted-foreground">{g.email}</div>}
+                    {g.name && <div className="text-[11.5px] text-[#8A8A8A]">{g.email}</div>}
                     <div className="mt-1 flex flex-wrap gap-1">
                       <Pill>{GRANT_PLATFORM_LABELS[g.platform ?? "both"]}</Pill>
                       {g.pending && g.state === "active" && <Pill tone="amber">Waiting for sign-up</Pill>}
@@ -129,13 +129,13 @@ export function EngageGrantsTable() {
                       <Pill tone="violet">Lifetime</Pill>
                     )}
                   </td>
-                  <td className="max-w-[340px] px-3 py-2.5 text-muted-foreground">
+                  <td className="max-w-[340px] px-3 py-2.5 text-[#B0B0B0]">
                     {g.reason}
-                    {g.revokeReason && <div className="text-caption text-danger">Revoked: {g.revokeReason}</div>}
+                    {g.revokeReason && <div className="text-[11.5px] text-red-300">Revoked: {g.revokeReason}</div>}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-muted-foreground">
+                  <td className="whitespace-nowrap px-3 py-2.5 text-[#B0B0B0]">
                     {fmtDate(g.createdAt)}
-                    <div className="text-caption text-muted-foreground">{g.grantedBy}</div>
+                    <div className="text-[11.5px] text-[#8A8A8A]">{g.grantedBy}</div>
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     {g.state === "active" && (
@@ -149,7 +149,7 @@ export function EngageGrantsTable() {
             </tbody>
           </table>
           {data.total > data.pageSize && (
-            <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-caption text-muted-foreground">
+            <div className="flex items-center justify-between border-t border-[#2A2A2A] px-4 py-2.5 text-[12px] text-[#8A8A8A]">
               <span>{fmtNumber(data.total)} grants</span>
               <div className="flex gap-1">
                 <AdminButton variant="ghost" disabled={page <= 1} onClick={() => setPage(page - 1)}>
@@ -174,11 +174,13 @@ export function EngageGrantsTable() {
         }}
       />
 
-      <Modal open={revoking !== null} onClose={() => !busy && setRevoking(null)} title={revoking ? `Revoke free access for ${revoking.email}?` : ""}>
-        {revoking && (
+      {revoking && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4" onClick={() => setRevoking(null)}>
           <form
+            role="dialog"
             aria-label="Revoke free access"
-            className="flex flex-col gap-4"
+            className="w-full max-w-md space-y-4 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5"
+            onClick={(e) => e.stopPropagation()}
             onSubmit={async (e) => {
               e.preventDefault()
               setBusy(true)
@@ -195,14 +197,15 @@ export function EngageGrantsTable() {
               }
             }}
           >
-            <p className="text-label text-muted-foreground">It ends immediately. If they don&apos;t pay, they go back to the free plan.</p>
-            <AdminInput
+            <h3 className="text-[14px] font-semibold text-white">Revoke free access for {revoking.email}?</h3>
+            <p className="text-[12.5px] text-[#B0B0B0]">It ends immediately. If they don&apos;t pay, they go back to the free plan.</p>
+            <input
               required
               minLength={3}
               autoFocus
               aria-label="Reason"
               placeholder="Reason (kept in the audit log)"
-              className="w-full"
+              className="h-9 w-full rounded-lg border border-[#2A2A2A] bg-[#141414] px-3 text-[13px] text-white outline-none focus:border-[#7C3AED]"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
             />
@@ -215,8 +218,8 @@ export function EngageGrantsTable() {
               </AdminButton>
             </div>
           </form>
-        )}
-      </Modal>
+        </div>
+      )}
     </div>
   )
 }

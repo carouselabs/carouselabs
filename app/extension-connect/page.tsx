@@ -6,13 +6,11 @@
 // /extension-connect, and Clerk sends the browser back here automatically
 // once signed in — so by the time this component ever renders, there's
 // always an active session, no manual SignIn widget needed.
-import { fontVariables } from "@/lib/fonts"
 import { ExtensionConnectClient } from "@/components/extension/ExtensionConnectClient"
 
 export default function ExtensionConnectPage() {
   return (
-    <div data-theme="light" className={`${fontVariables} flex min-h-svh items-center justify-center bg-background px-4 font-ui text-foreground`}>
-      <style>{`body{background-color:#F9F7F2;color:#211F1C}`}</style>
+    <div className="flex min-h-svh items-center justify-center bg-[#080810] px-4 text-white">
       <ExtensionConnectClient />
     </div>
   )

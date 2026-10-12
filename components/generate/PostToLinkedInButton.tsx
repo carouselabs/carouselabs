@@ -87,9 +87,9 @@ export function PostToLinkedInButton({
         href={postUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex h-9 items-center gap-1.5 rounded-control-sm bg-[#0A66C2] px-3 text-label font-semibold text-white transition-colors duration-(--motion-fast) hover:bg-[#004182]"
+        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#0A66C2] hover:bg-[#004182] transition-colors"
       >
-        <ExternalLink className="size-4" aria-hidden />
+        <ExternalLink size={13} strokeWidth={2.2} />
         Posted to LinkedIn! View post →
       </a>
     )
@@ -100,21 +100,20 @@ export function PostToLinkedInButton({
       <button
         onClick={handlePost}
         disabled={posting || disabled}
-        aria-busy={posting || undefined}
-        className="inline-flex h-9 items-center gap-1.5 rounded-control-sm bg-[#0A66C2] px-3 text-label font-semibold whitespace-nowrap text-white transition-colors duration-(--motion-fast) hover:bg-[#004182] disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#0A66C2] hover:bg-[#004182] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {posting ? (
-          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+          <Loader2 size={13} className="animate-spin" strokeWidth={2.2} />
         ) : (
-          <LinkedInIcon size={14} />
+          <LinkedInIcon size={13} />
         )}
         {posting ? "Posting…" : "Post to LinkedIn"}
       </button>
 
       {notConnected && (
-        <p role="alert" className="max-w-56 text-caption text-muted-foreground">
+        <p className="text-[11px] text-[#9CA3AF]">
           Connect your LinkedIn account in{" "}
-          <Link href="/settings/account" className="font-medium text-[#0A66C2] underline underline-offset-2">
+          <Link href="/settings/account" className="text-[#0A66C2] underline">
             Settings
           </Link>{" "}
           first
@@ -122,7 +121,7 @@ export function PostToLinkedInButton({
       )}
 
       {error && (
-        <p role="alert" className="max-w-56 text-caption text-danger">{error}</p>
+        <p className="text-[11px] text-[rgba(239,68,68,0.9)]">{error}</p>
       )}
     </div>
   )

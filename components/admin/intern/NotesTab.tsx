@@ -16,16 +16,16 @@ const NOTE_TYPES = [
 ]
 
 const TYPE_STYLES: Record<string, string> = {
-  general: "bg-surface-raised text-muted-foreground",
-  praise: "bg-success/15 text-success",
-  warning: "bg-warning/15 text-warning",
-  review: "bg-brand/15 text-brand",
+  general: "bg-[#2A2A2A] text-[#B0B0B0]",
+  praise: "bg-emerald-500/15 text-emerald-400",
+  warning: "bg-amber-500/15 text-amber-400",
+  review: "bg-[#7C3AED]/15 text-[#A78BFA]",
 }
 
 function TypeBadge({ type }: { type: string }) {
   const style = TYPE_STYLES[type] ?? TYPE_STYLES.general
   return (
-    <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${style}`}>
+    <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-semibold capitalize ${style}`}>
       {type}
     </span>
   )
@@ -103,7 +103,7 @@ export function NotesTab({
             onChange={(e) => setContent(e.target.value)}
             rows={3}
             placeholder="Note content…"
-            className="w-full rounded-control-sm border border-border bg-background p-3 text-label text-foreground placeholder:text-muted-foreground/80 outline-none focus:border-brand"
+            className="w-full rounded-lg border border-[#2A2A2A] bg-[#141414] p-3 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED]"
           />
           <div className="flex justify-end">
             <AdminButton loading={busy} onClick={addNote}>
@@ -115,27 +115,27 @@ export function NotesTab({
 
       <AdminCard title={`Notes (${notes.length})`}>
         {notes.length === 0 ? (
-          <p className="text-caption text-muted-foreground/80">No notes yet.</p>
+          <p className="text-[12.5px] text-[#6A6A6A]">No notes yet.</p>
         ) : (
           <ul className="space-y-3">
             {notes.map((n) => (
-              <li key={n.id} className="rounded-control-sm border border-border p-3.5">
+              <li key={n.id} className="rounded-lg border border-[#2A2A2A] p-3.5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <TypeBadge type={n.type} />
-                    <span className="text-caption text-muted-foreground/80">
+                    <span className="text-[11px] text-[#6A6A6A]">
                       {n.addedBy} · {fmtDateTime(n.createdAt)}
                     </span>
                   </div>
                   <button
                     onClick={() => setDeleting(n)}
-                    className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-danger/15 hover:text-danger transition-colors"
+                    className="shrink-0 rounded-md p-1.5 text-[#8A8A8A] hover:bg-red-500/15 hover:text-red-400 transition-colors"
                     aria-label="Delete note"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
-                <p className="mt-2 whitespace-pre-wrap text-label leading-relaxed text-foreground/90">{n.content}</p>
+                <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-[#D0D0D0]">{n.content}</p>
               </li>
             ))}
           </ul>

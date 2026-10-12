@@ -1,34 +1,9 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Sparkles, Copy, Check, Loader2, Save } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { controlClasses } from "@/components/ui/input"
-import {
-  ActionBar,
-  BackButton,
-  BackLink,
-  CaptionSkeleton,
-  CategoryChips,
-  ChoiceCard,
-  ChoiceHeader,
-  CreateToolbar,
-  ErrorNotice,
-  FieldLabel,
-  LoadingState,
-  PlatformChecks,
-  PlatformTag,
-  RatioCard,
-  RestoredTag,
-  StepActions,
-  StepColumn,
-  StructureTag,
-  Workspace,
-  captionFieldClasses,
-} from "@/components/create/CreateKit"
-import { CaptionSetup } from "@/components/create/CaptionSetup"
+import { ArrowLeft, Sparkles, Copy, Check, History, Loader2 } from "lucide-react"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
 import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { CarouselImageGrid, type SlideImage } from "@/components/generate/CarouselImageGrid"
@@ -52,8 +27,9 @@ import { createDraftWriter } from "@/lib/postDraft"
 import { persistDraftValues, reconcileDraft } from "@/lib/draftRecovery"
 import { DraftRecoveryNotice } from "@/components/generate/DraftRecoveryNotice"
 import { useCreditStore } from "@/lib/store/creditStore"
+import { CAPTION_PLATFORMS } from "@/lib/captionPlatforms"
 import { isValidPlatform, validatePostForPlatform } from "@/lib/platforms"
-import { CAPTION_TEMPLATES, CATEGORY_ORDER } from "@/lib/captionTemplates"
+import { CAPTION_TEMPLATES, CATEGORY_ORDER, getTemplatesByCategory } from "@/lib/captionTemplates"
 import {
   CAROUSEL_CATEGORY_ORDER,
   getCarouselTemplatesByCategory,
@@ -84,6 +60,8 @@ interface Slide {
   headline: string
   prompt: string
 }
+
+const SKELETON_WIDTHS = ["88%", "72%", "95%", "65%", "80%", "55%", "70%", "40%"]
 
 // Platform + structure selection — shown before caption generation for every
 // idea, same pattern as caption/_client.tsx and image/_client.tsx.
@@ -916,6 +894,10 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     completeSelection("template", null, templateId)
   }
 
+  const customWordCount = customStructure.trim()
+    ? customStructure.trim().split(/\s+/).length
+    : 0
+
   // ── Carousel structure selection handlers (own-idea flow) ─────
   // Selection complete → log it and unlock the "Generate Carousel" button.
   function completeCarouselStructureSelection(
@@ -966,546 +948,906 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     ? customCarouselStructure.trim().split(/\s+/).length
     : 0
 
-  const steps = ["Platform", "Structure", "Caption", "Format", "Reference", "Slides"]
-  const stepIndex =
-    carouselFlowStep === "platform-select" ? 0 : carouselFlowStep !== "generating" ? 1 : step + 1
+  // The step-4 caption + carousel grid. Rendered centered normally; once image
+  // generation has started it moves into a 70% left column with the LoadingGame
+  // on the right.
+  const carouselGrid = (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+      {/* Left: Caption */}
+      <div className="flex flex-col gap-3">
+        <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
+          Caption
+        </p>
+        <textarea
+          value={caption}
+          onChange={(e) => handleCaptionChange(e.target.value)}
+          rows={20}
+          className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.65] resize-none focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors"
+        />
+        {countWords(caption) > 0 && (
+          <p className="text-[11px] text-[#ADA99F] tabular-nums">{countWords(caption)} words</p>
+        )}
+        {/* Same validatePostForPlatform used by Content Hub's Custom Post
+            Composer, so an AI caption/carousel that runs long or has too many
+            slides gets the same treatment as content a user typed by hand. */}
+        {caption.trim() && selectedPlatform && isValidPlatform(selectedPlatform) && (() => {
+          const { errors, warnings } = validatePostForPlatform(caption, slideImages.length, selectedPlatform)
+          if (errors.length === 0 && warnings.length === 0) return null
+          return (
+            <div className="flex flex-col gap-1">
+              {errors.map((msg, i) => (
+                <p key={`e${i}`} className="text-[12px] leading-snug text-[rgba(239,68,68,0.9)]">
+                  {msg}
+                </p>
+              ))}
+              {warnings.map((msg, i) => (
+                <p key={`w${i}`} className="text-[12px] leading-snug text-[rgba(217,119,6,0.9)]">
+                  {msg}
+                </p>
+              ))}
+            </div>
+          )
+        })()}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCopyCaption}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] hover:bg-[#E9E7E1] text-[12px] font-medium text-[#6B7280] transition-colors"
+          >
+            {captionCopied ? <Check size={12} /> : <Copy size={12} />}
+            {captionCopied ? "Copied!" : "Copy Caption"}
+          </button>
+          {slideImages.length > 0 && !isGeneratingImages && (
+            <PostToLinkedInButton
+              caption={caption}
+              imageUrls={slideImages
+                .map((s) => s.imageUrl)
+                .filter((u): u is string => !!u)}
+              disabled={isGeneratingImages || failedSlideNumbers.length > 0 || regeneratingSlide !== null}
+              beforePost={confirmLinkedInPost}
+            />
+          )}
+          {slideImages.length > 0 && !isGeneratingImages && (
+            <>
+              <button onClick={() => void handleSaveDraft()} disabled={savingDraft || failedSlideNumbers.length > 0 || regeneratingSlide !== null} className="px-3 py-2 rounded-lg border border-[#E5E3DE] text-[12px] disabled:opacity-50">
+                {savingDraft ? "Saving?" : savedSnapshot === JSON.stringify({ caption, images: slideImages, size }) ? "Saved" : "Save Draft"}
+              </button>
+              <ScheduleForLaterButton getPostId={getPostIdSynced} disabled={savingDraft || failedSlideNumbers.length > 0 || regeneratingSlide !== null} />
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Right: carousel images (the slide-prompt step is bypassed) */}
+      <div className="flex flex-col gap-4">
+        {/* Single button — confirm, then generate prompts + all images in one go */}
+        {slideImages.length === 0 && !isGeneratingSlides && !isGeneratingImages && (
+          <button
+            onClick={() => setConfirmOpen(true)}
+            className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
+          >
+            <Sparkles size={14} strokeWidth={2} />
+            Generate Carousel
+          </button>
+        )}
+
+        {(isGeneratingSlides || isGeneratingImages) && loadingMessage && (
+          <div className="flex items-center gap-2.5 text-[13px] font-medium text-[#1A1A1A]">
+            <Loader2 size={15} className="animate-spin" strokeWidth={2.2} />
+            {loadingMessage}
+          </div>
+        )}
+
+        {/* Grid fills in one image at a time as each slide is generated */}
+        {slideImages.length > 0 && (
+          <CarouselImageGrid
+            images={slideImages}
+            size={size ?? "4:5"}
+            ideaId={ideaId}
+            onRegenerate={regenerateSlideImage}
+            regeneratingSlide={regeneratingSlide}
+            busy={isGeneratingImages || isGeneratingSlides || retryingFailedSlide !== null}
+            complete={failedSlideNumbers.length === 0 && !isGeneratingImages && (!slides || slideImages.length === slides.length)}
+            instructions={slideInstructions}
+            onInstructionChange={(slideNumber, value) =>
+              setSlideInstructions((prev) => ({ ...prev, [slideNumber]: value }))
+            }
+          />
+        )}
+
+        {/* Slides that failed to generate even after one automatic retry —
+            shown explicitly rather than just being a gap in the grid above. */}
+        {!isGeneratingImages && failedSlideNumbers.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {failedSlideNumbers.map((slideNumber) => (
+              <div
+                key={slideNumber}
+                className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-[rgba(239,68,68,0.06)] border border-[rgba(239,68,68,0.2)]"
+              >
+                <span className="text-[12.5px] font-medium text-[rgba(239,68,68,0.9)]">
+                  Slide {slideNumber} failed to generate
+                </span>
+                <button
+                  onClick={() => void retryFailedSlide(slideNumber)}
+                  disabled={retryingFailedSlide !== null}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[rgba(239,68,68,0.3)] bg-white hover:bg-[rgba(239,68,68,0.08)] text-[11.5px] font-semibold text-[rgba(239,68,68,0.9)] transition-colors disabled:opacity-50"
+                >
+                  {retryingFailedSlide === slideNumber && (
+                    <Loader2 size={11} className="animate-spin" strokeWidth={2.2} />
+                  )}
+                  Retry
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
 
   // Session-restore check still in flight — avoids flashing the
   // platform-select screen before a restored session takes over.
   if (initializing) {
-    return <LoadingState label="Checking for a saved session..." />
+    return (
+      <div className="max-w-2xl mx-auto flex flex-col items-center justify-center min-h-[50vh] gap-3">
+        <div className="w-6 h-6 border-[3px] border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
+        <p className="text-[13px] text-[#6B7280]">Checking for a saved session...</p>
+      </div>
+    )
   }
 
   // ── Platform + structure selection screens (every idea) ──
   if (carouselFlowStep !== "generating") {
     return (
-      <div>
-        <CreateToolbar
-          // Back — each step returns to the previous one
-          back={
-            carouselFlowStep === "platform-select" ? (
-              <BackLink href={`/idea/${ideaId}`}>Back to breakdown</BackLink>
-            ) : (
-              <BackButton
-                onClick={() =>
-                  setCarouselFlowStep(carouselFlowStep === "structure-select" ? "platform-select" : "structure-select")
-                }
-              >
-                {carouselFlowStep === "structure-select" ? "Back to platforms" : "Back to structure options"}
-              </BackButton>
-            )
-          }
-          label="Carousel for"
-          title={ideaHook}
-          steps={steps}
-          current={stepIndex}
-        />
-        <CaptionSetup
-          step={carouselFlowStep}
-          platformQuestion="Which platform is this carousel for?"
-          selectedPlatform={selectedPlatform}
-          onSelectPlatform={handleSelectPlatform}
-          onSelectAuto={handleSelectAuto}
-          onSelectCustom={handleSelectCustom}
-          onSelectTemplateMode={handleSelectTemplateMode}
-          customStructure={customStructure}
-          onCustomStructureChange={setCustomStructure}
-          onCustomContinue={handleCustomContinue}
-          selectedCategory={selectedCategory}
-          onCategoryChange={setSelectedCategory}
-          onTemplatePick={handleTemplatePick}
-        />
+      <div className="max-w-2xl mx-auto flex flex-col gap-8">
+        {/* Back — each step returns to the previous one */}
+        {carouselFlowStep === "platform-select" ? (
+          <Link
+            href={`/idea/${ideaId}`}
+            className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+          >
+            <ArrowLeft size={13} strokeWidth={2.2} />
+            Back to breakdown
+          </Link>
+        ) : (
+          <button
+            onClick={() =>
+              setCarouselFlowStep(
+                carouselFlowStep === "structure-select" ? "platform-select" : "structure-select",
+              )
+            }
+            className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+          >
+            <ArrowLeft size={13} strokeWidth={2.2} />
+            {carouselFlowStep === "structure-select" ? "Back to platforms" : "Back to structure options"}
+          </button>
+        )}
+
+        {/* Idea hook */}
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
+            Carousel for
+          </p>
+          <p className="text-[15px] font-medium text-[#4B5563] leading-[1.4]">{ideaHook}</p>
+          {selectedPlatform && carouselFlowStep !== "platform-select" && (
+            <span className="mt-1 self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
+              {(() => {
+                const p = CAPTION_PLATFORMS.find((p) => p.id === selectedPlatform)
+                return p ? `${p.emoji} ${p.name}` : selectedPlatform
+              })()}
+            </span>
+          )}
+        </div>
+
+        {/* ── Platform selection: 8 cards ──────────────────────── */}
+        {carouselFlowStep === "platform-select" && (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
+                Which platform is this carousel for?
+              </h2>
+              <p className="text-[13px] text-[#6B7280] leading-[1.55]">
+                We&apos;ll tailor the tone, length, and style to match.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {CAPTION_PLATFORMS.map((platform) => (
+                <button
+                  key={platform.id}
+                  onClick={() => handleSelectPlatform(platform.id)}
+                  className="group flex flex-col items-start gap-2 p-4 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[24px] leading-none">{platform.emoji}</span>
+                  <span className="text-[13px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    {platform.name}
+                  </span>
+                  <span className="self-start text-[10px] font-semibold px-1.5 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)] tabular-nums">
+                    {platform.charLimit.toLocaleString()} chars
+                  </span>
+                  <span className="text-[11px] text-[#9CA3AF] leading-[1.5]">
+                    {platform.guidance}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Main selection: 3 large cards ────────────────────── */}
+        {carouselFlowStep === "structure-select" && (
+          <div className="flex flex-col gap-4">
+            <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
+              How should your caption be structured?
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                {
+                  emoji: "🤖",
+                  title: "Auto (AI Chooses)",
+                  subtitle:
+                    "AI analyzes the topic and automatically selects or combines the best caption structure.",
+                  onClick: handleSelectAuto,
+                },
+                {
+                  emoji: "✍️",
+                  title: "Define Your Own",
+                  subtitle: "Tell us exactly how you want your caption structured.",
+                  onClick: handleSelectCustom,
+                },
+                {
+                  emoji: "📋",
+                  title: "Choose a Template",
+                  subtitle: "Pick from proven caption frameworks.",
+                  onClick: handleSelectTemplateMode,
+                },
+              ].map((opt) => (
+                <button
+                  key={opt.title}
+                  onClick={opt.onClick}
+                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[26px] leading-none">{opt.emoji}</span>
+                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    {opt.title}
+                  </span>
+                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">{opt.subtitle}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Custom structure input ───────────────────────────── */}
+        {carouselFlowStep === "custom-input" && (
+          <div className="flex flex-col gap-4">
+            <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
+              Define your caption structure
+            </h2>
+            <div className="flex flex-col gap-2">
+              <textarea
+                value={customStructure}
+                onChange={(e) => setCustomStructure(e.target.value)}
+                rows={5}
+                autoFocus
+                placeholder="Describe how you want your caption structured (e.g. Hook, then 3 quick tips, then a question at the end)"
+                className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[14px] text-[#0A0A0A] leading-[1.6] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.5)] transition-colors"
+              />
+              <p className="text-[11px] text-[#ADA99F] tabular-nums">
+                {customWordCount} {customWordCount === 1 ? "word" : "words"}
+              </p>
+            </div>
+            <button
+              onClick={handleCustomContinue}
+              disabled={!customStructure.trim()}
+              className={[
+                "self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
+                customStructure.trim()
+                  ? "bg-[#7C3AED] hover:bg-[#6D28D9] cursor-pointer shadow-[0_0_24px_rgba(124,58,237,0.28)]"
+                  : "bg-[rgba(124,58,237,0.3)] cursor-not-allowed opacity-50",
+              ].join(" ")}
+            >
+              Continue →
+            </button>
+          </div>
+        )}
+
+        {/* ── Template grid — tabbed by category ───────────────── */}
+        {carouselFlowStep === "template-select" && (
+          <div className="flex flex-col gap-4">
+            <h2 className="text-[18px] font-bold text-[#0A0A0A] tracking-[-0.01em]">
+              Pick a caption framework
+            </h2>
+            <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
+              {CATEGORY_ORDER.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={[
+                    "flex-shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-all cursor-pointer",
+                    selectedCategory === cat
+                      ? "bg-[#7C3AED] text-white shadow-[0_0_16px_rgba(124,58,237,0.25)]"
+                      : "bg-[#F4F2EC] text-[#6B7280] border border-[#E9E7E1] hover:border-[rgba(124,58,237,0.4)] hover:text-[#7C3AED]",
+                  ].join(" ")}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {(getTemplatesByCategory()[selectedCategory] ?? []).map((template) => (
+                <button
+                  key={template.id}
+                  onClick={() => handleTemplatePick(template.id)}
+                  className="group flex flex-col items-start gap-2 p-4 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[20px] leading-none">{template.emoji}</span>
+                  <span className="text-[13px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    {template.name}
+                  </span>
+                  <span className="text-[11px] text-[#9CA3AF] leading-[1.5]">
+                    {template.structure.join(" → ")}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     )
   }
 
-  const isResult = step === 4 && carouselStructureStep === "ready"
-  // TEMPORARY DEBUG — prompts-only panel, see DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION.
-  const showDebugPrompts = DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION && slides && slideImages.length === 0
-  const savedNow = savedSnapshot === JSON.stringify({ caption, images: slideImages, size })
-  const hasSlides = slideImages.length > 0 && !isGeneratingImages
-
   return (
-    <div>
-      <CreateToolbar
-        back={<BackLink href={`/idea/${ideaId}`}>Back to breakdown</BackLink>}
-        title={ideaHook}
-        steps={steps}
-        current={stepIndex}
-      />
+    <div className="max-w-4xl mx-auto flex flex-col gap-8">
+      {browserRecovery !== null && <DraftRecoveryNotice onRestore={() => {
+        setCaption(browserRecovery.caption ?? "")
+        setCaptionReady(Boolean(browserRecovery.caption))
+        setSlides(browserRecovery.slides)
+        setSlideImages(browserRecovery.images ?? [])
+        setSize(browserRecovery.size)
+        persistBrowserDraft(browserRecovery, writer.revision(), true)
+        setFailedSlideNumbers(browserRecovery.slides?.filter((slide) => !browserRecovery.images?.some((image) => image.slideNumber === slide.slideNumber)).map((slide) => slide.slideNumber) ?? [])
+        setBrowserRecovery(null)
+      }} />}
+      <Link
+        href={`/idea/${ideaId}`}
+        className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+      >
+        <ArrowLeft size={13} strokeWidth={2.2} />
+        Back to breakdown
+      </Link>
 
-      <div className={cn("mx-auto flex w-full flex-col gap-6", !isResult && "max-w-2xl")}>
-        {browserRecovery !== null && <DraftRecoveryNotice onRestore={() => {
-          setCaption(browserRecovery.caption ?? "")
-          setCaptionReady(Boolean(browserRecovery.caption))
-          setSlides(browserRecovery.slides)
-          setSlideImages(browserRecovery.images ?? [])
-          setSize(browserRecovery.size)
-          persistBrowserDraft(browserRecovery, writer.revision(), true)
-          setFailedSlideNumbers(browserRecovery.slides?.filter((slide) => !browserRecovery.images?.some((image) => image.slideNumber === slide.slideNumber)).map((slide) => slide.slideNumber) ?? [])
-          setBrowserRecovery(null)
-        }} />}
+      <p className="text-[13px] text-[#9CA3AF] leading-[1.5] max-w-2xl">{ideaHook}</p>
 
-        {/* Restored badge + chosen platform/structure */}
-        {(restored || selectedPlatform || structureMode) && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {restored && <RestoredTag />}
-            {selectedPlatform && <PlatformTag platformId={selectedPlatform} />}
-            {structureMode && <StructureTag mode={structureMode} templateId={selectedTemplateId} />}
-          </div>
-        )}
-      </div>
+      {restored && (
+        <span className="self-start inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#1A1A1A] bg-[rgba(26,26,26,0.1)] border border-[rgba(26,26,26,0.2)]">
+          <History size={11} strokeWidth={2.2} />
+          Restored from last session
+        </span>
+      )}
 
-      <div className="mt-8">
-        {/* ── STEP 1: Caption Generation ── */}
-        {step === 1 && (
-          <StepColumn>
-            <ChoiceHeader title="Your Caption" />
+      {/* Chosen platform + structure */}
+      {(selectedPlatform || structureMode) && (
+        <div className="flex items-center gap-1.5 flex-wrap -mt-4">
+          {selectedPlatform && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
+              {(() => {
+                const p = CAPTION_PLATFORMS.find((p) => p.id === selectedPlatform)
+                return p ? `${p.emoji} ${p.name}` : selectedPlatform
+              })()}
+            </span>
+          )}
+          {structureMode && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full text-[#7C3AED] bg-[rgba(124,58,237,0.08)]">
+              {structureMode === "auto" && "🤖 Auto structure"}
+              {structureMode === "custom" && "✍️ Custom structure"}
+              {structureMode === "template" &&
+                (() => {
+                  const t = CAPTION_TEMPLATES.find((t) => t.id === selectedTemplateId)
+                  return t ? `${t.emoji} ${t.name}` : "📋 Template"
+                })()}
+            </span>
+          )}
+        </div>
+      )}
 
-            {isStreamingCaption && !caption && <CaptionSkeleton />}
+      {/* ── STEP 1: Caption Generation ── */}
+      {step === 1 && (
+        <div className="flex flex-col gap-6 max-w-2xl">
+          <h1 className="text-[22px] font-bold text-[#0A0A0A]">Your Caption</h1>
 
-            {/* First generation — no caption yet. The voice-guidelines toggle sits
-                above the button so the user can opt in before generating. */}
-            {!caption && !isStreamingCaption && (
-              <div className="flex flex-col items-start gap-5 rounded-card border border-dashed border-control-border/60 bg-surface px-6 py-10">
-                <VoiceGuidelinesToggle
-                  hasGuidelines={hasGuidelines}
-                  value={useVoiceGuidelines}
-                  onChange={setUseVoiceGuidelines}
+          {isStreamingCaption && !caption && (
+            <div className="flex flex-col gap-2.5">
+              {SKELETON_WIDTHS.map((w, i) => (
+                <div
+                  key={i}
+                  className="h-3.5 rounded-full bg-[#ECEAE4] animate-pulse"
+                  style={{ width: w }}
                 />
-                <Button size="lg" onClick={() => void streamCaption()}>
-                  <Sparkles aria-hidden />
-                  Generate Caption
-                </Button>
-              </div>
-            )}
-
-            {caption && (
-              <>
-                <div className="flex flex-col gap-1.5">
-                  <textarea
-                    aria-label="Caption"
-                    value={caption}
-                    onChange={(e) => handleCaptionChange(e.target.value)}
-                    rows={16}
-                    className={cn(captionFieldClasses, "resize-y bg-surface-raised")}
-                  />
-                  <div className="flex items-center justify-between text-caption text-muted-foreground tabular-nums">
-                    <span>{countWords(caption) > 0 ? `${countWords(caption)} words` : ""}</span>
-                    <span>{caption.length} chars</span>
-                  </div>
-                </div>
-                <VoiceGuidelinesToggle
-                  hasGuidelines={hasGuidelines}
-                  value={useVoiceGuidelines}
-                  onChange={setUseVoiceGuidelines}
-                />
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                  <textarea
-                    value={captionInstruction}
-                    onChange={(e) => setCaptionInstruction(e.target.value)}
-                    disabled={isStreamingCaption || atLimit}
-                    rows={2}
-                    aria-label="What should change?"
-                    placeholder="What should change? (e.g. make it shorter, add more stats, make it funnier...)"
-                    className={cn(controlClasses, "flex-1 resize-none px-3 py-2.5 leading-normal md:text-label")}
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={handleRegenerateCaption}
-                    disabled={isStreamingCaption || atLimit}
-                    className="shrink-0"
-                  >
-                    Regenerate caption — 1 credit
-                  </Button>
-                </div>
-              </>
-            )}
-
-            {error && (
-              <ErrorNotice
-                message={friendlyGenerationError(error)}
-                onRetry={() => void streamCaption()}
-                retryDisabled={isStreamingCaption}
-              />
-            )}
-
-            <StepActions>
-              <Button onClick={() => setStep(2)} disabled={!captionReady} className="ml-auto">
-                Continue to Carousel →
-              </Button>
-            </StepActions>
-          </StepColumn>
-        )}
-
-        {/* ── STEP 2: Choose Ratio ── */}
-        {step === 2 && (
-          <StepColumn>
-            <ChoiceHeader title="Choose your image format" />
-
-            <div className="grid grid-cols-2 gap-4">
-              <RatioCard
-                ratio="4:5"
-                selected={size === "4:5"}
-                onClick={() => selectSize("4:5")}
-                title="4:5 Portrait"
-                hint="Best for LinkedIn feed"
-              />
-              <RatioCard
-                ratio="1:1"
-                selected={size === "1:1"}
-                onClick={() => selectSize("1:1")}
-                title="1:1 Square"
-                hint="Classic format"
-              />
+              ))}
             </div>
+          )}
 
-            <StepActions>
-              <Button variant="ghost" onClick={() => setStep(1)}>
-                ← Back
-              </Button>
-              <Button onClick={() => setStep(3)} disabled={!size} className="ml-auto">
-                Continue →
-              </Button>
-            </StepActions>
-          </StepColumn>
-        )}
+          {/* First generation — no caption yet. The voice-guidelines toggle sits
+              above the button so the user can opt in before generating. */}
+          {!caption && !isStreamingCaption && (
+            <div className="flex flex-col gap-4">
+              <VoiceGuidelinesToggle
+                hasGuidelines={hasGuidelines}
+                value={useVoiceGuidelines}
+                onChange={setUseVoiceGuidelines}
+              />
+              <button
+                onClick={() => void streamCaption()}
+                className="self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
+              >
+                <Sparkles size={14} strokeWidth={2} />
+                Generate Caption
+              </button>
+            </div>
+          )}
 
-        {/* ── STEP 3: Reference Image ── */}
-        {step === 3 && (
-          <StepColumn>
-            <ChoiceHeader
-              title="Upload a style reference (optional)"
-              description={<>We&apos;ll match the style across all slides — not copy the image</>}
-            />
-
-            <ReferenceUploader
-              value={referenceImage}
-              onChange={handleReferenceChange}
-              onClear={handleReferenceClear}
-            />
-
-            {referenceNotice && (
-              <p role="status" className="text-label text-warning">{referenceNotice}</p>
-            )}
-
-            <StepActions>
-              <Button variant="ghost" onClick={() => setStep(2)}>
-                ← Back
-              </Button>
-              <div className="ml-auto flex flex-wrap items-center gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    handleReferenceClear()
-                    setStep(4)
-                  }}
-                >
-                  Skip, generate without reference
-                </Button>
-                {referenceImage && (
-                  <Button onClick={() => setStep(4)}>Continue with reference →</Button>
-                )}
+          {caption && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <textarea
+                  value={caption}
+                  onChange={(e) => handleCaptionChange(e.target.value)}
+                  rows={16}
+                  className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.65] resize-none focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors"
+                />
+                <div className="flex items-center justify-between text-[11px] text-[#ADA99F] tabular-nums">
+                  <span>{countWords(caption) > 0 ? `${countWords(caption)} words` : ""}</span>
+                  <span>{caption.length} chars</span>
+                </div>
               </div>
-            </StepActions>
-          </StepColumn>
-        )}
-
-        {/* ── STEP 4: Carousel structure selection or Final Screen ── */}
-        {step === 4 && carouselStructureStep !== "ready" && (
-          <StepColumn>
-            {carouselStructureStep === "select" ? (
-              <BackButton onClick={() => setStep(3)}>Back</BackButton>
-            ) : (
-              <BackButton onClick={() => setCarouselStructureStep("select")}>Back to structure options</BackButton>
-            )}
-
-            {/* ── Main selection: 4 cards ─────────────────────────── */}
-            {carouselStructureStep === "select" && (
-              <>
-                <ChoiceHeader
-                  title="How should this carousel be structured?"
-                  description="Choose the best slide flow for your content."
+              <VoiceGuidelinesToggle
+                hasGuidelines={hasGuidelines}
+                value={useVoiceGuidelines}
+                onChange={setUseVoiceGuidelines}
+              />
+              <div className="flex items-end gap-2">
+                <textarea
+                  value={captionInstruction}
+                  onChange={(e) => setCaptionInstruction(e.target.value)}
+                  disabled={isStreamingCaption || atLimit}
+                  rows={2}
+                  placeholder="What should change? (e.g. make it shorter, add more stats, make it funnier...)"
+                  className="flex-1 px-3.5 py-2.5 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.5] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(26,26,26,0.4)] transition-colors disabled:opacity-50"
                 />
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <ChoiceCard
-                    emoji="🤖"
-                    title="Let AI Decide"
-                    subtitle="AI analyzes your content and picks the best slide structure automatically."
-                    onClick={handleSelectCarouselAuto}
-                  />
-                  <ChoiceCard
-                    emoji="✍️"
-                    title={<>I&apos;ll Define It</>}
-                    subtitle="Describe exactly how you want the carousel structured."
-                    onClick={handleSelectCarouselCustomMode}
-                  />
-                  <ChoiceCard
-                    emoji="📋"
-                    title="Choose a Template"
-                    subtitle="Pick from 30 proven slide structures."
-                    onClick={handleSelectCarouselTemplateMode}
-                  />
-                  <ChoiceCard
-                    emoji="🖼️"
-                    title={<>Follow My Reference Image&apos;s Structure</>}
-                    subtitle={
-                      referenceImage
-                        ? "Use the same layout and structure as your uploaded reference image."
-                        : "Upload a reference image first to use this option"
-                    }
-                    onClick={handleSelectCarouselReferenceOnly}
-                    disabled={!referenceImage}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* ── Custom structure input ───────────────────────────── */}
-            {carouselStructureStep === "custom" && (
-              <>
-                <ChoiceHeader title="Define your carousel structure" />
-                <div className="flex flex-col gap-2">
-                  <textarea
-                    value={customCarouselStructure}
-                    onChange={(e) => setCustomCarouselStructure(e.target.value)}
-                    rows={5}
-                    autoFocus
-                    aria-label="Define your carousel structure"
-                    placeholder="Describe how you want this carousel structured (e.g. 8 slides: hook, 3 tips, 3 examples, summary)"
-                    className={cn(controlClasses, "resize-none px-4 py-3 leading-relaxed")}
-                  />
-                  <p className="text-caption text-muted-foreground tabular-nums" aria-live="polite">
-                    {customCarouselWordCount} {customCarouselWordCount === 1 ? "word" : "words"}
-                  </p>
-                </div>
-                <Button
-                  onClick={handleCarouselCustomContinue}
-                  disabled={!customCarouselStructure.trim()}
-                  className="self-start"
+                <button
+                  onClick={handleRegenerateCaption}
+                  disabled={isStreamingCaption || atLimit}
+                  className="flex-shrink-0 px-3.5 py-2 rounded-lg bg-[rgba(26,26,26,0.1)] hover:bg-[rgba(26,26,26,0.18)] border border-[rgba(26,26,26,0.2)] text-[12px] font-medium text-[#1A1A1A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Continue →
-                </Button>
-              </>
-            )}
+                  Regenerate caption — 1 credit
+                </button>
+              </div>
+            </>
+          )}
 
-            {/* ── Template grid — tabbed by category ───────────────── */}
-            {carouselStructureStep === "template" && (
-              <>
-                <ChoiceHeader title="Pick a slide structure" />
-                <CategoryChips
-                  categories={CAROUSEL_CATEGORY_ORDER}
-                  value={selectedCarouselCategory}
-                  onChange={setSelectedCarouselCategory}
-                />
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  {(getCarouselTemplatesByCategory()[selectedCarouselCategory] ?? []).map((template) => (
-                    <ChoiceCard
-                      key={template.id}
-                      title={template.name}
-                      subtitle={template.slides.join(" → ")}
-                      onClick={() => handleCarouselTemplatePick(template.id)}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-          </StepColumn>
-        )}
+          {error && (
+            <div className="flex flex-col gap-3">
+              <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
+                {friendlyGenerationError(error)}
+              </div>
+              <button
+                onClick={() => void streamCaption()}
+                disabled={isStreamingCaption}
+                className="self-start text-[13px] font-medium text-[#1A1A1A] hover:text-black transition-colors disabled:opacity-50"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
 
-        {isResult && (
-          <>
-            <BackButton onClick={() => setStep(3)} arrow={false} className="mb-6">
+          <button
+            onClick={() => setStep(2)}
+            disabled={!captionReady}
+            className={[
+              "self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
+              captionReady
+                ? "bg-[#1A1A1A] hover:bg-[#000000] cursor-pointer shadow-[0_0_24px_rgba(26,26,26,0.22)]"
+                : "bg-[rgba(26,26,26,0.3)] cursor-not-allowed opacity-50",
+            ].join(" ")}
+          >
+            Continue to Carousel →
+          </button>
+        </div>
+      )}
+
+      {/* ── STEP 2: Choose Ratio ── */}
+      {step === 2 && (
+        <div className="flex flex-col gap-6 max-w-2xl">
+          <h1 className="text-[22px] font-bold text-[#0A0A0A]">Choose your image format</h1>
+
+          <div className="grid grid-cols-2 gap-4">
+            <button
+              onClick={() => selectSize("4:5")}
+              className={[
+                "group flex flex-col items-center gap-5 p-6 rounded-2xl border transition-all duration-150 outline-none cursor-pointer",
+                size === "4:5"
+                  ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.1)] shadow-[0_0_28px_rgba(26,26,26,0.18)]"
+                  : "border-[#E5E3DE] bg-[#F4F2EC] hover:border-[rgba(26,26,26,0.3)] hover:bg-[rgba(26,26,26,0.05)]",
+              ].join(" ")}
+            >
+              <div
+                className={[
+                  "w-10 aspect-[4/5] rounded-lg transition-colors",
+                  size === "4:5"
+                    ? "bg-[rgba(26,26,26,0.35)] border border-[rgba(26,26,26,0.6)]"
+                    : "bg-[#E5E3DE] border border-[#E5E3DE] group-hover:bg-[rgba(26,26,26,0.15)] group-hover:border-[rgba(26,26,26,0.3)]",
+                ].join(" ")}
+              />
+              <div className="flex flex-col gap-1 text-center">
+                <span
+                  className={[
+                    "text-[14px] font-semibold transition-colors",
+                    size === "4:5" ? "text-[#1A1A1A]" : "text-[#374151]",
+                  ].join(" ")}
+                >
+                  4:5 Portrait
+                </span>
+                <span className="text-[12px] text-[#9CA3AF]">Best for LinkedIn feed</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => selectSize("1:1")}
+              className={[
+                "group flex flex-col items-center gap-5 p-6 rounded-2xl border transition-all duration-150 outline-none cursor-pointer",
+                size === "1:1"
+                  ? "border-[#1A1A1A] bg-[rgba(26,26,26,0.1)] shadow-[0_0_28px_rgba(26,26,26,0.18)]"
+                  : "border-[#E5E3DE] bg-[#F4F2EC] hover:border-[rgba(26,26,26,0.3)] hover:bg-[rgba(26,26,26,0.05)]",
+              ].join(" ")}
+            >
+              <div
+                className={[
+                  "w-12 aspect-square rounded-lg transition-colors",
+                  size === "1:1"
+                    ? "bg-[rgba(26,26,26,0.35)] border border-[rgba(26,26,26,0.6)]"
+                    : "bg-[#E5E3DE] border border-[#E5E3DE] group-hover:bg-[rgba(26,26,26,0.15)] group-hover:border-[rgba(26,26,26,0.3)]",
+                ].join(" ")}
+              />
+              <div className="flex flex-col gap-1 text-center">
+                <span
+                  className={[
+                    "text-[14px] font-semibold transition-colors",
+                    size === "1:1" ? "text-[#1A1A1A]" : "text-[#374151]",
+                  ].join(" ")}
+                >
+                  1:1 Square
+                </span>
+                <span className="text-[12px] text-[#9CA3AF]">Classic format</span>
+              </div>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setStep(1)}
+              className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-[#9CA3AF] hover:text-[#374151] transition-colors"
+            >
               ← Back
-            </BackButton>
+            </button>
+            <button
+              onClick={() => setStep(3)}
+              disabled={!size}
+              className={[
+                "inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
+                size
+                  ? "bg-[#1A1A1A] hover:bg-[#000000] cursor-pointer shadow-[0_0_24px_rgba(26,26,26,0.22)]"
+                  : "bg-[rgba(26,26,26,0.3)] cursor-not-allowed opacity-50",
+              ].join(" ")}
+            >
+              Continue →
+            </button>
+          </div>
+        </div>
+      )}
 
-            {error && (
-              <div className="mb-6">
-                <ErrorNotice
-                  message={friendlyGenerationError(error)}
-                  onRetry={() => void generateCarouselFlow()}
-                  retryDisabled={isGeneratingSlides || isGeneratingImages}
-                />
-              </div>
+      {/* ── STEP 3: Reference Image ── */}
+      {step === 3 && (
+        <div className="flex flex-col gap-6 max-w-2xl">
+          <div className="flex flex-col gap-1.5">
+            <h1 className="text-[22px] font-bold text-[#0A0A0A]">
+              Upload a style reference (optional)
+            </h1>
+            <p className="text-[13px] text-[#9CA3AF]">
+              We&apos;ll match the style across all slides — not copy the image
+            </p>
+          </div>
+
+          <ReferenceUploader
+            value={referenceImage}
+            onChange={handleReferenceChange}
+            onClear={handleReferenceClear}
+          />
+
+          {referenceNotice && (
+            <p className="text-[12px] text-[#D97706] leading-[1.5]">{referenceNotice}</p>
+          )}
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={() => setStep(2)}
+              className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-[#9CA3AF] hover:text-[#374151] transition-colors"
+            >
+              ← Back
+            </button>
+            <button
+              onClick={() => {
+                handleReferenceClear()
+                setStep(4)
+              }}
+              className="px-4 py-2.5 rounded-xl border border-[#E5E3DE] bg-[#F1EFE9] hover:bg-[#E9E7E1] text-[13px] font-medium text-[#4B5563] transition-colors"
+            >
+              Skip, generate without reference
+            </button>
+            {referenceImage && (
+              <button
+                onClick={() => setStep(4)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
+              >
+                Continue with reference →
+              </button>
             )}
+          </div>
+        </div>
+      )}
 
-            <h1 className="sr-only">Caption + Slides</h1>
+      {/* ── STEP 4: Carousel structure selection or Final Screen ── */}
+      {step === 4 && carouselStructureStep !== "ready" && (
+        <div className="flex flex-col gap-6 max-w-2xl">
+          {carouselStructureStep === "select" ? (
+            <button
+              onClick={() => setStep(3)}
+              className="self-start flex items-center gap-1.5 text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+            >
+              <ArrowLeft size={13} strokeWidth={2.2} />
+              Back
+            </button>
+          ) : (
+            <button
+              onClick={() => setCarouselStructureStep("select")}
+              className="self-start flex items-center gap-1.5 text-[12px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+            >
+              <ArrowLeft size={13} strokeWidth={2.2} />
+              Back to structure options
+            </button>
+          )}
 
-            {/* TEMPORARY DEBUG — prompts-only panel, see
-                DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION above. */}
-            {showDebugPrompts && slides && (
-              <div className="flex flex-col gap-4">
-                <div className="rounded-control border border-warning/30 bg-warning-soft px-3 py-2 text-caption text-warning">
-                  DEBUG MODE — prompts only, no images generated. Carousel structure decision and slide
-                  prompts shown below.
-                </div>
-                {carouselStructureDecision && (
-                  <div className="flex flex-col gap-2 rounded-control border border-border bg-surface p-4">
-                    <p className="text-caption font-semibold text-foreground">
-                      Stage 1 — Carousel Structure Decision:
-                    </p>
-                    <pre className="font-ui text-caption leading-relaxed whitespace-pre-wrap text-foreground">
-                      {carouselStructureDecision}
-                    </pre>
-                  </div>
-                )}
-                {slides.map((slide) => (
-                  <div
-                    key={slide.slideNumber}
-                    className="flex flex-col gap-2 rounded-control border border-border bg-surface p-4"
+          {/* ── Main selection: 4 cards ─────────────────────────── */}
+          {carouselStructureStep === "select" && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <h1 className="text-[22px] font-bold text-[#0A0A0A]">
+                  How should this carousel be structured?
+                </h1>
+                <p className="text-[13px] text-[#9CA3AF]">
+                  Choose the best slide flow for your content.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  onClick={handleSelectCarouselAuto}
+                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[26px] leading-none">🤖</span>
+                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    Let AI Decide
+                  </span>
+                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
+                    AI analyzes your content and picks the best slide structure automatically.
+                  </span>
+                </button>
+
+                <button
+                  onClick={handleSelectCarouselCustomMode}
+                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[26px] leading-none">✍️</span>
+                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    I&apos;ll Define It
+                  </span>
+                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
+                    Describe exactly how you want the carousel structured.
+                  </span>
+                </button>
+
+                <button
+                  onClick={handleSelectCarouselTemplateMode}
+                  className="group flex flex-col items-start gap-2.5 p-5 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                >
+                  <span className="text-[26px] leading-none">📋</span>
+                  <span className="text-[14px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                    Choose a Template
+                  </span>
+                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
+                    Pick from 30 proven slide structures.
+                  </span>
+                </button>
+
+                <button
+                  onClick={handleSelectCarouselReferenceOnly}
+                  disabled={!referenceImage}
+                  className={[
+                    "group flex flex-col items-start gap-2.5 p-5 rounded-xl border text-left transition-all duration-150 outline-none",
+                    referenceImage
+                      ? "bg-[#F4F2EC] border-[#E9E7E1] cursor-pointer hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] hover:shadow-[0_10px_28px_rgba(124,58,237,0.08)] focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                      : "bg-[rgba(26,26,26,0.03)] border-[#E9E7E1] cursor-not-allowed opacity-50",
+                  ].join(" ")}
+                >
+                  <span className="text-[26px] leading-none">🖼️</span>
+                  <span
+                    className={[
+                      "text-[14px] font-semibold transition-colors",
+                      referenceImage ? "text-[#0A0A0A] group-hover:text-[#7C3AED]" : "text-[#6B7280]",
+                    ].join(" ")}
                   >
-                    <p className="text-caption font-semibold text-foreground">
-                      Slide {slide.slideNumber} ({slide.role}): {slide.headline}
-                    </p>
-                    <pre className="font-ui text-caption leading-relaxed whitespace-pre-wrap text-foreground">
-                      {slide.prompt}
-                    </pre>
-                  </div>
+                    Follow My Reference Image&apos;s Structure
+                  </span>
+                  <span className="text-[12px] text-[#6B7280] leading-[1.5]">
+                    {referenceImage
+                      ? "Use the same layout and structure as your uploaded reference image."
+                      : "Upload a reference image first to use this option"}
+                  </span>
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── Custom structure input ───────────────────────────── */}
+          {carouselStructureStep === "custom" && (
+            <div className="flex flex-col gap-4">
+              <h1 className="text-[22px] font-bold text-[#0A0A0A]">
+                Define your carousel structure
+              </h1>
+              <div className="flex flex-col gap-2">
+                <textarea
+                  value={customCarouselStructure}
+                  onChange={(e) => setCustomCarouselStructure(e.target.value)}
+                  rows={5}
+                  autoFocus
+                  placeholder="Describe how you want this carousel structured (e.g. 8 slides: hook, 3 tips, 3 examples, summary)"
+                  className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[14px] text-[#0A0A0A] leading-[1.6] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.5)] transition-colors"
+                />
+                <p className="text-[11px] text-[#ADA99F] tabular-nums">
+                  {customCarouselWordCount} {customCarouselWordCount === 1 ? "word" : "words"}
+                </p>
+              </div>
+              <button
+                onClick={handleCarouselCustomContinue}
+                disabled={!customCarouselStructure.trim()}
+                className={[
+                  "self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
+                  customCarouselStructure.trim()
+                    ? "bg-[#7C3AED] hover:bg-[#6D28D9] cursor-pointer shadow-[0_0_24px_rgba(124,58,237,0.28)]"
+                    : "bg-[rgba(124,58,237,0.3)] cursor-not-allowed opacity-50",
+                ].join(" ")}
+              >
+                Continue →
+              </button>
+            </div>
+          )}
+
+          {/* ── Template grid — tabbed by category ───────────────── */}
+          {carouselStructureStep === "template" && (
+            <div className="flex flex-col gap-4">
+              <h1 className="text-[22px] font-bold text-[#0A0A0A]">
+                Pick a slide structure
+              </h1>
+              <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
+                {CAROUSEL_CATEGORY_ORDER.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCarouselCategory(cat)}
+                    className={[
+                      "flex-shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-all cursor-pointer",
+                      selectedCarouselCategory === cat
+                        ? "bg-[#7C3AED] text-white shadow-[0_0_16px_rgba(124,58,237,0.25)]"
+                        : "bg-[#F4F2EC] text-[#6B7280] border border-[#E9E7E1] hover:border-[rgba(124,58,237,0.4)] hover:text-[#7C3AED]",
+                    ].join(" ")}
+                  >
+                    {cat}
+                  </button>
                 ))}
               </div>
-            )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(getCarouselTemplatesByCategory()[selectedCarouselCategory] ?? []).map((template) => (
+                  <button
+                    key={template.id}
+                    onClick={() => handleCarouselTemplatePick(template.id)}
+                    className="group flex flex-col items-start gap-1.5 p-4 rounded-xl bg-[#F4F2EC] border border-[#E9E7E1] text-left hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50"
+                  >
+                    <span className="text-[13px] font-semibold text-[#0A0A0A] group-hover:text-[#7C3AED] transition-colors">
+                      {template.name}
+                    </span>
+                    <span className="text-[11px] text-[#9CA3AF] leading-[1.5]">
+                      {template.slides.join(" → ")}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
-            {/* Hidden entirely while the DEBUG prompts-only panel above is showing,
-                so the two don't overlap. */}
-            {!showDebugPrompts && (
-              <>
-                <Workspace
-                  panelLabel="Caption"
-                  canvas={
-                    <>
-                      {/* Single button — confirm, then generate prompts + all images in one go */}
-                      {slideImages.length === 0 && !isGeneratingSlides && !isGeneratingImages && (
-                        <div className="flex min-h-80 flex-col items-center justify-center gap-4 rounded-card border border-dashed border-control-border/60 bg-surface px-6 py-12">
-                          <Button size="lg" onClick={() => setConfirmOpen(true)}>
-                            <Sparkles aria-hidden />
-                            Generate Carousel
-                          </Button>
-                        </div>
-                      )}
+      {step === 4 && carouselStructureStep === "ready" && (
+        <div className="flex flex-col gap-6">
+          <button
+            onClick={() => setStep(3)}
+            className="self-start text-[12px] text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+          >
+            ← Back
+          </button>
 
-                      {(isGeneratingSlides || isGeneratingImages) && loadingMessage && (
-                        <p
-                          role="status"
-                          className="flex items-center gap-2.5 rounded-control border border-border bg-surface px-4 py-3 text-label font-medium text-foreground"
-                        >
-                          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-                          {loadingMessage}
-                        </p>
-                      )}
+          {error && (
+            <div className="flex flex-col gap-3">
+              <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
+                {friendlyGenerationError(error)}
+              </div>
+              <button
+                onClick={() => void generateCarouselFlow()}
+                disabled={isGeneratingSlides || isGeneratingImages}
+                className="self-start text-[13px] font-medium text-[#1A1A1A] hover:text-black transition-colors disabled:opacity-50"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
 
-                      {/* Grid fills in one image at a time as each slide is generated */}
-                      {slideImages.length > 0 && (
-                        <CarouselImageGrid
-                          images={slideImages}
-                          size={size ?? "4:5"}
-                          ideaId={ideaId}
-                          onRegenerate={regenerateSlideImage}
-                          regeneratingSlide={regeneratingSlide}
-                          busy={isGeneratingImages || isGeneratingSlides || retryingFailedSlide !== null}
-                          complete={failedSlideNumbers.length === 0 && !isGeneratingImages && (!slides || slideImages.length === slides.length)}
-                          instructions={slideInstructions}
-                          onInstructionChange={(slideNumber, value) =>
-                            setSlideInstructions((prev) => ({ ...prev, [slideNumber]: value }))
-                          }
-                        />
-                      )}
-
-                      {/* Slides that failed to generate — shown explicitly rather than
-                          just being a gap in the grid above. */}
-                      {!isGeneratingImages && failedSlideNumbers.length > 0 && (
-                        <div className="flex flex-col gap-2">
-                          {failedSlideNumbers.map((slideNumber) => (
-                            <div
-                              key={slideNumber}
-                              className="flex items-center justify-between gap-3 rounded-control border border-danger/25 bg-danger-soft px-3.5 py-2.5"
-                            >
-                              <span className="text-label font-medium text-danger">
-                                Slide {slideNumber} failed to generate
-                              </span>
-                              <Button
-                                variant="outline"
-                                size="xs"
-                                onClick={() => void retryFailedSlide(slideNumber)}
-                                disabled={retryingFailedSlide !== null}
-                                className="border-danger/40 text-danger"
-                              >
-                                {retryingFailedSlide === slideNumber && (
-                                  <Loader2 className="animate-spin" aria-hidden />
-                                )}
-                                Retry
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  }
-                  panel={
-                    <>
-                      {/* Once image generation has started, the game stays here so the
-                          user can keep playing after the carousel is done. */}
-                      {gameStarted && <LoadingGame />}
-
-                      <div className="flex flex-col gap-2">
-                        <FieldLabel htmlFor="carousel-caption">Caption</FieldLabel>
-                        <textarea
-                          id="carousel-caption"
-                          value={caption}
-                          onChange={(e) => handleCaptionChange(e.target.value)}
-                          rows={16}
-                          className={cn(captionFieldClasses, "resize-y bg-surface-raised")}
-                        />
-                        {countWords(caption) > 0 && (
-                          <p className="text-caption text-muted-foreground tabular-nums">{countWords(caption)} words</p>
-                        )}
-                        {/* Same validatePostForPlatform used by Content Hub's Custom Post
-                            Composer, so an AI caption/carousel that runs long or has too many
-                            slides gets the same treatment as content a user typed by hand. */}
-                        {caption.trim() && selectedPlatform && isValidPlatform(selectedPlatform) && (
-                          <PlatformChecks {...validatePostForPlatform(caption, slideImages.length, selectedPlatform)} />
-                        )}
-                      </div>
-                    </>
-                  }
-                />
-
-                <div className="mt-8">
-                  <ActionBar>
-                    <Button variant="ghost" size="sm" onClick={handleCopyCaption}>
-                      {captionCopied ? <Check className="text-success" aria-hidden /> : <Copy aria-hidden />}
-                      {captionCopied ? "Copied!" : "Copy Caption"}
-                    </Button>
-                    {hasSlides && (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => void handleSaveDraft()}
-                          disabled={savingDraft || failedSlideNumbers.length > 0 || regeneratingSlide !== null}
-                          aria-busy={savingDraft || undefined}
-                          className={cn(savedNow && !savingDraft && "border-success/40 bg-success-soft text-success hover:bg-success-soft")}
-                        >
-                          {savingDraft ? <Loader2 className="animate-spin" aria-hidden /> : savedNow ? <Check aria-hidden /> : <Save aria-hidden />}
-                          {savingDraft ? "Saving…" : savedNow ? "Saved" : "Save Draft"}
-                        </Button>
-                        <ScheduleForLaterButton getPostId={getPostIdSynced} disabled={savingDraft || failedSlideNumbers.length > 0 || regeneratingSlide !== null} />
-                        <PostToLinkedInButton
-                          caption={caption}
-                          imageUrls={slideImages
-                            .map((s) => s.imageUrl)
-                            .filter((u): u is string => !!u)}
-                          disabled={isGeneratingImages || failedSlideNumbers.length > 0 || regeneratingSlide !== null}
-                          beforePost={confirmLinkedInPost}
-                        />
-                      </>
-                    )}
-                  </ActionBar>
+          {/* TEMPORARY DEBUG — prompts-only panel, see
+              DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION above. */}
+          {DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION && slides && slideImages.length === 0 && (
+            <div className="flex flex-col gap-4 p-4">
+              <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-700">
+                DEBUG MODE — prompts only, no images generated. Carousel structure decision and slide
+                prompts shown below.
+              </div>
+              {carouselStructureDecision && (
+                <div className="flex flex-col gap-2 p-4 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC]">
+                  <p className="text-[12px] font-semibold text-[#0A0A0A]">
+                    Stage 1 — Carousel Structure Decision:
+                  </p>
+                  <pre className="whitespace-pre-wrap text-[11px] text-[#374151] leading-relaxed font-sans">
+                    {carouselStructureDecision}
+                  </pre>
                 </div>
-              </>
-            )}
-          </>
-        )}
-      </div>
+              )}
+              {slides.map((slide) => (
+                <div
+                  key={slide.slideNumber}
+                  className="flex flex-col gap-2 p-4 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC]"
+                >
+                  <p className="text-[12px] font-semibold text-[#0A0A0A]">
+                    Slide {slide.slideNumber} ({slide.role}): {slide.headline}
+                  </p>
+                  <pre className="whitespace-pre-wrap text-[11px] text-[#374151] leading-relaxed font-sans">
+                    {slide.prompt}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Once generation has started, keep the 2-column layout (caption+images
+              left, game right) so the user can keep playing after the carousel is
+              done. Before that, the normal centered grid. Hidden entirely while
+              the DEBUG prompts-only panel above is showing, so the two don't
+              overlap. */}
+          {!(DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION && slides && slideImages.length === 0) &&
+            (gameStarted ? (
+              <div style={{ display: "flex", gap: "2rem", alignItems: "flex-start" }}>
+                <div style={{ flex: "0 0 70%", maxWidth: "70%" }}>{carouselGrid}</div>
+                <div style={{ flex: "0 0 28%", maxWidth: "28%" }}>
+                  <LoadingGame />
+                </div>
+              </div>
+            ) : (
+              carouselGrid
+            ))}
+        </div>
+      )}
 
       {/* Regeneration limit toast */}
       <RegenerationLimit
@@ -1524,18 +1866,22 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
               generation credits.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="ghost" onClick={() => setConfirmOpen(false)}>
+          <DialogFooter>
+            <button
+              onClick={() => setConfirmOpen(false)}
+              className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-[#6B7280] hover:text-[#1A1A1A] transition-colors"
+            >
               Cancel
-            </Button>
-            <Button
+            </button>
+            <button
               onClick={() => {
                 setConfirmOpen(false)
                 void generateCarouselFlow()
               }}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-all"
             >
               Yes, generate →
-            </Button>
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1563,13 +1909,19 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
               How would you like to proceed?
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="ghost" onClick={() => resolveLinkedInWarn(false)}>
+          <DialogFooter>
+            <button
+              onClick={() => resolveLinkedInWarn(false)}
+              className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-[#6B7280] hover:text-[#1A1A1A] transition-colors"
+            >
               Go Back
-            </Button>
-            <Button onClick={() => resolveLinkedInWarn(true)} className="bg-[#0A66C2] text-white hover:bg-[#004182]">
+            </button>
+            <button
+              onClick={() => resolveLinkedInWarn(true)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#0A66C2] hover:bg-[#004182] transition-colors"
+            >
               Upload as Images
-            </Button>
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

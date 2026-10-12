@@ -95,22 +95,18 @@ export function InternDetail({
 
   return (
     <div className="space-y-6">
-      {/* Sections as underline tabs, the same as the Engage admin's */}
-      <div role="tablist" aria-label="Intern sections" className="flex gap-1 overflow-x-auto border-b border-border print:hidden">
+      <div className="flex flex-wrap gap-1 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-1.5 print:hidden">
         {TABS.map((t) => (
           <button
             key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.key}
             onClick={() => setTab(t.key)}
-            className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-caption font-medium whitespace-nowrap transition-colors duration-(--motion-fast) ${
-              tab === t.key ? "border-brand text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[12.5px] font-semibold transition-colors ${
+              tab === t.key ? "bg-[#7C3AED] text-white" : "text-[#8A8A8A] hover:bg-[#232323] hover:text-white"
             }`}
           >
             {t.label}
             {t.key === "support" && unreadMessageCount > 0 && (
-              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[11px] font-bold text-danger-foreground">
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
                 {unreadMessageCount}
               </span>
             )}

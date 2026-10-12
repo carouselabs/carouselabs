@@ -1,14 +1,21 @@
 import type { ReactNode } from "react"
+import { Onest } from "next/font/google"
 import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 import { headers } from "next/headers"
 import { getCurrentUser } from "@/lib/auth"
-import { AppChrome } from "@/components/shell/AppChrome"
-import { AppFrame } from "@/components/shell/AppFrame"
+import { Sidebar } from "@/components/shell/Sidebar"
+import { Topbar } from "@/components/shell/Topbar"
+import { AppStickers } from "@/components/shell/AppStickers"
 import { MaintenanceBanner } from "@/components/shared/MaintenanceBanner"
 import { ProfileReviewBanner } from "@/components/shell/ProfileReviewBanner"
 import { UpgradeRequiredBanner } from "@/components/shell/UpgradeRequiredBanner"
 import { FREE_LIFETIME_CREDITS } from "@/lib/credits"
+
+const font = Onest({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+})
 
 // KNOWN LIMITATION (loading-state audit): this layout's own auth/db work
 // below (auth(), getCurrentUser()) has no Suspense boundary of its own, and
@@ -36,7 +43,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   }
 
   // employee.carouselabs.com is the intern-only subdomain (see proxy.ts) —
-  // computed server-side so the app frame renders the restricted nav on
+  // computed server-side so Sidebar/Topbar render the restricted nav on
   // first paint, with no client-side flash of the full app nav.
   const hostname = (await headers()).get("host") || ""
   const isEmployeeSubdomain = hostname.startsWith("employee.")
@@ -51,7 +58,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const showUpgradeBanner = sub?.plan === "FREE" && sub.creditsUsed >= FREE_LIFETIME_CREDITS
 
   return (
-    <AppFrame>
+    <div className={`${font.className} h-screen overflow-hidden flex flex-col bg-[#F9F7F2] text-[#0A0A0A]`}>
+      {/* The root layout sets a dark body background; keep the app on cream. */}
+      <style>{`body{background-color:#F9F7F2;color:#0A0A0A}`}</style>
       {/* Fetches its own visibility client-side — see MaintenanceBanner for why
           this isn't a server-side getAppSettings() call. */}
       <MaintenanceBanner />
@@ -59,7 +68,18 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <ProfileReviewBanner
         show={!!user.profile?.prefilledByAdmin && !user.profile?.profileReviewDismissed}
       />
-      <AppChrome isEmployeeSubdomain={isEmployeeSubdomain}>{children}</AppChrome>
-    </AppFrame>
+      {/* Grid lives in its own flex-1 wrapper (rather than h-screen directly)
+          so the banner above can take its own height without breaking the
+          56px-topbar/1fr-main row template. */}
+      <div className="flex-1 min-h-0 flex flex-col md:grid md:grid-cols-[230px_1fr] md:grid-rows-[56px_1fr]">
+        <Sidebar isEmployeeSubdomain={isEmployeeSubdomain} />
+        <Topbar isEmployeeSubdomain={isEmployeeSubdomain} />
+        <main className="relative flex-1 min-h-0 overflow-y-auto bg-[#F9F7F2] px-6 py-8 md:px-10 pb-24 md:pb-10">
+          {/* Page-aware floating stickers in the cream margins, behind content */}
+          <AppStickers />
+          <div className="relative z-10 h-full">{children}</div>
+        </main>
+      </div>
+    </div>
   )
 }

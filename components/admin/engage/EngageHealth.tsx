@@ -11,10 +11,10 @@ import type { EngageHealth as HealthData, HealthStatus } from "@/lib/engage/heal
 import { ErrorState, SkeletonBlock, useAdminApi } from "./shared"
 
 const STATUS: Record<HealthStatus, { label: string; className: string; Icon: typeof CheckCircle2 }> = {
-  ok: { label: "OK", className: "text-success", Icon: CheckCircle2 },
-  warn: { label: "Needs a look", className: "text-warning", Icon: AlertTriangle },
-  bad: { label: "Problem", className: "text-danger", Icon: XCircle },
-  idle: { label: "No activity", className: "text-muted-foreground", Icon: CircleSlash },
+  ok: { label: "OK", className: "text-emerald-300", Icon: CheckCircle2 },
+  warn: { label: "Needs a look", className: "text-amber-300", Icon: AlertTriangle },
+  bad: { label: "Problem", className: "text-red-300", Icon: XCircle },
+  idle: { label: "No activity", className: "text-[#8A8A8A]", Icon: CircleSlash },
 }
 
 const OVERALL: Record<HealthStatus, string> = {
@@ -31,8 +31,8 @@ export function EngageHealth() {
     <div className="mx-auto max-w-[900px] space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lead font-semibold tracking-tight text-foreground">Health</h2>
-          <p className="mt-0.5 text-caption text-muted-foreground">
+          <h1 className="text-[18px] font-semibold tracking-tight text-white">Health</h1>
+          <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">
             Is Engage working right now. {data ? `Checked ${fmtDateTime(data.checkedAt)}.` : ""}
           </p>
         </div>
@@ -48,21 +48,21 @@ export function EngageHealth() {
         <SkeletonBlock className="h-[400px]" />
       ) : (
         <>
-          <div role="status" className={`rounded-card border border-border bg-surface px-4 py-3 text-label font-semibold ${STATUS[data.overall].className}`}>
+          <div role="status" className={`rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3 text-[14px] font-semibold ${STATUS[data.overall].className}`}>
             {OVERALL[data.overall]}
           </div>
-          <ul className="divide-y divide-border rounded-card border border-border bg-surface" aria-label="Checks">
+          <ul className="divide-y divide-[#232323] rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]" aria-label="Checks">
             {data.checks.map((c) => {
               const s = STATUS[c.status]
               return (
                 // What was checked, what was found and the status side by side,
                 // the status a fixed width so the columns line up; on a phone,
                 // one under the other.
-                <li key={c.id} className="flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-2.5 text-caption">
+                <li key={c.id} className="flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-2.5 text-[12.5px]">
                   <s.Icon className={`mt-px h-4 w-4 shrink-0 ${s.className}`} aria-hidden />
                   <div className="min-w-0 flex-1 sm:flex sm:gap-3">
-                    <span className="block text-foreground/90 sm:w-2/5 sm:shrink-0">{c.label}</span>
-                    <span className="block break-words text-muted-foreground sm:min-w-0 sm:flex-1">
+                    <span className="block text-[#D0D0D0] sm:w-2/5 sm:shrink-0">{c.label}</span>
+                    <span className="block break-words text-[#B0B0B0] sm:min-w-0 sm:flex-1">
                       {c.id === "controls" && c.status !== "ok" ? (
                         <Link href="/admin/engage/controls" className="hover:underline">
                           {c.detail}
@@ -72,7 +72,7 @@ export function EngageHealth() {
                       )}
                     </span>
                   </div>
-                  <span className={`w-full pl-7 text-caption font-medium sm:w-[84px] sm:shrink-0 sm:pl-0 sm:text-right ${s.className}`}>{s.label}</span>
+                  <span className={`w-full pl-7 text-[11.5px] font-medium sm:w-[84px] sm:shrink-0 sm:pl-0 sm:text-right ${s.className}`}>{s.label}</span>
                 </li>
               )
             })}

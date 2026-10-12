@@ -8,6 +8,7 @@ import {
   Download,
   Loader2,
   RotateCcw,
+  ImageIcon,
   FileText,
   Plus,
   X,
@@ -15,16 +16,6 @@ import {
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
 import { LoadingGame } from "@/components/generate/LoadingGame"
 import { useCreditStore } from "@/lib/store/creditStore"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { controlClasses } from "@/components/ui/input"
-import {
-  ActionBar,
-  BackLink,
-  ChoiceHeader,
-  CreateToolbar,
-  captionFieldClasses,
-} from "@/components/create/CreateKit"
 import type { ThumbnailBlueprint } from "@/lib/types/thumbnail"
 
 // ── Shared shapes (mirror the API routes) ──────────────────────────
@@ -154,12 +145,6 @@ const GENERATION_STATUS_MESSAGES = [
   "Generating your thumbnail…",
   "Almost done…",
 ]
-
-// Where the flow is, shown in the toolbar.
-const THUMBNAIL_STEPS = ["Reference", "Questions", "Blueprint", "Thumbnail"]
-
-const segmentClasses =
-  "inline-flex h-8 items-center gap-1.5 rounded-control-sm px-3 text-label font-medium text-muted-foreground transition-colors duration-(--motion-fast) hover:text-foreground aria-pressed:bg-surface-raised aria-pressed:text-foreground aria-pressed:shadow-card"
 
 export function ThumbnailClient() {
   const [screen, setScreen] = useState<Screen>("input")
@@ -451,143 +436,129 @@ export function ThumbnailClient() {
     }
   }
 
-  // One toolbar for every screen: back to the Toolkit, and where you are.
-  const stepIndex = screen === "input" ? 0 : screen === "chat" ? 1 : screen === "review" ? 2 : 3
-  const toolbar = (
-    <CreateToolbar
-      back={<BackLink href="/toolkit">Toolkit</BackLink>}
-      title="Thumbnail"
-      steps={THUMBNAIL_STEPS}
-      current={stepIndex}
-    />
-  )
-  const referencePreview = referenceImage ? `data:${referenceMediaType};base64,${referenceImage}` : null
-  const errorBox = error && (
-    <div role="alert" className="rounded-card border border-danger/25 bg-danger-soft px-4 py-3 text-label text-danger">
-      {error}
-    </div>
-  )
-
   // ── Screen 1: Initial Input ──────────────────────────────────────
   if (screen === "input") {
     return (
-      <div>
-        {toolbar}
-        <div className="mx-auto flex w-full max-w-showcase flex-col gap-8">
-          <ChoiceHeader
-            title={
-              <span className="flex items-center gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element -- small fixed-size logo */}
-                <img src="/images/tools/thumbnail-recreation.svg" alt="" width={40} height={40} className="size-10 shrink-0 rounded-[10px] shadow-card" />
-                Thumbnail
-              </span>
-            }
-            description={
-              <>
-                Upload a reference thumbnail you like, tell us about your video, and we&apos;ll walk you
-                through recreating its style for your own content.
-              </>
-            }
+      <div className="max-w-2xl mx-auto flex flex-col gap-8">
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-lg bg-[rgba(124,58,237,0.1)] flex items-center justify-center">
+              <ImageIcon size={16} className="text-[#7C3AED]" strokeWidth={2} />
+            </div>
+            <h1 className="text-[22px] font-bold text-[#0A0A0A]">Thumbnail</h1>
+          </div>
+          <p className="text-[13px] text-[#6B7280] leading-[1.55]">
+            Upload a reference thumbnail you like, tell us about your video, and we&apos;ll walk you
+            through recreating its style for your own content.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-6">
+          <ReferenceUploader
+            value={referenceImage}
+            onChange={(b64, mediaType) => {
+              setReferenceImage(b64)
+              setReferenceMediaType(mediaType)
+            }}
+            onClear={() => setReferenceImage(null)}
           />
 
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:gap-12">
-            {/* The reference is the canvas: everything else is recreated from it. */}
-            <ReferenceUploader
-              size="canvas"
-              value={referenceImage}
-              onChange={(b64, mediaType) => {
-                setReferenceImage(b64)
-                setReferenceMediaType(mediaType)
-              }}
-              onClear={() => setReferenceImage(null)}
-            />
-
-            <div className="flex flex-col gap-5 lg:border-l lg:border-border lg:pl-12">
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 id="video-heading" className="text-body font-semibold text-foreground">
-                    Tell us about your video
-                  </h2>
-                  <div role="group" aria-labelledby="video-heading" className="inline-flex rounded-control border border-border bg-surface p-1">
-                    <button
-                      type="button"
-                      aria-pressed={contentMode === "type"}
-                      onClick={() => setContentMode("type")}
-                      className={segmentClasses}
-                    >
-                      Type
-                    </button>
-                    <button
-                      type="button"
-                      aria-pressed={contentMode === "upload"}
-                      onClick={() => setContentMode("upload")}
-                      className={segmentClasses}
-                    >
-                      <FileText className="size-3.5" aria-hidden />
-                      Upload a file
-                    </button>
-                  </div>
-                </div>
-
-                {contentMode === "upload" && (
-                  <div className="flex flex-col gap-1.5">
-                    <input
-                      ref={docFileInputRef}
-                      type="file"
-                      accept=".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
-                      className="hidden"
-                      onChange={(e) => void handleDocumentSelected(e)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => docFileInputRef.current?.click()}
-                      disabled={extractingDocument}
-                      className="flex min-h-12 items-center justify-center gap-2 rounded-control border border-dashed border-control-border bg-surface-raised px-4 py-2 text-center text-label text-muted-foreground transition-colors duration-(--motion-fast) hover:border-brand/50 hover:bg-brand-soft/40 disabled:opacity-60"
-                    >
-                      {extractingDocument ? (
-                        <Loader2 className="size-4 animate-spin" aria-hidden />
-                      ) : (
-                        <Upload className="size-4" strokeWidth={1.8} aria-hidden />
-                      )}
-                      {extractingDocument
-                        ? "Extracting text…"
-                        : documentName
-                          ? `Replace "${documentName}"`
-                          : "Upload a script or document (PDF, DOC, DOCX, TXT)"}
-                    </button>
-                    {documentError && <p className="text-caption text-danger">{documentError}</p>}
-                    {documentName && !extractingDocument && !documentError && (
-                      <p className="text-caption text-muted-foreground">
-                        Extracted from {documentName} — review and edit below before continuing.
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <textarea
-                  value={videoContent}
-                  onChange={(e) => setVideoContent(e.target.value)}
-                  rows={9}
-                  placeholder="Title, script, topic, or key points..."
-                  aria-labelledby="video-heading"
-                  className={captionFieldClasses}
-                />
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
+                Tell us about your video
+              </p>
+              <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[#F4F2EC] border border-[#E5E3DE]">
+                <button
+                  onClick={() => setContentMode("type")}
+                  className={[
+                    "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors",
+                    contentMode === "type"
+                      ? "bg-white text-[#1A1A1A] shadow-sm"
+                      : "text-[#9CA3AF] hover:text-[#4B5563]",
+                  ].join(" ")}
+                >
+                  Type
+                </button>
+                <button
+                  onClick={() => setContentMode("upload")}
+                  className={[
+                    "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors",
+                    contentMode === "upload"
+                      ? "bg-white text-[#1A1A1A] shadow-sm"
+                      : "text-[#9CA3AF] hover:text-[#4B5563]",
+                  ].join(" ")}
+                >
+                  <FileText size={11} strokeWidth={2.2} />
+                  Upload a file
+                </button>
               </div>
-
-              {errorBox}
-
-              <Button
-                variant="brand"
-                size="lg"
-                className="self-start"
-                onClick={() => void handleAnalyzeStart()}
-                disabled={!referenceImage || !videoContent.trim()}
-              >
-                <Sparkles aria-hidden />
-                Analyze &amp; Start
-              </Button>
             </div>
+
+            {contentMode === "upload" && (
+              <div className="flex flex-col gap-1.5">
+                <input
+                  ref={docFileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                  className="hidden"
+                  onChange={(e) => void handleDocumentSelected(e)}
+                />
+                <button
+                  onClick={() => docFileInputRef.current?.click()}
+                  disabled={extractingDocument}
+                  className="flex items-center justify-center gap-2 h-11 rounded-xl border border-dashed border-[#E5E3DE] bg-[#F6F4EE] hover:border-[#D6D3CC] hover:bg-[#F4F2EC] text-[12px] text-[#6B7280] transition-all disabled:opacity-60"
+                >
+                  {extractingDocument ? (
+                    <Loader2 size={13} className="animate-spin" strokeWidth={2.2} />
+                  ) : (
+                    <Upload size={13} strokeWidth={1.8} className="text-[#ADA99F]" />
+                  )}
+                  {extractingDocument
+                    ? "Extracting text…"
+                    : documentName
+                      ? `Replace "${documentName}"`
+                      : "Upload a script or document (PDF, DOC, DOCX, TXT)"}
+                </button>
+                {documentError && (
+                  <p className="text-[11px] text-[rgba(239,68,68,0.9)]">{documentError}</p>
+                )}
+                {documentName && !extractingDocument && !documentError && (
+                  <p className="text-[11px] text-[#9CA3AF]">
+                    Extracted from {documentName} — review and edit below before continuing.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <textarea
+              value={videoContent}
+              onChange={(e) => setVideoContent(e.target.value)}
+              rows={6}
+              placeholder="Title, script, topic, or key points..."
+              className="w-full px-4 py-3 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.6] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.5)] transition-colors"
+            />
           </div>
+
+          {error && (
+            <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={() => void handleAnalyzeStart()}
+            disabled={!referenceImage || !videoContent.trim()}
+            className={[
+              "self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all",
+              referenceImage && videoContent.trim()
+                ? "bg-[#7C3AED] hover:bg-[#6D28D9] cursor-pointer shadow-[0_0_24px_rgba(124,58,237,0.28)]"
+                : "bg-[rgba(124,58,237,0.3)] cursor-not-allowed opacity-50",
+            ].join(" ")}
+          >
+            <Sparkles size={14} strokeWidth={2} />
+            Analyze &amp; Start
+          </button>
         </div>
       </div>
     )
@@ -603,9 +574,7 @@ export function ThumbnailClient() {
       (currentQuestion.inputType === "single_image" || currentQuestion.inputType === "multiple_images")
 
     return (
-      <div>
-        {toolbar}
-        <h1 className="sr-only">Thumbnail</h1>
+      <div className="max-w-2xl mx-auto flex flex-col h-full gap-4">
         <input
           ref={singleFileInputRef}
           type="file"
@@ -622,196 +591,185 @@ export function ThumbnailClient() {
           onChange={(e) => void handleMultiFilesSelected(e)}
         />
 
-        <div className="mx-auto grid w-full max-w-showcase gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-12">
-          <div className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-4">
-            <div role="log" aria-live="polite" className="flex flex-col gap-3">
-              {messages.map((m, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex max-w-[85%] flex-col gap-1.5",
-                    m.role === "user" ? "items-end self-end" : "items-start self-start"
-                  )}
-                >
-                  {m.imagePreviews && m.imagePreviews.length > 0 && (
-                    <div className="flex flex-wrap justify-end gap-1.5">
-                      {m.imagePreviews.map((src, idx) => (
-                        /* eslint-disable-next-line @next/next/no-img-element */
-                        <img
-                          key={idx}
-                          src={src}
-                          alt="Uploaded"
-                          className="size-16 rounded-control-sm border border-border object-cover"
-                        />
-                      ))}
-                    </div>
-                  )}
-                  <div
-                    className={cn(
-                      "rounded-card px-4 py-3 text-label leading-relaxed whitespace-pre-wrap",
-                      m.role === "user"
-                        ? "rounded-br-md bg-brand text-brand-foreground"
-                        : "rounded-bl-md border border-border bg-surface-raised text-foreground"
-                    )}
-                  >
-                    {m.text}
-                  </div>
-                </div>
-              ))}
-
-              {isAnalyzing && (
-                <div role="status" className="flex items-center gap-2 self-start rounded-card rounded-bl-md border border-border bg-surface-raised px-4 py-3">
-                  <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-hidden />
-                  <span className="text-caption text-muted-foreground">Thinking…</span>
-                </div>
-              )}
-
-              {error && (
-                <div role="alert" className="flex max-w-[85%] flex-col gap-2 self-start rounded-card border border-danger/25 bg-danger-soft px-4 py-3 text-label text-danger">
-                  {error}
-                  <button
-                    type="button"
-                    onClick={() => void callChat()}
-                    className="self-start rounded-detail text-caption font-medium underline underline-offset-2"
-                  >
-                    Try again
-                  </button>
-                </div>
-              )}
-
-              <div ref={chatEndRef} />
-            </div>
-
-            {/* Question input — floats at the bottom while the chat scrolls. The
-                control shown adapts to question.inputType: choice buttons, a
-                single-photo upload, a multi-photo picker (up to maxImages), or a
-                text field. */}
-            {currentQuestion && !isAnalyzing && (
-              <div className="sticky bottom-0 z-(--z-sticky) flex flex-col gap-3 rounded-card border border-border bg-surface-raised/95 p-4 shadow-popover backdrop-blur-sm">
-                <p className="text-caption font-medium text-muted-foreground">{currentQuestion.topic}</p>
-
-                {currentQuestion.inputType === "choice" && answerMode !== "text" && (
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {currentQuestion.options.map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => submitAnswer(opt)}
-                        className="rounded-control border border-border bg-surface px-4 py-2.5 text-left text-label font-medium text-foreground transition-colors duration-(--motion-fast) hover:border-brand/60 hover:bg-brand-soft"
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {currentQuestion.inputType === "single_image" && answerMode !== "text" && (
-                  <button
-                    type="button"
-                    onClick={() => singleFileInputRef.current?.click()}
-                    disabled={processingImage}
-                    className="flex h-12 items-center justify-center gap-2 rounded-control border border-dashed border-brand/40 bg-brand-soft/40 text-label font-medium text-brand transition-colors duration-(--motion-fast) hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {processingImage ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Upload className="size-4" aria-hidden />}
-                    {processingImage ? "Processing photo…" : "Upload a photo"}
-                  </button>
-                )}
-
-                {showImagePicker && currentQuestion.inputType === "multiple_images" && (
-                  <div className="flex flex-col gap-3">
-                    <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
-                      {pendingImages.map((img, i) => (
-                        <div key={i} className="relative aspect-square overflow-hidden rounded-control-sm border border-border">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={img.previewUrl} alt={`Selected ${i + 1}`} className="h-full w-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => removePendingImage(i)}
-                            aria-label="Remove image"
-                            className="absolute top-1 right-1 flex size-6 items-center justify-center rounded-full bg-foreground/70 text-background transition-colors duration-(--motion-fast) hover:bg-foreground/90"
-                          >
-                            <X className="size-3" strokeWidth={2.5} aria-hidden />
-                          </button>
-                        </div>
-                      ))}
-                      {pendingImages.length < maxImages && (
-                        <button
-                          type="button"
-                          onClick={() => multiFileInputRef.current?.click()}
-                          disabled={processingImage}
-                          aria-label="Upload a photo"
-                          className="flex aspect-square items-center justify-center rounded-control-sm border border-dashed border-control-border text-muted-foreground transition-colors duration-(--motion-fast) hover:border-brand hover:bg-brand-soft/40 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {processingImage ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Plus className="size-4" aria-hidden />}
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Button variant="brand" size="sm" onClick={confirmMultiImages} disabled={pendingImages.length === 0}>
-                        Use {pendingImages.length || ""} image{pendingImages.length === 1 ? "" : "s"}
-                      </Button>
-                      <span className="text-caption text-muted-foreground tabular-nums">
-                        {pendingImages.length} / {maxImages} selected
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {showImagePicker && (
-                  <button
-                    type="button"
-                    onClick={() => setAnswerMode("text")}
-                    className="self-start rounded-detail text-caption text-muted-foreground underline underline-offset-2 transition-colors duration-(--motion-fast) hover:text-foreground"
-                  >
-                    Answer in your own words instead
-                  </button>
-                )}
-
-                {showTextInput && (
-                  <div className="flex items-end gap-2">
-                    <textarea
-                      value={textAnswer}
-                      onChange={(e) => setTextAnswer(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault()
-                          handleTextSubmit()
-                        }
-                      }}
-                      autoFocus
-                      rows={2}
-                      placeholder="Type your answer..."
-                      aria-label={currentQuestion.topic}
-                      className={cn(controlClasses, "flex-1 resize-none px-3.5 py-2.5 leading-relaxed")}
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 py-2">
+          {messages.map((m, i) => (
+            <div
+              key={i}
+              className={`flex flex-col gap-1.5 max-w-[85%] ${m.role === "user" ? "self-end items-end" : "self-start items-start"}`}
+            >
+              {m.imagePreviews && m.imagePreviews.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 justify-end">
+                  {m.imagePreviews.map((src, idx) => (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      key={idx}
+                      src={src}
+                      alt="Uploaded"
+                      className="w-16 h-16 rounded-lg object-cover border border-[#E5E3DE]"
                     />
-                    <Button
-                      variant="brand"
-                      size="icon"
-                      onClick={handleTextSubmit}
-                      disabled={!textAnswer.trim()}
-                      aria-label="Send"
-                    >
-                      <Send aria-hidden />
-                    </Button>
-                  </div>
+                  ))}
+                </div>
+              )}
+              <div
+                className={[
+                  "px-4 py-3 rounded-2xl text-[13px] leading-[1.55] whitespace-pre-wrap",
+                  m.role === "user"
+                    ? "bg-[#7C3AED] text-white rounded-br-md"
+                    : "bg-white border border-[#E5E3DE] text-[#374151] rounded-bl-md",
+                ].join(" ")}
+              >
+                {m.text}
+              </div>
+            </div>
+          ))}
+
+          {isAnalyzing && (
+            <div className="self-start flex items-center gap-2 px-4 py-3 rounded-2xl rounded-bl-md bg-white border border-[#E5E3DE]">
+              <Loader2 size={13} className="animate-spin text-[#9CA3AF]" />
+              <span className="text-[12px] text-[#9CA3AF]">Thinking…</span>
+            </div>
+          )}
+
+          {error && (
+            <div className="self-start flex flex-col gap-2 px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)] max-w-[85%]">
+              {error}
+              <button
+                onClick={() => void callChat()}
+                className="self-start text-[12px] font-medium underline"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* Question input — sticky at the bottom. The control shown adapts to
+            question.inputType: choice buttons, a single-photo upload, a
+            multi-photo picker (up to maxImages), or a text field. */}
+        {currentQuestion && !isAnalyzing && (
+          <div className="flex-shrink-0 flex flex-col gap-2.5 pt-2 border-t border-[#E5E3DE]">
+            <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
+              {currentQuestion.topic}
+            </p>
+
+            {currentQuestion.inputType === "choice" && answerMode !== "text" && (
+              <div className="flex flex-col gap-2">
+                {currentQuestion.options.map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => submitAnswer(opt)}
+                    className="px-4 py-2.5 rounded-xl border border-[#E5E3DE] bg-white hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.05)] text-[13px] font-medium text-[#374151] text-left transition-all"
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {currentQuestion.inputType === "single_image" && answerMode !== "text" && (
+              <button
+                onClick={() => singleFileInputRef.current?.click()}
+                disabled={processingImage}
+                className="flex items-center justify-center gap-2 h-11 rounded-xl border border-dashed border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.03)] hover:bg-[rgba(124,58,237,0.06)] text-[13px] font-medium text-[#7C3AED] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {processingImage ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Upload size={14} strokeWidth={2} />
                 )}
+                {processingImage ? "Processing photo…" : "Upload a photo"}
+              </button>
+            )}
+
+            {showImagePicker && currentQuestion.inputType === "multiple_images" && (
+              <div className="flex flex-col gap-2.5">
+                <div className="grid grid-cols-4 gap-2">
+                  {pendingImages.map((img, i) => (
+                    <div
+                      key={i}
+                      className="relative aspect-square rounded-lg overflow-hidden border border-[#E5E3DE]"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={img.previewUrl}
+                        alt={`Selected ${i + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        onClick={() => removePendingImage(i)}
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[rgba(0,0,0,0.65)] flex items-center justify-center hover:bg-[rgba(0,0,0,0.85)] transition-colors"
+                      >
+                        <X size={10} className="text-white" strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  ))}
+                  {pendingImages.length < maxImages && (
+                    <button
+                      onClick={() => multiFileInputRef.current?.click()}
+                      disabled={processingImage}
+                      className="aspect-square rounded-lg border border-dashed border-[#E5E3DE] flex items-center justify-center hover:border-[#7C3AED] hover:bg-[rgba(124,58,237,0.03)] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {processingImage ? (
+                        <Loader2 size={16} className="text-[#9CA3AF] animate-spin" />
+                      ) : (
+                        <Plus size={16} className="text-[#9CA3AF]" strokeWidth={2} />
+                      )}
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={confirmMultiImages}
+                    disabled={pendingImages.length === 0}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-40 disabled:cursor-not-allowed text-[12px] font-semibold text-white transition-colors"
+                  >
+                    Use {pendingImages.length || ""} image{pendingImages.length === 1 ? "" : "s"}
+                  </button>
+                  <span className="text-[11px] text-[#ADA99F]">
+                    {pendingImages.length} / {maxImages} selected
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {showImagePicker && (
+              <button
+                onClick={() => setAnswerMode("text")}
+                className="self-start text-[11px] text-[#9CA3AF] hover:text-[#6B7280] underline transition-colors"
+              >
+                Answer in your own words instead
+              </button>
+            )}
+
+            {showTextInput && (
+              <div className="flex items-end gap-2">
+                <textarea
+                  value={textAnswer}
+                  onChange={(e) => setTextAnswer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault()
+                      handleTextSubmit()
+                    }
+                  }}
+                  autoFocus
+                  rows={2}
+                  placeholder="Type your answer..."
+                  className="flex-1 px-3.5 py-2.5 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#374151] leading-[1.5] resize-none placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.5)] transition-colors"
+                />
+                <button
+                  onClick={handleTextSubmit}
+                  disabled={!textAnswer.trim()}
+                  className="flex-shrink-0 w-9 h-9 rounded-lg bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                >
+                  <Send size={14} className="text-white" strokeWidth={2.2} />
+                </button>
               </div>
             )}
           </div>
-
-          {/* What the questions are about, kept in view */}
-          <aside aria-label="Reference" className="hidden lg:block">
-            <div className="sticky top-20 flex flex-col gap-3">
-              {referencePreview && (
-                <div className="aspect-video overflow-hidden rounded-card border border-border bg-surface-muted shadow-card">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={referencePreview} alt="Reference" className="h-full w-full object-contain" />
-                </div>
-              )}
-              <p className="line-clamp-6 text-caption whitespace-pre-wrap text-muted-foreground">{videoContent}</p>
-            </div>
-          </aside>
-        </div>
+        )}
       </div>
     )
   }
@@ -820,56 +778,79 @@ export function ThumbnailClient() {
   if (screen === "review" && blueprint) {
     if (isGenerating) {
       return (
-        <div>
-          {toolbar}
-          <h1 className="sr-only">Thumbnail</h1>
-          <div className="mx-auto flex max-w-md flex-col items-center justify-center gap-6">
-            <div role="status" className="flex flex-col items-center gap-3 text-center">
-              <Loader2 className="size-8 animate-spin text-brand motion-reduce:animate-none" aria-hidden />
-              <p className="text-label font-medium text-foreground">{GENERATION_STATUS_MESSAGES[genStatusIndex]}</p>
-              <p className="text-caption text-muted-foreground">(this can take up to a minute)</p>
-            </div>
-            <LoadingGame />
+        <div className="max-w-md mx-auto flex flex-col gap-6 items-center justify-center h-full">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <div className="h-10 w-10 rounded-full border-2 border-[rgba(124,58,237,0.25)] border-t-[#7C3AED] animate-spin" />
+            <p className="text-[13px] font-medium text-[#1A1A1A]">
+              {GENERATION_STATUS_MESSAGES[genStatusIndex]}
+            </p>
+            <p className="text-[11px] text-[#9CA3AF]">(this can take up to a minute)</p>
           </div>
+          <LoadingGame />
         </div>
       )
     }
 
     return (
-      <div>
-        {toolbar}
-        <div className="mx-auto grid w-full max-w-showcase gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-12">
-          {referencePreview && (
-            <div className="lg:sticky lg:top-20 lg:self-start">
-              <div className="aspect-video overflow-hidden rounded-card border border-border bg-surface-muted shadow-card">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={referencePreview} alt="Reference" className="h-full w-full object-contain" />
+      <div className="max-w-2xl mx-auto flex flex-col gap-6">
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-[22px] font-bold text-[#0A0A0A]">Your Thumbnail Blueprint</h1>
+          <p className="text-[13px] text-[#6B7280] leading-[1.55]">
+            Here&apos;s the plan we&apos;ll generate from. Ready when you are.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3 p-5 rounded-2xl bg-white border border-[#E5E3DE]">
+            <p className="text-[11px] font-semibold text-[#7C3AED] uppercase tracking-widest">
+              Reference Structure (preserved)
+            </p>
+            {referenceCompositionRows(blueprint).map(({ label, value }) => (
+              <div key={label} className="flex flex-col gap-0.5">
+                <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
+                  {label}
+                </p>
+                <p className="text-[13px] text-[#374151] leading-[1.5]">{value || "—"}</p>
               </div>
-            </div>
-          )}
-
-          <div className="flex min-w-0 flex-col gap-8">
-            <ChoiceHeader
-              title="Your Thumbnail Blueprint"
-              description={<>Here&apos;s the plan we&apos;ll generate from. Ready when you are.</>}
-            />
-
-            <BlueprintSheet title="Reference Structure (preserved)" rows={referenceCompositionRows(blueprint)} />
-            <BlueprintSheet title="Your Content (fills the structure)" rows={adaptedContentRows(blueprint)} />
-
-            {errorBox}
-
-            <ActionBar>
-              <Button variant="ghost" onClick={resetAll}>
-                <RotateCcw aria-hidden />
-                Start Over
-              </Button>
-              <Button variant="brand" onClick={() => void handleGenerate()}>
-                <Sparkles aria-hidden />
-                Generate Thumbnail — 15 credits
-              </Button>
-            </ActionBar>
+            ))}
           </div>
+
+          <div className="flex flex-col gap-3 p-5 rounded-2xl bg-white border border-[#E5E3DE]">
+            <p className="text-[11px] font-semibold text-[#7C3AED] uppercase tracking-widest">
+              Your Content (fills the structure)
+            </p>
+            {adaptedContentRows(blueprint).map(({ label, value }) => (
+              <div key={label} className="flex flex-col gap-0.5">
+                <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
+                  {label}
+                </p>
+                <p className="text-[13px] text-[#374151] leading-[1.5]">{value || "—"}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {error && (
+          <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
+            {error}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => void handleGenerate()}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] shadow-[0_0_24px_rgba(124,58,237,0.28)] transition-all"
+          >
+            <Sparkles size={14} strokeWidth={2} />
+            Generate Thumbnail — 15 credits
+          </button>
+          <button
+            onClick={resetAll}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[12px] font-medium text-[#6B7280] transition-colors"
+          >
+            <RotateCcw size={12} />
+            Start Over
+          </button>
         </div>
       </div>
     )
@@ -878,58 +859,40 @@ export function ThumbnailClient() {
   // ── Screen 4: Result ──────────────────────────────────────────────
   if (screen === "result" && resultImageUrl) {
     return (
-      <div>
-        {toolbar}
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-          <h1 className="text-title-sm font-semibold text-foreground">Your Thumbnail</h1>
+      <div className="max-w-2xl mx-auto flex flex-col gap-6 items-center">
+        <div className="w-full flex flex-col gap-1.5">
+          <h1 className="text-[22px] font-bold text-[#0A0A0A]">Your Thumbnail</h1>
+        </div>
 
-          <div className="aspect-video w-full overflow-hidden rounded-showcase border border-border bg-surface-muted shadow-dialog">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={resultImageUrl} alt="Generated thumbnail" className="h-full w-full object-cover" />
-          </div>
+        <div className="w-full aspect-video rounded-2xl overflow-hidden border border-[#E5E3DE] bg-[#F4F2EC]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={resultImageUrl} alt="Generated thumbnail" className="w-full h-full object-cover" />
+        </div>
 
-          <ActionBar
-            start={
-              referencePreview && (
-                <span className="flex items-center gap-2.5">
-                  <span className="aspect-video w-20 shrink-0 overflow-hidden rounded-detail border border-border bg-surface-muted">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={referencePreview} alt="Reference" className="h-full w-full object-cover" />
-                  </span>
-                </span>
-              )
-            }
+        <div className="flex items-center gap-2 self-start">
+          <button
+            onClick={() => void handleDownload()}
+            disabled={downloading}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-colors disabled:opacity-50"
           >
-            <Button variant="ghost" onClick={resetAll}>
-              <RotateCcw aria-hidden />
-              Start Over
-            </Button>
-            <Button onClick={() => void handleDownload()} disabled={downloading}>
-              {downloading ? <Loader2 className="animate-spin" aria-hidden /> : <Download aria-hidden />}
-              {downloading ? "Downloading…" : "Download"}
-            </Button>
-          </ActionBar>
+            {downloading ? (
+              <Loader2 size={13} className="animate-spin" strokeWidth={2.2} />
+            ) : (
+              <Download size={13} strokeWidth={2.2} />
+            )}
+            {downloading ? "Downloading…" : "Download"}
+          </button>
+          <button
+            onClick={resetAll}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[12px] font-medium text-[#6B7280] transition-colors"
+          >
+            <RotateCcw size={12} />
+            Start Over
+          </button>
         </div>
       </div>
     )
   }
 
   return null
-}
-
-/** One half of the blueprint as a spec sheet: label on the left, value on the right. */
-function BlueprintSheet({ title, rows }: { title: string; rows: { label: string; value: string }[] }) {
-  return (
-    <section className="flex flex-col gap-3">
-      <h2 className="border-b border-foreground/80 pb-2.5 text-body font-semibold text-foreground">{title}</h2>
-      <dl className="flex flex-col divide-y divide-border">
-        {rows.map(({ label, value }) => (
-          <div key={label} className="grid gap-1 py-3 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-6">
-            <dt className="text-caption font-medium text-muted-foreground">{label}</dt>
-            <dd className="text-label text-foreground">{value || "—"}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
-  )
 }

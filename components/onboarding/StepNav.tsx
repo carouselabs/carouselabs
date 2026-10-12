@@ -4,9 +4,6 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-
 interface StepNavProps {
   backHref?: string
   onContinue: () => void | Promise<void>
@@ -72,40 +69,40 @@ export function StepNav({
   }
 
   return (
-    <div className="mt-10 border-t border-border pt-6">
-      <div aria-live="assertive">
-        {showWarning && validationMessage && (
-          <p role="alert" className="mb-4 text-right text-label font-medium text-danger">
-            {validationMessage}
-          </p>
-        )}
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <Button
-          variant="ghost"
+    <div>
+      {showWarning && validationMessage && (
+        <p className="mb-3 text-sm text-right text-red-600">{validationMessage}</p>
+      )}
+      <div className="flex items-center justify-between pt-8 mt-8 border-t border-[#E9E7E1]">
+        <button
           onClick={() => backHref && router.push(backHref)}
           disabled={!backHref || loading}
-          className="-ml-3 text-muted-foreground disabled:opacity-0"
+          className="px-5 py-2.5 text-sm text-[#6B7280] hover:text-[#0A0A0A] disabled:opacity-0 disabled:pointer-events-none transition-colors rounded-lg"
         >
           ← Back
-        </Button>
+        </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {showSkip && onSkip && (
-            <Button variant="ghost" onClick={onSkip} disabled={loading} className="text-muted-foreground">
+            <button
+              onClick={onSkip}
+              disabled={loading}
+              className="px-4 py-2.5 text-sm text-[#9CA3AF] hover:text-[#4B5563] transition-colors disabled:opacity-50"
+            >
               Skip
-            </Button>
+            </button>
           )}
-          <Button
+          <button
             onClick={handleContinue}
             disabled={loading}
-            aria-disabled={!canContinue || undefined}
-            // Stays clickable while incomplete so the message above can explain why.
-            className={cn("min-w-28 aria-disabled:pointer-events-auto aria-disabled:cursor-pointer", shake && "animate-shake")}
+            aria-disabled={!canContinue}
+            className={`min-w-[112px] flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium text-white rounded-xl transition-all ${
+              canContinue ? "bg-[#1A1A1A] hover:bg-[#000000]" : "bg-[#1A1A1A] opacity-35"
+            } ${loading ? "cursor-not-allowed" : "cursor-pointer"} ${shake ? "animate-shake" : ""}`}
           >
-            {loading && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden />}
+            {loading && <Loader2 size={14} className="animate-spin" />}
             {loading ? "Saving…" : continueLabel}
-          </Button>
+          </button>
         </div>
       </div>
     </div>

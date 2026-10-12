@@ -1,7 +1,6 @@
 import Link from "next/link"
-import { ArrowRight, Gift, Link2, Repeat, Users } from "lucide-react"
-
-import { buttonVariants } from "@/components/ui/button"
+import { ArrowRight, Link2, Repeat, Gift, Users } from "lucide-react"
+import { AnimatedSection, AnimatedScale } from "@/components/marketing/AnimatedSection"
 
 const DIFFERENTIATORS = [
   {
@@ -18,39 +17,50 @@ const DIFFERENTIATORS = [
   },
 ]
 
-/** A compact band — the referral offer stays secondary to the product. Copy unchanged. */
 export function ReferralFeature() {
   return (
-    <section id="referrals" aria-labelledby="referrals-title" className="scroll-mt-20 border-t border-border font-ui">
-      <div className="mx-auto grid max-w-showcase gap-10 gutter-x py-14 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-16 lg:py-20">
-        <div className="flex flex-col gap-4">
-          <p className="inline-flex items-center gap-1.5 text-label font-medium text-brand">
-            <Users className="size-3.5" strokeWidth={2.2} aria-hidden />
+    <section id="referrals" className="py-24 px-6">
+      <div className="max-w-5xl mx-auto flex flex-col gap-14">
+        <AnimatedSection className="flex flex-col gap-4 text-center items-center">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#E5E3DE] text-[12px] font-medium text-[#7C3AED]">
+            <Users size={12} strokeWidth={2.2} />
             Referral Program
-          </p>
-          <h2 id="referrals-title" className="text-title font-semibold text-balance">
+          </div>
+          <h2 className="max-w-3xl text-[clamp(1.75rem,4vw,2.75rem)] font-bold tracking-[-0.02em] text-[#0A0A0A] leading-[1.15]">
             Earn 8% Recurring Commission for Every Referral
           </h2>
-          <p className="text-body text-muted-foreground">
-            Share CarouseLabs with your network. If they upgrade to Pro or Growth, you earn 8% of their subscription — every month, for as
-            long as they stay subscribed. If they stay on the free plan, you get 50 bonus credits instead.
+          <p className="max-w-2xl text-[15px] text-[#6B7280] leading-[1.7]">
+            Share CarouseLabs with your network. If they upgrade to Pro or Growth, you earn 8% of
+            their subscription — every month, for as long as they stay subscribed. If they stay on
+            the free plan, you get 50 bonus credits instead.
           </p>
-          <div className="flex flex-col gap-2 pt-2">
-            <Link href="/sign-up" className={buttonVariants({ variant: "outline", size: "lg", className: "self-start" })}>
-              Get Your Referral Link
-              <ArrowRight aria-hidden />
-            </Link>
-            <p className="text-caption text-muted-foreground">Free to join — sign up to get your unique link.</p>
-          </div>
-        </div>
-        <ul className="flex flex-col justify-center divide-y divide-border">
-          {DIFFERENTIATORS.map((d) => (
-            <li key={d.text} className="flex gap-3 py-4 text-body">
-              <d.icon className="mt-0.5 size-5 shrink-0 text-muted-foreground" strokeWidth={1.8} aria-hidden />
-              <span>{d.text}</span>
-            </li>
+        </AnimatedSection>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {DIFFERENTIATORS.map((d, i) => (
+            <AnimatedScale
+              key={d.text}
+              delay={i * 0.08}
+              className="flex flex-col items-start gap-4 p-6 rounded-2xl border border-[#E5E3DE] bg-white"
+            >
+              <div className="w-11 h-11 rounded-xl bg-[#EDE9FE] flex items-center justify-center flex-shrink-0">
+                <d.icon size={19} className="text-[#7C3AED]" strokeWidth={1.8} />
+              </div>
+              <p className="text-[14px] text-[#3F3F46] leading-[1.6]">{d.text}</p>
+            </AnimatedScale>
           ))}
-        </ul>
+        </div>
+
+        <AnimatedSection className="flex flex-col items-center gap-3">
+          <Link
+            href="/sign-up"
+            className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-[15px] font-semibold text-white transition-colors shadow-[0_10px_30px_rgba(124,58,237,0.25)]"
+          >
+            Get Your Referral Link
+            <ArrowRight size={16} strokeWidth={2.2} />
+          </Link>
+          <p className="text-[12.5px] text-[#9CA3AF]">Free to join — sign up to get your unique link.</p>
+        </AnimatedSection>
       </div>
     </section>
   )

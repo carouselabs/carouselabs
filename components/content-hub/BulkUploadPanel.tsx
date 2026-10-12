@@ -8,8 +8,6 @@
 import { useRef, useState } from "react"
 import { Upload, Loader2, Download, CheckCircle2, XCircle, FileText } from "lucide-react"
 import { csvToBulkRows, EXAMPLE_CSV, type BulkUploadRow } from "@/lib/csv"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 
 const MAX_ROWS = 100
 const CHUNK_SIZE = 20
@@ -126,59 +124,53 @@ export function BulkUploadPanel({ onDone }: BulkUploadPanelProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-label text-muted-foreground [&_code]:rounded-[4px] [&_code]:bg-surface-muted [&_code]:px-1 [&_code]:py-px [&_code]:text-caption [&_code]:text-foreground">
+      <p className="text-[13px] text-[#6B7280] leading-[1.5]">
         Import up to {MAX_ROWS} posts at once from a CSV with columns <code>caption</code>,{" "}
         <code>imageUrl</code>, <code>platform</code>, and <code>scheduledFor</code> (an ISO date/time, or
         &quot;queue&quot; to use your next available queue slot). Each row becomes a real post — no AI, no
         credit charge.
       </p>
 
-      <Button variant="link" size="sm" onClick={downloadExample} className="self-start">
-        <Download aria-hidden />
-        Download example CSV
-      </Button>
-
       <button
-        type="button"
-        onClick={() => !uploading && inputRef.current?.click()}
-        aria-disabled={uploading || undefined}
-        className={cn(
-          "flex h-32 flex-col items-center justify-center gap-2 rounded-card border border-dashed border-control-border bg-surface-raised px-4 text-center transition-colors duration-(--motion-fast) hover:border-brand/50 hover:bg-brand-soft/40",
-          uploading ? "cursor-wait" : "cursor-pointer"
-        )}
+        onClick={downloadExample}
+        className="self-start inline-flex items-center gap-1.5 text-[12px] font-medium text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
       >
-        <FileText className="size-5 text-muted-foreground" strokeWidth={1.8} aria-hidden />
-        <span className="max-w-full truncate text-label text-foreground">{fileName ? fileName : "Click to choose a CSV file"}</span>
+        <Download size={13} strokeWidth={2.2} />
+        Download example CSV
       </button>
-      <input ref={inputRef} type="file" accept=".csv,text/csv" disabled={uploading} className="hidden" onChange={handleInputChange} />
+
+      <div
+        onClick={() => !uploading && inputRef.current?.click()}
+        className={`flex flex-col items-center justify-center gap-2 h-28 rounded-xl border border-dashed transition-colors ${
+          uploading ? "cursor-wait" : "cursor-pointer"
+        } border-[#E5E3DE] bg-[#F6F4EE] hover:border-[#D6D3CC] hover:bg-[#F4F2EC]`}
+      >
+        <FileText size={16} className="text-[#ADA99F]" strokeWidth={1.8} />
+        <p className="text-[12px] text-[#9CA3AF]">{fileName ? fileName : "Click to choose a CSV file"}</p>
+        <input ref={inputRef} type="file" accept=".csv,text/csv" disabled={uploading} className="hidden" onChange={handleInputChange} />
+      </div>
 
       {parseError && (
-        <p role="alert" className="rounded-control-sm border border-danger/25 bg-danger-soft px-3 py-2.5 text-caption text-danger">
+        <div className="px-3 py-2.5 rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[12px] text-[rgba(239,68,68,0.9)]">
           {parseError}
-        </p>
+        </div>
       )}
 
       {rows.length > 0 && !done && (
-        <p className="text-label text-foreground">
+        <p className="text-[12.5px] text-[#374151]">
           <strong>{rows.length}</strong> row{rows.length === 1 ? "" : "s"} ready to import.
         </p>
       )}
 
       {(uploading || done) && (
         <div className="flex flex-col gap-2">
-          <div
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={rows.length}
-            aria-valuenow={processed}
-            className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted"
-          >
+          <div className="h-2 w-full rounded-full bg-[#ECEAE4] overflow-hidden">
             <div
-              className="h-full rounded-full bg-brand transition-[width] duration-(--motion-panel)"
+              className="h-full rounded-full bg-[#7C3AED] transition-all duration-300"
               style={{ width: `${rows.length ? (processed / rows.length) * 100 : 0}%` }}
             />
           </div>
-          <p className="text-caption text-muted-foreground tabular-nums">
+          <p className="text-[11.5px] text-[#9CA3AF]">
             {processed} / {rows.length} processed
           </p>
         </div>
@@ -186,24 +178,24 @@ export function BulkUploadPanel({ onDone }: BulkUploadPanelProps) {
 
       {done && (
         <div className="flex flex-col gap-2">
-          <div role="status" className="flex items-center gap-4 rounded-card border border-border bg-surface-raised p-3">
-            <span className="inline-flex items-center gap-1.5 text-label font-medium text-success">
-              <CheckCircle2 className="size-4" aria-hidden />
+          <div className="flex items-center gap-4 p-3 rounded-xl border border-[#E5E3DE] bg-white">
+            <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#10B981]">
+              <CheckCircle2 size={14} />
               {succeeded} succeeded
             </span>
             {failed > 0 && (
-              <span className="inline-flex items-center gap-1.5 text-label font-medium text-danger">
-                <XCircle className="size-4" aria-hidden />
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[rgba(239,68,68,0.9)]">
+                <XCircle size={14} />
                 {failed} failed
               </span>
             )}
           </div>
           {failed > 0 && (
-            <div className="flex max-h-40 flex-col gap-1.5 overflow-y-auto">
+            <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto">
               {results
                 .filter((r) => !r.ok)
                 .map((r) => (
-                  <p key={r.row} className="text-caption text-danger">
+                  <p key={r.row} className="text-[11.5px] text-[rgba(239,68,68,0.9)]">
                     Row {r.row + 1}: {r.error}
                   </p>
                 ))}
@@ -213,13 +205,17 @@ export function BulkUploadPanel({ onDone }: BulkUploadPanelProps) {
       )}
 
       {!done && (
-        <Button variant="brand" className="self-start" onClick={() => void handleUpload()} disabled={rows.length === 0 || uploading}>
-          {uploading ? <Loader2 className="animate-spin" aria-hidden /> : <Upload aria-hidden />}
+        <button
+          onClick={() => void handleUpload()}
+          disabled={rows.length === 0 || uploading}
+          className="self-start inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[12.5px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 transition-colors"
+        >
+          {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} strokeWidth={2.2} />}
           {uploading ? "Uploading…" : "Start Upload"}
-        </Button>
+        </button>
       )}
       {done && (
-        <p className="text-caption text-muted-foreground">Choose another file above to run a new import.</p>
+        <p className="text-[11.5px] text-[#9CA3AF]">Choose another file above to run a new import.</p>
       )}
     </div>
   )

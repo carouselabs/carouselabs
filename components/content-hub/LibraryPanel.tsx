@@ -6,10 +6,6 @@
 // delete-and-recreate rather than full inline editing, to keep this simple.
 import { useState } from "react"
 import { Loader2, Plus, Trash2, Hash, Copy, Check, Link2 } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { controlClasses } from "@/components/ui/input"
-import { fieldClasses, iconAction } from "./hubStyles"
 
 export interface PostTemplateSummary {
   id: string
@@ -194,13 +190,9 @@ export function LibraryPanel({
     }
   }
 
-  const addFormClasses = "flex flex-col gap-2 rounded-card border border-dashed border-brand/35 bg-brand-soft/40 p-3"
-  const listClasses = "flex flex-col divide-y divide-border rounded-card border border-border bg-surface-raised"
-  const deleteClasses = cn(iconAction, "shrink-0 hover:bg-danger-soft hover:text-danger")
-
   return (
     <div className="flex flex-col gap-4">
-      <div role="group" aria-label="Library" className="inline-flex self-start rounded-control border border-border bg-surface p-1">
+      <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[#F4F2EC] border border-[#E5E3DE] self-start">
         {(
           [
             { key: "templates", label: "Templates" },
@@ -211,10 +203,11 @@ export function LibraryPanel({
         ).map((t) => (
           <button
             key={t.key}
-            type="button"
-            aria-pressed={tab === t.key}
             onClick={() => setTab(t.key)}
-            className="inline-flex h-8 items-center rounded-control-sm px-2.5 text-caption font-medium whitespace-nowrap text-muted-foreground transition-colors duration-(--motion-fast) hover:text-foreground aria-pressed:bg-surface-raised aria-pressed:text-foreground aria-pressed:shadow-card"
+            className={[
+              "px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors",
+              tab === t.key ? "bg-white text-[#1A1A1A] shadow-sm" : "text-[#9CA3AF] hover:text-[#4B5563]",
+            ].join(" ")}
           >
             {t.label}
           </button>
@@ -224,41 +217,46 @@ export function LibraryPanel({
       {tab === "templates" && (
         <div className="flex flex-col gap-3">
           {templates.length > 0 && (
-            <ul className={listClasses}>
+            <div className="flex flex-col gap-2">
               {templates.map((t) => (
-                <li key={t.id} className="flex items-start gap-3 px-3 py-2.5">
-                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <p className="truncate text-label font-medium text-foreground">{t.name}</p>
-                    <p className="line-clamp-2 text-caption text-muted-foreground">{t.caption}</p>
+                <div key={t.id} className="flex items-start gap-3 p-3 rounded-xl border border-[#E5E3DE] bg-white">
+                  <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                    <p className="text-[13px] font-medium text-[#0A0A0A] truncate">{t.name}</p>
+                    <p className="text-[11px] text-[#9CA3AF] line-clamp-2">{t.caption}</p>
                   </div>
-                  <button type="button" onClick={() => onDeleteTemplate(t.id)} aria-label="Delete" title="Delete" className={deleteClasses}>
-                    <Trash2 aria-hidden />
+                  <button
+                    onClick={() => onDeleteTemplate(t.id)}
+                    className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.08)] transition-colors flex-shrink-0"
+                  >
+                    <Trash2 size={13} strokeWidth={2} />
                   </button>
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
-          <div className={addFormClasses}>
+          <div className="flex flex-col gap-2 p-3 rounded-xl border border-dashed border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.03)]">
             <input
               value={templateName}
               onChange={(e) => setTemplateName(e.target.value)}
               placeholder="Template name"
-              aria-label="Template name"
-              className={fieldClasses}
+              className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-white text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
             />
             <textarea
               value={templateCaption}
               onChange={(e) => setTemplateCaption(e.target.value)}
               placeholder="Caption text…"
-              aria-label="Caption text…"
               rows={3}
-              className={cn(controlClasses, "resize-y px-3 py-2")}
+              className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-white text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors resize-y"
             />
-            {templateError && <p className="text-caption text-danger">{templateError}</p>}
-            <Button variant="brand" size="sm" className="self-start" onClick={() => void submitTemplate()} disabled={savingTemplate}>
-              {savingTemplate ? <Loader2 className="animate-spin" aria-hidden /> : <Plus aria-hidden />}
+            {templateError && <p className="text-[11px] text-[rgba(239,68,68,0.9)]">{templateError}</p>}
+            <button
+              onClick={() => void submitTemplate()}
+              disabled={savingTemplate}
+              className="self-start inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 transition-colors"
+            >
+              {savingTemplate ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} strokeWidth={2.4} />}
               Save Template
-            </Button>
+            </button>
           </div>
         </div>
       )}
@@ -270,53 +268,49 @@ export function LibraryPanel({
               {tags.map((t) => (
                 <span
                   key={t.id}
-                  className="inline-flex h-8 items-center gap-1 rounded-full pr-1 pl-3 text-caption font-medium text-white"
+                  className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full text-[11.5px] font-medium text-white"
                   style={{ backgroundColor: t.color }}
                 >
                   {t.name}
                   <button
-                    type="button"
                     onClick={() => onDeleteTag(t.id)}
-                    aria-label="Delete"
-                    title="Delete"
-                    className="flex size-6 items-center justify-center rounded-full transition-colors duration-(--motion-fast) hover:bg-black/20"
+                    className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-black/20 transition-colors"
                   >
-                    <Trash2 className="size-3" aria-hidden />
+                    <Trash2 size={9} strokeWidth={2.5} />
                   </button>
                 </span>
               ))}
             </div>
           )}
-          <div className={addFormClasses}>
+          <div className="flex flex-col gap-2 p-3 rounded-xl border border-dashed border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.03)]">
             <input
               value={tagName}
               onChange={(e) => setTagName(e.target.value)}
               placeholder="Tag name (e.g. Launch campaign)"
-              aria-label="Tag name (e.g. Launch campaign)"
-              className={fieldClasses}
+              className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-white text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
             />
-            <div role="radiogroup" aria-label="Color" className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               {TAG_COLORS.map((c) => (
                 <button
                   key={c}
-                  type="button"
-                  role="radio"
-                  aria-checked={tagColor === c}
-                  aria-label={c}
                   onClick={() => setTagColor(c)}
-                  className={cn(
-                    "size-7 shrink-0 rounded-full transition-transform duration-(--motion-fast)",
-                    tagColor === c && "scale-110 ring-2 ring-foreground ring-offset-2 ring-offset-surface"
-                  )}
+                  className={[
+                    "w-6 h-6 rounded-full flex-shrink-0 transition-transform",
+                    tagColor === c ? "ring-2 ring-offset-1 ring-[#0A0A0A] scale-110" : "",
+                  ].join(" ")}
                   style={{ backgroundColor: c }}
                 />
               ))}
             </div>
-            {tagError && <p className="text-caption text-danger">{tagError}</p>}
-            <Button variant="brand" size="sm" className="self-start" onClick={() => void submitTag()} disabled={savingTag}>
-              {savingTag ? <Loader2 className="animate-spin" aria-hidden /> : <Plus aria-hidden />}
+            {tagError && <p className="text-[11px] text-[rgba(239,68,68,0.9)]">{tagError}</p>}
+            <button
+              onClick={() => void submitTag()}
+              disabled={savingTag}
+              className="self-start inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 transition-colors"
+            >
+              {savingTag ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} strokeWidth={2.4} />}
               Add Tag
-            </Button>
+            </button>
           </div>
         </div>
       )}
@@ -324,43 +318,48 @@ export function LibraryPanel({
       {tab === "hashtags" && (
         <div className="flex flex-col gap-3">
           {hashtagGroups.length > 0 && (
-            <ul className={listClasses}>
+            <div className="flex flex-col gap-2">
               {hashtagGroups.map((g) => (
-                <li key={g.id} className="flex items-start gap-3 px-3 py-2.5">
-                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <p className="truncate text-label font-medium text-foreground">{g.name}</p>
-                    <p className="line-clamp-2 text-caption text-muted-foreground">{g.hashtags.join(" ")}</p>
+                <div key={g.id} className="flex items-start gap-3 p-3 rounded-xl border border-[#E5E3DE] bg-white">
+                  <div className="flex-1 min-w-0 flex flex-col gap-1">
+                    <p className="text-[13px] font-medium text-[#0A0A0A] truncate">{g.name}</p>
+                    <p className="text-[11px] text-[#9CA3AF] line-clamp-2">{g.hashtags.join(" ")}</p>
                   </div>
-                  <button type="button" onClick={() => onDeleteHashtagGroup(g.id)} aria-label="Delete" title="Delete" className={deleteClasses}>
-                    <Trash2 aria-hidden />
+                  <button
+                    onClick={() => onDeleteHashtagGroup(g.id)}
+                    className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.08)] transition-colors flex-shrink-0"
+                  >
+                    <Trash2 size={13} strokeWidth={2} />
                   </button>
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
-          <div className={addFormClasses}>
+          <div className="flex flex-col gap-2 p-3 rounded-xl border border-dashed border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.03)]">
             <input
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
               placeholder="Group name (e.g. LinkedIn growth)"
-              aria-label="Group name (e.g. LinkedIn growth)"
-              className={fieldClasses}
+              className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-white text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
             />
             <div className="relative">
-              <Hash className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <Hash size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#ADA99F]" />
               <input
                 value={groupHashtags}
                 onChange={(e) => setGroupHashtags(e.target.value)}
                 placeholder="linkedin growth marketing (space or comma separated)"
-                aria-label="linkedin growth marketing (space or comma separated)"
-                className={cn(fieldClasses, "pl-8")}
+                className="w-full pl-8 pr-3 py-2 rounded-lg border border-[#E5E3DE] bg-white text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
               />
             </div>
-            {groupError && <p className="text-caption text-danger">{groupError}</p>}
-            <Button variant="brand" size="sm" className="self-start" onClick={() => void submitGroup()} disabled={savingGroup}>
-              {savingGroup ? <Loader2 className="animate-spin" aria-hidden /> : <Plus aria-hidden />}
+            {groupError && <p className="text-[11px] text-[rgba(239,68,68,0.9)]">{groupError}</p>}
+            <button
+              onClick={() => void submitGroup()}
+              disabled={savingGroup}
+              className="self-start inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 transition-colors"
+            >
+              {savingGroup ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} strokeWidth={2.4} />}
               Save Group
-            </Button>
+            </button>
           </div>
         </div>
       )}
@@ -368,79 +367,83 @@ export function LibraryPanel({
       {tab === "links" && (
         <div className="flex flex-col gap-3">
           {shortLinks.length > 0 && (
-            <ul className={listClasses}>
+            <div className="flex flex-col gap-2">
               {shortLinks.map((l) => (
-                <li key={l.id} className="flex items-center gap-3 px-3 py-2.5">
-                  <Link2 className="size-4 shrink-0 text-brand" aria-hidden />
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <p className="truncate text-label font-medium text-foreground">/l/{l.slug}</p>
-                    <p className="truncate text-caption text-muted-foreground">{l.targetUrl}</p>
+                <div key={l.id} className="flex items-center gap-3 p-3 rounded-xl border border-[#E5E3DE] bg-white">
+                  <Link2 size={14} className="text-[#7C3AED] flex-shrink-0" strokeWidth={2} />
+                  <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                    <p className="text-[13px] font-medium text-[#0A0A0A] truncate">/l/{l.slug}</p>
+                    <p className="text-[11px] text-[#9CA3AF] truncate">{l.targetUrl}</p>
                   </div>
-                  <span className="shrink-0 text-caption text-muted-foreground tabular-nums">
+                  <span className="text-[11px] text-[#ADA99F] flex-shrink-0">
                     {l.clickCount} click{l.clickCount === 1 ? "" : "s"}
                   </span>
                   <button
-                    type="button"
                     onClick={() => void copyShortLink(l)}
                     title="Copy"
-                    aria-label="Copy"
-                    className={cn(iconAction, "shrink-0")}
+                    className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F4F2EC] transition-colors flex-shrink-0"
                   >
-                    {copiedId === l.id ? <Check className="text-success" aria-hidden /> : <Copy aria-hidden />}
+                    {copiedId === l.id ? (
+                      <Check size={13} className="text-[#10B981]" />
+                    ) : (
+                      <Copy size={13} strokeWidth={2} />
+                    )}
                   </button>
-                  <button type="button" onClick={() => onDeleteShortLink(l.id)} aria-label="Delete" title="Delete" className={deleteClasses}>
-                    <Trash2 aria-hidden />
+                  <button
+                    onClick={() => onDeleteShortLink(l.id)}
+                    className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.08)] transition-colors flex-shrink-0"
+                  >
+                    <Trash2 size={13} strokeWidth={2} />
                   </button>
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
-          <div className={addFormClasses}>
+          <div className="flex flex-col gap-2 p-3 rounded-xl border border-dashed border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.03)]">
             <input
               value={linkUrl}
               onChange={(e) => setLinkUrl(e.target.value)}
               placeholder="https://example.com/your-long-link"
-              aria-label="https://example.com/your-long-link"
-              className={fieldClasses}
+              className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-white text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
             />
             <button
               type="button"
-              aria-expanded={showUtm}
               onClick={() => setShowUtm((v) => !v)}
-              className="self-start rounded-detail text-caption font-medium text-brand underline-offset-4 hover:underline"
+              className="self-start text-[11px] font-medium text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
             >
               {showUtm ? "Hide UTM parameters" : "Add UTM parameters (optional)"}
             </button>
             {showUtm && (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <input
                   value={utmSource}
                   onChange={(e) => setUtmSource(e.target.value)}
                   placeholder="utm_source"
-                  aria-label="utm_source"
-                  className={cn(controlClasses, "h-9 px-2.5 text-caption")}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-[#E5E3DE] bg-white text-[12px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
                 />
                 <input
                   value={utmMedium}
                   onChange={(e) => setUtmMedium(e.target.value)}
                   placeholder="utm_medium"
-                  aria-label="utm_medium"
-                  className={cn(controlClasses, "h-9 px-2.5 text-caption")}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-[#E5E3DE] bg-white text-[12px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
                 />
                 <input
                   value={utmCampaign}
                   onChange={(e) => setUtmCampaign(e.target.value)}
                   placeholder="utm_campaign"
-                  aria-label="utm_campaign"
-                  className={cn(controlClasses, "h-9 px-2.5 text-caption")}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-[#E5E3DE] bg-white text-[12px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
                 />
               </div>
             )}
-            {linkError && <p className="text-caption text-danger">{linkError}</p>}
-            <Button variant="brand" size="sm" className="self-start" onClick={() => void submitLink()} disabled={savingLink}>
-              {savingLink ? <Loader2 className="animate-spin" aria-hidden /> : <Plus aria-hidden />}
+            {linkError && <p className="text-[11px] text-[rgba(239,68,68,0.9)]">{linkError}</p>}
+            <button
+              onClick={() => void submitLink()}
+              disabled={savingLink}
+              className="self-start inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 transition-colors"
+            >
+              {savingLink ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} strokeWidth={2.4} />}
               Shorten Link
-            </Button>
+            </button>
           </div>
         </div>
       )}

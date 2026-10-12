@@ -104,7 +104,7 @@ export function SequencesTable() {
               {rows.map((r) => (
                 <tr key={r.id} className={tableCls.row}>
                   <td className={tableCls.td}>
-                    <Link href={`/admin/sequences/${r.id}`} className="text-brand hover:underline">
+                    <Link href={`/admin/sequences/${r.id}`} className="text-[#A78BFA] hover:underline">
                       {r.name}
                     </Link>
                   </td>
@@ -118,10 +118,10 @@ export function SequencesTable() {
                     <button
                       onClick={() => void toggleActive(r)}
                       disabled={togglingId === r.id}
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-semibold transition-colors disabled:opacity-50 ${
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
                         r.active
-                          ? "bg-success/15 text-success hover:bg-success/25"
-                          : "bg-surface-raised text-muted-foreground hover:bg-surface-raised"
+                          ? "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
+                          : "bg-[#2A2A2A] text-[#8A8A8A] hover:bg-[#333]"
                       }`}
                     >
                       {r.active ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}

@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation"
 import { useOnboardingStore } from "@/lib/store/onboardingStore"
 import { StepNav } from "@/components/onboarding/StepNav"
 import { WordLimitedField } from "@/components/WordLimitedField"
-import { controlClasses } from "@/components/ui/input"
-import { cn } from "@/lib/utils"
 
 const INDUSTRIES = [
   "Technology & SaaS",
@@ -42,7 +40,6 @@ export default function IndustryPage() {
 
   const [query, setQuery] = useState(industry)
   const [open, setOpen] = useState(false)
-  const [active, setActive] = useState(-1)
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -58,31 +55,11 @@ export default function IndustryPage() {
   const filtered = INDUSTRIES.filter((i) =>
     i.toLowerCase().includes(query.toLowerCase())
   )
-  const expanded = open && filtered.length > 0
 
   const handleSelect = (val: string) => {
     setIndustry(val)
     setQuery(val)
     setOpen(false)
-    setActive(-1)
-  }
-
-  // Combobox keys: ↓/↑ move through matches, Enter picks, Escape closes.
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowDown") {
-      e.preventDefault()
-      setOpen(true)
-      setActive((i) => Math.min(i + 1, filtered.length - 1))
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault()
-      setActive((i) => Math.max(i - 1, 0))
-    } else if (e.key === "Enter" && expanded && active >= 0) {
-      e.preventDefault()
-      handleSelect(filtered[active])
-    } else if (e.key === "Escape") {
-      setOpen(false)
-      setActive(-1)
-    }
   }
 
   useEffect(() => {
@@ -97,82 +74,62 @@ export default function IndustryPage() {
 
   return (
     <div>
-      <h1 className="text-title-sm font-semibold">What&apos;s your industry?</h1>
-      <p className="mt-1 mb-8 text-body text-muted-foreground">
+      <h1 className="text-2xl font-semibold text-[#0A0A0A] mb-1">What&apos;s your industry?</h1>
+      <p className="text-sm text-[#6B7280] mb-8">
         We&apos;ll align your content with your space.
       </p>
 
-      <div className="flex flex-col gap-6">
-        <div className="relative flex flex-col gap-1.5" ref={dropdownRef}>
-          <label htmlFor="industry" className="text-label font-medium">
+      <div className="space-y-5">
+        <div className="relative" ref={dropdownRef}>
+          <label className="block text-xs font-medium text-[#6B7280] mb-2 uppercase tracking-wide">
             Industry
           </label>
           <input
-            id="industry"
             type="text"
-            role="combobox"
-            aria-expanded={expanded}
-            aria-controls="industry-options"
-            aria-autocomplete="list"
-            aria-activedescendant={expanded && active >= 0 ? `industry-option-${active}` : undefined}
-            aria-invalid={missingIndustry || undefined}
-            autoComplete="off"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value)
               setOpen(true)
-              setActive(-1)
               if (!e.target.value) setIndustry("")
             }}
             onFocus={() => setOpen(true)}
-            onKeyDown={onKeyDown}
             placeholder="Search your industry…"
-            className={cn(controlClasses, "h-12 px-4")}
+            className={`w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors ${
+              missingIndustry ? "border-red-400" : "border-[#E5E3DE]"
+            }`}
           />
-          {expanded && (
-            <ul
-              id="industry-options"
-              role="listbox"
-              aria-label="Industries"
-              className="absolute top-full z-(--z-popover) mt-1 max-h-60 w-full overflow-auto rounded-control border border-border bg-popover p-1 shadow-popover"
-            >
-              {filtered.map((item, i) => (
-                <li
+          {open && filtered.length > 0 && (
+            <div className="absolute z-20 mt-1 w-full rounded-xl bg-[#FFFFFF] border border-[#E5E3DE] shadow-2xl overflow-auto max-h-52">
+              {filtered.map((item) => (
+                <button
                   key={item}
-                  id={`industry-option-${i}`}
-                  role="option"
-                  aria-selected={industry === item}
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    handleSelect(item)
-                  }}
-                  onMouseEnter={() => setActive(i)}
-                  className={cn(
-                    "flex min-h-10 cursor-pointer items-center rounded-control-sm px-3 text-label",
-                    i === active && "bg-surface-muted",
-                    industry === item && "font-semibold text-foreground"
-                  )}
+                  onMouseDown={() => handleSelect(item)}
+                  className={`w-full text-left px-4 py-3 text-sm transition-colors ${
+                    industry === item
+                      ? "text-[#1A1A1A] bg-[rgba(26,26,26,0.1)]"
+                      : "text-[#374151] hover:bg-[#F1EFE9] hover:text-[#0A0A0A]"
+                  }`}
                 >
                   {item}
-                </li>
+                </button>
               ))}
-            </ul>
+            </div>
           )}
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="niche" className="text-label font-medium">
+        <div>
+          <label className="block text-xs font-medium text-[#6B7280] mb-2 uppercase tracking-wide">
             Describe your business
           </label>
           <WordLimitedField
             as="input"
-            id="niche"
-            invalid={missingNiche}
             value={niche}
             onChange={setNiche}
             maxWords={500}
             placeholder="e.g. I help B2B SaaS founders grow with content"
-            className={cn(controlClasses, "h-12 px-4")}
+            className={`w-full px-4 py-3 rounded-xl bg-[#F4F2EC] border text-[#0A0A0A] placeholder-[#ADA99F] text-sm focus:outline-none focus:border-[#1A1A1A] transition-colors ${
+              missingNiche ? "border-red-400" : "border-[#E5E3DE]"
+            }`}
           />
         </div>
       </div>

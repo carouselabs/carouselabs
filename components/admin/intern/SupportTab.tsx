@@ -58,14 +58,14 @@ export function SupportTab({
   return (
     <AdminCard title="Support">
       <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-2 text-caption text-muted-foreground">
-          <Headset className="h-4 w-4 text-brand" />
+        <div className="flex items-center gap-2 text-[12.5px] text-[#8A8A8A]">
+          <Headset className="h-4 w-4 text-[#7C3AED]" />
           Conversation with this intern. Replies are emailed to them automatically.
         </div>
 
-        <div className="flex max-h-[420px] min-h-[160px] flex-col gap-3 overflow-y-auto rounded-control-sm border border-border bg-background p-4">
+        <div className="flex max-h-[420px] min-h-[160px] flex-col gap-3 overflow-y-auto rounded-lg border border-[#2A2A2A] bg-[#141414] p-4">
           {messages.length === 0 ? (
-            <p className="text-caption text-muted-foreground/80">No messages yet.</p>
+            <p className="text-[12.5px] text-[#6A6A6A]">No messages yet.</p>
           ) : (
             messages.map((m) => (
               <div
@@ -75,15 +75,15 @@ export function SupportTab({
                 }`}
               >
                 <div
-                  className={`whitespace-pre-wrap rounded-card px-3.5 py-2.5 text-label leading-[1.5] ${
+                  className={`whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[13px] leading-[1.5] ${
                     m.sender === "admin"
-                      ? "rounded-br-md bg-brand text-brand-foreground"
-                      : "rounded-bl-md border border-border bg-surface-muted text-foreground/90"
+                      ? "rounded-br-md bg-[#7C3AED] text-white"
+                      : "rounded-bl-md border border-[#2A2A2A] bg-[#232323] text-[#D0D0D0]"
                   }`}
                 >
                   {m.message}
                 </div>
-                <span className="text-[11px] text-muted-foreground/80">{fmtDateTime(m.createdAt)}</span>
+                <span className="text-[10.5px] text-[#6A6A6A]">{fmtDateTime(m.createdAt)}</span>
               </div>
             ))
           )}
@@ -102,7 +102,7 @@ export function SupportTab({
             }}
             rows={3}
             placeholder="Type a reply…"
-            className="w-full resize-none rounded-control-sm border border-border bg-background p-3 text-label text-foreground placeholder:text-muted-foreground/80 outline-none focus:border-brand"
+            className="w-full resize-none rounded-lg border border-[#2A2A2A] bg-[#141414] p-3 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED]"
           />
           <div className="flex justify-end">
             <AdminButton loading={sending} disabled={!reply.trim()} onClick={sendReply}>

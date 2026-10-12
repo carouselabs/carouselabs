@@ -8,17 +8,15 @@ import { AlertTriangle, Download, Loader2, RotateCw } from "lucide-react"
 import { AdminButton, fmtDate } from "@/components/admin/ui"
 import type { EngageFeature } from "@/lib/engage/features"
 
-// Series colours for the four LinkedIn features, validated as a set (all
-// pairs: lightness, chroma, colour-blind separation, contrast) on the dark
-// card surface (#201E1B): violet, teal, amber, rose — the same set as the
-// admin charts (components/admin/charts.tsx). Fixed by feature, never by rank.
-// X's two features are only ever charted on their own, so they reuse the
-// set's first two slots.
+// Series colours for the four LinkedIn features, validated as a set on the
+// admin card surface (#1A1A1A): the admin's own violet, teal, amber, plus a
+// magenta. Fixed by feature, never by rank. X's two features are only ever
+// charted on their own, so they reuse the set's first two slots.
 export const FEATURE_COLORS: Record<EngageFeature, string> = {
   comments: "#8B5CF6",
   replies: "#0D9488",
   connection_notes: "#D97706",
-  messages: "#E11D48",
+  messages: "#d55181",
   x_replies: "#8B5CF6",
   x_messages: "#0D9488",
 }
@@ -86,9 +84,9 @@ export async function adminSend<T = unknown>(url: string, method: string, body?:
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div role="alert" className="flex flex-col items-center gap-3 rounded-control border border-danger/35 bg-danger-soft px-6 py-10 text-center">
-      <AlertTriangle className="h-5 w-5 text-danger" aria-hidden />
-      <p className="max-w-md text-label text-danger">{message}</p>
+    <div role="alert" className="flex flex-col items-center gap-3 rounded-xl border border-[#5A2030] bg-[#2A1218] px-6 py-10 text-center">
+      <AlertTriangle className="h-5 w-5 text-red-400" aria-hidden />
+      <p className="max-w-md text-[13px] text-red-200">{message}</p>
       {onRetry && (
         <AdminButton variant="secondary" onClick={onRetry}>
           <RotateCw className="h-3.5 w-3.5" aria-hidden />
@@ -101,35 +99,35 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
 
 export function EmptyState({ title, body, action }: { title: string; body?: string; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-control border border-dashed border-border px-6 py-12 text-center">
-      <p className="text-label font-semibold text-foreground">{title}</p>
-      {body && <p className="max-w-md text-caption leading-relaxed text-muted-foreground">{body}</p>}
+    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-[#2A2A2A] px-6 py-12 text-center">
+      <p className="text-[13.5px] font-semibold text-white">{title}</p>
+      {body && <p className="max-w-md text-[12.5px] leading-relaxed text-[#8A8A8A]">{body}</p>}
       {action && <div className="mt-2">{action}</div>}
     </div>
   )
 }
 
 export function SkeletonBlock({ className = "" }: { className?: string }) {
-  return <div aria-hidden className={`animate-pulse rounded-md bg-surface-muted ${className}`} />
+  return <div aria-hidden className={`animate-pulse rounded-md bg-[#232323] ${className}`} />
 }
 
 export function InlineSpinner() {
-  return <Loader2 className="h-3.5 w-3.5 animate-spin text-brand" aria-label="Loading" />
+  return <Loader2 className="h-3.5 w-3.5 animate-spin text-[#A78BFA]" aria-label="Loading" />
 }
 
 // ── Badges ──────────────────────────────────────────────────────────────
 
 const TONES = {
-  violet: "bg-brand/15 text-brand",
-  green: "bg-success/12 text-success",
-  amber: "bg-warning/12 text-warning",
-  red: "bg-danger/12 text-danger",
-  gray: "bg-surface-muted text-muted-foreground",
+  violet: "bg-[#7C3AED]/15 text-[#C4B5FD]",
+  green: "bg-emerald-500/12 text-emerald-300",
+  amber: "bg-amber-500/12 text-amber-300",
+  red: "bg-red-500/12 text-red-300",
+  gray: "bg-[#262626] text-[#B0B0B0]",
 } as const
 
 export function Pill({ tone = "gray", children, title }: { tone?: keyof typeof TONES; children: ReactNode; title?: string }) {
   return (
-    <span title={title} className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-caption font-medium ${TONES[tone]}`}>
+    <span title={title} className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11.5px] font-medium ${TONES[tone]}`}>
       {children}
     </span>
   )
@@ -183,7 +181,7 @@ export function Tabs<T extends string>({
   label: string
 }) {
   return (
-    <div role="tablist" aria-label={label} className="flex gap-1 overflow-x-auto border-b border-border">
+    <div role="tablist" aria-label={label} className="flex gap-1 overflow-x-auto border-b border-[#2A2A2A]">
       {tabs.map((t) => {
         const active = t.value === value
         return (
@@ -192,12 +190,12 @@ export function Tabs<T extends string>({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(t.value)}
-            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2.5 text-caption font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-              active ? "border-brand text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2.5 text-[12.5px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED] ${
+              active ? "border-[#7C3AED] text-white" : "border-transparent text-[#8A8A8A] hover:text-white"
             }`}
           >
             {t.label}
-            {t.count !== undefined && <span className="ml-1.5 text-caption tabular-nums text-muted-foreground">{t.count}</span>}
+            {t.count !== undefined && <span className="ml-1.5 text-[11px] tabular-nums text-[#8A8A8A]">{t.count}</span>}
           </button>
         )
       })}
@@ -217,15 +215,15 @@ export function Segmented<T extends string>({
   label: string
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex flex-wrap rounded-control-sm border border-border bg-background p-0.5">
+    <div role="radiogroup" aria-label={label} className="inline-flex flex-wrap rounded-lg border border-[#2A2A2A] bg-[#141414] p-0.5">
       {options.map((o) => (
         <button
           key={o.value}
           role="radio"
           aria-checked={o.value === value}
           onClick={() => onChange(o.value)}
-          className={`rounded-md px-2.5 py-1.5 text-caption font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-            o.value === value ? "bg-surface-raised text-foreground" : "text-muted-foreground hover:text-foreground"
+          className={`rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED] ${
+            o.value === value ? "bg-[#2A2A2A] text-white" : "text-[#8A8A8A] hover:text-white"
           }`}
         >
           {o.label}
@@ -242,7 +240,7 @@ export function CsvLink({ type, query = "" }: { type: string; query?: string }) 
     <a
       href={`/api/admin/engage/export?type=${type}${query ? `&${query}` : ""}`}
       download
-      className="inline-flex items-center gap-1.5 rounded-control-sm border border-border px-3 py-2 text-caption font-medium text-foreground/90 hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+      className="inline-flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-[12.5px] font-medium text-[#D0D0D0] hover:bg-[#232323] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
     >
       <Download className="h-3.5 w-3.5" aria-hidden />
       Download CSV

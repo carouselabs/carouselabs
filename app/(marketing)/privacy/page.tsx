@@ -15,24 +15,24 @@ export default function PrivacyPage() {
     >
       <LegalSection heading="1. Information we collect">
         <p>We collect the following categories of information:</p>
-        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-muted-foreground">
+        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-[#1A1A1A]">
           <li>
-            <span className="text-foreground font-medium">Account information</span> — your name, email
+            <span className="text-[#0A0A0A] font-medium">Account information</span> — your name, email
             address, and authentication identifiers, provided when you sign up and managed through our
             authentication provider.
           </li>
           <li>
-            <span className="text-foreground font-medium">Profile and content data</span> — your niche,
+            <span className="text-[#0A0A0A] font-medium">Profile and content data</span> — your niche,
             target audience, content pillars, tone and writing preferences, and the ideas, captions,
             breakdowns, and carousels you generate or upload.
           </li>
           <li>
-            <span className="text-foreground font-medium">Payment information</span> — subscription status,
+            <span className="text-[#0A0A0A] font-medium">Payment information</span> — subscription status,
             plan, billing history, and payment metadata. Full card details are collected and processed
             by our payment processor and are never stored on our servers.
           </li>
           <li>
-            <span className="text-foreground font-medium">Usage and device data</span> — log data, IP
+            <span className="text-[#0A0A0A] font-medium">Usage and device data</span> — log data, IP
             address, browser and device type, pages viewed, and feature interactions, collected
             automatically for security, analytics, and improvement.
           </li>
@@ -41,7 +41,7 @@ export default function PrivacyPage() {
 
       <LegalSection heading="2. How we use information">
         <p>We use the information we collect to:</p>
-        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-muted-foreground">
+        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-[#1A1A1A]">
           <li>Provide, operate, personalize, and maintain the Service.</li>
           <li>Generate AI content tailored to your brand profile and inputs.</li>
           <li>Process payments, manage subscriptions and credits, and send service-related emails.</li>
@@ -60,25 +60,25 @@ export default function PrivacyPage() {
           We rely on the following trusted providers to deliver the Service. Each processes data only
           as needed for its function and is bound by its own privacy and security commitments:
         </p>
-        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-muted-foreground">
+        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-[#1A1A1A]">
           <li>
-            <span className="text-foreground font-medium">Clerk</span> — authentication, sign-up/sign-in,
+            <span className="text-[#0A0A0A] font-medium">Clerk</span> — authentication, sign-up/sign-in,
             and account-session management.
           </li>
           <li>
-            <span className="text-foreground font-medium">Razorpay</span> — payment processing for
+            <span className="text-[#0A0A0A] font-medium">Razorpay</span> — payment processing for
             subscriptions and one-time purchases.
           </li>
           <li>
-            <span className="text-foreground font-medium">Anthropic and OpenAI</span> — AI models that
+            <span className="text-[#0A0A0A] font-medium">Anthropic and OpenAI</span> — AI models that
             generate text (ideas, captions, breakdowns) and images (carousels) from your inputs.
           </li>
           <li>
-            <span className="text-foreground font-medium">Cloudflare R2</span> — secure cloud storage for
+            <span className="text-[#0A0A0A] font-medium">Cloudflare R2</span> — secure cloud storage for
             generated images and assets.
           </li>
           <li>
-            <span className="text-foreground font-medium">Resend</span> — delivery of transactional and
+            <span className="text-[#0A0A0A] font-medium">Resend</span> — delivery of transactional and
             support emails.
           </li>
         </ul>
@@ -113,13 +113,13 @@ export default function PrivacyPage() {
           You have meaningful control over your data. Depending on your location, you may have the
           right to:
         </p>
-        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-muted-foreground">
+        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-[#1A1A1A]">
           <li>
-            <span className="text-foreground font-medium">Delete your account</span> and associated personal
+            <span className="text-[#0A0A0A] font-medium">Delete your account</span> and associated personal
             data, at any time from your settings or by contacting us.
           </li>
           <li>
-            <span className="text-foreground font-medium">Export your data</span> — request a copy of the
+            <span className="text-[#0A0A0A] font-medium">Export your data</span> — request a copy of the
             personal information and generated content associated with your account.
           </li>
           <li>Access, correct, or update inaccurate information.</li>
@@ -153,21 +153,21 @@ export default function PrivacyPage() {
           If you install our LinkedIn commenting extension, the following additional practices
           apply:
         </p>
-        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-muted-foreground">
+        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-[#1A1A1A]">
           <li>
-            <span className="text-foreground font-medium">Extension token</span> — signing in from
+            <span className="text-[#0A0A0A] font-medium">Extension token</span> — signing in from
             the extension stores a unique authentication token locally in your browser, used solely
             to identify your account when generating comments. Each browser you install on holds its
             own token.
           </li>
           <li>
-            <span className="text-foreground font-medium">Post content you select</span> — when you
+            <span className="text-[#0A0A0A] font-medium">Post content you select</span> — when you
             click the Comment button on a LinkedIn post, that post&rsquo;s visible text, author name
             and headline, and its link are sent to CarouseLabs so a comment can be written about it.
             This happens only for posts you explicitly select.
           </li>
           <li>
-            <span className="text-foreground font-medium">Profiles and conversations you select</span>{" "}
+            <span className="text-[#0A0A0A] font-medium">Profiles and conversations you select</span>{" "}
             — when you write a connection note, the name, headline, current role, About text and link
             of the profile you are connecting with are sent to CarouseLabs to write that note. When
             you click Read this conversation in Messages, the messages visible in that conversation
@@ -177,7 +177,7 @@ export default function PrivacyPage() {
             conversations you explicitly select.
           </li>
           <li>
-            <span className="text-foreground font-medium">Generated text</span> — each comment, reply,
+            <span className="text-[#0A0A0A] font-medium">Generated text</span> — each comment, reply,
             connection note or message produced for you is stored against your account with who it
             was for, a link, a short excerpt for context (part of the post or message it answers, or
             the person&rsquo;s headline for a note), and whether you copied or inserted it, so it
@@ -186,18 +186,18 @@ export default function PrivacyPage() {
             delete them from the Extension section of your account.
           </li>
           <li>
-            <span className="text-foreground font-medium">90-day retention</span> — History is deleted
+            <span className="text-[#0A0A0A] font-medium">90-day retention</span> — History is deleted
             automatically 90 days after it is created, by a scheduled job.
           </li>
           <li>
-            <span className="text-foreground font-medium">Diagnostics</span> — each request from the
+            <span className="text-[#0A0A0A] font-medium">Diagnostics</span> — each request from the
             extension includes its version number. When something fails inside the extension (for
             example, Insert cannot find LinkedIn&rsquo;s text box), it sends a short error code and a
             fixed description of it. These are stored against your account so we can find and fix
             problems. They never include post text, messages, names or any other page content.
           </li>
           <li>
-            <span className="text-foreground font-medium">No automatic browsing tracking</span> — the
+            <span className="text-[#0A0A0A] font-medium">No automatic browsing tracking</span> — the
             extension reads a post only when you click its Comment button, a profile only when you
             write a note for it, and a conversation only when you click Read. To offer help when you
             open a LinkedIn conversation, it checks whether the LinkedIn page&rsquo;s address is a
@@ -206,20 +206,20 @@ export default function PrivacyPage() {
             have not selected.
           </li>
           <li>
-            <span className="text-foreground font-medium">It never posts for you</span> — the
+            <span className="text-[#0A0A0A] font-medium">It never posts for you</span> — the
             extension never submits anything to LinkedIn. Copy places the comment on your clipboard.
             Insert, which is optional and can be hidden in the extension&rsquo;s Settings, only
             places text into LinkedIn&rsquo;s comment box; you still review it and press Post
             yourself.
           </li>
           <li>
-            <span className="text-foreground font-medium">No third-party sharing</span> — the content
+            <span className="text-[#0A0A0A] font-medium">No third-party sharing</span> — the content
             you select and the text generated for you are used solely to provide the feature to you
             and are never sold or shared with third parties. Generating text involves sending the
             selected content to our AI model providers purely to produce that text.
           </li>
           <li>
-            <span className="text-foreground font-medium">Your control</span> — you can sign out from
+            <span className="text-[#0A0A0A] font-medium">Your control</span> — you can sign out from
             the extension&rsquo;s Account screen, which immediately revokes that browser&rsquo;s
             token and disconnects it from your account. Signing out on one browser does not affect
             your other devices.
@@ -236,9 +236,9 @@ export default function PrivacyPage() {
           any page content, no sale or sharing with third parties, and signing out from its Account
           screen. In addition:
         </p>
-        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-muted-foreground">
+        <ul className="flex flex-col gap-2 pl-5 list-disc marker:text-[#1A1A1A]">
           <li>
-            <span className="text-foreground font-medium">Posts you select</span> — when you click
+            <span className="text-[#0A0A0A] font-medium">Posts you select</span> — when you click
             Reply on a post on X, that post&rsquo;s visible text, author name and @handle, its link,
             and which kinds of media it carries (for example image, video or poll, never the media
             itself) are read, together with the same details for a post it quotes and for the posts
@@ -247,28 +247,28 @@ export default function PrivacyPage() {
             this is sent to CarouseLabs only when you ask for a reply to be written.
           </li>
           <li>
-            <span className="text-foreground font-medium">Chats you select</span> — when you click
+            <span className="text-[#0A0A0A] font-medium">Chats you select</span> — when you click
             Read this conversation in Messages while an X chat is open, the messages visible in that
             chat and the other person&rsquo;s name and @handle are read. The @handle is used to look
             up the reason you saved for that person; the messages and name are sent to CarouseLabs
             when you generate a reply.
           </li>
           <li>
-            <span className="text-foreground font-medium">Your X profiles and settings</span> — the
+            <span className="text-[#0A0A0A] font-medium">Your X profiles and settings</span> — the
             reply profiles you create for X, your default profile, whether you have X Premium (which
             allows longer replies) and whether the Insert button is shown are stored with your
             account, separately from your LinkedIn profiles. The reasons you save for conversations
             are shared by both extensions.
           </li>
           <li>
-            <span className="text-foreground font-medium">No automatic browsing tracking</span> — the
+            <span className="text-[#0A0A0A] font-medium">No automatic browsing tracking</span> — the
             extension reads a post only when you click its Reply button and a chat only when you
             click Read. To offer help when you open an X chat, it checks whether the page&rsquo;s
             address is a chat; that check happens in your browser and nothing about it is sent. It
             does not monitor your timeline, your messages, or any page you have not selected.
           </li>
           <li>
-            <span className="text-foreground font-medium">It never posts for you</span> — the
+            <span className="text-[#0A0A0A] font-medium">It never posts for you</span> — the
             extension never submits anything to X. Copy places the text on your clipboard. Insert,
             which is optional and can be hidden in the extension&rsquo;s Settings, only places text
             into X&rsquo;s reply or message box; you still review it and press Reply or Send
@@ -280,7 +280,7 @@ export default function PrivacyPage() {
       <LegalSection heading="11. Contact">
         <p>
           For privacy questions, requests, or concerns, email{" "}
-          <a href="mailto:support@carouselabs.com" className="text-foreground hover:underline">
+          <a href="mailto:support@carouselabs.com" className="text-[#1A1A1A] hover:underline">
             support@carouselabs.com
           </a>
           .

@@ -14,10 +14,6 @@ interface WordLimitedFieldProps {
   placeholder?: string
   rows?: number
   onFocus?: () => void
-  /** Links a <label htmlFor>. */
-  id?: string
-  /** Marks the field invalid for assistive tech. */
-  invalid?: boolean
 }
 
 // A text input / textarea with a hard word-count limit. Typing past the limit is
@@ -33,8 +29,6 @@ export function WordLimitedField({
   placeholder,
   rows,
   onFocus,
-  id,
-  invalid,
 }: WordLimitedFieldProps) {
   const remaining = maxWords - countWords(value)
   const showWarning = remaining <= warnWithin
@@ -52,9 +46,6 @@ export function WordLimitedField({
           placeholder={placeholder}
           rows={rows}
           onFocus={onFocus}
-          id={id}
-          aria-invalid={invalid || undefined}
-          aria-describedby={showWarning && id ? `${id}-words` : undefined}
           className={className}
         />
       ) : (
@@ -64,14 +55,11 @@ export function WordLimitedField({
           onChange={(e) => handle(e.target.value)}
           placeholder={placeholder}
           onFocus={onFocus}
-          id={id}
-          aria-invalid={invalid || undefined}
-          aria-describedby={showWarning && id ? `${id}-words` : undefined}
           className={className}
         />
       )}
       {showWarning && (
-        <p id={id ? `${id}-words` : undefined} aria-live="polite" className="text-caption font-medium text-warning">
+        <p className="text-[11px] text-[#D97706]">
           {Math.max(0, remaining)} word{remaining === 1 ? "" : "s"} left
         </p>
       )}

@@ -1,9 +1,10 @@
 "use client"
 
-// /admin/referrals — every referrer in a list, and the chosen one's full
-// commission + payout history plus a "Record Payout" action in a detail panel
-// beside it (below it on narrower screens).
-import { useCallback, useEffect, useRef, useState } from "react"
+// /admin/referrals — list every referrer, and (in a detail overlay) their
+// full commission + payout history plus a "Record Payout" action. Built as
+// its own wider overlay rather than the shared Modal (max-w-md) so the
+// commission table has room to breathe.
+import { useCallback, useEffect, useState } from "react"
 import { X } from "lucide-react"
 import { AdminButton, AdminCard, AdminInput, Spinner, tableCls, fmtDate } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
@@ -60,9 +61,9 @@ function fmtMoney(n: number): string {
 }
 
 const STATUS_STYLE: Record<CommissionRow["status"], string> = {
-  pending: "bg-warning/15 text-warning",
-  paid: "bg-success/15 text-success",
-  reversed: "bg-danger/15 text-danger",
+  pending: "bg-amber-500/15 text-amber-400",
+  paid: "bg-emerald-500/15 text-emerald-400",
+  reversed: "bg-red-500/15 text-red-400",
 }
 
 export function ReferralsTable() {
@@ -94,14 +95,8 @@ export function ReferralsTable() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => void loadList(), [loadList])
 
-  // Below the two-column layout the panel sits under the list — bring it into view.
-  const detailRef = useRef<HTMLElement>(null)
-
   async function openDetail(userId: string) {
     setDetailUserId(userId)
-    if (!window.matchMedia("(min-width: 80rem)").matches) {
-      requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }))
-    }
     setLoadingDetail(true)
     try {
       const res = await fetch(`/api/admin/referrals/${userId}`)
@@ -151,8 +146,8 @@ export function ReferralsTable() {
   if (rows === null) return <Spinner label="Loading referrers…" />
 
   return (
-    <div className={`grid gap-6 ${detailUserId ? "xl:grid-cols-[minmax(0,1fr)_34rem]" : ""}`}>
-      <AdminCard title={`Referrers (${rows.length})`} className="min-w-0 self-start">
+    <div className="space-y-6">
+      <AdminCard title={`Referrers (${rows.length})`}>
         <div className={tableCls.wrap}>
           <table className={tableCls.table}>
             <thead>
@@ -176,34 +171,21 @@ export function ReferralsTable() {
               {rows.map((r) => (
                 <tr
                   key={r.id}
-                  aria-current={detailUserId === r.id || undefined}
-                  className={`${tableCls.row} cursor-pointer ${detailUserId === r.id ? "bg-brand-soft/50" : ""}`}
+                  className={`${tableCls.row} cursor-pointer`}
                   onClick={() => void openDetail(r.id)}
                 >
                   <td className={tableCls.td}>{r.name ?? "—"}</td>
-                  <td className={tableCls.td}>
-                    {/* The row opens on click; the email is its keyboard way in. */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        void openDetail(r.id)
-                      }}
-                      className="rounded-detail font-medium text-foreground underline-offset-4 hover:text-brand hover:underline"
-                    >
-                      {r.email}
-                    </button>
-                  </td>
+                  <td className={tableCls.td}>{r.email}</td>
                   <td className={`${tableCls.td} tabular-nums`}>{r.totalReferrals}</td>
                   <td className={`${tableCls.td} tabular-nums`}>{fmtMoney(r.pendingCommission)}</td>
                   <td className={`${tableCls.td} tabular-nums`}>{fmtMoney(r.totalPaid)}</td>
                   <td className={tableCls.td}>
                     {r.hasPayoutDetails ? (
-                      <span className="inline-flex rounded-full bg-success/15 px-2 py-0.5 text-caption font-semibold text-success">
+                      <span className="inline-flex rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-400">
                         On file
                       </span>
                     ) : (
-                      <span className="inline-flex rounded-full bg-surface-raised px-2 py-0.5 text-caption font-medium text-muted-foreground">
+                      <span className="inline-flex rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[11px] font-medium text-[#8A8A8A]">
                         Not set
                       </span>
                     )}
@@ -216,23 +198,20 @@ export function ReferralsTable() {
       </AdminCard>
 
       {detailUserId && (
-        <aside
-          ref={detailRef}
-          aria-labelledby="referrer-detail-title"
-          className="min-w-0 self-start rounded-card border border-border bg-surface shadow-card xl:sticky xl:top-0 xl:max-h-[calc(100dvh-8rem)] xl:overflow-y-auto"
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4"
+          onClick={closeDetail}
         >
-          <div>
-            <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
-              <h2 id="referrer-detail-title" className="text-body font-semibold text-foreground">
+          <div
+            className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3.5">
+              <h3 className="text-[14px] font-semibold text-white">
                 {detail?.referrer.name ?? detail?.referrer.email ?? "Referrer"}
-              </h2>
-              <button
-                type="button"
-                onClick={closeDetail}
-                aria-label="Close"
-                className="flex size-8 items-center justify-center rounded-control-sm text-muted-foreground transition-colors duration-(--motion-fast) hover:bg-surface-muted hover:text-foreground"
-              >
-                <X className="size-4" aria-hidden />
+              </h3>
+              <button onClick={closeDetail} className="text-[#8A8A8A] hover:text-white transition-colors">
+                <X className="h-4 w-4" />
               </button>
             </div>
 
@@ -241,36 +220,36 @@ export function ReferralsTable() {
                 <Spinner label="Loading detail…" />
               ) : (
                 <>
-                  <p className="text-caption text-muted-foreground">{detail.referrer.email}</p>
+                  <p className="text-[12.5px] text-[#8A8A8A]">{detail.referrer.email}</p>
 
                   {/* Payout details the referrer self-reported (Settings > Referrals) */}
-                  <div className="rounded-control-sm border border-border bg-background p-4 space-y-2">
-                    <span className="text-caption font-semibold text-muted-foreground">
+                  <div className="rounded-lg border border-[#2A2A2A] bg-[#141414] p-4 space-y-2">
+                    <span className="text-[12px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
                       Payout Details
                     </span>
                     {detail.referrer.payoutMethod && detail.referrer.payoutDetails ? (
                       <div className="space-y-1">
-                        <span className="inline-flex rounded-full bg-brand/15 px-2 py-0.5 text-caption font-semibold text-brand">
+                        <span className="inline-flex rounded-full bg-[#7C3AED]/15 px-2 py-0.5 text-[11px] font-semibold text-[#A78BFA]">
                           {PAYOUT_METHOD_LABEL[detail.referrer.payoutMethod] ?? detail.referrer.payoutMethod}
                         </span>
-                        <p className="text-label text-foreground whitespace-pre-wrap break-words">
+                        <p className="text-[13px] text-white whitespace-pre-wrap break-words">
                           {detail.referrer.payoutDetails}
                         </p>
                       </div>
                     ) : (
-                      <p className="text-caption text-muted-foreground/80">
+                      <p className="text-[12.5px] text-[#6A6A6A]">
                         Not provided yet — this referrer hasn&apos;t added payout details in Settings.
                       </p>
                     )}
                   </div>
 
                   {/* Record payout */}
-                  <div className="rounded-control-sm border border-border bg-background p-4 space-y-3">
+                  <div className="rounded-lg border border-[#2A2A2A] bg-[#141414] p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-caption font-semibold text-muted-foreground">
+                      <span className="text-[12px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
                         Record Payout
                       </span>
-                      <span className="text-caption text-muted-foreground">
+                      <span className="text-[12.5px] text-[#B0B0B0]">
                         Pending: {fmtMoney(detail.pendingBalance)}
                       </span>
                     </div>
@@ -280,14 +259,12 @@ export function ReferralsTable() {
                         min={0}
                         step="0.01"
                         placeholder="Amount"
-                        aria-label="Amount"
                         value={payoutAmount}
                         onChange={(e) => setPayoutAmount(e.target.value)}
                         className="w-32"
                       />
                       <AdminInput
                         placeholder="Method (e.g. PayPal, bank transfer)"
-                        aria-label="Method (e.g. PayPal, bank transfer)"
                         value={payoutMethod}
                         onChange={(e) => setPayoutMethod(e.target.value)}
                         className="flex-1 min-w-[160px]"
@@ -296,7 +273,7 @@ export function ReferralsTable() {
                         Record Payout
                       </AdminButton>
                     </div>
-                    <p className="text-caption text-muted-foreground/80">
+                    <p className="text-[11px] text-[#6A6A6A]">
                       Recording a payout marks ALL currently-pending commissions for this referrer as
                       paid, regardless of the amount entered here.
                     </p>
@@ -304,7 +281,7 @@ export function ReferralsTable() {
 
                   {/* Commission history */}
                   <div className="space-y-2">
-                    <p className="text-caption font-semibold text-muted-foreground">
+                    <p className="text-[12px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
                       Commission History
                     </p>
                     <div className={tableCls.wrap}>
@@ -330,13 +307,13 @@ export function ReferralsTable() {
                               <td className={tableCls.td}>{fmtDate(c.createdAt)}</td>
                               <td className={tableCls.td}>{c.sourceEvent}</td>
                               <td
-                                className={`${tableCls.td} tabular-nums ${c.status === "reversed" ? "line-through text-muted-foreground/80" : ""}`}
+                                className={`${tableCls.td} tabular-nums ${c.status === "reversed" ? "line-through text-[#6A6A6A]" : ""}`}
                               >
                                 {fmtMoney(c.amount)}
                               </td>
                               <td className={tableCls.td}>
                                 <span
-                                  className={`inline-flex rounded-full px-2 py-0.5 text-caption font-semibold ${STATUS_STYLE[c.status]}`}
+                                  className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_STYLE[c.status]}`}
                                   title={c.reversedReason ?? undefined}
                                 >
                                   {c.status}
@@ -351,7 +328,7 @@ export function ReferralsTable() {
 
                   {/* Payout history */}
                   <div className="space-y-2">
-                    <p className="text-caption font-semibold text-muted-foreground">
+                    <p className="text-[12px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
                       Payout History
                     </p>
                     <div className={tableCls.wrap}>
@@ -388,7 +365,7 @@ export function ReferralsTable() {
               )}
             </div>
           </div>
-        </aside>
+        </div>
       )}
     </div>
   )

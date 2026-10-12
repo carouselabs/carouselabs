@@ -173,8 +173,8 @@ export function EngageUsersTable() {
     <div className="mx-auto max-w-[1400px] space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lead font-semibold tracking-tight text-foreground">Engage users</h2>
-          <p className="mt-0.5 text-caption text-muted-foreground">Everyone who has signed in to the extension, paid for it, or been given access.</p>
+          <h1 className="text-[18px] font-semibold tracking-tight text-white">Engage users</h1>
+          <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">Everyone who has signed in to the extension, paid for it, or been given access.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <CsvLink type="users" query={filterQuery} />
@@ -187,7 +187,7 @@ export function EngageUsersTable() {
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[240px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8A8A8A]" aria-hidden />
           <AdminInput
             aria-label="Search users"
             className="w-full pl-8"
@@ -238,12 +238,12 @@ export function EngageUsersTable() {
             Columns
           </AdminButton>
           {showColumns && (
-            <div className="absolute right-0 z-20 mt-1 w-48 space-y-1 rounded-card border border-border bg-surface p-2 shadow-popover">
+            <div className="absolute right-0 z-20 mt-1 w-48 space-y-1 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-2 shadow-xl">
               {COLUMNS.map((c) => (
-                <label key={c} className="flex items-center gap-2 rounded px-2 py-1.5 text-caption text-foreground/90 hover:bg-surface-muted">
+                <label key={c} className="flex items-center gap-2 rounded px-2 py-1.5 text-[12.5px] text-[#D0D0D0] hover:bg-[#232323]">
                   <input
                     type="checkbox"
-                    className="accent-brand"
+                    className="accent-[#7C3AED]"
                     checked={visible(c)}
                     onChange={(e) => setColumns(e.target.checked ? [...columns, c] : columns.filter((x) => x !== c))}
                   />
@@ -319,8 +319,8 @@ export function EngageUsersTable() {
       </div>
 
       {selected.size > 0 && (
-        <div role="region" aria-label="Bulk actions" className="flex flex-wrap items-center gap-2 rounded-control-sm border border-brand/35 bg-brand-soft px-3 py-2">
-          <span className="text-caption font-medium text-foreground">{selected.size} selected</span>
+        <div role="region" aria-label="Bulk actions" className="flex flex-wrap items-center gap-2 rounded-lg border border-[#3B2A6B] bg-[#1C1530] px-3 py-2">
+          <span className="text-[12.5px] font-medium text-white">{selected.size} selected</span>
           <AdminButton variant="secondary" onClick={() => setBulk("grant")}>
             Give free access
           </AdminButton>
@@ -343,28 +343,28 @@ export function EngageUsersTable() {
       {error ? (
         <ErrorState message={error} onRetry={reload} />
       ) : (
-        <div className="overflow-hidden rounded-card border border-border bg-surface">
+        <div className="overflow-hidden rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]">
           <div className="max-h-[calc(100vh-280px)] overflow-auto">
-            <table className="w-full text-left text-caption" aria-busy={loading}>
-              <thead className="sticky top-0 z-10 bg-background">
-                <tr className="text-caption font-semibold text-muted-foreground">
-                  <th className="w-8 border-b border-border py-2.5 pl-4">
+            <table className="w-full text-left text-[12.5px]" aria-busy={loading}>
+              <thead className="sticky top-0 z-10 bg-[#161616]">
+                <tr className="text-[11px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
+                  <th className="w-8 border-b border-[#2A2A2A] py-2.5 pl-4">
                     <input
                       type="checkbox"
                       aria-label="Select everyone on this page"
-                      className="accent-brand"
+                      className="accent-[#7C3AED]"
                       checked={allSelected}
                       disabled={pageRows.length === 0}
                       onChange={(e) => toggleAll(pageRows, e.target.checked)}
                     />
                   </th>
-                  <th className="border-b border-border px-4 py-2.5">User</th>
-                  {visible("access") && <th className="border-b border-border px-4 py-2.5">Access</th>}
-                  {visible("month") && <th className="border-b border-border px-4 py-2.5 text-right">This month</th>}
-                  {visible("lastActive") && <th className="border-b border-border px-4 py-2.5">Last active</th>}
-                  {visible("version") && <th className="border-b border-border px-4 py-2.5">Extension</th>}
-                  {visible("joined") && <th className="border-b border-border px-4 py-2.5">Joined</th>}
-                  {visible("tags") && <th className="border-b border-border px-4 py-2.5">Tags</th>}
+                  <th className="border-b border-[#2A2A2A] px-4 py-2.5">User</th>
+                  {visible("access") && <th className="border-b border-[#2A2A2A] px-4 py-2.5">Access</th>}
+                  {visible("month") && <th className="border-b border-[#2A2A2A] px-4 py-2.5 text-right">This month</th>}
+                  {visible("lastActive") && <th className="border-b border-[#2A2A2A] px-4 py-2.5">Last active</th>}
+                  {visible("version") && <th className="border-b border-[#2A2A2A] px-4 py-2.5">Extension</th>}
+                  {visible("joined") && <th className="border-b border-[#2A2A2A] px-4 py-2.5">Joined</th>}
+                  {visible("tags") && <th className="border-b border-[#2A2A2A] px-4 py-2.5">Tags</th>}
                 </tr>
               </thead>
               <tbody>
@@ -377,12 +377,12 @@ export function EngageUsersTable() {
                       </tr>
                     ))
                   : data?.rows.map((u) => (
-                      <tr key={u.id} className="border-b border-border transition-colors hover:bg-surface-muted">
+                      <tr key={u.id} className="border-b border-[#232323] transition-colors hover:bg-[#1F1F1F]">
                         <td className="py-2.5 pl-4">
                           <input
                             type="checkbox"
                             aria-label={`Select ${u.email}`}
-                            className="accent-brand"
+                            className="accent-[#7C3AED]"
                             checked={selected.has(u.id)}
                             onChange={(e) => toggle(u, e.target.checked)}
                           />
@@ -390,10 +390,10 @@ export function EngageUsersTable() {
                         <td className="px-4 py-2.5">
                           <Link
                             href={`/admin/engage/users/${u.id}`}
-                            className="block rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                            className="block rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
                           >
-                            <span className="block font-medium text-foreground">{u.name ?? u.email}</span>
-                            {u.name && <span className="block text-caption text-muted-foreground">{u.email}</span>}
+                            <span className="block font-medium text-white">{u.name ?? u.email}</span>
+                            {u.name && <span className="block text-[11.5px] text-[#8A8A8A]">{u.email}</span>}
                           </Link>
                         </td>
                         {visible("access") && (
@@ -406,24 +406,24 @@ export function EngageUsersTable() {
                         )}
                         {visible("month") && (
                           <td
-                            className="px-4 py-2.5 text-right tabular-nums text-foreground/90"
+                            className="px-4 py-2.5 text-right tabular-nums text-[#D0D0D0]"
                             title={ENGAGE_FEATURES.map((f) => `${FEATURE_LABELS[f]}: ${u.monthByFeature[f] ?? 0}`).join("\n")}
                           >
                             {fmtNumber(u.monthTotal)}
                           </td>
                         )}
-                        {visible("lastActive") && <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">{fmtRelative(u.lastActiveAt)}</td>}
+                        {visible("lastActive") && <td className="whitespace-nowrap px-4 py-2.5 text-[#B0B0B0]">{fmtRelative(u.lastActiveAt)}</td>}
                         {visible("version") && (
-                          <td className="px-4 py-2.5 tabular-nums text-muted-foreground">
+                          <td className="px-4 py-2.5 tabular-nums text-[#B0B0B0]">
                             {extensionCell(u)}
                           </td>
                         )}
-                        {visible("joined") && <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">{fmtDate(u.createdAt)}</td>}
+                        {visible("joined") && <td className="whitespace-nowrap px-4 py-2.5 text-[#B0B0B0]">{fmtDate(u.createdAt)}</td>}
                         {visible("tags") && (
                           <td className="px-4 py-2.5">
                             <div className="flex flex-wrap gap-1">
                               {u.tags.map((t) => (
-                                <button key={t} onClick={() => setFilter({ tag: t })} className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+                                <button key={t} onClick={() => setFilter({ tag: t })} className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]">
                                   <Pill>{t}</Pill>
                                 </button>
                               ))}
@@ -444,7 +444,7 @@ export function EngageUsersTable() {
             )}
           </div>
           {data && data.total > 0 && (
-            <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-caption text-muted-foreground">
+            <div className="flex items-center justify-between border-t border-[#2A2A2A] px-4 py-2.5 text-[12px] text-[#8A8A8A]">
               <span className="tabular-nums">
                 {fmtNumber(from)}–{fmtNumber(to)} of {fmtNumber(data.total)}
               </span>

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { X } from "lucide-react"
 import { useOnboardingStore } from "@/lib/store/onboardingStore"
 import { StepNav } from "@/components/onboarding/StepNav"
-import { cn } from "@/lib/utils"
 
 const SUGGESTIONS = [
   "Leadership",
@@ -62,34 +61,31 @@ export default function TopicsPage() {
 
   return (
     <div>
-      <h1 id="topics-title" className="text-title-sm font-semibold">What do you post about?</h1>
-      <p id="topics-hint" className="mt-1 mb-8 text-body text-muted-foreground">
+      <h1 className="text-2xl font-semibold text-[#0A0A0A] mb-1">What do you post about?</h1>
+      <p className="text-sm text-[#6B7280] mb-8">
         Type your own topics or pick {MIN}+ from the suggestions below.
       </p>
 
       <div
-        className={cn(
-          "mb-2 flex min-h-28 cursor-text flex-wrap content-start gap-2 rounded-card border bg-surface p-3 transition-colors focus-within:border-brand",
-          missingTopics ? "border-danger" : "border-control-border"
-        )}
+        className={`min-h-[112px] p-4 rounded-xl bg-[#F6F4EE] border flex flex-wrap gap-2 cursor-text focus-within:border-[#1A1A1A] transition-colors mb-2 ${
+          missingTopics ? "border-red-400" : "border-[#E5E3DE]"
+        }`}
         onClick={() => document.getElementById("tag-input")?.focus()}
       >
         {topics.map((tag) => (
           <span
             key={tag}
-            className="inline-flex h-9 items-center gap-1 rounded-full bg-primary pr-1 pl-3.5 text-label text-primary-foreground"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[rgba(26,26,26,0.16)] border border-[rgba(26,26,26,0.25)] text-[#1A1A1A] text-sm"
           >
             {tag}
             <button
-              type="button"
-              aria-label={`Remove ${tag}`}
               onClick={(e) => {
                 e.stopPropagation()
                 removeTopic(tag)
               }}
-              className="grid size-7 place-items-center rounded-full opacity-70 transition-opacity hover:opacity-100"
+              className="text-[rgba(26,26,26,0.55)] hover:text-[#1A1A1A] transition-colors"
             >
-              <X size={12} aria-hidden />
+              <X size={11} />
             </button>
           </span>
         ))}
@@ -99,31 +95,27 @@ export default function TopicsPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKey}
-            aria-labelledby="topics-title"
-            aria-describedby="topics-hint topics-count"
-            aria-invalid={missingTopics || undefined}
             placeholder={topics.length === 0 ? "Type a topic, press Enter…" : ""}
-            className="h-9 min-w-[160px] flex-1 bg-transparent px-1 text-body text-foreground outline-none placeholder:text-muted-foreground"
+            className="flex-1 min-w-[160px] bg-transparent text-[#0A0A0A] text-sm placeholder-[#C4C0B6] outline-none"
           />
         )}
       </div>
 
-      <p id="topics-count" className="mb-8 text-caption text-muted-foreground tabular-nums">
+      <p className="text-xs text-[#ADA99F] mb-7">
         {topics.length}/{MAX} · type 1 custom topic or pick {MIN}+ from below
       </p>
 
       <div>
-        <p className="mb-3 text-label font-medium text-muted-foreground">
+        <p className="text-xs text-[#9CA3AF] mb-3 uppercase tracking-wide font-medium">
           Suggestions
         </p>
         <div className="flex flex-wrap gap-2">
           {SUGGESTIONS.filter((s) => !topics.includes(s)).map((s) => (
             <button
               key={s}
-              type="button"
               onClick={() => addTopic(s, false)}
               disabled={topics.length >= MAX}
-              className="h-9 rounded-full border border-border bg-surface px-3.5 text-label text-foreground transition-colors hover:border-control-border hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
+              className="px-3 py-1.5 rounded-full border border-[#E5E3DE] text-sm text-[#6B7280] hover:border-[#D6D3CC] hover:text-[#1A1A1A] disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
             >
               + {s}
             </button>

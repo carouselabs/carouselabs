@@ -1,7 +1,6 @@
 import Link from "next/link"
-import { ArrowRight, Calendar, Repeat, TrendingUp, ShieldCheck } from "lucide-react"
-
-import { cn } from "@/lib/utils"
+import { ArrowRight, Calendar, Repeat, TrendingUp, ShieldCheck, ImageIcon } from "lucide-react"
+import { AnimatedSection, AnimatedScale } from "@/components/marketing/AnimatedSection"
 
 const DIFFERENTIATORS = [
   {
@@ -22,77 +21,65 @@ const DIFFERENTIATORS = [
   },
 ]
 
-// Example week for the visual (replaces the old "coming soon" placeholder).
-const WEEK = [
-  { day: "Mon", posts: [] as { time: string; title: string; kind: "post" | "slot" }[] },
-  { day: "Tue", posts: [{ time: "9:00", title: "Day two decides everything", kind: "post" as const }] },
-  { day: "Wed", posts: [] },
-  { day: "Thu", posts: [{ time: "8:30", title: "Recurring slot", kind: "slot" as const }] },
-  { day: "Fri", posts: [{ time: "12:00", title: "Pricing pages that convert", kind: "post" as const }] },
-]
-
-function CalendarExample() {
-  return (
-    <figure aria-label="Example week in Content Hub" className="flex flex-col gap-2">
-      <div aria-hidden className="grid grid-cols-5 gap-1.5 rounded-control border border-border bg-surface-raised p-2 text-caption">
-        {WEEK.map((d) => (
-          <div key={d.day} className="flex min-w-0 flex-col gap-1.5">
-            <span className="px-1 text-muted-foreground">{d.day}</span>
-            <div className="flex h-28 flex-col gap-1 rounded-control-sm bg-surface-muted/60 p-1">
-              {d.posts.map((p) => (
-                <span
-                  key={p.title}
-                  className={cn(
-                    "rounded-[6px] px-1.5 py-1 text-[10px] leading-tight",
-                    p.kind === "post" ? "bg-primary text-primary-foreground" : "border border-dashed border-control-border text-muted-foreground"
-                  )}
-                >
-                  <span className="block tabular-nums opacity-70">{p.time}</span>
-                  <span className="line-clamp-2">{p.title}</span>
-                </span>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      <figcaption className="text-caption text-muted-foreground">Example week</figcaption>
-    </figure>
-  )
-}
-
-/** Panel in the tools section (see app/(marketing)/page.tsx). Copy unchanged. */
 export function ContentHubFeature() {
   return (
-    <article id="content-hub" aria-labelledby="content-hub-title" className="flex scroll-mt-20 flex-col gap-6 rounded-showcase border border-border bg-surface p-5 sm:p-8">
-      <CalendarExample />
+    <section className="py-24 px-6">
+      <div className="max-w-5xl mx-auto flex flex-col gap-14">
+        <AnimatedSection className="flex flex-col gap-4 text-center items-center">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#E5E3DE] text-[12px] font-medium text-[#7C3AED]">
+            <Calendar size={12} strokeWidth={2.2} />
+            New — Content Hub
+          </div>
+          <h2 className="max-w-3xl text-[clamp(1.75rem,4vw,2.75rem)] font-bold tracking-[-0.02em] text-[#0A0A0A] leading-[1.15]">
+            Plan Your Entire Content Calendar — Not Just One Post
+          </h2>
+          <p className="max-w-2xl text-[15px] text-[#6B7280] leading-[1.7]">
+            Schedule posts weeks in advance, set up recurring slots, and let CarouseLabs publish
+            automatically — while you focus on creating, not remembering to hit publish.
+          </p>
+        </AnimatedSection>
 
-      <div className="flex flex-col gap-3">
-        <p className="inline-flex items-center gap-1.5 text-label font-medium text-brand">
-          <Calendar className="size-3.5" strokeWidth={2.2} aria-hidden />
-          New — Content Hub
-        </p>
-        <h2 id="content-hub-title" className="text-title-sm font-semibold text-balance sm:text-title">
-          Plan Your Entire Content Calendar — Not Just One Post
-        </h2>
-        <p className="text-body text-muted-foreground">
-          Schedule posts weeks in advance, set up recurring slots, and let CarouseLabs publish automatically — while you focus on
-          creating, not remembering to hit publish.
-        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5">
+          {DIFFERENTIATORS.map((d, i) => (
+            <AnimatedScale
+              key={d.text}
+              delay={i * 0.08}
+              className="flex flex-col items-start gap-4 p-6 rounded-2xl border border-[#E5E3DE] bg-white"
+            >
+              <div className="w-11 h-11 rounded-xl bg-[#EDE9FE] flex items-center justify-center flex-shrink-0">
+                <d.icon size={19} className="text-[#7C3AED]" strokeWidth={1.8} />
+              </div>
+              <p className="text-[14px] text-[#3F3F46] leading-[1.6]">{d.text}</p>
+            </AnimatedScale>
+          ))}
+        </div>
+
+        {/* Calendar mockup — placeholder until a real screenshot is provided.
+            Swap this block for a real <Image> once one is available; keep
+            the dashed border treatment only for genuinely missing content. */}
+        <AnimatedSection>
+          <div className="flex flex-col items-center gap-3 p-10 rounded-2xl border border-dashed border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.03)] text-center">
+            <div className="w-11 h-11 rounded-xl bg-[rgba(124,58,237,0.1)] flex items-center justify-center">
+              <ImageIcon size={19} className="text-[#7C3AED]" strokeWidth={1.8} />
+            </div>
+            <p className="text-[14px] font-semibold text-[#0A0A0A]">Calendar preview coming soon</p>
+            <p className="max-w-md text-[13px] text-[#9CA3AF] leading-[1.6]">
+              A look at the Month/Week calendar — real post thumbnails, drag-and-drop rescheduling,
+              and recurring slots at a glance.
+            </p>
+          </div>
+        </AnimatedSection>
+
+        <AnimatedSection className="flex flex-col items-center gap-3">
+          <Link
+            href="/content-hub"
+            className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-[15px] font-semibold text-white transition-colors shadow-[0_10px_30px_rgba(124,58,237,0.25)]"
+          >
+            Try Content Hub
+            <ArrowRight size={16} strokeWidth={2.2} />
+          </Link>
+        </AnimatedSection>
       </div>
-
-      <ul className="flex flex-col gap-3">
-        {DIFFERENTIATORS.map((d) => (
-          <li key={d.text} className="flex gap-3 text-label">
-            <d.icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" strokeWidth={1.8} aria-hidden />
-            <span>{d.text}</span>
-          </li>
-        ))}
-      </ul>
-
-      <Link href="/content-hub" className="mt-auto inline-flex items-center gap-1.5 self-start text-label font-semibold text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">
-        Try Content Hub
-        <ArrowRight className="size-4" aria-hidden />
-      </Link>
-    </article>
+    </section>
   )
 }

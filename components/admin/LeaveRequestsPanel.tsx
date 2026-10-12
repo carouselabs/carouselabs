@@ -56,9 +56,9 @@ export function LeaveRequestsPanel({
     <AdminCard
       title={`Leave Requests (${leaveRequests.length})`}
       actions={
-        <span className="text-caption text-muted-foreground">
+        <span className="text-[12px] text-[#8A8A8A]">
           {leaveBalance.used}/{leaveBalance.total} used ·{" "}
-          <span className="text-foreground font-semibold">{leaveBalance.remaining} remaining</span>
+          <span className="text-white font-semibold">{leaveBalance.remaining} remaining</span>
         </span>
       }
     >
@@ -84,9 +84,9 @@ export function LeaveRequestsPanel({
             {leaveRequests.map((r) => (
               <tr key={r.id} className={tableCls.row}>
                 <td className={tableCls.td}>{fmtDate(r.date)}</td>
-                <td className={`${tableCls.td} max-w-[280px] truncate text-muted-foreground`}>{r.reason ?? "—"}</td>
+                <td className={`${tableCls.td} max-w-[280px] truncate text-[#8A8A8A]`}>{r.reason ?? "—"}</td>
                 <td className={tableCls.td}>
-                  <span className="inline-flex rounded-full bg-chart-4/15 px-2 py-0.5 text-caption font-semibold text-chart-4">
+                  <span className="inline-flex rounded-full bg-blue-500/15 px-2 py-0.5 text-[11px] font-semibold text-blue-400">
                     {r.status.toUpperCase()}
                   </span>
                 </td>
@@ -94,7 +94,7 @@ export function LeaveRequestsPanel({
                 <td className={tableCls.td}>
                   <button
                     onClick={() => setRevoking(r)}
-                    className="rounded-md p-1.5 text-muted-foreground hover:bg-danger/15 hover:text-danger transition-colors"
+                    className="rounded-md p-1.5 text-[#8A8A8A] hover:bg-red-500/15 hover:text-red-400 transition-colors"
                     aria-label="Revoke leave request"
                   >
                     <Trash2 className="h-3.5 w-3.5" />

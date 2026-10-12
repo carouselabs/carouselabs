@@ -103,14 +103,14 @@ export function BulkActionModal({
     <Modal open={action !== null} onClose={close} title={action ? `${TITLES[action]} · ${count} user${count === 1 ? "" : "s"}` : ""}>
       {result ? (
         <div className="space-y-3">
-          <p className="text-caption text-muted-foreground">
+          <p className="text-[12.5px] text-[#B0B0B0]">
             Done for {result.done} of {result.of}. Skipped:
           </p>
-          <ul className="max-h-60 space-y-1 overflow-auto text-caption" aria-label="Skipped users">
+          <ul className="max-h-60 space-y-1 overflow-auto text-[12.5px]" aria-label="Skipped users">
             {result.skipped.map((s) => (
-              <li key={s.email} className="flex justify-between gap-3 text-foreground/90">
+              <li key={s.email} className="flex justify-between gap-3 text-[#D0D0D0]">
                 <span className="truncate">{s.email}</span>
-                <span className="shrink-0 text-muted-foreground">{s.why}</span>
+                <span className="shrink-0 text-[#8A8A8A]">{s.why}</span>
               </li>
             ))}
           </ul>
@@ -128,7 +128,7 @@ export function BulkActionModal({
         >
           {action === "grant" && (
             <label className="block space-y-1">
-              <span className="block text-caption text-muted-foreground">Extension</span>
+              <span className="block text-[12px] text-[#B0B0B0]">Extension</span>
               <AdminSelect aria-label="Extension" value={platform} onChange={(e) => setPlatform(e.target.value as GrantPlatform)}>
                 {GRANT_PLATFORMS.map((p) => (
                   <option key={p} value={p}>
@@ -140,7 +140,7 @@ export function BulkActionModal({
           )}
           {action === "grant" && (
             <label className="block space-y-1">
-              <span className="block text-caption text-muted-foreground">For how long</span>
+              <span className="block text-[12px] text-[#B0B0B0]">For how long</span>
               <AdminSelect aria-label="For how long" value={duration} onChange={(e) => setDuration(e.target.value as GrantDuration)}>
                 {DURATIONS.map((d) => (
                   <option key={d} value={d}>
@@ -151,22 +151,22 @@ export function BulkActionModal({
             </label>
           )}
           {action === "suspend" && (
-            <p className="text-caption leading-relaxed text-muted-foreground">They can&apos;t write with either extension until resumed. Their account and billing are untouched.</p>
+            <p className="text-[12.5px] leading-relaxed text-[#B0B0B0]">They can&apos;t write with either extension until resumed. Their account and billing are untouched.</p>
           )}
           {action === "tag" && (
             <label className="block space-y-1">
-              <span className="block text-caption text-muted-foreground">Tag</span>
+              <span className="block text-[12px] text-[#B0B0B0]">Tag</span>
               <AdminInput className="w-full" maxLength={32} value={tag} onChange={(e) => setTag(e.target.value)} placeholder="e.g. Beta tester" />
             </label>
           )}
           {needsReason && (
             <label className="block space-y-1">
-              <span className="block text-caption text-muted-foreground">Reason (for the audit log)</span>
+              <span className="block text-[12px] text-[#B0B0B0]">Reason (for the audit log)</span>
               <AdminInput className="w-full" maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Launch partners" />
             </label>
           )}
           {error && (
-            <p role="alert" className="text-caption text-danger">
+            <p role="alert" className="text-[12.5px] text-red-300">
               {error}
             </p>
           )}

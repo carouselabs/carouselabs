@@ -7,9 +7,8 @@
 // app/(onboarding)/onboarding/*), sourced from the same shared option lists.
 import { useState } from "react"
 import { X } from "lucide-react"
-import { AdminButton, AdminInput, AdminSelect } from "@/components/admin/ui"
+import { AdminButton, AdminCard, AdminInput, AdminSelect } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
-import { SettingsSection } from "@/components/settings/SettingsSection"
 import {
   ROLES,
   INDUSTRIES,
@@ -37,10 +36,10 @@ function ToggleRow({
           key={o.id}
           type="button"
           onClick={() => onToggle(o.id)}
-          className={`px-3 py-1.5 rounded-full border text-caption transition-colors ${
+          className={`px-3 py-1.5 rounded-full border text-[12.5px] transition-colors ${
             selected.includes(o.id)
-              ? "border-brand bg-brand/15 text-brand"
-              : "border-border text-muted-foreground hover:border-control-border hover:text-foreground"
+              ? "border-[#7C3AED] bg-[#7C3AED]/15 text-[#A78BFA]"
+              : "border-[#2A2A2A] text-[#8A8A8A] hover:border-[#3A3A3A] hover:text-white"
           }`}
         >
           {o.label}
@@ -149,8 +148,8 @@ export function PrefillUserForm() {
   }
 
   return (
-    <div className="flex max-w-5xl flex-col gap-8">
-      <p className="text-label text-muted-foreground">
+    <div className="max-w-2xl flex flex-col gap-5">
+      <p className="text-[13px] text-[#8A8A8A]">
         Pre-fill a user&apos;s onboarding profile by email — for people who told you what they
         post about outside the app. If they&apos;ve already signed up, this overwrites their
         Profile directly. If not, it&apos;s held as a pending prefill and applied automatically
@@ -158,9 +157,9 @@ export function PrefillUserForm() {
         prompting them to review it.
       </p>
 
-      <SettingsSection title="Who">
+      <AdminCard title="Who">
         <div className="flex flex-col gap-1.5">
-          <label className="text-caption font-medium text-muted-foreground">
+          <label className="text-[11px] font-medium uppercase tracking-wide text-[#8A8A8A]">
             Email *
           </label>
           <AdminInput
@@ -171,13 +170,13 @@ export function PrefillUserForm() {
             className="w-full max-w-sm"
           />
         </div>
-      </SettingsSection>
+      </AdminCard>
 
-      <SettingsSection title="Identity">
+      <AdminCard title="Identity">
         <ToggleRow options={ROLES} selected={role ? [role] : []} onToggle={(id) => setRole(role === id ? "" : id)} />
-      </SettingsSection>
+      </AdminCard>
 
-      <SettingsSection title="Industry & Niche">
+      <AdminCard title="Industry & Niche">
         <div className="flex flex-col gap-3">
           <AdminSelect value={industry} onChange={(e) => setIndustry(e.target.value)} className="w-full">
             <option value="">Select an industry…</option>
@@ -194,18 +193,18 @@ export function PrefillUserForm() {
             className="w-full"
           />
         </div>
-      </SettingsSection>
+      </AdminCard>
 
-      <SettingsSection title="Content Topics" action={<span className="text-caption text-muted-foreground/80">{topics.length}/{TOPICS_MAX}</span>}>
+      <AdminCard title="Content Topics" actions={<span className="text-[11px] text-[#6A6A6A]">{topics.length}/{TOPICS_MAX}</span>}>
         <div className="flex flex-col gap-3">
           <div
-            className="min-h-[52px] p-2.5 rounded-control-sm bg-background border border-border flex flex-wrap gap-2 cursor-text"
+            className="min-h-[52px] p-2.5 rounded-lg bg-[#141414] border border-[#2A2A2A] flex flex-wrap gap-2 cursor-text"
             onClick={() => document.getElementById("prefill-topic-input")?.focus()}
           >
             {topics.map((tag) => (
               <span
                 key={tag}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand/15 border border-brand/30 text-brand text-caption"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#7C3AED]/15 border border-[#7C3AED]/30 text-[#A78BFA] text-[12px]"
               >
                 {tag}
                 <button
@@ -214,7 +213,7 @@ export function PrefillUserForm() {
                     e.stopPropagation()
                     removeTopic(tag)
                   }}
-                  className="text-brand/70 hover:text-brand"
+                  className="text-[#A78BFA]/70 hover:text-[#A78BFA]"
                 >
                   <X size={10} />
                 </button>
@@ -235,11 +234,11 @@ export function PrefillUserForm() {
                   }
                 }}
                 placeholder={topics.length === 0 ? "Type a topic, press Enter…" : ""}
-                className="flex-1 min-w-[140px] bg-transparent text-label text-foreground placeholder:text-muted-foreground/80 outline-none"
+                className="flex-1 min-w-[140px] bg-transparent text-[13px] text-white placeholder:text-[#5A5A5A] outline-none"
               />
             )}
           </div>
-          <p className="text-caption text-muted-foreground/80">
+          <p className="text-[11px] text-[#6A6A6A]">
             {topics.length < TOPICS_MIN ? `Add at least ${TOPICS_MIN}, or ` : ""}pick from
             suggestions:
           </p>
@@ -250,16 +249,16 @@ export function PrefillUserForm() {
                 type="button"
                 onClick={() => addTopic(s)}
                 disabled={topics.length >= TOPICS_MAX}
-                className="px-2.5 py-1 rounded-full border border-border text-caption text-muted-foreground hover:border-control-border hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="px-2.5 py-1 rounded-full border border-[#2A2A2A] text-[12px] text-[#8A8A8A] hover:border-[#3A3A3A] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 + {s}
               </button>
             ))}
           </div>
         </div>
-      </SettingsSection>
+      </AdminCard>
 
-      <SettingsSection title="Target Audience">
+      <AdminCard title="Target Audience">
         <div className="flex flex-col gap-3">
           <AdminInput
             value={audienceRole}
@@ -283,16 +282,16 @@ export function PrefillUserForm() {
             onChange={(e) => setCoreProblem(e.target.value)}
             rows={3}
             placeholder="Core problem they face — e.g. struggling to generate leads on LinkedIn…"
-            className="w-full rounded-control-sm border border-border bg-background px-3 py-2 text-label text-foreground placeholder:text-muted-foreground/80 outline-none focus:border-brand transition-colors resize-none"
+            className="w-full rounded-lg border border-[#2A2A2A] bg-[#141414] px-3 py-2 text-[13px] text-white placeholder:text-[#5A5A5A] outline-none focus:border-[#7C3AED] transition-colors resize-none"
           />
         </div>
-      </SettingsSection>
+      </AdminCard>
 
-      <SettingsSection title="Content Goals">
+      <AdminCard title="Content Goals">
         <div className="flex flex-col gap-3">
           <ToggleRow options={GOALS} selected={goals} onToggle={toggleGoal} />
           {goals.length > 0 && (
-            <div className="flex items-center gap-2 text-caption text-muted-foreground">
+            <div className="flex items-center gap-2 text-[12px] text-[#8A8A8A]">
               Primary:
               <AdminSelect value={primaryGoal} onChange={(e) => setPrimaryGoal(e.target.value)}>
                 {goals.map((id) => (
@@ -304,17 +303,17 @@ export function PrefillUserForm() {
             </div>
           )}
         </div>
-      </SettingsSection>
+      </AdminCard>
 
-      <SettingsSection title="Tone & Voice" action={<span className="text-caption text-muted-foreground/80">up to 2</span>}>
+      <AdminCard title="Tone & Voice" actions={<span className="text-[11px] text-[#6A6A6A]">up to 2</span>}>
         <ToggleRow options={TONES} selected={tones} onToggle={toggleTone} />
-      </SettingsSection>
+      </AdminCard>
 
       <div className="flex items-center gap-3">
         <AdminButton onClick={handleSave} disabled={!canSave} loading={saving}>
           Create Pre-filled Profile
         </AdminButton>
-        {!email.trim() && <span className="text-caption text-muted-foreground/80">Email is required</span>}
+        {!email.trim() && <span className="text-[12px] text-[#6A6A6A]">Email is required</span>}
       </div>
     </div>
   )

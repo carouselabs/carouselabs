@@ -5,13 +5,13 @@
 // balance, calendar, and taken-dates list all pick up the new leave day.
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { controlClasses } from "@/components/ui/input"
 
-// The kit's control (16px text on phones, so iOS Safari doesn't zoom on
-// focus) at the 44px tap height.
-const inputCls = cn(controlClasses, "h-11 px-3.5")
+// text-[16px] on mobile — anything smaller makes iOS Safari auto-zoom the
+// page on focus; sm:text-[13px] restores the compact desktop size once
+// zoom-on-focus isn't a concern. py-3 (not py-2.5) keeps the ~44px min tap
+// target with the larger mobile font.
+const inputCls =
+  "w-full px-3.5 py-3 rounded-lg bg-[#F4F2EC] border border-[#E5E3DE] text-[#0A0A0A] placeholder-[#ADA99F] text-[16px] sm:text-[13px] focus:outline-none focus:border-[#7C3AED]/50 transition-colors"
 
 function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
@@ -65,21 +65,21 @@ export function LeaveApplication({
   }
 
   return (
-    <section className="rounded-card border border-border bg-surface p-5">
-      <h2 className="mb-1 text-body font-semibold text-foreground">Apply for Leave</h2>
-      <p className="mb-4 text-label text-muted-foreground">
-        You have <span className="font-semibold text-foreground">{remaining} of {total}</span> leave days
+    <div className="rounded-2xl border border-[#E5E3DE] bg-white p-4 sm:p-5">
+      <h2 className="mb-1 text-[13px] font-semibold text-[#0A0A0A]">Apply for Leave</h2>
+      <p className="mb-4 text-[13px] text-[#6B7280]">
+        You have <span className="font-semibold text-[#0A0A0A]">{remaining} of {total}</span> leave days
         remaining.
       </p>
 
       {success && (
-        <p role="status" className="mb-3 rounded-control-sm bg-success-soft px-3.5 py-2.5 text-label text-success">{success}</p>
+        <p className="mb-3 rounded-lg bg-emerald-50 px-3.5 py-2.5 text-[13px] text-emerald-700">{success}</p>
       )}
-      {error && <p role="alert" className="mb-3 rounded-control-sm bg-danger-soft px-3.5 py-2.5 text-label text-danger">{error}</p>}
+      {error && <p className="mb-3 rounded-lg bg-red-50 px-3.5 py-2.5 text-[13px] text-red-600">{error}</p>}
 
       <div className="space-y-3">
         {noBalance && (
-          <p className="rounded-control-sm bg-warning-soft px-3.5 py-2.5 text-caption font-medium text-warning">
+          <p className="rounded-lg bg-amber-50 px-3.5 py-2.5 text-[12.5px] font-medium text-amber-700">
             You&apos;re out of leave days. Applying now will mark you Absent instead of Leave.
           </p>
         )}
@@ -91,11 +91,10 @@ export function LeaveApplication({
             setDate(e.target.value)
             setError(null)
           }}
-          aria-label="Date"
           className={inputCls}
         />
         {dateTaken && (
-          <p className="text-caption text-danger">
+          <p className="text-[12px] text-red-600">
             You already have an attendance or leave record for this date.
           </p>
         )}
@@ -104,22 +103,22 @@ export function LeaveApplication({
           placeholder="Reason (optional)"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          aria-label="Reason (optional)"
           className={inputCls}
         />
-        <Button
-          variant={noBalance ? "destructive" : "brand"}
+        <button
           onClick={submit}
           disabled={submitting || dateTaken}
-          className="h-auto min-h-11 w-full touch-manipulation py-2.5 whitespace-normal"
+          className={`min-h-11 w-full touch-manipulation rounded-lg px-4 py-3 text-[14px] font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            noBalance ? "bg-red-600 hover:bg-red-700" : "bg-[#7C3AED] hover:bg-[#6D28D9]"
+          }`}
         >
           {submitting
             ? "Submitting…"
             : noBalance
               ? "Apply (will be marked Absent — no leave days left)"
               : "Submit Leave Request"}
-        </Button>
+        </button>
       </div>
-    </section>
+    </div>
   )
 }

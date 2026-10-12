@@ -4,10 +4,8 @@
 // replies, connection notes, messages — from the same route the side panel's
 // History screen reads (app/api/ext/history). With platform="x" (Extension →
 // X), CarouseLabs Engage for X's replies and messages instead.
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Check, Copy, ExternalLink, Loader2, Trash2 } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 import { dateTime, errorMessage, extApi, type HistoryEntry, type HistoryKind } from "./api"
 
 type Platform = "linkedin" | "x"
@@ -81,27 +79,12 @@ function siteHref(url: string): string | null {
 }
 
 const ACTION_LABELS: Record<HistoryEntry["action"], { label: string; className: string }> = {
-  INSERTED: { label: "Inserted", className: "text-success bg-success-soft" },
-  COPIED: { label: "Copied", className: "text-chart-4 bg-chart-4/10" },
-  NONE: { label: "Not used", className: "text-muted-foreground bg-surface-muted" },
+  INSERTED: { label: "Inserted", className: "text-[#15803D] bg-[#DCFCE7]" },
+  COPIED: { label: "Copied", className: "text-[#1D4ED8] bg-[#DBEAFE]" },
+  NONE: { label: "Not used", className: "text-[#6B7280] bg-[#F3F4F6]" },
 }
 
-// Status dot colours, matching the labels above.
-const ACTION_DOT: Record<HistoryEntry["action"], string> = {
-  INSERTED: "bg-success",
-  COPIED: "bg-chart-4",
-  NONE: "bg-control-border",
-}
-
-const dayOf = (iso: string) =>
-  new Date(iso).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })
-const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
-
-/**
- * The selected generation shown as the exchange it was part of: the post (or
- * chat) it answered, then what the extension wrote, as the reply it became.
- */
-function HistoryDetail({ entry, onDeleted }: { entry: HistoryEntry; onDeleted: (id: string) => void }) {
+function HistoryRow({ entry, onDeleted }: { entry: HistoryEntry; onDeleted: (id: string) => void }) {
   const [copied, setCopied] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -132,68 +115,80 @@ function HistoryDetail({ entry, onDeleted }: { entry: HistoryEntry; onDeleted: (
   }
 
   return (
-    <article aria-label={audience(entry)} className="flex flex-col gap-6 rounded-showcase border border-border bg-surface-raised p-6 shadow-card sm:p-8">
-      <header className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-brand-soft px-2.5 py-0.5 text-caption font-semibold text-brand">
-            {KIND_LABELS[entry.kind] ?? "Comment"}
-          </span>
-          <span className={`rounded-full px-2.5 py-0.5 text-caption font-semibold ${action.className}`}>{action.label}</span>
-        </div>
-        <h2 className="text-title-sm font-semibold text-balance text-foreground">{audience(entry)}</h2>
-        <p className="text-caption text-muted-foreground">{dateTime(entry.createdAt)}</p>
-      </header>
-
-      {/* The exchange */}
-      <div className="flex flex-col gap-3">
-        {entry.postSnippet && (
-          <blockquote className="rounded-card border border-border bg-background px-5 py-4">
-            {entry.postAuthor && <p className="mb-1 text-caption font-semibold text-foreground">{entry.postAuthor}</p>}
-            <p className="line-clamp-4 text-label text-muted-foreground">{entry.postSnippet}</p>
-          </blockquote>
-        )}
-        <div className={cn("flex flex-col gap-1.5", entry.postSnippet && "pl-6 sm:pl-10")}>
-          <p className="rounded-[1.25rem] rounded-tl-md bg-brand-soft px-5 py-4 text-body whitespace-pre-wrap text-foreground">
-            {entry.comment}
-          </p>
-          <p className="pl-1 text-caption text-muted-foreground">Voice: {entry.profileName}</p>
-        </div>
+    <article className="flex flex-col gap-3 rounded-2xl border border-[#E5E3DE] bg-white p-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-[rgba(124,58,237,0.08)] px-2.5 py-0.5 text-[11px] font-semibold text-[#7C3AED]">
+          {KIND_LABELS[entry.kind] ?? "Comment"}
+        </span>
+        <span className="text-[12.5px] font-medium text-[#0A0A0A]">{audience(entry)}</span>
+        <span className="text-[12px] text-[#9CA3AF]">· {dateTime(entry.createdAt)}</span>
+        <span className={`ml-auto rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${action.className}`}>
+          {action.label}
+        </span>
       </div>
 
-      <footer className="flex flex-wrap items-center gap-2 border-t border-border pt-5">
-        <Button variant="outline" size="sm" onClick={copy}>
-          {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
-        {href && (
-          <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-control px-3 text-label font-medium text-foreground transition-colors duration-(--motion-fast) hover:bg-surface-muted">
-            <ExternalLink className="size-4" aria-hidden />
-            {LINK_LABELS[entry.kind] ?? "Open"}
-          </a>
-        )}
-        {confirming ? (
-          <span className="ml-auto flex items-center gap-1">
-            <Button variant="destructive" size="sm" disabled={deleting} onClick={remove}>
-              {deleting && <Loader2 className="animate-spin" aria-hidden />}
-              Delete
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
-              Cancel
-            </Button>
-          </span>
-        ) : (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Delete"
-            onClick={() => setConfirming(true)}
-            className="ml-auto text-muted-foreground hover:bg-danger-soft hover:text-danger"
+      {entry.postSnippet && (
+        <p className="line-clamp-2 border-l-2 border-[#E5E3DE] pl-3 text-[12.5px] leading-[1.55] text-[#6B7280]">
+          {entry.postSnippet}
+        </p>
+      )}
+
+      <p className="whitespace-pre-wrap text-[13.5px] leading-[1.65] text-[#0A0A0A]">{entry.comment}</p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11.5px] text-[#9CA3AF]">Voice: {entry.profileName}</span>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={copy}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#E5E3DE] px-3 py-1.5 text-[12px] font-semibold text-[#374151] hover:bg-[#F9F7F2]"
           >
-            <Trash2 aria-hidden />
-          </Button>
-        )}
-      </footer>
-      {error && <p role="alert" className="text-caption text-danger">{error}</p>}
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+          {href && (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#E5E3DE] px-3 py-1.5 text-[12px] font-semibold text-[#374151] hover:bg-[#F9F7F2]"
+            >
+              <ExternalLink size={13} />
+              {LINK_LABELS[entry.kind] ?? "Open"}
+            </a>
+          )}
+          {confirming ? (
+            <>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={remove}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#DC2626] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#B91C1C] disabled:opacity-60"
+              >
+                {deleting && <Loader2 size={12} className="animate-spin" />}
+                Delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                className="px-2 py-1.5 text-[12px] font-medium text-[#6B7280] hover:text-[#0A0A0A]"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              aria-label="Delete"
+              onClick={() => setConfirming(true)}
+              className="inline-flex items-center rounded-lg border border-[#E5E3DE] p-1.5 text-[#9CA3AF] hover:border-[#DC2626]/40 hover:text-[#DC2626]"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+      {error && <p className="text-[12px] text-[#DC2626]">{error}</p>}
     </article>
   )
 }
@@ -205,9 +200,6 @@ export function HistoryList({ platform = "linkedin" }: { platform?: Platform } =
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Which entry the panel on the right shows (null: the newest).
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const detailRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async (filter: HistoryKind | null, cursor: string | null) => {
     const params = new URLSearchParams({ limit: "30" })
@@ -255,105 +247,57 @@ export function HistoryList({ platform = "linkedin" }: { platform?: Platform } =
     }
   }
 
-  const selected = entries.find((e) => e.id === selectedId) ?? entries[0] ?? null
-  // Newest first, grouped by day.
-  const days: { day: string; items: HistoryEntry[] }[] = []
-  for (const entry of entries) {
-    const day = dayOf(entry.createdAt)
-    const last = days[days.length - 1]
-    if (last && last.day === day) last.items.push(entry)
-    else days.push({ day, items: [entry] })
-  }
-
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-        <div role="group" aria-label="Filter" className="no-scrollbar -mx-6 max-w-[calc(100%+3rem)] overflow-x-auto px-6 md:mx-0 md:max-w-full md:px-0">
-          <div className="inline-flex gap-1 rounded-full border border-border bg-surface-muted p-1">
-            {FILTERS[platform].map((f) => (
-              <button
-                key={f.label}
-                type="button"
-                aria-pressed={kind === f.kind}
-                onClick={() => chooseFilter(f.kind)}
-                className="h-8 shrink-0 rounded-full px-3.5 text-label font-medium whitespace-nowrap text-muted-foreground transition-colors duration-(--motion-fast) hover:text-foreground aria-pressed:bg-surface-raised aria-pressed:text-foreground aria-pressed:shadow-card"
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <span className="ml-auto text-caption text-muted-foreground">Kept for 90 days</span>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {FILTERS[platform].map((f) => (
+          <button
+            key={f.label}
+            type="button"
+            onClick={() => chooseFilter(f.kind)}
+            className={[
+              "rounded-full px-3.5 py-1.5 text-[12.5px] font-medium transition-colors",
+              kind === f.kind
+                ? "bg-[#1A1A1A] text-white"
+                : "border border-[#E5E3DE] bg-white text-[#6B7280] hover:text-[#0A0A0A]",
+            ].join(" ")}
+          >
+            {f.label}
+          </button>
+        ))}
+        <span className="ml-auto text-[11.5px] text-[#9CA3AF]">Kept for 90 days</span>
       </div>
 
-      {error && (
-        <p role="alert" className="rounded-control border border-danger/25 bg-danger-soft px-4 py-3 text-label text-danger">
-          {error}
-        </p>
-      )}
+      {error && <p className="text-[13px] text-[#DC2626]">{error}</p>}
 
       {loading ? (
-        <p role="status" className="text-label text-muted-foreground">Loading history…</p>
+        <p className="text-[13px] text-[#9CA3AF]">Loading history…</p>
       ) : entries.length === 0 ? (
-        <div className="rounded-showcase border border-dashed border-border px-6 py-14 text-center text-label text-muted-foreground">
+        <div className="rounded-2xl border border-dashed border-[#E5E3DE] p-8 text-center text-[13px] text-[#6B7280]">
           {EMPTY[platform]}
         </div>
       ) : (
-        <div className="grid gap-8 lg:grid-cols-[22rem_minmax(0,1fr)] lg:gap-10">
-          <nav aria-label="History" className="flex min-w-0 flex-col gap-5">
-            {days.map(({ day, items }) => (
-              <section key={day} aria-label={day} className="flex flex-col gap-1">
-                <h3 className="px-3 text-caption font-medium text-muted-foreground">{day}</h3>
-                <ul className="flex flex-col gap-0.5">
-                  {items.map((entry) => {
-                    const current = entry.id === selected?.id
-                    return (
-                      <li key={entry.id}>
-                        <button
-                          type="button"
-                          aria-current={current ? "true" : undefined}
-                          onClick={() => {
-                            setSelectedId(entry.id)
-                            requestAnimationFrame(() => {
-                              if (!window.matchMedia("(min-width: 64rem)").matches)
-                                detailRef.current?.scrollIntoView({ block: "start" })
-                            })
-                          }}
-                          className="relative flex w-full flex-col gap-1 rounded-control px-3 py-2.5 text-left transition-colors duration-(--motion-fast) hover:bg-surface-muted aria-[current=true]:bg-surface-raised aria-[current=true]:shadow-card aria-[current=true]:before:absolute aria-[current=true]:before:inset-y-2.5 aria-[current=true]:before:left-0 aria-[current=true]:before:w-0.5 aria-[current=true]:before:rounded-full aria-[current=true]:before:bg-brand"
-                        >
-                          <span className="flex min-w-0 items-center gap-2">
-                            <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", ACTION_DOT[entry.action] ?? ACTION_DOT.NONE)} />
-                            <span className="truncate text-label font-medium text-foreground">{audience(entry)}</span>
-                            <span className="ml-auto shrink-0 text-caption text-muted-foreground tabular-nums">{timeOf(entry.createdAt)}</span>
-                          </span>
-                          <span className="truncate pl-3.5 text-caption text-muted-foreground">{entry.comment}</span>
-                          <span className="sr-only">{(ACTION_LABELS[entry.action] ?? ACTION_LABELS.NONE).label}</span>
-                        </button>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </section>
-            ))}
-
-            {nextCursor && (
-              <Button variant="outline" disabled={loadingMore} onClick={loadMore} className="self-start">
-                {loadingMore && <Loader2 className="animate-spin" aria-hidden />}
-                Load more
-              </Button>
-            )}
-          </nav>
-
-          <div ref={detailRef} className="min-w-0 scroll-mt-28 lg:sticky lg:top-6 lg:self-start">
-            {selected && (
-              <HistoryDetail
-                key={selected.id}
-                entry={selected}
-                onDeleted={(id) => setEntries((list) => list.filter((e) => e.id !== id))}
-              />
-            )}
-          </div>
+        <div className="flex flex-col gap-3">
+          {entries.map((entry) => (
+            <HistoryRow
+              key={entry.id}
+              entry={entry}
+              onDeleted={(id) => setEntries((list) => list.filter((e) => e.id !== id))}
+            />
+          ))}
         </div>
+      )}
+
+      {nextCursor && !loading && (
+        <button
+          type="button"
+          disabled={loadingMore}
+          onClick={loadMore}
+          className="mx-auto inline-flex items-center gap-2 rounded-xl border border-[#E5E3DE] bg-white px-5 py-2.5 text-[13px] font-semibold text-[#0A0A0A] hover:bg-[#F9F7F2] disabled:opacity-60"
+        >
+          {loadingMore && <Loader2 size={14} className="animate-spin" />}
+          Load more
+        </button>
       )}
     </div>
   )

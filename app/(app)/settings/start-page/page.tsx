@@ -15,8 +15,7 @@ import {
   Check,
   X,
 } from "lucide-react"
-import { SettingsHeader } from "@/components/settings/SettingsHeader"
-import { SettingsSection } from "@/components/settings/SettingsSection"
+import { SettingsTabs } from "@/components/settings/SettingsTabs"
 import { START_PAGE_THEMES, type StartPageTheme } from "@/lib/startPage"
 
 interface StartPageLink {
@@ -293,50 +292,59 @@ export default function StartPageEditor() {
 
   if (loading) {
     return (
-      <div className="mx-auto flex max-w-5xl flex-col gap-8">
-        <SettingsHeader />
-        <div className="h-40 rounded-card bg-surface border border-border animate-pulse" />
+      <div className="max-w-2xl mx-auto flex flex-col gap-8">
+        <SettingsTabs />
+        <div className="h-40 rounded-2xl bg-[#F6F4EE] border border-[#F1EFE9] animate-pulse" />
       </div>
     )
   }
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-8">
-      <SettingsHeader />
+    <div className="max-w-2xl mx-auto flex flex-col gap-8">
+      <SettingsTabs />
 
-      <SettingsSection title="Start Page" description="A simple link-in-bio page — one link to put everywhere: your LinkedIn, your website, your latest post, whatever you want." action={startPage && (
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="text-[14px] font-semibold text-[#0A0A0A]">Start Page</h2>
+          {startPage && (
             <a
               href={`/start/${startPage.slug}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex shrink-0 items-center gap-1.5 text-label font-medium text-brand hover:underline"
+              className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
             >
               Preview
-              <ExternalLink size={12} strokeWidth={2.2} aria-hidden />
+              <ExternalLink size={12} strokeWidth={2.2} />
             </a>
-          )}>
+          )}
+        </div>
+        <p className="text-[13px] text-[#6B7280] leading-[1.5]">
+          A simple link-in-bio page — one link to put everywhere: your LinkedIn, your website, your latest
+          post, whatever you want.
+        </p>
+
         {error && (
-          <div className="px-4 py-3 rounded-control bg-danger-soft border border-danger/25 text-label text-danger">
+          <div className="px-4 py-3 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[13px] text-[rgba(239,68,68,0.9)]">
             {error}
           </div>
         )}
 
         {!startPage ? (
-          <div className="flex flex-col gap-3 p-5 rounded-card border border-border bg-surface-raised">
-            <p className="text-label font-medium text-foreground">Claim your Start Page</p>
+          <div className="flex flex-col gap-3 p-5 rounded-2xl border border-[#E5E3DE] bg-white">
+            <p className="text-[13px] font-medium text-[#0A0A0A]">Claim your Start Page</p>
             <div className="flex items-center gap-2">
-              <span className="text-label text-muted-foreground whitespace-nowrap">carouselabs.com/start/</span>
+              <span className="text-[13px] text-[#9CA3AF] whitespace-nowrap">carouselabs.com/start/</span>
               <input
                 value={claimSlug}
                 onChange={(e) => setClaimSlug(e.target.value.toLowerCase())}
                 placeholder="your-name"
-                className="flex-1 px-3 py-2 rounded-control-sm border border-border bg-surface text-label text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand transition-colors"
+                className="flex-1 px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
               />
             </div>
             <button
               onClick={() => void handleClaim()}
               disabled={claiming}
-              className="self-start inline-flex items-center gap-2 px-4 py-2 rounded-control-sm text-caption font-semibold text-white bg-brand hover:bg-brand-hover disabled:opacity-50 transition-colors"
+              className="self-start inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[12.5px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 transition-colors"
             >
               {claiming && <Loader2 size={13} className="animate-spin" />}
               Create
@@ -344,17 +352,17 @@ export default function StartPageEditor() {
           </div>
         ) : (
           <>
-            <div className="flex flex-col gap-4 p-5 rounded-card border border-border bg-surface-raised">
+            <div className="flex flex-col gap-4 p-5 rounded-2xl border border-[#E5E3DE] bg-white">
               <div className="flex items-center gap-4">
-                <div className="relative w-16 h-16 rounded-full overflow-hidden border border-border bg-surface flex items-center justify-center flex-shrink-0">
+                <div className="relative w-16 h-16 rounded-full overflow-hidden border border-[#E5E3DE] bg-[#F4F2EC] flex items-center justify-center flex-shrink-0">
                   {startPage.avatarUrl ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img src={startPage.avatarUrl} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <ImageIcon size={18} className="text-muted-foreground" />
+                    <ImageIcon size={18} className="text-[#ADA99F]" />
                   )}
                   {uploadingAvatar && (
-                    <div className="absolute inset-0 bg-primary/40 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                       <Loader2 size={16} className="text-white animate-spin" />
                     </div>
                   )}
@@ -362,7 +370,7 @@ export default function StartPageEditor() {
                 <button
                   onClick={() => avatarInputRef.current?.click()}
                   disabled={uploadingAvatar}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-control-sm border border-border bg-surface-raised hover:bg-surface-muted text-caption font-medium text-muted-foreground transition-colors disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E5E3DE] bg-white hover:bg-[#F4F2EC] text-[12px] font-medium text-[#6B7280] transition-colors disabled:opacity-50"
                 >
                   <Upload size={12} strokeWidth={2} />
                   Upload avatar
@@ -377,50 +385,50 @@ export default function StartPageEditor() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-caption font-medium text-muted-foreground">Slug</label>
+                <label className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">Slug</label>
                 <div className="flex items-center gap-2">
-                  <span className="text-label text-muted-foreground whitespace-nowrap">/start/</span>
+                  <span className="text-[13px] text-[#9CA3AF] whitespace-nowrap">/start/</span>
                   <input
                     value={slug}
                     onChange={(e) => setSlug(e.target.value.toLowerCase())}
-                    className="flex-1 px-3 py-2 rounded-control-sm border border-border bg-surface text-label text-foreground focus:outline-none focus:border-brand transition-colors"
+                    className="flex-1 px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
                   />
-                  {slugStatus === "checking" && <Loader2 size={14} className="text-muted-foreground animate-spin" />}
-                  {slugStatus === "available" && <Check size={14} className="text-success" />}
-                  {slugStatus === "taken" && <X size={14} className="text-danger" />}
+                  {slugStatus === "checking" && <Loader2 size={14} className="text-[#9CA3AF] animate-spin" />}
+                  {slugStatus === "available" && <Check size={14} className="text-[#10B981]" />}
+                  {slugStatus === "taken" && <X size={14} className="text-[rgba(239,68,68,0.9)]" />}
                 </div>
                 {slugStatus === "taken" && (
-                  <p className="text-caption text-danger">That slug is already taken.</p>
+                  <p className="text-[11px] text-[rgba(239,68,68,0.9)]">That slug is already taken.</p>
                 )}
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-caption font-medium text-muted-foreground">Title</label>
+                <label className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">Title</label>
                 <input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Your name or brand"
-                  className="w-full px-3 py-2 rounded-control-sm border border-border bg-surface text-label text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand transition-colors"
+                  className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-caption font-medium text-muted-foreground">Bio</label>
+                <label className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">Bio</label>
                 <textarea
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   placeholder="A short line about you"
                   rows={2}
-                  className="w-full px-3 py-2 rounded-control-sm border border-border bg-surface text-label text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand transition-colors resize-y"
+                  className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors resize-y"
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-caption font-medium text-muted-foreground">Theme</label>
+                <label className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">Theme</label>
                 <select
                   value={theme}
                   onChange={(e) => setTheme(e.target.value as StartPageTheme)}
-                  className="w-full px-3 py-2 rounded-control-sm border border-border bg-surface text-label text-foreground focus:outline-none focus:border-brand transition-colors"
+                  className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
                 >
                   {START_PAGE_THEMES.map((t) => (
                     <option key={t} value={t}>
@@ -433,46 +441,46 @@ export default function StartPageEditor() {
               <button
                 onClick={() => void handleSave()}
                 disabled={saving || slugStatus === "taken"}
-                className="self-start inline-flex items-center gap-2 px-4 py-2 rounded-control-sm text-caption font-semibold text-white bg-brand hover:bg-brand-hover disabled:opacity-50 transition-colors"
+                className="self-start inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[12.5px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 transition-colors"
               >
                 {saving && <Loader2 size={13} className="animate-spin" />}
                 {saved ? "Saved!" : "Save"}
               </button>
             </div>
 
-            <div className="flex flex-col gap-3 p-5 rounded-card border border-border bg-surface-raised">
-              <p className="text-label font-medium text-foreground">Links</p>
+            <div className="flex flex-col gap-3 p-5 rounded-2xl border border-[#E5E3DE] bg-white">
+              <p className="text-[13px] font-medium text-[#0A0A0A]">Links</p>
 
               {startPage.links.length > 0 && (
                 <div className="flex flex-col gap-2">
                   {startPage.links.map((link, i) => (
                     <div
                       key={link.id}
-                      className="flex items-center gap-2 p-3 rounded-control border border-border bg-surface"
+                      className="flex items-center gap-2 p-3 rounded-xl border border-[#E5E3DE] bg-[#FBFAF6]"
                     >
                       <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                        <p className="text-label font-medium text-foreground truncate">{link.label}</p>
-                        <p className="text-caption text-muted-foreground truncate">{link.url}</p>
+                        <p className="text-[13px] font-medium text-[#0A0A0A] truncate">{link.label}</p>
+                        <p className="text-[11px] text-[#9CA3AF] truncate">{link.url}</p>
                       </div>
-                      <span className="text-caption text-muted-foreground flex-shrink-0">{link.clickCount} clicks</span>
+                      <span className="text-[11px] text-[#ADA99F] flex-shrink-0">{link.clickCount} clicks</span>
                       <div className="flex items-center gap-0.5 flex-shrink-0">
                         <button
                           onClick={() => void handleMoveLink(link.id, "up")}
                           disabled={i === 0}
-                          className="p-1 rounded text-muted-foreground hover:text-muted-foreground hover:bg-surface-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="p-1 rounded text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F4F2EC] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           <ChevronUp size={14} strokeWidth={2} />
                         </button>
                         <button
                           onClick={() => void handleMoveLink(link.id, "down")}
                           disabled={i === startPage.links.length - 1}
-                          className="p-1 rounded text-muted-foreground hover:text-muted-foreground hover:bg-surface-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="p-1 rounded text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F4F2EC] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           <ChevronDown size={14} strokeWidth={2} />
                         </button>
                         <button
                           onClick={() => void handleDeleteLink(link.id)}
-                          className="p-1 rounded text-muted-foreground hover:text-danger hover:bg-danger-soft transition-colors"
+                          className="p-1 rounded text-[#9CA3AF] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.08)] transition-colors"
                         >
                           <Trash2 size={13} strokeWidth={2} />
                         </button>
@@ -482,24 +490,24 @@ export default function StartPageEditor() {
                 </div>
               )}
 
-              <div className="flex flex-col gap-2 p-3 rounded-control border border-dashed border-brand/40 bg-[rgba(124,58,237,0.03)]">
+              <div className="flex flex-col gap-2 p-3 rounded-xl border border-dashed border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.03)]">
                 <input
                   value={newLabel}
                   onChange={(e) => setNewLabel(e.target.value)}
                   placeholder="Label (e.g. My LinkedIn)"
-                  className="w-full px-3 py-2 rounded-control-sm border border-border bg-surface-raised text-label text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand transition-colors"
+                  className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-white text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
                 />
                 <input
                   value={newUrl}
                   onChange={(e) => setNewUrl(e.target.value)}
                   placeholder="https://…"
-                  className="w-full px-3 py-2 rounded-control-sm border border-border bg-surface-raised text-label text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand transition-colors"
+                  className="w-full px-3 py-2 rounded-lg border border-[#E5E3DE] bg-white text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
                 />
-                {linkError && <p className="text-caption text-danger">{linkError}</p>}
+                {linkError && <p className="text-[11px] text-[rgba(239,68,68,0.9)]">{linkError}</p>}
                 <button
                   onClick={() => void handleAddLink()}
                   disabled={addingLink}
-                  className="self-start inline-flex items-center gap-1.5 px-3.5 py-2 rounded-control-sm text-caption font-semibold text-white bg-brand hover:bg-brand-hover disabled:opacity-50 transition-colors"
+                  className="self-start inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 transition-colors"
                 >
                   {addingLink ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} strokeWidth={2.4} />}
                   Add Link
@@ -508,7 +516,7 @@ export default function StartPageEditor() {
             </div>
           </>
         )}
-      </SettingsSection>
+      </div>
     </div>
   )
 }

@@ -5,9 +5,6 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { ImageIcon, Copy, Loader2 } from "lucide-react"
 import type { CustomPostHistoryEntry } from "@/lib/hooks/useHistory"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { PILL } from "@/components/shared/categoryTone"
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -52,39 +49,38 @@ export function CustomPostHistoryCard({ entry }: CustomPostHistoryCardProps) {
   }
 
   return (
-    <div className="flex gap-4 py-5">
-      <div className="aspect-square w-24 shrink-0 overflow-hidden rounded-control-sm border border-border bg-surface-raised sm:w-28">
+    <div className="group relative flex gap-4 p-4 rounded-xl border border-[#E5E3DE] bg-[#F4F2EC]">
+      <div className="shrink-0 w-24 aspect-square rounded-lg overflow-hidden border border-[#E5E3DE] bg-white">
         {entry.imageUrl ? (
           /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={entry.imageUrl} alt="Custom post" className="h-full w-full object-cover" />
+          <img src={entry.imageUrl} alt="Custom post" className="w-full h-full object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <ImageIcon className="size-4 text-muted-foreground" aria-hidden />
+          <div className="w-full h-full flex items-center justify-center">
+            <ImageIcon size={16} className="text-[#ADA99F]" />
           </div>
         )}
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
+      <div className="flex-1 min-w-0 flex flex-col gap-2">
         <div className="flex items-start justify-between gap-3">
-          <span className={cn(PILL, "bg-foreground text-background")}>Custom</span>
-          <Button
-            variant="ghost"
-            size="icon-sm"
+          <span className="self-start text-[10.5px] font-semibold px-2 py-0.5 rounded-full tracking-wide text-white bg-[#0A0A0A]">
+            Custom
+          </span>
+          <button
             onClick={(e) => void handleDuplicate(e)}
             disabled={duplicating}
             title="Duplicate"
-            aria-label="Duplicate"
-            className="-mt-1.5 -mr-1.5 text-muted-foreground hover:text-foreground"
+            className="flex-shrink-0 p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#ECEAE4] transition-colors cursor-pointer disabled:opacity-50"
           >
-            {duplicating ? <Loader2 className="animate-spin" aria-hidden /> : <Copy aria-hidden />}
-          </Button>
+            {duplicating ? <Loader2 size={13} className="animate-spin" strokeWidth={2} /> : <Copy size={13} strokeWidth={2} />}
+          </button>
         </div>
 
-        <p className="line-clamp-2 text-label text-foreground">
+        <p className="text-[13px] text-[#374151] leading-[1.4] line-clamp-2">
           {entry.caption?.trim() || "No caption"}
         </p>
 
-        <span className="mt-auto text-caption text-muted-foreground">Created {timeAgo(entry.createdAt)}</span>
+        <span className="text-[11px] text-[#ADA99F] mt-auto">Created {timeAgo(entry.createdAt)}</span>
       </div>
     </div>
   )

@@ -1,31 +1,31 @@
 import Link from "next/link"
 import { ArrowRight } from "lucide-react"
+import { AnimatedSection } from "@/components/marketing/AnimatedSection"
 
-import { buttonVariants } from "@/components/ui/button"
-
-// Copy unchanged except row 12 of docs/redesign/copy-ledger.md: the
-// unverified "Join 1,000+ creators" line was removed (owner, 2026-10-11).
 export function CTA() {
   return (
-    <section aria-labelledby="cta-title" className="font-ui gutter-x pb-16 lg:pb-24">
-      <div className="mx-auto flex max-w-showcase flex-col items-start gap-6 rounded-showcase bg-primary px-6 py-12 text-primary-foreground sm:px-12 lg:flex-row lg:items-end lg:justify-between lg:px-16 lg:py-16">
-        <div className="flex max-w-[40rem] flex-col gap-4">
-          <p className="text-label font-medium opacity-70">One day or day one</p>
-          <h2 id="cta-title" className="text-section font-semibold text-balance">
+    <section className="py-24 px-6">
+      <AnimatedSection className="relative max-w-4xl mx-auto rounded-3xl border border-[#E5E3DE] bg-[#FFFDF8] px-8 py-16 sm:py-20 overflow-hidden text-center">
+        <div className="relative flex flex-col items-center gap-7">
+          <p className="text-[12px] font-semibold text-[#1A1A1A] uppercase tracking-[0.2em]">
+            One day or day one
+          </p>
+          <h2 className="max-w-2xl text-[clamp(2rem,5vw,3.25rem)] font-bold leading-[1.08] tracking-[-0.025em] text-[#0A0A0A]">
             Start creating content that actually gets noticed.
           </h2>
-        </div>
-        <div className="flex flex-col items-start gap-2">
+          <p className="max-w-md text-[16px] text-[#6B7280] leading-[1.6]">
+            Join 1,000+ creators turning ideas into scroll-stopping posts — starting today.
+          </p>
           <Link
             href="/sign-up"
-            className={buttonVariants({ size: "lg", className: "bg-primary-foreground text-primary hover:bg-[color-mix(in_oklab,var(--primary-foreground),var(--primary)_8%)]" })}
+            className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-[#1A1A1A] hover:bg-black text-[15px] font-semibold text-white transition-colors shadow-[0_8px_30px_rgba(0,0,0,0.14)]"
           >
             Get started free
-            <ArrowRight aria-hidden />
+            <ArrowRight size={16} strokeWidth={2.2} />
           </Link>
-          <p className="text-caption opacity-70">No credit card required</p>
+          <p className="text-[12px] text-[#9CA3AF]">No credit card required</p>
         </div>
-      </div>
+      </AnimatedSection>
     </section>
   )
 }

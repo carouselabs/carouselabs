@@ -48,6 +48,3 @@ next-env.d.ts
 /playwright-report/
 /test-results/
 !.env.example
-
-# Redesign dev server build output (NEXT_BUILD_DIR=.next-redesign)
-/.next-redesign/

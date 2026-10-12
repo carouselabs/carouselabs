@@ -7,12 +7,7 @@
 // for how it flows into the same date/time + Schedule/Save-as-Draft step used
 // for AI-generated content.
 import { useRef, useState } from "react"
-import { Loader2, FileText, Hash, ChevronDown, Link2, Check } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Button, buttonVariants } from "@/components/ui/button"
-import { controlClasses } from "@/components/ui/input"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { BackButton, FieldLabel } from "@/components/create/CreateKit"
+import { Loader2, FileText, Hash, ChevronDown, Link2 } from "lucide-react"
 import { PLATFORM_ORDER, PLATFORM_META, PLATFORM_LIMITS, validatePostForPlatform, type Platform } from "@/lib/platforms"
 import { PlatformBadge } from "./platforms"
 import { CustomPostImageUploader } from "./CustomPostImageUploader"
@@ -173,82 +168,101 @@ export function CustomPostComposer({
   }
 
   function counterColor(len: number, max: number): string {
-    if (len > max) return "text-danger"
-    if (len >= max * 0.9) return "text-warning"
-    return "text-success"
+    if (len > max) return "text-[rgba(239,68,68,0.9)]"
+    if (len >= max * 0.9) return "text-[rgba(217,119,6,0.9)]"
+    return "text-[#16A34A]"
   }
 
-  const toolClasses = buttonVariants({ variant: "ghost", size: "xs", className: "px-2 text-brand hover:bg-brand-soft hover:text-brand" })
-
   return (
-    <div className="flex flex-col gap-5">
-      {shortenError && <p role="alert" className="text-caption text-danger">{shortenError}</p>}
-      <BackButton arrow={false} onClick={onBack}>
+    <div className="flex flex-col gap-4">
+      {shortenError && <p role="alert" className="text-[12px] text-red-600">{shortenError}</p>}
+      <button
+        onClick={onBack}
+        className="self-start text-[11px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors"
+      >
         ← Back
-      </BackButton>
-      <h3 className="text-label font-semibold text-foreground">Create a Custom Post</h3>
+      </button>
+      <p className="text-[11px] font-semibold text-[#ADA99F] uppercase tracking-widest">Create a Custom Post</p>
 
       <CustomPostImageUploader images={images} onAdd={onAddImage} onRemove={onRemoveImage} platforms={platforms} />
 
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-          <FieldLabel htmlFor="custom-post-caption">Caption</FieldLabel>
-          <div className="-mr-2 flex flex-wrap items-center">
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor="custom-post-caption" className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">Caption</label>
+          <div className="flex items-center gap-1.5">
             {templates.length > 0 && (
-              <DropdownMenu open={showLoadTemplate} onOpenChange={setShowLoadTemplate}>
-                <DropdownMenuTrigger render={<button type="button" className={toolClasses} />}>
-                  <FileText aria-hidden />
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowLoadTemplate((v) => !v)}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-medium text-[#7C3AED] hover:bg-[rgba(124,58,237,0.08)] transition-colors"
+                >
+                  <FileText size={11} strokeWidth={2.2} />
                   Load Template
-                  <ChevronDown aria-hidden className="-ml-0.5 opacity-70" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="max-h-60 w-60">
-                  {templates.map((t) => (
-                    <DropdownMenuItem
-                      key={t.id}
-                      onClick={() => {
-                        onCaptionChange(t.caption)
-                        setShowLoadTemplate(false)
-                      }}
-                      className="flex-col items-start gap-0.5"
-                    >
-                      <span className="w-full truncate text-label font-medium text-foreground">{t.name}</span>
-                      <span className="w-full truncate text-caption text-muted-foreground">{t.caption}</span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  <ChevronDown size={10} strokeWidth={2.2} />
+                </button>
+                {showLoadTemplate && (
+                  <div className="absolute right-0 top-full mt-1 z-10 w-56 max-h-48 overflow-y-auto rounded-lg border border-[#E5E3DE] bg-white shadow-lg py-1">
+                    {templates.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => {
+                          onCaptionChange(t.caption)
+                          setShowLoadTemplate(false)
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-[#F4F2EC] transition-colors"
+                      >
+                        <p className="text-[12px] font-medium text-[#0A0A0A] truncate">{t.name}</p>
+                        <p className="text-[10.5px] text-[#9CA3AF] truncate">{t.caption}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
             {hashtagGroups.length > 0 && (
-              <DropdownMenu open={showHashtagPicker} onOpenChange={setShowHashtagPicker}>
-                <DropdownMenuTrigger render={<button type="button" className={toolClasses} />}>
-                  <Hash aria-hidden />
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowHashtagPicker((v) => !v)}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-medium text-[#7C3AED] hover:bg-[rgba(124,58,237,0.08)] transition-colors"
+                >
+                  <Hash size={11} strokeWidth={2.2} />
                   Hashtags
-                  <ChevronDown aria-hidden className="-ml-0.5 opacity-70" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="max-h-60 w-60">
-                  {hashtagGroups.map((g) => (
-                    <DropdownMenuItem key={g.id} onClick={() => insertHashtags(g)} className="flex-col items-start gap-0.5">
-                      <span className="w-full truncate text-label font-medium text-foreground">{g.name}</span>
-                      <span className="w-full truncate text-caption text-muted-foreground">{g.hashtags.join(" ")}</span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  <ChevronDown size={10} strokeWidth={2.2} />
+                </button>
+                {showHashtagPicker && (
+                  <div className="absolute right-0 top-full mt-1 z-10 w-56 max-h-48 overflow-y-auto rounded-lg border border-[#E5E3DE] bg-white shadow-lg py-1">
+                    {hashtagGroups.map((g) => (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => insertHashtags(g)}
+                        className="w-full text-left px-3 py-2 hover:bg-[#F4F2EC] transition-colors"
+                      >
+                        <p className="text-[12px] font-medium text-[#0A0A0A] truncate">{g.name}</p>
+                        <p className="text-[10.5px] text-[#9CA3AF] truncate">{g.hashtags.join(" ")}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowShortenLink((v) => !v)}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-medium text-[#7C3AED] hover:bg-[rgba(124,58,237,0.08)] transition-colors"
+              >
+                <Link2 size={11} strokeWidth={2.2} />
+                Insert Short Link
+              </button>
+            </div>
             <button
               type="button"
-              aria-expanded={showShortenLink}
-              onClick={() => setShowShortenLink((v) => !v)}
-              className={toolClasses}
-            >
-              <Link2 aria-hidden />
-              Insert Short Link
-            </button>
-            <button
-              type="button"
-              aria-expanded={showSaveTemplate}
               onClick={() => setShowSaveTemplate((v) => !v)}
-              className={buttonVariants({ variant: "ghost", size: "xs", className: "px-2 text-muted-foreground" })}
+              className="text-[10.5px] font-medium text-[#9CA3AF] hover:text-[#4B5563] transition-colors px-2 py-1"
             >
               Save as Template
             </button>
@@ -261,46 +275,47 @@ export function CustomPostComposer({
           onChange={(e) => onCaptionChange(e.target.value)}
           onPaste={(e) => void handlePaste(e)}
           placeholder="Write your caption… (pasting a bare link auto-shortens it)"
-          rows={6}
-          className={cn(controlClasses, "h-auto resize-y px-3 py-2.5 leading-relaxed")}
+          rows={5}
+          className="w-full px-3 py-2.5 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] text-[13px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors resize-y"
         />
         {showShortenLink && (
-          <div className="flex flex-col gap-2 rounded-control border border-border bg-surface-raised p-3">
+          <div className="flex flex-col gap-2 p-2.5 rounded-lg border border-[#E5E3DE] bg-[#FBFAF6]">
             <input
               value={shortenUrlInput}
               onChange={(e) => setShortenUrlInput(e.target.value)}
               placeholder="https://example.com/your-long-link"
-              aria-label="https://example.com/your-long-link"
-              className={cn(controlClasses, "h-10 px-3")}
+              className="w-full px-2.5 py-1.5 rounded-lg border border-[#E5E3DE] bg-white text-[12px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
             />
             <div className="grid grid-cols-3 gap-1.5">
               <input
                 value={shortenUtmSource}
                 onChange={(e) => setShortenUtmSource(e.target.value)}
                 placeholder="utm_source"
-                aria-label="utm_source"
-                className={cn(controlClasses, "h-9 px-2.5 text-caption")}
+                className="w-full px-2 py-1 rounded-md border border-[#E5E3DE] bg-white text-[11px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
               />
               <input
                 value={shortenUtmMedium}
                 onChange={(e) => setShortenUtmMedium(e.target.value)}
                 placeholder="utm_medium"
-                aria-label="utm_medium"
-                className={cn(controlClasses, "h-9 px-2.5 text-caption")}
+                className="w-full px-2 py-1 rounded-md border border-[#E5E3DE] bg-white text-[11px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
               />
               <input
                 value={shortenUtmCampaign}
                 onChange={(e) => setShortenUtmCampaign(e.target.value)}
                 placeholder="utm_campaign"
-                aria-label="utm_campaign"
-                className={cn(controlClasses, "h-9 px-2.5 text-caption")}
+                className="w-full px-2 py-1 rounded-md border border-[#E5E3DE] bg-white text-[11px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
               />
             </div>
-            {shortenError && <p className="text-caption text-danger">{shortenError}</p>}
-            <Button variant="brand" size="sm" className="self-start" onClick={() => void handleShortenAndInsert()} disabled={shortening}>
-              {shortening && <Loader2 className="animate-spin" aria-hidden />}
+            {shortenError && <p className="text-[11px] text-[rgba(239,68,68,0.9)]">{shortenError}</p>}
+            <button
+              type="button"
+              onClick={() => void handleShortenAndInsert()}
+              disabled={shortening}
+              className="self-start inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11.5px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 transition-colors"
+            >
+              {shortening && <Loader2 size={11} className="animate-spin" />}
               Shorten &amp; Insert
-            </Button>
+            </button>
           </div>
         )}
         {showSaveTemplate && (
@@ -309,24 +324,23 @@ export function CustomPostComposer({
               value={templateNameInput}
               onChange={(e) => setTemplateNameInput(e.target.value)}
               placeholder="Template name"
-              aria-label="Template name"
-              className={cn(controlClasses, "h-9 flex-1 px-2.5")}
+              className="flex-1 px-2.5 py-1.5 rounded-lg border border-[#E5E3DE] bg-white text-[12px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors"
             />
-            <Button
-              variant="brand"
-              size="sm"
+            <button
+              type="button"
               onClick={() => void handleSaveTemplate()}
               disabled={savingTemplate || !templateNameInput.trim() || !caption.trim()}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11.5px] font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 transition-colors"
             >
-              {savingTemplate && <Loader2 className="animate-spin" aria-hidden />}
+              {savingTemplate && <Loader2 size={11} className="animate-spin" />}
               Save
-            </Button>
+            </button>
           </div>
         )}
       </div>
 
       <div className="flex flex-col gap-2">
-        <FieldLabel>Platforms</FieldLabel>
+        <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">Platforms</p>
         <div className="grid grid-cols-2 gap-2">
           {PLATFORM_ORDER.map((platform) => {
             const meta = PLATFORM_META[platform]
@@ -338,22 +352,22 @@ export function CustomPostComposer({
             return (
               <div
                 key={platform}
-                className={cn(
-                  "flex flex-col rounded-control border transition-colors duration-(--motion-fast)",
-                  checked ? "border-brand/50 bg-brand-soft" : "border-border bg-surface-raised hover:border-control-border"
-                )}
+                className={[
+                  "flex flex-col rounded-xl border transition-colors",
+                  checked
+                    ? "border-[rgba(124,58,237,0.5)] bg-[rgba(124,58,237,0.05)]"
+                    : "border-[#E5E3DE] bg-white hover:border-[#D1CFC8]",
+                ].join(" ")}
               >
                 <button
                   type="button"
-                  role="checkbox"
-                  aria-checked={checked}
                   onClick={() => onTogglePlatform(platform)}
-                  className="flex w-full items-center gap-2 rounded-control p-2.5 text-left"
+                  className="flex items-center gap-2 p-2.5 text-left w-full"
                 >
                   <PlatformBadge platform={platform} size={22} />
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate text-caption font-semibold text-foreground">{meta.label}</span>
-                    <span className="truncate text-[11px] text-muted-foreground">
+                  <span className="flex flex-col min-w-0">
+                    <span className="text-[12.5px] font-semibold text-[#0A0A0A] truncate">{meta.label}</span>
+                    <span className="text-[10px] text-[#9CA3AF] truncate">
                       {meta.functional
                         ? linkedInConnected === false
                           ? "Not connected"
@@ -362,29 +376,28 @@ export function CustomPostComposer({
                     </span>
                   </span>
                   {checked && (
-                    <span className={`ml-auto text-[11px] font-medium tabular-nums ${counterColor(len, limits.maxChars)}`}>
+                    <span className={`ml-auto text-[10px] font-medium tabular-nums ${counterColor(len, limits.maxChars)}`}>
                       {len.toLocaleString()}/{limits.maxChars.toLocaleString()}
                     </span>
                   )}
                   <span
-                    aria-hidden
-                    className={cn(
-                      "flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors duration-(--motion-fast)",
-                      checked ? "border-brand bg-brand text-brand-foreground" : "ml-auto border-control-border"
-                    )}
+                    className={[
+                      "w-4 h-4 rounded flex-shrink-0 border flex items-center justify-center transition-colors",
+                      checked ? "bg-[#7C3AED] border-[#7C3AED]" : "border-[#D1D5DB] ml-auto",
+                    ].join(" ")}
                   >
-                    {checked && <Check className="size-3" strokeWidth={3} />}
+                    {checked && <span className="w-1.5 h-1.5 rounded-sm bg-white" />}
                   </span>
                 </button>
                 {checked && validation && (validation.errors.length > 0 || validation.warnings.length > 0) && (
-                  <div className="-mt-1 flex flex-col gap-0.5 px-2.5 pb-2">
+                  <div className="flex flex-col gap-0.5 px-2.5 pb-2 -mt-1">
                     {validation.errors.map((msg, i) => (
-                      <p key={`e${i}`} className="text-[11px] leading-snug text-danger">
+                      <p key={`e${i}`} className="text-[10px] leading-snug text-[rgba(239,68,68,0.9)]">
                         {msg}
                       </p>
                     ))}
                     {validation.warnings.map((msg, i) => (
-                      <p key={`w${i}`} className="text-[11px] leading-snug text-warning">
+                      <p key={`w${i}`} className="text-[10px] leading-snug text-[rgba(217,119,6,0.9)]">
                         {msg}
                       </p>
                     ))}
@@ -394,31 +407,31 @@ export function CustomPostComposer({
             )
           })}
         </div>
-        <p className="text-caption text-muted-foreground">
+        <p className="text-[11px] text-[#9CA3AF]">
           Platforms marked &quot;Connect to enable&quot; are saved as pending — CarouseLabs will publish there
           automatically once that connection is available.
         </p>
       </div>
 
       {platforms.length > 1 && (
-        <div className="flex flex-col gap-2 rounded-control border border-border bg-surface-raised p-3">
-          <label className="flex cursor-pointer items-center gap-2">
+        <div className="flex flex-col gap-2 p-3 rounded-xl border border-[#E5E3DE] bg-[#FBFAF6]">
+          <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={customizePerPlatform}
               onChange={(e) => onToggleCustomizePerPlatform(e.target.checked)}
-              className="size-4 accent-brand"
+              className="accent-[#7C3AED]"
             />
-            <span className="text-caption font-medium text-foreground">Customize caption per platform</span>
+            <span className="text-[12px] font-medium text-[#374151]">Customize caption per platform</span>
           </label>
           {customizePerPlatform && (
-            <div className="flex flex-col gap-3 pt-1">
+            <div className="flex flex-col gap-2.5 pt-1">
               {platforms.map((platform) => {
                 const overrideLen = (platformCaptions[platform] ?? caption).trim().length
                 const overrideMax = PLATFORM_LIMITS[platform].maxChars
                 return (
-                  <div key={platform} className="flex flex-col gap-1.5">
-                    <span className="flex items-center gap-1.5 text-caption font-medium text-muted-foreground">
+                  <div key={platform} className="flex flex-col gap-1">
+                    <span className="text-[11px] font-medium text-[#6B7280] flex items-center gap-1.5">
                       <PlatformBadge platform={platform} size={16} />
                       {PLATFORM_META[platform].label}
                       <span className={`ml-auto tabular-nums ${counterColor(overrideLen, overrideMax)}`}>
@@ -429,9 +442,8 @@ export function CustomPostComposer({
                       value={platformCaptions[platform] ?? ""}
                       onChange={(e) => onPlatformCaptionChange(platform, e.target.value)}
                       placeholder={caption || "Same as default caption"}
-                      aria-label={PLATFORM_META[platform].label}
                       rows={2}
-                      className={cn(controlClasses, "h-auto resize-y px-2.5 py-2 text-caption")}
+                      className="w-full px-2.5 py-2 rounded-lg border border-[#E5E3DE] bg-white text-[12.5px] text-[#1A1A1A] placeholder:text-[#ADA99F] focus:outline-none focus:border-[rgba(124,58,237,0.4)] transition-colors resize-y"
                     />
                   </div>
                 )
@@ -442,9 +454,9 @@ export function CustomPostComposer({
       )}
 
       {error && (
-        <p role="alert" className="rounded-control-sm border border-danger/25 bg-danger-soft px-3 py-2.5 text-caption text-danger">
+        <div className="px-3 py-2.5 rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[12px] text-[rgba(239,68,68,0.9)]">
           {error}
-        </p>
+        </div>
       )}
     </div>
   )

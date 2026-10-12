@@ -25,19 +25,18 @@ interface CarouselImageGridProps {
   onInstructionChange: (slideNumber: number, value: string) => void
 }
 
-// Badges sit on top of the slide image, so they use solid light surfaces.
 const ROLE_CONFIG = {
   hook: {
     label: "HOOK",
-    className: "bg-warning-soft text-warning",
+    className: "bg-[rgba(251,191,36,0.12)] border border-[rgba(251,191,36,0.3)] text-[#D97706]",
   },
   body: {
     label: "BODY",
-    className: "bg-surface-raised text-foreground",
+    className: "bg-[rgba(99,102,241,0.12)] border border-[rgba(99,102,241,0.3)] text-[#A5B4FC]",
   },
   cta: {
     label: "CTA",
-    className: "bg-success-soft text-success",
+    className: "bg-[rgba(52,211,153,0.12)] border border-[rgba(52,211,153,0.3)] text-[#059669]",
   },
 }
 
@@ -156,52 +155,52 @@ export function CarouselImageGrid({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-label font-semibold text-foreground">Generated Slides</h2>
+        <p className="text-[11px] font-medium text-[#ADA99F] uppercase tracking-widest">
+          Generated Slides
+        </p>
         <button
-          type="button"
           onClick={downloadAllAsPdf}
           disabled={downloadingAll || downloadingSlide !== null || !complete || busy || images.length === 0}
-          aria-busy={downloadingAll || undefined}
-          className="inline-flex h-9 items-center gap-1.5 rounded-control-sm bg-primary px-3 text-label font-semibold text-primary-foreground transition-colors duration-(--motion-fast) hover:bg-primary-hover disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#1A1A1A] hover:bg-[#000000] shadow-[0_0_24px_rgba(26,26,26,0.22)] transition-colors disabled:opacity-50"
         >
           {downloadingAll ? (
-            <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+            <Loader2 size={13} className="animate-spin" strokeWidth={2.2} />
           ) : (
-            <FileDown className="size-4" aria-hidden />
+            <FileDown size={13} strokeWidth={2.2} />
           )}
           {downloadingAll ? `Building PDF ${pdfProgress}/${sorted.length}...` : "Download All as PDF"}
         </button>
       </div>
 
       {error && (
-        <div role="alert" className="rounded-control border border-danger/25 bg-danger-soft px-3.5 py-2.5 text-label text-danger">
+        <div role="alert" className="px-3.5 py-2.5 rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[12px] text-[rgba(239,68,68,0.9)]">
           {error}
         </div>
       )}
 
-      <ol aria-label="Slides" className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {sorted.map((slide) => {
           const roleConfig = ROLE_CONFIG[slide.role] ?? ROLE_CONFIG.body
           const isRegenerating = regeneratingSlide === slide.slideNumber
           const isDownloading = downloadingSlide === slide.slideNumber
 
           return (
-            <li key={slide.slideNumber} className="flex min-w-0 flex-col gap-2.5">
+            <div key={slide.slideNumber} className="flex flex-col gap-2.5">
               <div
                 className={[
-                  "relative w-full overflow-hidden rounded-card border border-border bg-surface shadow-card",
+                  "relative w-full rounded-2xl overflow-hidden border border-[#E9E7E1]",
                   size === "4:5" ? "aspect-[4/5]" : "aspect-square",
                 ].join(" ")}
               >
                 {/* Slide number badge */}
-                <span className="absolute top-2.5 left-2.5 z-10 flex size-7 items-center justify-center rounded-full bg-surface-raised/90 text-caption font-semibold text-foreground tabular-nums shadow-card">
+                <span className="absolute top-2.5 left-2.5 z-10 w-6 h-6 rounded-full bg-[rgba(8,8,16,0.7)] backdrop-blur-sm flex items-center justify-center text-[11px] font-semibold text-[#0A0A0A] tabular-nums">
                   {slide.slideNumber}
                 </span>
 
                 {/* Role badge */}
                 <span
                   className={[
-                    "absolute top-2.5 right-2.5 z-10 rounded-detail px-2 py-0.5 text-[11px] leading-4 font-semibold tracking-wider shadow-card",
+                    "absolute top-2.5 right-2.5 z-10 px-2 py-0.5 rounded-md text-[10px] font-semibold tracking-wider backdrop-blur-sm",
                     roleConfig.className,
                   ].join(" ")}
                 >
@@ -210,9 +209,9 @@ export function CarouselImageGrid({
 
                 {/* Regenerating overlay */}
                 {isRegenerating && (
-                  <div role="status" className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-surface-raised/80 backdrop-blur-sm">
-                    <Loader2 className="size-6 animate-spin text-foreground motion-reduce:animate-none" aria-hidden />
-                    <span className="text-caption font-medium text-foreground">Regenerating…</span>
+                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-[rgba(8,8,16,0.6)] backdrop-blur-sm">
+                    <Loader2 size={22} className="animate-spin text-[#1A1A1A]" strokeWidth={2.2} />
+                    <span className="text-[11px] text-[#1A1A1A]">Regenerating…</span>
                   </div>
                 )}
 
@@ -229,11 +228,11 @@ export function CarouselImageGrid({
               </div>
 
               {/* Headline */}
-              <p className="line-clamp-2 text-label text-foreground">
+              <p className="text-[12px] text-[#4B5563] leading-[1.45] line-clamp-2">
                 {slide.headline}
               </p>
               {countWords(slide.headline) > 0 && (
-                <p className="text-caption text-muted-foreground tabular-nums">
+                <p className="text-[11px] text-[#ADA99F] tabular-nums">
                   {countWords(slide.headline)} words
                 </p>
               )}
@@ -241,25 +240,22 @@ export function CarouselImageGrid({
               {/* Actions: regenerate + download (both functional) */}
               <div className="flex flex-wrap items-center gap-2">
                 <button
-                  type="button"
                   onClick={() => onRegenerate(slide.slideNumber)}
                   disabled={isRegenerating || regeneratingSlide !== null || busy || downloadingAll}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-control-sm border border-control-border bg-surface px-2.5 text-caption font-medium text-foreground transition-colors duration-(--motion-fast) enabled:hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-45"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[rgba(26,26,26,0.2)] bg-[rgba(26,26,26,0.08)] hover:bg-[rgba(26,26,26,0.16)] text-[11px] font-medium text-[#1A1A1A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <RefreshCw className="size-3.5" aria-hidden />
+                  <RefreshCw size={11} strokeWidth={2.2} />
                   Regenerate Slide {slide.slideNumber} — 8 credits
                 </button>
                 <button
-                  type="button"
                   onClick={() => downloadSlide(slide)}
                   disabled={downloadingSlide !== null || downloadingAll}
-                  aria-label={`Download slide ${slide.slideNumber}`}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-control-sm px-2.5 text-caption font-medium text-muted-foreground transition-colors duration-(--motion-fast) enabled:hover:bg-surface-muted enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E5E3DE] bg-[#F4F2EC] hover:bg-[#E9E7E1] text-[11px] font-medium text-[#6B7280] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {isDownloading ? (
-                    <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
+                    <Loader2 size={11} className="animate-spin" strokeWidth={2.2} />
                   ) : (
-                    <Download className="size-3.5" aria-hidden />
+                    <Download size={11} strokeWidth={2.2} />
                   )}
                   Download
                 </button>
@@ -272,10 +268,10 @@ export function CarouselImageGrid({
                 disabled={isRegenerating}
                 rows={2}
               />
-            </li>
+            </div>
           )
         })}
-      </ol>
+      </div>
     </div>
   )
 }

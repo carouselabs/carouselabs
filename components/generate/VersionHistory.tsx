@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { History, RotateCcw, ChevronDown } from "lucide-react"
-import { cn } from "@/lib/utils"
 
 interface VersionHistoryProps {
   versions: string[]
@@ -25,36 +24,34 @@ export function VersionHistory({ versions, onRestore, preview }: VersionHistoryP
   return (
     <div className="flex flex-col gap-2">
       <button
-        type="button"
         onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="inline-flex items-center gap-1.5 self-start rounded-detail text-label font-medium text-muted-foreground transition-colors duration-(--motion-fast) hover:text-foreground"
+        className="self-start inline-flex items-center gap-1.5 text-[12px] font-medium text-[#9CA3AF] hover:text-[#374151] transition-colors"
       >
-        <History className="size-3.5" aria-hidden />
+        <History size={12} strokeWidth={2.2} />
         Previous versions
         <ChevronDown
-          className={cn("size-3.5 transition-transform duration-(--motion-fast)", open && "rotate-180")}
-          aria-hidden
+          size={12}
+          strokeWidth={2.2}
+          className={open ? "rotate-180 transition-transform" : "transition-transform"}
         />
       </button>
 
       {open && (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 p-2 rounded-xl border border-[#E5E3DE] bg-[#F6F4EE]">
           {shown.map((version, i) => (
             <div
               key={i}
-              className="flex flex-col gap-2 rounded-control border border-border bg-surface p-3"
+              className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-[#F4F2EC] border border-[#ECEAE4]"
             >
-              <p className="line-clamp-2 text-caption text-muted-foreground">
+              <p className="text-[12px] text-[#6B7280] leading-[1.4] line-clamp-2">
                 {toPreview(version).slice(0, 80)}
                 {toPreview(version).length > 80 ? "…" : ""}
               </p>
               <button
-                type="button"
                 onClick={() => onRestore(version)}
-                className="inline-flex h-8 items-center gap-1.5 self-start rounded-control-sm border border-border bg-surface-raised px-2.5 text-caption font-medium text-foreground transition-colors duration-(--motion-fast) hover:bg-surface-muted"
+                className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[rgba(26,26,26,0.1)] hover:bg-[rgba(26,26,26,0.18)] border border-[rgba(26,26,26,0.2)] text-[11px] font-medium text-[#1A1A1A] transition-colors"
               >
-                <RotateCcw className="size-3" aria-hidden />
+                <RotateCcw size={11} strokeWidth={2.2} />
                 Restore this version
               </button>
             </div>

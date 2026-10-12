@@ -10,8 +10,8 @@ export default function AdminScheduledEmailsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lead font-bold text-foreground">Scheduled Emails</h2>
-        <p className="mt-0.5 text-caption text-muted-foreground">
+        <h1 className="text-[18px] font-bold text-white">Scheduled Emails</h1>
+        <p className="mt-0.5 text-[12.5px] text-[#8A8A8A]">
           Broadcasts queued to send later, from both the Interns and Broadcasts pages.
         </p>
       </div>

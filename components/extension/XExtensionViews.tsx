@@ -68,11 +68,11 @@ function XSettingsForm({ settings, onSaved }: { settings: XSettings; onSaved: (n
 
   const status = (key: keyof XSettings) =>
     saving === key ? (
-      <span className="inline-flex items-center gap-1 text-caption text-muted-foreground">
+      <span className="inline-flex items-center gap-1 text-[11.5px] text-[#9CA3AF]">
         <Loader2 size={11} className="animate-spin" /> Saving
       </span>
     ) : saved === key ? (
-      <span className="inline-flex items-center gap-1 text-caption text-success">
+      <span className="inline-flex items-center gap-1 text-[11.5px] text-[#15803D]">
         <Check size={11} /> Saved
       </span>
     ) : null
@@ -84,14 +84,14 @@ function XSettingsForm({ settings, onSaved }: { settings: XSettings; onSaved: (n
 
   return (
     <div className="flex flex-col gap-4">
-      {error && <p className="text-label text-danger">{error}</p>}
+      {error && <p className="text-[13px] text-[#DC2626]">{error}</p>}
 
-      <div className="rounded-card border border-border bg-surface-raised px-5">
+      <div className="rounded-2xl border border-[#E5E3DE] bg-white px-5">
         <Row
           label="X Premium"
           hint={`X allows ${X_MAX_LENGTH} characters per reply. Premium accounts can post longer ones.`}
         >
-          <label className="flex items-center gap-3 text-label text-foreground">
+          <label className="flex items-center gap-3 text-[13px] text-[#374151]">
             <input
               type="checkbox"
               className="h-4 w-4 accent-[#7C3AED]"
@@ -127,7 +127,7 @@ function XSettingsForm({ settings, onSaved }: { settings: XSettings; onSaved: (n
           label="Insert button"
           hint="Whether the X extension shows Insert, which types the text into X's reply box. Copy always stays."
         >
-          <label className="flex items-center gap-3 text-label text-foreground">
+          <label className="flex items-center gap-3 text-[13px] text-[#374151]">
             <input
               type="checkbox"
               className="h-4 w-4 accent-[#7C3AED]"
@@ -148,14 +148,14 @@ function XSettingsForm({ settings, onSaved }: { settings: XSettings; onSaved: (n
 export function XReplyProfiles() {
   const { settings, error, load } = useXSettings()
 
-  if (error) return <p className="text-label text-danger">{error}</p>
-  if (!settings) return <p className="text-label text-muted-foreground">Loading…</p>
+  if (error) return <p className="text-[13px] text-[#DC2626]">{error}</p>
+  if (!settings) return <p className="text-[13px] text-[#9CA3AF]">Loading…</p>
   return (
     <div className="flex flex-col gap-6">
       <KindPanel kind={xKind(settings.maxReplyLength)} me={null} onDefaultsChanged={load} />
-      <p className="text-caption text-muted-foreground">
+      <p className="text-[12px] text-[#9CA3AF]">
         The reasons behind your X chats are shared with LinkedIn: edit them under{" "}
-        <a href="/extension/profiles" className="font-medium text-brand hover:underline">
+        <a href="/extension/profiles" className="font-medium text-[#7C3AED] hover:underline">
           Custom tones → Conversations
         </a>
         .
@@ -168,7 +168,7 @@ export function XReplyProfiles() {
 export function XSettingsPanel() {
   const { settings, setSettings, error } = useXSettings()
 
-  if (error) return <p className="text-label text-danger">{error}</p>
-  if (!settings) return <p className="text-label text-muted-foreground">Loading…</p>
+  if (error) return <p className="text-[13px] text-[#DC2626]">{error}</p>
+  if (!settings) return <p className="text-[13px] text-[#9CA3AF]">Loading…</p>
   return <XSettingsForm settings={settings} onSaved={setSettings} />
 }

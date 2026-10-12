@@ -143,20 +143,20 @@ export function GlobalSearch() {
       onClick={close}
     >
       <div
-        className="w-full max-w-lg overflow-hidden rounded-control border border-border bg-surface shadow-dialog"
+        className="w-full max-w-lg overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-          <Search className="h-4 w-4 shrink-0 text-muted-foreground/80" />
+        <div className="flex items-center gap-3 border-b border-[#2A2A2A] px-4 py-3">
+          <Search className="h-4 w-4 shrink-0 text-[#6A6A6A]" />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder="Search users, posts…"
-            className="w-full bg-transparent text-label text-foreground placeholder:text-muted-foreground/80 outline-none"
+            className="w-full bg-transparent text-[14px] text-white placeholder:text-[#5A5A5A] outline-none"
           />
-          <kbd className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground/80">
+          <kbd className="shrink-0 rounded border border-[#2A2A2A] px-1.5 py-0.5 text-[10px] text-[#6A6A6A]">
             ESC
           </kbd>
         </div>
@@ -164,13 +164,13 @@ export function GlobalSearch() {
         {query.trim() && (
           <div className="max-h-80 overflow-y-auto py-1.5">
             {loading && results.length === 0 && (
-              <p className="px-4 py-6 text-center text-caption text-muted-foreground/80">Searching…</p>
+              <p className="px-4 py-6 text-center text-[12.5px] text-[#6A6A6A]">Searching…</p>
             )}
             {!loading && results.length === 0 && (
-              <p className="px-4 py-6 text-center text-caption text-muted-foreground/80">No results</p>
+              <p className="px-4 py-6 text-center text-[12.5px] text-[#6A6A6A]">No results</p>
             )}
             {results.length > 0 && (
-              <div className="px-2 pb-1 pt-2 text-[11px] font-semibold text-muted-foreground/80">
+              <div className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[#5A5A5A]">
                 Users
               </div>
             )}
@@ -179,13 +179,13 @@ export function GlobalSearch() {
                 key={`${r.type}-${r.id}`}
                 onClick={() => goTo(r)}
                 onMouseEnter={() => setActiveIndex(i)}
-                className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-label transition-colors ${
-                  i === activeIndex ? "bg-brand/15 text-foreground" : "text-foreground/90"
+                className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-[13px] transition-colors ${
+                  i === activeIndex ? "bg-[#7C3AED]/15 text-white" : "text-[#D0D0D0]"
                 }`}
               >
                 {r.type === "user" ? (
                   <>
-                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand/20 text-[11px] font-bold text-brand">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[10px] font-bold text-[#A78BFA]">
                       {(r.name ?? r.email)[0]?.toUpperCase()}
                     </div>
                     <span className="truncate">{r.email}</span>
@@ -193,18 +193,18 @@ export function GlobalSearch() {
                   </>
                 ) : (
                   <>
-                    <ScrollText className="h-4 w-4 shrink-0 text-muted-foreground/80" />
-                    <span className="truncate text-muted-foreground">{r.label}</span>
+                    <ScrollText className="h-4 w-4 shrink-0 text-[#6A6A6A]" />
+                    <span className="truncate text-[#B0B0B0]">{r.label}</span>
                   </>
                 )}
-                {i === activeIndex && <CornerDownLeft className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground/80" />}
+                {i === activeIndex && <CornerDownLeft className="ml-auto h-3.5 w-3.5 shrink-0 text-[#6A6A6A]" />}
               </button>
             ))}
           </div>
         )}
 
         {!query.trim() && (
-          <div className="flex items-center justify-center gap-4 px-4 py-6 text-caption text-muted-foreground/80">
+          <div className="flex items-center justify-center gap-4 px-4 py-6 text-[11px] text-[#5A5A5A]">
             <span className="flex items-center gap-1">
               <UserIcon className="h-3 w-3" /> Search users by email
             </span>

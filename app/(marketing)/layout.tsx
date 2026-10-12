@@ -1,7 +1,12 @@
+import { Onest } from "next/font/google"
 import { Navbar } from "@/components/landing/Navbar"
 import { Footer } from "@/components/landing/Footer"
 import { MaintenanceBanner } from "@/components/shared/MaintenanceBanner"
-import { fontVariables } from "@/lib/fonts"
+
+const font = Onest({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+})
 
 // No server-side DB call here — this layout wraps statically generated
 // pages, and a getAppSettings() call here would run at build time (see
@@ -13,17 +18,16 @@ export default function MarketingLayout({
 }) {
   return (
     <div
-      data-theme="light"
-      className={`${fontVariables} flex min-h-screen flex-col overflow-x-hidden bg-background font-ui text-foreground`}
+      className={`${font.className} min-h-screen bg-[#F9F7F2] text-[#0A0A0A] overflow-x-hidden flex flex-col`}
     >
-      {/* The root layout's body styles are for the authenticated app.
-          Override them to the marketing canvas so overscroll and scrollbars
-          stay on-theme. Server-rendered (no flash); reverts on navigation
-          into the app. */}
-      <style>{`body{background-color:#F9F7F2;color:#211F1C}`}</style>
+      {/* The app's root layout sets a dark body background for the authenticated
+          app. Override it to cream for marketing routes so overscroll and
+          scrollbars stay on-theme. Server-rendered (no flash); reverts on
+          navigation into the app. */}
+      <style>{`body{background-color:#F9F7F2;color:#0A0A0A}`}</style>
       <MaintenanceBanner />
       <Navbar />
-      <main className="flex-1 pt-14">{children}</main>
+      <main className="flex-1 pt-16">{children}</main>
       <Footer />
     </div>
   )

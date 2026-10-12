@@ -8,9 +8,8 @@
 // Saving sends the version the edit started from: if the agent was changed
 // in the panel meanwhile, the server refuses (409) and the newer version is
 // loaded here instead of being overwritten.
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useState, type ReactNode } from "react"
 import { Bot, Copy, Loader2, Pencil, Plus, Star, Trash2, X } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import {
   AGENT_LENGTHS,
   AGENT_LIMITS,
@@ -73,17 +72,17 @@ const draftOf = (agent: Agent | null, copy = false): Draft =>
     : { name: "", description: "", purpose: "sales", config: EMPTY_CONFIG }
 
 const inputClass =
-  "w-full rounded-control border border-border bg-surface-raised px-3.5 py-2.5 text-label text-foreground placeholder:text-muted-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
+  "w-full rounded-xl border border-[#E5E3DE] bg-white px-3.5 py-2.5 text-[13px] text-[#0A0A0A] placeholder:text-[#9CA3AF] outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/15"
 
 function Field({ label, hint, required, wide, children }: { label: string; hint?: string; required?: boolean; wide?: boolean; children: ReactNode }) {
   return (
     <label className={`flex flex-col gap-2 ${wide ? "md:col-span-2" : ""}`}>
       <span className="flex flex-col gap-0.5">
-        <span className="text-caption font-semibold text-foreground">
+        <span className="text-[12.5px] font-semibold text-[#0A0A0A]">
           {label}
-          {required && <span className="text-danger"> *</span>}
+          {required && <span className="text-[#DC2626]"> *</span>}
         </span>
-        {hint && <span className="text-caption leading-[1.5] text-muted-foreground">{hint}</span>}
+        {hint && <span className="text-[12px] leading-[1.5] text-[#9CA3AF]">{hint}</span>}
       </span>
       {children}
     </label>
@@ -95,8 +94,8 @@ function ListField({ label, hint, noun, items, max, onChange }: { label: string;
   return (
     <div className="flex flex-col gap-2 md:col-span-2">
       <span className="flex flex-col gap-0.5">
-        <span className="text-caption font-semibold text-foreground">{label}</span>
-        <span className="text-caption leading-[1.5] text-muted-foreground">{hint}</span>
+        <span className="text-[12.5px] font-semibold text-[#0A0A0A]">{label}</span>
+        <span className="text-[12px] leading-[1.5] text-[#9CA3AF]">{hint}</span>
       </span>
       {shown.map((item, i) => (
         <div key={i} className="flex items-start gap-2">
@@ -113,7 +112,7 @@ function ListField({ label, hint, noun, items, max, onChange }: { label: string;
               type="button"
               aria-label={`Remove ${noun} ${i + 1}`}
               onClick={() => onChange(shown.filter((_, j) => j !== i))}
-              className="mt-2 rounded-control-sm p-1.5 text-muted-foreground hover:bg-surface-muted hover:text-danger"
+              className="mt-2 rounded-lg p-1.5 text-[#9CA3AF] hover:bg-[#F4F2EC] hover:text-[#DC2626]"
             >
               <X size={14} />
             </button>
@@ -124,7 +123,7 @@ function ListField({ label, hint, noun, items, max, onChange }: { label: string;
         <button
           type="button"
           onClick={() => onChange([...shown, ""])}
-          className="inline-flex w-fit items-center gap-1.5 rounded-control-sm border border-border px-3 py-1.5 text-caption font-medium text-foreground hover:bg-surface-muted"
+          className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[#E5E3DE] px-3 py-1.5 text-[12.5px] font-medium text-[#374151] hover:bg-[#F4F2EC]"
         >
           <Plus size={13} /> Add {noun}
         </button>
@@ -136,7 +135,7 @@ function ListField({ label, hint, noun, items, max, onChange }: { label: string;
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-4" aria-label={title}>
-      <h4 className="border-b border-border pb-2 text-label font-semibold text-foreground">{title}</h4>
+      <h4 className="border-b border-[#F0EEE9] pb-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-[#9CA3AF]">{title}</h4>
       <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">{children}</div>
     </section>
   )
@@ -187,11 +186,11 @@ function AgentEditor({ existing, seed, onDone, onCancel }: { existing: Agent | n
   )
 
   return (
-    <div className="flex flex-col gap-8 rounded-showcase border border-border bg-surface-raised p-6 shadow-card sm:p-8">
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="text-title-sm font-semibold text-foreground">{existing ? "Edit agent" : "New agent"}</h3>
-        <button type="button" onClick={onCancel} aria-label="Close" className="relative -mt-1 -mr-1 rounded-control-sm p-1.5 text-muted-foreground after:absolute after:-inset-1.5 after:content-[''] hover:bg-surface-muted hover:text-foreground">
-          <X size={16} aria-hidden />
+    <div className="flex flex-col gap-6 rounded-2xl border border-[#E5E3DE] bg-white p-6">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-[15px] font-bold text-[#0A0A0A]">{existing ? "Edit agent" : "New agent"}</h3>
+        <button type="button" onClick={onCancel} aria-label="Close" className="rounded-lg p-1.5 text-[#9CA3AF] hover:bg-[#F4F2EC] hover:text-[#0A0A0A]">
+          <X size={16} />
         </button>
       </div>
 
@@ -292,211 +291,28 @@ function AgentEditor({ existing, seed, onDone, onCancel }: { existing: Agent | n
         />
       </Section>
 
-      <label className="flex items-center gap-2 text-label text-foreground">
-        <input type="checkbox" className="size-4 accent-[var(--brand)]" checked={setAsDefault} onChange={(e) => setSetAsDefault(e.target.checked)} />
+      <label className="flex items-center gap-2 text-[13px] text-[#374151]">
+        <input type="checkbox" className="h-4 w-4 accent-[#7C3AED]" checked={setAsDefault} onChange={(e) => setSetAsDefault(e.target.checked)} />
         Start new conversations with this agent
       </label>
 
-      {error && <p className="text-label text-danger" role="alert">{error}</p>}
+      {error && <p className="text-[13px] text-[#DC2626]" role="alert">{error}</p>}
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-5">
-        <Button onClick={() => void save()} disabled={!canSave} aria-busy={saving || undefined}>
-          {saving && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden />}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={!canSave}
+          className="inline-flex items-center gap-2 rounded-xl bg-[#1A1A1A] px-5 py-2.5 text-[13px] font-semibold text-white disabled:opacity-40"
+        >
+          {saving && <Loader2 size={14} className="animate-spin" />}
           {existing ? "Save changes" : "Create agent"}
-        </Button>
-        <Button variant="ghost" onClick={onCancel}>
+        </button>
+        <button type="button" onClick={onCancel} className="rounded-xl px-4 py-2.5 text-[13px] font-medium text-[#6B7280] hover:text-[#0A0A0A]">
           Cancel
-        </Button>
+        </button>
       </div>
     </div>
-  )
-}
-
-/** One block of the briefing: its title in the margin, its content beside it. */
-function BriefSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section aria-label={title} className="grid gap-3 border-t border-border pt-6 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-8">
-      <h3 className="text-label font-semibold text-foreground">{title}</h3>
-      <div className="flex min-w-0 flex-col gap-5">{children}</div>
-    </section>
-  )
-}
-
-function BriefItem({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <p className="text-caption text-muted-foreground">{label}</p>
-      <div className="text-label whitespace-pre-line text-foreground">{children}</div>
-    </div>
-  )
-}
-
-/**
- * The selected agent as a briefing: who it speaks for, what it's for, how it
- * sounds, what it knows, its rules, and replies in its voice.
- */
-function AgentBrief({
-  agent,
-  pending,
-  confirming,
-  onEdit,
-  onDuplicate,
-  onToggleDefault,
-  onAskDelete,
-  onDelete,
-  onKeep,
-}: {
-  agent: Agent
-  pending: boolean
-  confirming: boolean
-  onEdit: () => void
-  onDuplicate: () => void
-  onToggleDefault: () => void
-  onAskDelete: () => void
-  onDelete: () => void
-  onKeep: () => void
-}) {
-  const c = { ...EMPTY_CONFIG, ...agent.config }
-  const facts = c.facts.filter((x) => x.trim())
-  const objections = c.objections.filter((x) => x.trim())
-  const examples = c.examples.filter((x) => x.trim())
-  const has = (...v: string[]) => v.some((x) => x.trim())
-
-  return (
-    <article aria-label={agent.name} className="flex flex-col gap-6 rounded-showcase border border-border bg-surface-raised p-6 shadow-card sm:p-8 lg:p-10">
-      <header className="flex flex-col gap-4">
-        <div className="flex flex-wrap gap-1.5">
-          {agent.isDefault && (
-            <span className="rounded-full bg-success-soft px-2 py-0.5 text-[11px] leading-4 font-semibold text-success">Default</span>
-          )}
-          <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] leading-4 font-semibold text-muted-foreground">
-            {AGENT_PURPOSE_LABELS[agent.purpose]}
-          </span>
-        </div>
-        <h2 className="font-display text-[2.5rem] leading-[1.02] font-normal tracking-[-0.01em] text-balance text-foreground sm:text-[3.25rem]">
-          {agent.name}
-        </h2>
-        {(agent.description || c.goals) && (
-          <p className="max-w-[62ch] text-body-lg text-foreground/80">{agent.description || c.goals}</p>
-        )}
-      </header>
-
-      {has(c.business, c.offer, c.audience) && (
-        <BriefSection title="Your business">
-          {c.business.trim() && <BriefItem label="Who you are, what you do">{c.business}</BriefItem>}
-          {c.offer.trim() && <BriefItem label="What you offer">{c.offer}</BriefItem>}
-          {c.audience.trim() && <BriefItem label="Who you talk to">{c.audience}</BriefItem>}
-        </BriefSection>
-      )}
-
-      <BriefSection title="Goals">
-        <BriefItem label="What these conversations are for">{c.goals}</BriefItem>
-        {c.nextStep.trim() && <BriefItem label="Next step to aim for">{c.nextStep}</BriefItem>}
-        {c.strategy.trim() && <BriefItem label="How to move the conversation">{c.strategy}</BriefItem>}
-      </BriefSection>
-
-      <BriefSection title="Style">
-        <dl className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-3">
-          {[
-            ["Tone", c.tone],
-            ["Reply length", LENGTH_LABELS[c.length]],
-            ["Language", c.language],
-          ].map(([label, value]) => (
-            <div key={label} className="flex min-w-0 flex-col gap-1">
-              <dt className="text-caption text-muted-foreground">{label}</dt>
-              <dd className="text-label font-medium text-foreground">{value}</dd>
-            </div>
-          ))}
-        </dl>
-      </BriefSection>
-
-      {(facts.length > 0 || objections.length > 0) && (
-        <BriefSection title="Knowledge">
-          {facts.length > 0 && (
-            <BriefItem label="Verified facts">
-              <ul className="flex flex-col gap-1.5">
-                {facts.map((f, i) => (
-                  <li key={i} className="flex gap-2.5">
-                    <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-success" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-            </BriefItem>
-          )}
-          {objections.length > 0 && (
-            <BriefItem label="Objections and situations">
-              <ul className="flex flex-col gap-1.5">
-                {objections.map((o, i) => (
-                  <li key={i} className="flex gap-2.5">
-                    <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-warning" />
-                    {o}
-                  </li>
-                ))}
-              </ul>
-            </BriefItem>
-          )}
-        </BriefSection>
-      )}
-
-      {has(c.alwaysDo, c.neverDo) && (
-        <BriefSection title="Rules">
-          <div className="grid gap-5 sm:grid-cols-2">
-            {c.alwaysDo.trim() && <BriefItem label="Always">{c.alwaysDo}</BriefItem>}
-            {c.neverDo.trim() && <BriefItem label="Never">{c.neverDo}</BriefItem>}
-          </div>
-        </BriefSection>
-      )}
-
-      {examples.length > 0 && (
-        <BriefSection title="Examples">
-          <ul className="flex flex-col gap-2.5" aria-label="Replies that sound like you">
-            {examples.map((e, i) => (
-              <li key={i} className="max-w-[60ch] self-end rounded-[1.25rem] rounded-br-md bg-brand-soft px-4 py-3 text-label whitespace-pre-line text-foreground">
-                {e}
-              </li>
-            ))}
-          </ul>
-        </BriefSection>
-      )}
-
-      <footer className="flex flex-wrap items-center gap-2 border-t border-border pt-5">
-        {confirming ? (
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label={`Delete ${agent.name}?`}>
-            <span className="text-label font-medium text-danger">Delete this agent?</span>
-            <Button variant="destructive" size="sm" disabled={pending} onClick={onDelete}>
-              Delete
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onKeep}>
-              Keep it
-            </Button>
-          </div>
-        ) : (
-          <>
-            <Button variant="outline" size="sm" disabled={pending} onClick={onEdit}>
-              <Pencil aria-hidden /> Edit
-            </Button>
-            <Button variant="ghost" size="sm" disabled={pending} onClick={onDuplicate}>
-              <Copy aria-hidden /> Duplicate
-            </Button>
-            <Button variant="ghost" size="sm" disabled={pending} onClick={onToggleDefault}>
-              {pending ? <Loader2 className="animate-spin" aria-hidden /> : <Star aria-hidden />}
-              {agent.isDefault ? "Stop using by default" : "Make default"}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Delete"
-              disabled={pending}
-              onClick={onAskDelete}
-              className="ml-auto text-muted-foreground hover:bg-danger-soft hover:text-danger"
-            >
-              <Trash2 aria-hidden />
-            </Button>
-          </>
-        )}
-      </footer>
-    </article>
   )
 }
 
@@ -506,9 +322,6 @@ export function AgentsManager() {
   const [editing, setEditing] = useState<{ existing: Agent | null; seed: Draft } | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
-  // Which agent the briefing shows (null: the default, else the first).
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const detailRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(() => {
     return extApi<{ agents: Agent[] }>("/api/ext/agents")
@@ -545,115 +358,98 @@ export function AgentsManager() {
       }),
     )
 
-  // On narrow screens the panel sits under the list: bring it into view.
-  const reveal = () =>
-    requestAnimationFrame(() => {
-      if (!window.matchMedia("(min-width: 64rem)").matches) detailRef.current?.scrollIntoView({ block: "start" })
-    })
-  const edit = (next: { existing: Agent | null; seed: Draft }) => {
-    setEditing(next)
-    reveal()
+  if (editing) {
+    return (
+      <AgentEditor
+        existing={editing.existing}
+        seed={editing.seed}
+        onCancel={() => setEditing(null)}
+        onDone={() => {
+          setEditing(null)
+          void load()
+        }}
+      />
+    )
   }
 
-  const selected =
-    agents?.find((a) => a.id === selectedId) ?? agents?.find((a) => a.isDefault) ?? agents?.[0] ?? null
-  const atLimit = agents !== null && agents.length >= AGENT_LIMITS.agentsPerUser
-
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex max-w-2xl flex-col gap-1.5">
-          <h2 className="text-title-sm font-semibold text-foreground">AI agents</h2>
-          <p className="text-body text-muted-foreground">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex max-w-2xl flex-col gap-1">
+          <h2 className="text-[16px] font-bold text-[#0A0A0A]">AI agents</h2>
+          <p className="text-[13px] leading-[1.6] text-[#6B7280]">
             An agent knows your business, who you talk to and what your conversations are for, and writes your replies on the
             Messages screen of both extensions (LinkedIn and X). You review every reply before sending.
           </p>
         </div>
-        <Button onClick={() => edit({ existing: null, seed: draftOf(null) })} disabled={atLimit}>
-          <Plus aria-hidden /> New agent
-        </Button>
+        <button
+          type="button"
+          onClick={() => setEditing({ existing: null, seed: draftOf(null) })}
+          disabled={agents !== null && agents.length >= AGENT_LIMITS.agentsPerUser}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-[#1A1A1A] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-40"
+        >
+          <Plus size={15} /> New agent
+        </button>
       </div>
 
-      {error && (
-        <p className="rounded-control border border-danger/25 bg-danger-soft px-4 py-3 text-label text-danger" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <p className="text-[13px] text-[#DC2626]" role="alert">{error}</p>}
 
       {agents === null ? (
-        !error && <p className="text-label text-muted-foreground">Loading…</p>
-      ) : agents.length === 0 && !editing ? (
-        <div className="flex flex-col items-center gap-2 rounded-showcase border border-dashed border-border bg-surface-raised px-6 py-14 text-center">
-          <span className="flex size-11 items-center justify-center rounded-full bg-brand-soft text-brand">
-            <Bot className="size-5" aria-hidden />
+        !error && <p className="text-[13px] text-[#9CA3AF]">Loading…</p>
+      ) : agents.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-[#E5E3DE] bg-white px-6 py-10 text-center">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[rgba(124,58,237,0.08)] text-[#7C3AED]">
+            <Bot size={18} />
           </span>
-          <p className="text-body font-semibold text-foreground">No agents yet</p>
-          <p className="max-w-md text-label text-muted-foreground">Create one, then pick it on the extension&apos;s Messages screen.</p>
+          <p className="text-[14px] font-semibold text-[#0A0A0A]">No agents yet</p>
+          <p className="max-w-md text-[13px] text-[#6B7280]">Create one, then pick it on the extension&apos;s Messages screen.</p>
         </div>
       ) : (
-        <div className="grid gap-8 lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-10">
-          <nav aria-label="Agents" className="min-w-0 lg:sticky lg:top-6 lg:self-start">
-            <ul className="flex flex-col gap-0.5">
-              {agents.map((agent) => {
-                const current = !editing && agent.id === selected?.id
-                return (
-                  <li key={agent.id}>
-                    <button
-                      type="button"
-                      aria-current={current ? "true" : undefined}
-                      onClick={() => {
-                        setEditing(null)
-                        setConfirmingId(null)
-                        setSelectedId(agent.id)
-                        reveal()
-                      }}
-                      className="relative flex w-full flex-col gap-0.5 rounded-control px-3 py-2.5 text-left transition-colors duration-(--motion-fast) hover:bg-surface-muted aria-[current=true]:bg-surface-raised aria-[current=true]:shadow-card aria-[current=true]:before:absolute aria-[current=true]:before:inset-y-2.5 aria-[current=true]:before:left-0 aria-[current=true]:before:w-0.5 aria-[current=true]:before:rounded-full aria-[current=true]:before:bg-brand"
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="truncate text-label font-semibold text-foreground">{agent.name}</span>
-                        {agent.isDefault && (
-                          <span className="shrink-0 rounded-full bg-success-soft px-2 py-0.5 text-[11px] leading-4 font-semibold text-success">
-                            Default
-                          </span>
-                        )}
-                      </span>
-                      <span className="truncate text-caption text-muted-foreground">{AGENT_PURPOSE_LABELS[agent.purpose]}</span>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {agents.map((agent) => {
+            const pending = pendingId === agent.id
+            return (
+              <div key={agent.id} className="flex flex-col gap-2 rounded-2xl border border-[#E5E3DE] bg-white p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[14px] font-semibold text-[#0A0A0A]">{agent.name}</span>
+                  {agent.isDefault && (
+                    <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-semibold text-[#047857]">Default</span>
+                  )}
+                  <span className="rounded-full bg-[#F4F2EC] px-2 py-0.5 text-[11px] font-medium text-[#6B7280]">
+                    {AGENT_PURPOSE_LABELS[agent.purpose]}
+                  </span>
+                </div>
+                <p className="line-clamp-2 text-[13px] leading-[1.6] text-[#6B7280]">{agent.description || agent.config.goals}</p>
+                {confirmingId === agent.id ? (
+                  <div className="flex items-center gap-2" role="group" aria-label={`Delete ${agent.name}?`}>
+                    <span className="text-[12.5px] font-medium text-[#DC2626]">Delete this agent?</span>
+                    <button type="button" disabled={pending} onClick={() => void act(agent.id, () => extApi(`/api/ext/agents/${agent.id}`, { method: "DELETE" }))} className="rounded-lg bg-[#DC2626] px-3 py-1.5 text-[12px] font-semibold text-white">
+                      Delete
                     </button>
-                  </li>
-                )
-              })}
-            </ul>
-          </nav>
-
-          <div ref={detailRef} className="min-w-0 scroll-mt-28">
-            {editing ? (
-              <AgentEditor
-                key={editing.existing?.id ?? "new"}
-                existing={editing.existing}
-                seed={editing.seed}
-                onCancel={() => setEditing(null)}
-                onDone={() => {
-                  setEditing(null)
-                  void load()
-                }}
-              />
-            ) : (
-              selected && (
-                <AgentBrief
-                  key={selected.id}
-                  agent={selected}
-                  pending={pendingId === selected.id}
-                  confirming={confirmingId === selected.id}
-                  onEdit={() => edit({ existing: selected, seed: draftOf(selected) })}
-                  onDuplicate={() => edit({ existing: null, seed: draftOf(selected, true) })}
-                  onToggleDefault={() => void setDefault(selected, !selected.isDefault)}
-                  onAskDelete={() => setConfirmingId(selected.id)}
-                  onDelete={() => void act(selected.id, () => extApi(`/api/ext/agents/${selected.id}`, { method: "DELETE" }))}
-                  onKeep={() => setConfirmingId(null)}
-                />
-              )
-            )}
-          </div>
+                    <button type="button" onClick={() => setConfirmingId(null)} className="rounded-lg px-3 py-1.5 text-[12px] font-medium text-[#6B7280]">
+                      Keep it
+                    </button>
+                  </div>
+                ) : (
+                  <div className="-ml-2 flex flex-wrap items-center gap-1">
+                    <button type="button" disabled={pending} onClick={() => setEditing({ existing: agent, seed: draftOf(agent) })} className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-[#374151] hover:bg-[#F4F2EC]">
+                      <Pencil size={13} /> Edit
+                    </button>
+                    <button type="button" disabled={pending} onClick={() => setEditing({ existing: null, seed: draftOf(agent, true) })} className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-[#374151] hover:bg-[#F4F2EC]">
+                      <Copy size={13} /> Duplicate
+                    </button>
+                    <button type="button" disabled={pending} onClick={() => void setDefault(agent, !agent.isDefault)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-[#374151] hover:bg-[#F4F2EC]">
+                      {pending ? <Loader2 size={13} className="animate-spin" /> : <Star size={13} />}
+                      {agent.isDefault ? "Stop using by default" : "Make default"}
+                    </button>
+                    <button type="button" aria-label="Delete" disabled={pending} onClick={() => setConfirmingId(agent.id)} className="ml-auto rounded-lg p-1.5 text-[#9CA3AF] hover:bg-[#FEF2F2] hover:text-[#DC2626]">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

@@ -43,8 +43,8 @@ function TypeBadge({ creation }: { creation: AdminCreation }) {
   const Icon = fromExtension ? MessageSquare : creation.images.length > 0 ? Images : Type
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${
-        fromExtension ? "bg-chart-4/15 text-chart-4" : "bg-brand-soft text-brand"
+      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold ${
+        fromExtension ? "bg-[#0E2A3D] text-[#7CC4F5]" : "bg-[#2A1F45] text-[#C4B5FD]"
       }`}
     >
       <Icon className="h-3 w-3" />
@@ -59,13 +59,13 @@ function TextPreview({ creation }: { creation: AdminCreation }) {
   const noImagesYet = creation.source === "post" && creation.type !== "TEXT_ONLY"
   return (
     <div className="flex h-full flex-col gap-2 overflow-hidden p-4">
-      {noImagesYet && <p className="text-caption font-semibold text-muted-foreground/80">No images</p>}
+      {noImagesYet && <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6A6A6A]">No images</p>}
       {creation.context && (
-        <p className="line-clamp-3 border-l-2 border-border pl-2 text-caption italic text-muted-foreground/80">
+        <p className="line-clamp-3 border-l-2 border-[#333] pl-2 text-[11.5px] italic text-[#6A6A6A]">
           {creation.context}
         </p>
       )}
-      <p className="line-clamp-[9] whitespace-pre-line text-caption leading-relaxed text-foreground/90">
+      <p className="line-clamp-[9] whitespace-pre-line text-[12.5px] leading-relaxed text-[#D0D0D0]">
         {creation.text || "No text saved"}
       </p>
     </div>
@@ -75,12 +75,12 @@ function TextPreview({ creation }: { creation: AdminCreation }) {
 function CreationCard({ creation, onOpen }: { creation: AdminCreation; onOpen: () => void }) {
   const cover = creation.images[0]
   return (
-    <div className="flex flex-col overflow-hidden rounded-control border border-border bg-surface">
+    <div className="flex flex-col overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
       <button
         type="button"
         onClick={onOpen}
         aria-label={`Open ${creation.title}`}
-        className="group relative block h-64 w-full overflow-hidden bg-background text-left"
+        className="group relative block h-64 w-full overflow-hidden bg-[#111] text-left"
       >
         {cover ? (
           <>
@@ -93,7 +93,7 @@ function CreationCard({ creation, onOpen }: { creation: AdminCreation; onOpen: (
               className="h-full w-full object-contain transition-transform duration-200 group-hover:scale-[1.02]"
             />
             {creation.images.length > 1 && (
-              <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 text-caption font-semibold text-white">
+              <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 text-[11px] font-semibold text-white">
                 <Images className="h-3 w-3" />
                 {creation.images.length}
               </span>
@@ -104,20 +104,20 @@ function CreationCard({ creation, onOpen }: { creation: AdminCreation; onOpen: (
         )}
       </button>
 
-      <div className="flex flex-1 flex-col gap-2 border-t border-border p-3.5">
+      <div className="flex flex-1 flex-col gap-2 border-t border-[#2A2A2A] p-3.5">
         <div className="flex flex-wrap items-center gap-1.5">
           <TypeBadge creation={creation} />
           {creation.status && (
-            <span className="text-[11px] text-muted-foreground/80">{creation.status}</span>
+            <span className="text-[10.5px] uppercase tracking-wide text-[#6A6A6A]">{creation.status}</span>
           )}
         </div>
-        <p className="line-clamp-2 text-label font-semibold leading-snug text-foreground">{creation.title}</p>
-        {cover && creation.text && <p className="line-clamp-2 text-caption text-muted-foreground">{creation.text}</p>}
-        <div className="mt-auto flex items-center justify-between gap-2 pt-1 text-caption">
-          <Link href={`/admin/users/${creation.userId}`} className="truncate text-brand hover:underline">
+        <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-white">{creation.title}</p>
+        {cover && creation.text && <p className="line-clamp-2 text-[12px] text-[#8A8A8A]">{creation.text}</p>}
+        <div className="mt-auto flex items-center justify-between gap-2 pt-1 text-[11.5px]">
+          <Link href={`/admin/users/${creation.userId}`} className="truncate text-[#A78BFA] hover:underline">
             {creation.email}
           </Link>
-          <span className="shrink-0 text-muted-foreground/80">{fmtDateTime(creation.createdAt)}</span>
+          <span className="shrink-0 text-[#6A6A6A]">{fmtDateTime(creation.createdAt)}</span>
         </div>
       </div>
     </div>
@@ -147,29 +147,29 @@ function CreationViewer({ creation, onClose }: { creation: AdminCreation; onClos
   }, [count, onClose])
 
   const details = (
-    <div className="flex flex-col gap-4 overflow-y-auto p-5 lg:w-[380px] lg:shrink-0 lg:border-l lg:border-border">
+    <div className="flex flex-col gap-4 overflow-y-auto p-5 lg:w-[380px] lg:shrink-0 lg:border-l lg:border-[#2A2A2A]">
       <div className="flex flex-col gap-2 pr-8">
         <div className="flex flex-wrap items-center gap-1.5">
           <TypeBadge creation={creation} />
           {creation.status && (
-            <span className="text-[11px] text-muted-foreground/80">{creation.status}</span>
+            <span className="text-[10.5px] uppercase tracking-wide text-[#6A6A6A]">{creation.status}</span>
           )}
         </div>
-        <h3 className="text-body font-semibold leading-snug text-foreground">{creation.title}</h3>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption">
-          <Link href={`/admin/users/${creation.userId}`} className="text-brand hover:underline">
+        <h3 className="text-[15px] font-semibold leading-snug text-white">{creation.title}</h3>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
+          <Link href={`/admin/users/${creation.userId}`} className="text-[#A78BFA] hover:underline">
             {creation.email}
           </Link>
-          <span className="text-muted-foreground/80">{fmtDateTime(creation.createdAt)}</span>
-          {creation.credits !== null && <span className="text-muted-foreground/80">{creation.credits} credits</span>}
+          <span className="text-[#6A6A6A]">{fmtDateTime(creation.createdAt)}</span>
+          {creation.credits !== null && <span className="text-[#6A6A6A]">{creation.credits} credits</span>}
         </div>
-        {creation.profileName && <p className="text-caption text-muted-foreground">Tone: {creation.profileName}</p>}
+        {creation.profileName && <p className="text-[12px] text-[#8A8A8A]">Tone: {creation.profileName}</p>}
       </div>
 
       {creation.context && (
         <div className="flex flex-col gap-1.5">
-          <p className="text-caption font-semibold text-muted-foreground/80">Written for</p>
-          <p className="whitespace-pre-line border-l-2 border-border pl-3 text-caption italic leading-relaxed text-muted-foreground">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6A6A6A]">Written for</p>
+          <p className="whitespace-pre-line border-l-2 border-[#333] pl-3 text-[12.5px] italic leading-relaxed text-[#8A8A8A]">
             {creation.context}
           </p>
         </div>
@@ -177,10 +177,10 @@ function CreationViewer({ creation, onClose }: { creation: AdminCreation; onClos
 
       {creation.text && (
         <div className="flex flex-col gap-1.5">
-          <p className="text-caption font-semibold text-muted-foreground/80">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6A6A6A]">
             {creation.source === "extension" ? "Generated text" : creation.type === "THUMBNAIL" ? "Brief" : "Caption"}
           </p>
-          <p className="whitespace-pre-line text-label leading-relaxed text-foreground/90">{creation.text}</p>
+          <p className="whitespace-pre-line text-[13px] leading-relaxed text-[#D0D0D0]">{creation.text}</p>
         </div>
       )}
 
@@ -190,7 +190,7 @@ function CreationViewer({ creation, onClose }: { creation: AdminCreation; onClos
             href={creation.linkUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-control-sm border border-border bg-surface-muted px-3 py-1.5 text-caption font-semibold text-foreground hover:bg-surface-raised"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#232323] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#2E2E2E]"
           >
             Open on LinkedIn <ExternalLink className="h-3 w-3" />
           </a>
@@ -200,7 +200,7 @@ function CreationViewer({ creation, onClose }: { creation: AdminCreation; onClos
             href={image}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-control-sm border border-border bg-surface-muted px-3 py-1.5 text-caption font-semibold text-foreground hover:bg-surface-raised"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#232323] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#2E2E2E]"
           >
             Open full image <ExternalLink className="h-3 w-3" />
           </a>
@@ -216,7 +216,7 @@ function CreationViewer({ creation, onClose }: { creation: AdminCreation; onClos
         aria-modal="true"
         aria-label={creation.title}
         onClick={(e) => e.stopPropagation()}
-        className={`relative m-auto flex max-h-full w-full flex-col overflow-hidden rounded-control border border-border bg-background lg:flex-row ${
+        className={`relative m-auto flex max-h-full w-full flex-col overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#141414] lg:flex-row ${
           count > 0 ? "max-w-6xl" : "max-w-2xl"
         }`}
       >
@@ -224,13 +224,13 @@ function CreationViewer({ creation, onClose }: { creation: AdminCreation; onClos
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-3 top-3 z-10 rounded-control-sm bg-black/60 p-1.5 text-white/80 hover:text-white"
+          className="absolute right-3 top-3 z-10 rounded-lg bg-black/60 p-1.5 text-[#B0B0B0] hover:text-white"
         >
           <X className="h-4 w-4" />
         </button>
 
         {count > 0 && (
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#0B0B0B]">
             <div className="relative flex min-h-[240px] flex-1 items-center justify-center p-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={image} alt={`${creation.title} — ${index + 1}`} className="max-h-[70vh] max-w-full object-contain" />
@@ -252,22 +252,22 @@ function CreationViewer({ creation, onClose }: { creation: AdminCreation; onClos
                   >
                     <ChevronRight className="h-5 w-5" />
                   </button>
-                  <span className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-md bg-black/70 px-2 py-1 text-caption font-semibold text-white">
+                  <span className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-md bg-black/70 px-2 py-1 text-[11px] font-semibold text-white">
                     {index + 1} / {count}
                   </span>
                 </>
               )}
             </div>
             {count > 1 && (
-              <div className="flex gap-2 overflow-x-auto border-t border-border p-3">
+              <div className="flex gap-2 overflow-x-auto border-t border-[#2A2A2A] p-3">
                 {creation.images.map((src, i) => (
                   <button
                     key={`${src}-${i}`}
                     type="button"
                     aria-label={`Image ${i + 1}`}
                     onClick={() => setIndex(i)}
-                    className={`h-16 w-14 shrink-0 overflow-hidden rounded-md border-2 bg-background ${
-                      i === index ? "border-brand" : "border-transparent opacity-60 hover:opacity-100"
+                    className={`h-16 w-14 shrink-0 overflow-hidden rounded-md border-2 bg-[#111] ${
+                      i === index ? "border-[#7C3AED]" : "border-transparent opacity-60 hover:opacity-100"
                     }`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -372,7 +372,7 @@ export function PostsGallery() {
   }
 
   const dateInputCls =
-    "h-9 rounded-control-sm border border-border bg-background px-3 text-label text-foreground outline-none focus:border-brand [color-scheme:dark]"
+    "h-9 rounded-lg border border-[#2A2A2A] bg-[#141414] px-3 text-[13px] text-white outline-none focus:border-[#7C3AED] [color-scheme:dark]"
 
   return (
     <div className="space-y-4">
@@ -408,7 +408,7 @@ export function PostsGallery() {
           onChange={(e) => setFilter({ from: e.target.value })}
           className={dateInputCls}
         />
-        <span className="text-caption text-muted-foreground/80">to</span>
+        <span className="text-[12px] text-[#6A6A6A]">to</span>
         <input
           type="date"
           value={filters.to}
@@ -416,7 +416,7 @@ export function PostsGallery() {
           className={dateInputCls}
         />
         {total !== null && (
-          <span className="text-caption text-muted-foreground/80">
+          <span className="text-[12px] text-[#6A6A6A]">
             Showing {items.length} of {total}
           </span>
         )}
@@ -432,7 +432,7 @@ export function PostsGallery() {
       {loading && items.length === 0 ? (
         <Spinner label="Loading posts…" />
       ) : items.length === 0 ? (
-        <div className="rounded-control border border-dashed border-border py-16 text-center text-label text-muted-foreground/80">
+        <div className="rounded-xl border border-dashed border-[#2A2A2A] py-16 text-center text-[13px] text-[#6A6A6A]">
           Nothing matches these filters
         </div>
       ) : (

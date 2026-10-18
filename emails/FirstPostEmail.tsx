@@ -1,22 +1,28 @@
 import * as React from "react"
-import { Heading, Text } from "@react-email/components"
-import { APP_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
+import { Text } from "@react-email/components"
+import { APP_URL, EmailButton, EmailFacts, EmailLayout, emailStyles } from "./EmailLayout"
 
-// Subject: "You just created your first post 🎉"
+// Subject: "Your first post is done"
 export function FirstPostEmail({ name }: { name?: string }) {
   const greeting = name?.trim() ? name : "there"
   return (
-    <EmailLayout preview="Congrats on your first post — here's how to do more.">
-      <Heading style={emailStyles.heading}>You just created your first post 🎉</Heading>
+    <EmailLayout hero="first-post" preview="The first post is the hardest one. Here's how to keep the momentum.">
+      <Text style={emailStyles.text}>Congratulations, {greeting}.</Text>
       <Text style={emailStyles.text}>
-        Congrats, {greeting} — your first piece of content is done! This is the start of a
-        consistent, standout presence across social media.
+        Your first post is done, and the first one is always the hardest. What grows an audience from here is showing up
+        consistently.
       </Text>
       <Text style={emailStyles.text}>
-        Ready to go further? Upgrade to <strong>Pro</strong> for 30 monthly credits, unlimited
-        ideas, and full carousel generation — everything you need to post every single day.
+        If you&apos;re ready to post every day, Pro and Growth add carousels, one-click LinkedIn posting, voice guidelines and
+        fresh trending ideas daily.
       </Text>
-      <EmailButton href={`${APP_URL}/settings`}>Upgrade to Pro</EmailButton>
+      <EmailFacts
+        items={[
+          ["Pro", "1,000 credits a month · $24.99"],
+          ["Growth", "2,000 credits a month · $45.99"],
+        ]}
+      />
+      <EmailButton href={`${APP_URL}/settings/billing`}>Compare plans</EmailButton>
     </EmailLayout>
   )
 }

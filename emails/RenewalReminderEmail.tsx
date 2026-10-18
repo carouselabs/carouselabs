@@ -1,6 +1,6 @@
 import * as React from "react"
-import { Heading, Text } from "@react-email/components"
-import { APP_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
+import { Text } from "@react-email/components"
+import { APP_URL, EmailButton, EmailFacts, EmailLayout, emailStyles } from "./EmailLayout"
 
 // Subject: "Your Pro subscription renews in 3 days"
 export function RenewalReminderEmail({
@@ -16,25 +16,23 @@ export function RenewalReminderEmail({
 }) {
   const greeting = name?.trim() ? name : "there"
   return (
-    <EmailLayout preview={`Your ${planName} plan renews on ${renewalDate}.`}>
-      <Heading style={emailStyles.heading}>Your {planName} plan renews soon</Heading>
+    <EmailLayout hero="renewal" preview={`Your ${planName} plan renews on ${renewalDate}.`}>
+      <Text style={emailStyles.text}>Hi {greeting},</Text>
       <Text style={emailStyles.text}>
-        Hi {greeting}, this is a friendly reminder that your CarouseLabs {planName} subscription
-        renews in 3 days.
+        This is a reminder that your CarouseLabs {planName} plan renews in three days. Here are the details:
       </Text>
-      <ul style={emailStyles.list}>
-        <li>
-          <strong>Renewal date:</strong> {renewalDate}
-        </li>
-        <li>
-          <strong>Amount:</strong> {amount}
-        </li>
-      </ul>
+      <EmailFacts
+        items={[
+          ["Plan", planName],
+          ["Renewal date", renewalDate],
+          ["Amount", amount],
+        ]}
+      />
       <Text style={emailStyles.text}>
-        No action is needed — your plan and monthly credits will continue automatically. You can
-        review or change your subscription any time.
+        You don&apos;t need to do anything. Your plan and monthly credits continue automatically. If you&apos;d like to
+        change or cancel, you can do it from Billing before the renewal date.
       </Text>
-      <EmailButton href={`${APP_URL}/settings`}>Manage Subscription</EmailButton>
+      <EmailButton href={`${APP_URL}/settings/billing`}>Manage subscription</EmailButton>
     </EmailLayout>
   )
 }

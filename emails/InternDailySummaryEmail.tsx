@@ -1,10 +1,13 @@
 import * as React from "react"
-import { Heading, Text } from "@react-email/components"
-import { EMPLOYEE_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
+import { Column, Row, Text } from "@react-email/components"
+import { EMPLOYEE_URL, EmailButton, EmailFacts, EmailLayout, EmailPanel, emailStyles } from "./EmailLayout"
+import { EMAIL_COLORS } from "./theme"
 
 export type DailySummaryTask = { name: string; points: number }
 
-// Subject: "Your summary for [date] 📋"
+const signed = (n: number) => `${n >= 0 ? "+" : ""}${n}`
+
+// Subject: "Your summary for [date]"
 export function InternDailySummaryEmail({
   name,
   date,
@@ -21,42 +24,32 @@ export function InternDailySummaryEmail({
   const hasTasks = tasksCompleted.length > 0
 
   return (
-    <EmailLayout
-      preview={`Your summary for ${date} — ${pointsToday >= 0 ? "+" : ""}${pointsToday} pts today`}
-    >
-      <Heading style={emailStyles.heading}>Your summary for {date}</Heading>
-      <Text style={emailStyles.text}>
-        Hi {name}, here&apos;s your summary for {date}:
-      </Text>
-
+    <EmailLayout audience="intern" hero="daily" preview={`Your summary for ${date}: ${signed(pointsToday)} pts today`}>
+      <Text style={emailStyles.text}>Hi {name},</Text>
+      <Text style={emailStyles.text}>Here&apos;s how {date} went.</Text>
+      <Text style={emailStyles.label}>Logged today</Text>
       {hasTasks ? (
-        <ul style={emailStyles.list}>
+        <EmailPanel>
           {tasksCompleted.map((task, i) => (
-            <li key={i}>
-              {task.name} — {task.points >= 0 ? "+" : ""}
-              {task.points} pts
-            </li>
+            <Row key={i} style={{ borderTop: i === 0 ? "none" : `1px solid ${EMAIL_COLORS.line}` }}>
+              <Column style={{ padding: "10px 12px 10px 0", fontSize: "15px", lineHeight: "1.45", color: EMAIL_COLORS.ink }}>{task.name}</Column>
+              <Column align="right" style={{ padding: "10px 0", fontSize: "14px", fontWeight: 600, color: EMAIL_COLORS.violet, whiteSpace: "nowrap" }}>
+                {signed(task.points)} pts
+              </Column>
+            </Row>
           ))}
-        </ul>
+        </EmailPanel>
       ) : (
-        <Text style={emailStyles.text}>No tasks logged today.</Text>
+        <Text style={{ ...emailStyles.text, color: EMAIL_COLORS.muted }}>No tasks were logged today.</Text>
       )}
-
-      <Text style={emailStyles.text}>
-        Points earned today:{" "}
-        <strong>
-          {pointsToday >= 0 ? "+" : ""}
-          {pointsToday}
-        </strong>
-        <br />
-        All-time total: <strong>{totalPoints} pts</strong>
-      </Text>
-
-      <Text style={emailStyles.text}>
-        {hasTasks ? "Great work today!" : "Let's aim to log some tasks tomorrow!"}
-      </Text>
-
-      <EmailButton href={EMPLOYEE_URL}>View Your Portal</EmailButton>
+      <EmailFacts
+        items={[
+          ["Points today", signed(pointsToday)],
+          ["All-time total", `${totalPoints} pts`],
+        ]}
+      />
+      <Text style={emailStyles.text}>{hasTasks ? "Good work today. See you tomorrow." : "Let's log a few tasks tomorrow."}</Text>
+      <EmailButton href={EMPLOYEE_URL}>Open your portal</EmailButton>
     </EmailLayout>
   )
 }

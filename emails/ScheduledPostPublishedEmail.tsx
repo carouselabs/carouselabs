@@ -1,9 +1,9 @@
 import * as React from "react"
-import { Heading, Text } from "@react-email/components"
+import { Text } from "@react-email/components"
 import { APP_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
 import { PLATFORM_META, isValidPlatform } from "@/lib/platforms"
 
-// Subject: "Your post just went out 🎉"
+// Subject: "Your post is live"
 export function ScheduledPostPublishedEmail({
   name,
   postTitle,
@@ -17,18 +17,16 @@ export function ScheduledPostPublishedEmail({
 }) {
   const greeting = name?.trim() ? name : "there"
   const platformLabel = isValidPlatform(platform) ? PLATFORM_META[platform].label : platform
-
   return (
-    <EmailLayout preview={`Your post just went out on ${platformLabel}.`}>
-      <Heading style={emailStyles.heading}>Your post just went out 🎉</Heading>
+    <EmailLayout hero="post-live" preview={`Your post just went out on ${platformLabel}.`}>
+      <Text style={emailStyles.text}>Hi {greeting},</Text>
       <Text style={emailStyles.text}>
-        Hi {greeting}, <strong>&quot;{postTitle}&quot;</strong> just published to {platformLabel}.
+        Your scheduled post <strong style={emailStyles.strong}>&ldquo;{postTitle}&rdquo;</strong> is now live on{" "}
+        {platformLabel}, right on time.
       </Text>
-      <EmailButton href={publishedUrl || `${APP_URL}/content-hub`}>
-        {publishedUrl ? "View the post" : "Open Content Hub"}
-      </EmailButton>
+      <EmailButton href={publishedUrl || `${APP_URL}/content-hub`}>{publishedUrl ? "View the post" : "Open Content Hub"}</EmailButton>
       <Text style={emailStyles.muted}>
-        You can turn these emails off anytime in Settings &gt; Account &gt; Notifications.
+        You can turn these emails off any time in Settings &gt; Account &gt; Notifications.
       </Text>
     </EmailLayout>
   )

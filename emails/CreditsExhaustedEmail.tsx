@@ -1,23 +1,32 @@
 import * as React from "react"
-import { Heading, Text } from "@react-email/components"
-import { APP_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
+import { Text } from "@react-email/components"
+import { APP_URL, EmailButton, EmailLayout, EmailPanel, EmailSteps, emailStyles } from "./EmailLayout"
 
-// Subject: "You've used all your credits for this month 🔴"
+// Subject: "You've used all your credits for this cycle"
+// Sent to paid plans when the balance reaches zero (lib/chargeCredits.ts).
 export function CreditsExhaustedEmail({ name }: { name?: string }) {
   const greeting = name?.trim() ? name : "there"
   return (
-    <EmailLayout preview="You're out of credits — here's how to keep creating.">
-      <Heading style={emailStyles.heading}>You&apos;re out of credits 🔴</Heading>
+    <EmailLayout hero="credits-out" preview="You've used every credit this cycle. Here's how to keep going.">
+      <Text style={emailStyles.text}>Hi {greeting},</Text>
       <Text style={emailStyles.text}>
-        Hi {greeting}, you&apos;ve used all your credits for this month. Nice work staying
-        consistent!
+        You&apos;ve used every credit in this billing cycle. That&apos;s a productive month, and there are two ways to keep
+        going:
       </Text>
-      <Text style={emailStyles.text}>You have two options:</Text>
-      <ul style={emailStyles.list}>
-        <li>Buy extra credits to keep creating right now</li>
-        <li>Wait for your monthly credits to reset on your next billing date</li>
-      </ul>
-      <EmailButton href={`${APP_URL}/settings`}>Buy Extra Credits</EmailButton>
+      <EmailPanel>
+        <EmailSteps
+          steps={[
+            <>
+              <strong style={emailStyles.strong}>Top up now.</strong> Extra credits are added to your balance straight away.
+            </>,
+            <>
+              <strong style={emailStyles.strong}>Or wait for your refill.</strong> Your monthly credits come back
+              automatically at the start of your next billing cycle.
+            </>,
+          ]}
+        />
+      </EmailPanel>
+      <EmailButton href={`${APP_URL}/settings/billing`}>Top up credits</EmailButton>
     </EmailLayout>
   )
 }

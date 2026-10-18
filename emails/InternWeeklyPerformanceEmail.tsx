@@ -1,6 +1,7 @@
 import * as React from "react"
-import { Heading, Text, Section } from "@react-email/components"
+import { Text, Section } from "@react-email/components"
 import { EMPLOYEE_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
+import { EMAIL_COLORS, SERIF } from "./theme"
 
 export type WeeklyPerformanceTone = "top" | "moved_up" | "steady" | "needs_push" | "no_activity"
 
@@ -112,9 +113,9 @@ export function InternWeeklyPerformanceEmail(props: WeeklyPerformanceEmailProps)
     props
 
   const badges = [
-    isHighestPoints && "🏆 Highest points this week",
-    perfectAttendance && "✅ Perfect attendance",
-    isMostImproved && "📈 Most improved",
+    isHighestPoints && "Highest points this week",
+    perfectAttendance && "Perfect attendance",
+    isMostImproved && "Most improved",
   ].filter((b): b is string => !!b)
 
   // TONE E ("no_activity"): there's no real rank, badge, or attendance
@@ -123,34 +124,49 @@ export function InternWeeklyPerformanceEmail(props: WeeklyPerformanceEmailProps)
   // from nothing. Skip straight to the neutral message (see Step 2).
   if (tone === "no_activity") {
     return (
-      <EmailLayout preview={`Your week in review — ${weekLabel}`}>
-        <Heading style={emailStyles.heading}>Your week in review</Heading>
+      <EmailLayout audience="intern" hero="performance" preview={`Your week in review — ${weekLabel}`}>
         <Text style={emailStyles.text}>Hi {name}, here&apos;s how your week went ({weekLabel}):</Text>
 
         <TonedMessage {...props} />
 
         <Text style={emailStyles.text}>{CLOSING_LINE[tone]}</Text>
 
-        <EmailButton href={`${EMPLOYEE_URL}/intern`}>View Full Leaderboard</EmailButton>
+        <EmailButton href={`${EMPLOYEE_URL}/intern`}>View the full leaderboard</EmailButton>
       </EmailLayout>
     )
   }
 
   return (
-    <EmailLayout preview={`Your week: #${rankThisWeek}, ${pointsThisWeek} pts — ${weekLabel}`}>
-      <Heading style={emailStyles.heading}>Your week in review</Heading>
+    <EmailLayout audience="intern" hero="performance" preview={`Your week: #${rankThisWeek}, ${pointsThisWeek} pts — ${weekLabel}`}>
       <Text style={emailStyles.text}>Hi {name}, here&apos;s how your week went ({weekLabel}):</Text>
 
       <Section style={{ padding: "4px 0 12px" }}>
-        <Text style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#16161d" }}>
+        <Text style={{ margin: "0 0 6px", fontFamily: SERIF, fontSize: "40px", fontWeight: 400, lineHeight: "1.1", color: EMAIL_COLORS.ink }}>
           #{rankThisWeek} · {pointsThisWeek} pts
         </Text>
-        <Text style={{ margin: 0, fontSize: "14px", fontWeight: 600, color: "#454552" }}>{movementLabel(props)}</Text>
+        <Text style={{ margin: 0, fontSize: "14px", fontWeight: 600, color: EMAIL_COLORS.body }}>{movementLabel(props)}</Text>
       </Section>
 
       {badges.length > 0 && (
-        <Text style={{ margin: "0 0 16px", fontSize: "13px", fontWeight: 600, color: "#7C3AED" }}>
-          {badges.join("  ·  ")}
+        <Text style={{ margin: "0 0 18px", lineHeight: "2.2" }}>
+          {badges.map((badge) => (
+            <span
+              key={badge}
+              style={{
+                display: "inline-block",
+                marginRight: "6px",
+                padding: "3px 10px",
+                borderRadius: "999px",
+                backgroundColor: EMAIL_COLORS.violetSoft,
+                color: EMAIL_COLORS.violet,
+                fontSize: "12px",
+                fontWeight: 600,
+                lineHeight: "1.5",
+              }}
+            >
+              {badge}
+            </span>
+          ))}
         </Text>
       )}
 
@@ -162,7 +178,7 @@ export function InternWeeklyPerformanceEmail(props: WeeklyPerformanceEmailProps)
 
       <Text style={emailStyles.text}>{CLOSING_LINE[tone]}</Text>
 
-      <EmailButton href={`${EMPLOYEE_URL}/intern`}>View Full Leaderboard</EmailButton>
+      <EmailButton href={`${EMPLOYEE_URL}/intern`}>View the full leaderboard</EmailButton>
     </EmailLayout>
   )
 }

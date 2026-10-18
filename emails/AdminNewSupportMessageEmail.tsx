@@ -1,6 +1,7 @@
 import * as React from "react"
-import { Heading, Text } from "@react-email/components"
-import { EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
+import { Text } from "@react-email/components"
+import { EmailButton, EmailLayout, EmailPanel, emailStyles } from "./EmailLayout"
+import { SERIF } from "./theme"
 
 const MAX_PREVIEW = 300
 
@@ -18,13 +19,14 @@ export function AdminNewSupportMessageEmail({
   const preview = message.length > MAX_PREVIEW ? `${message.slice(0, MAX_PREVIEW)}…` : message
 
   return (
-    <EmailLayout preview={`New support message from ${internName}`}>
-      <Heading style={emailStyles.heading}>New support message</Heading>
+    <EmailLayout audience="admin" hero="support-message" preview={`New support message from ${internName}`}>
       <Text style={emailStyles.text}>
-        <strong>{internName}</strong> just sent a new message in Support:
+        <strong>{internName}</strong> sent a new message in Support:
       </Text>
-      <Text style={{ ...emailStyles.text, fontStyle: "italic" }}>&ldquo;{preview}&rdquo;</Text>
-      <EmailButton href={detailUrl}>Reply in Admin</EmailButton>
+      <EmailPanel>
+        <Text style={{ ...emailStyles.text, fontFamily: SERIF, fontSize: "17px", fontStyle: "italic" }}>&ldquo;{preview}&rdquo;</Text>
+      </EmailPanel>
+      <EmailButton href={detailUrl}>Reply in admin</EmailButton>
     </EmailLayout>
   )
 }

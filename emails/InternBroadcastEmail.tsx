@@ -3,7 +3,8 @@ import { Heading, Text } from "@react-email/components"
 import { EMPLOYEE_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
 
 // Subject and body are admin-authored per send (see InternBroadcastComposer)
-// rather than fixed at build time like the other intern templates.
+// rather than fixed at build time like the other intern templates, so the
+// subject is this email's heading, under the "A note from the team" hero.
 export function InternBroadcastEmail({
   name,
   subject,
@@ -20,7 +21,7 @@ export function InternBroadcastEmail({
     .filter(Boolean)
 
   return (
-    <EmailLayout preview={subject}>
+    <EmailLayout audience="intern" hero="intern-note" preview={subject}>
       <Heading style={emailStyles.heading}>{subject}</Heading>
       <Text style={emailStyles.text}>Hi {greeting},</Text>
       {paragraphs.map((paragraph, i) => (
@@ -33,7 +34,7 @@ export function InternBroadcastEmail({
           ))}
         </Text>
       ))}
-      <EmailButton href={EMPLOYEE_URL}>Go to Your Portal</EmailButton>
+      <EmailButton href={EMPLOYEE_URL}>Open your portal</EmailButton>
     </EmailLayout>
   )
 }

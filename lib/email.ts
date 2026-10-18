@@ -45,7 +45,7 @@ export async function sendWelcomeEmail(email: string, name: string) {
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: "Welcome to CarouseLabs 🎨",
+    subject: "Welcome to CarouseLabs",
     html: await render(WelcomeEmail({ name })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
@@ -57,7 +57,7 @@ export async function sendEngageAccessGrantedEmail(email: string, until: string 
     to: email,
     subject: engageAccessGrantedSubject(platform),
     html: await render(
-      EngageAccessGrantedEmail({ until, platform, storeUrls: { linkedin: EXTENSION_STORE_URL, x: X_EXTENSION_STORE_URL } }),
+      EngageAccessGrantedEmail({ until, platform, email, storeUrls: { linkedin: EXTENSION_STORE_URL, x: X_EXTENSION_STORE_URL } }),
     ),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
@@ -67,7 +67,7 @@ export async function sendOnboardingCompleteEmail(email: string, name: string) {
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: "You're all set! Let's create your first post",
+    subject: "You're all set. Let's make your first post",
     html: await render(OnboardingCompleteEmail({ name })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
@@ -77,7 +77,7 @@ export async function sendFirstPostEmail(email: string, name: string) {
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: "You just created your first post 🎉",
+    subject: "Your first post is done",
     html: await render(FirstPostEmail({ name })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
@@ -92,7 +92,7 @@ export async function sendUpgradedToProEmail(
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: `Welcome to ${planName}! You have ${credits} credits ready 🚀`,
+    subject: `Welcome to ${planName}. Your ${credits.toLocaleString("en-US")} credits are ready`,
     html: await render(UpgradedToProEmail({ name, credits, planName })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
@@ -102,7 +102,7 @@ export async function sendCreditsLowEmail(email: string, name: string, creditsLe
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: `You have ${creditsLeft} credits left this month ⚠️`,
+    subject: `You have ${creditsLeft.toLocaleString("en-US")} credits left this cycle`,
     html: await render(CreditsLowEmail({ name, creditsLeft })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
@@ -136,7 +136,7 @@ export async function sendScheduledPostPublishedEmail(
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: "Your post just went out 🎉",
+    subject: "Your post is live",
     html: await render(ScheduledPostPublishedEmail({ name, postTitle, platform, publishedUrl })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
@@ -146,7 +146,7 @@ export async function sendCreditsExhaustedEmail(email: string, name: string) {
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: "You've used all your credits for this month 🔴",
+    subject: "You've used all your credits for this cycle",
     html: await render(CreditsExhaustedEmail({ name })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
@@ -161,7 +161,7 @@ export async function sendExtraCreditsEmail(
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: "Your extra credits are ready! ✅",
+    subject: "Your extra credits are ready",
     html: await render(ExtraCreditsEmail({ name, creditsAdded, expiryDate })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
@@ -183,7 +183,7 @@ export async function sendTopUpEmail(
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: `${credits} credits added to your account! 🎉`,
+    subject: `${credits.toLocaleString("en-US")} credits added to your account`,
     html: await render(ExtraCreditsEmail({ name, creditsAdded: credits, expiryDate })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
@@ -193,7 +193,7 @@ export async function sendMonthlyResetEmail(email: string, name: string, credits
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: `Your ${credits} credits have been reset 🔄`,
+    subject: `Your ${credits.toLocaleString("en-US")} credits are ready for a new month`,
     html: await render(MonthlyResetEmail({ name, credits })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
@@ -240,7 +240,7 @@ export async function sendInternWelcomeEmail(
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: `Welcome to CarouseLabs, ${name}! 🎉`,
+    subject: `Welcome to CarouseLabs, ${name}`,
     html: await render(InternWelcomeEmail({ name, role, joinDate, leaveAllowance, loginUrl, email })),
   })
   if (error) throw new Error(`Resend: ${error.message}`)
@@ -273,7 +273,7 @@ export async function sendInternDailySummaryEmail(
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
-    subject: `Your summary for ${date} 📋`,
+    subject: `Your summary for ${date}`,
     html: await render(
       InternDailySummaryEmail({ name, date, tasksCompleted, pointsToday, totalPoints }),
     ),
@@ -307,11 +307,11 @@ export async function sendInternAbsentWarningEmail(
 // lib/internWeeklyEmail.ts's decideTone) so the inbox preview line already
 // signals whether it's a celebration or a gentle nudge.
 const WEEKLY_PERFORMANCE_SUBJECT: Record<WeeklyPerformanceTone, (d: WeeklyPerformanceEmailProps) => string> = {
-  top: (d) => `🏆 You're #${d.rankThisWeek} this week!`,
-  moved_up: (d) => `📈 You moved up to #${d.rankThisWeek} this week`,
-  steady: (d) => `Your Week in Review — #${d.rankThisWeek}`,
-  needs_push: (d) => `Your Week in Review — ${d.weekLabel}`,
-  no_activity: (d) => `Your Week in Review — ${d.weekLabel}`,
+  top: (d) => `You finished #${d.rankThisWeek} this week`,
+  moved_up: (d) => `You moved up to #${d.rankThisWeek} this week`,
+  steady: (d) => `Your week in review: #${d.rankThisWeek}`,
+  needs_push: (d) => `Your week in review: ${d.weekLabel}`,
+  no_activity: (d) => `Your week in review: ${d.weekLabel}`,
 }
 
 // Sent weekly to every active intern — see

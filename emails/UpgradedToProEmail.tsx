@@ -1,8 +1,8 @@
 import * as React from "react"
-import { Heading, Text } from "@react-email/components"
-import { APP_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
+import { Text } from "@react-email/components"
+import { APP_URL, EmailButton, EmailFacts, EmailFeatures, EmailLayout, emailStyles } from "./EmailLayout"
 
-// Subject: "Welcome to Pro! You have 30 credits ready 🚀"
+// Subject: "Welcome to Pro. Your 1,000 credits are ready"
 export function UpgradedToProEmail({
   name,
   credits,
@@ -13,25 +13,35 @@ export function UpgradedToProEmail({
   planName?: "Pro" | "Growth"
 }) {
   const greeting = name?.trim() ? name : "there"
+  const amount = credits.toLocaleString("en-US")
   return (
-    <EmailLayout preview={`Welcome to ${planName} — ${credits} credits are ready to use.`}>
-      <Heading style={emailStyles.heading}>Welcome to {planName} 🚀</Heading>
+    <EmailLayout hero="upgraded" preview={`Your ${planName} plan is active, with ${amount} credits ready to use.`}>
+      <Text style={emailStyles.text}>Welcome to {planName}, {greeting}.</Text>
       <Text style={emailStyles.text}>
-        You&apos;re in, {greeting}! Your {planName} plan is active and{" "}
-        <strong>{credits} credits</strong> are ready to use right now.
+        Your plan is active and <strong style={emailStyles.strong}>{amount} credits</strong> are in your account, ready to
+        use right now. Thank you for backing CarouseLabs.
       </Text>
-      <Text style={emailStyles.text}>With {planName} you get:</Text>
-      <ul style={emailStyles.list}>
-        <li>{credits} content credits every month</li>
-        <li>Unlimited post idea generation</li>
-        <li>Full image + carousel generation</li>
-        <li>PDF downloads for every carousel</li>
-      </ul>
-      <Text style={emailStyles.text}>
-        Each credit creates one piece of content — a caption, an image, or a carousel. Credits
-        refresh at the start of every billing cycle.
+      <Text style={emailStyles.label}>What&apos;s unlocked</Text>
+      <EmailFeatures
+        items={[
+          { sticker: "carousel", title: "Carousels", text: "Turn any idea into a 7–8 slide carousel, downloadable as a PDF." },
+          { sticker: "publish", title: "One-click LinkedIn posting", text: "Publish straight to LinkedIn without leaving CarouseLabs." },
+          { sticker: "voice", title: "Voice guidelines", text: "Set your tone once, and every caption follows it." },
+          { sticker: "idea", title: "Trending ideas, daily", text: "Fresh post ideas based on what's working right now." },
+        ]}
+      />
+      <Text style={emailStyles.label}>What credits buy</Text>
+      <EmailFacts
+        items={[
+          ["Caption", "5 credits"],
+          ["Image + caption", "15 credits"],
+          ["Carousel", "40 credits"],
+        ]}
+      />
+      <EmailButton href={`${APP_URL}/dashboard`}>Start creating</EmailButton>
+      <Text style={emailStyles.muted}>
+        Your credits refill at the start of every billing cycle. Unused credits don&apos;t roll over.
       </Text>
-      <EmailButton href={`${APP_URL}/dashboard`}>Start Creating</EmailButton>
     </EmailLayout>
   )
 }

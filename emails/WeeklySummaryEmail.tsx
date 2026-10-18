@@ -1,6 +1,7 @@
 import * as React from "react"
-import { Heading, Text, Link } from "@react-email/components"
-import { APP_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
+import { Text, Link } from "@react-email/components"
+import { APP_URL, EmailButton, EmailFacts, EmailLayout, emailStyles } from "./EmailLayout"
+import { EMAIL_COLORS } from "./theme"
 import { PLATFORM_META, isValidPlatform } from "@/lib/platforms"
 
 function platformLabel(platform: string): string {
@@ -19,16 +20,16 @@ export interface WeeklySummaryEmailPost {
 }
 
 function PostRow({ post }: { post: WeeklySummaryEmailPost }) {
-  const label = `${post.title} — ${platformLabel(post.platform)}`
   return (
-    <Text style={{ margin: "0 0 8px", fontSize: "14px", lineHeight: "1.5", color: "#454552" }}>
+    <Text style={{ margin: "0 0 10px", fontSize: "15px", lineHeight: "1.5", color: EMAIL_COLORS.body }}>
       {post.publishedUrl ? (
-        <Link href={post.publishedUrl} style={{ color: "#7C3AED", textDecoration: "none" }}>
-          {label}
+        <Link href={post.publishedUrl} style={{ ...emailStyles.link, fontWeight: 600 }}>
+          {post.title}
         </Link>
       ) : (
-        label
+        <strong style={emailStyles.strong}>{post.title}</strong>
       )}
+      <span style={{ color: EMAIL_COLORS.muted }}> · {platformLabel(post.platform)}</span>
     </Text>
   )
 }
@@ -36,11 +37,7 @@ function PostRow({ post }: { post: WeeklySummaryEmailPost }) {
 function MoreLine({ shown, total }: { shown: number; total: number }) {
   const remaining = total - shown
   if (remaining <= 0) return null
-  return (
-    <Text style={{ margin: "0 0 8px", fontSize: "13px", color: "#8a8a99" }}>
-      +{remaining} more
-    </Text>
-  )
+  return <Text style={{ margin: "0 0 10px", fontSize: "13px", color: EMAIL_COLORS.muted }}>+{remaining} more</Text>
 }
 
 // Subject: "Your CarouseLabs week in review"
@@ -71,20 +68,15 @@ export function WeeklySummaryEmail({
   const planLabel = plan === "GROWTH" ? "Growth" : plan === "PRO" ? "Pro" : "Free"
 
   return (
-    <EmailLayout preview="Your week in review — what published, what's coming up, and more.">
-      <Heading style={emailStyles.heading}>Your week in review</Heading>
-      <Text style={emailStyles.text}>Hi {greeting}, here&apos;s what happened on CarouseLabs this week.</Text>
+    <EmailLayout hero="weekly" preview="What went out, what's coming up, and where your plan stands.">
+      <Text style={emailStyles.text}>Hi {greeting},</Text>
+      <Text style={emailStyles.text}>Here&apos;s your week on CarouseLabs: what went out, what&apos;s coming up, and where your plan stands.</Text>
 
-      <Text style={{ margin: "20px 0 8px", fontSize: "13px", fontWeight: 700, color: "#16161d" }}>
-        This Week
-      </Text>
+      <Text style={emailStyles.label}>Published this week</Text>
       {publishedCount === 0 ? (
-        <Text style={emailStyles.muted}>No posts published this week.</Text>
+        <Text style={{ ...emailStyles.text, color: EMAIL_COLORS.muted }}>Nothing went out this week.</Text>
       ) : (
         <>
-          <Text style={emailStyles.text}>
-            {publishedCount} post{publishedCount === 1 ? "" : "s"} published:
-          </Text>
           {publishedPosts.map((p) => (
             <PostRow key={p.id} post={p} />
           ))}
@@ -92,16 +84,11 @@ export function WeeklySummaryEmail({
         </>
       )}
 
-      <Text style={{ margin: "20px 0 8px", fontSize: "13px", fontWeight: 700, color: "#16161d" }}>
-        Coming Up
-      </Text>
+      <Text style={emailStyles.label}>Coming up in the next 7 days</Text>
       {upcomingCount === 0 ? (
-        <Text style={emailStyles.muted}>Nothing scheduled for the next 7 days yet.</Text>
+        <Text style={{ ...emailStyles.text, color: EMAIL_COLORS.muted }}>Nothing scheduled yet. A good week to plan a few posts.</Text>
       ) : (
         <>
-          <Text style={emailStyles.text}>
-            {upcomingCount} post{upcomingCount === 1 ? "" : "s"} scheduled for the next 7 days:
-          </Text>
           {upcomingPosts.map((p) => (
             <PostRow key={p.id} post={p} />
           ))}
@@ -109,32 +96,19 @@ export function WeeklySummaryEmail({
         </>
       )}
 
-      {hasReferralActivity && (
-        <>
-          <Text style={{ margin: "20px 0 8px", fontSize: "13px", fontWeight: 700, color: "#16161d" }}>
-            Referral Earnings
-          </Text>
-          <Text style={emailStyles.text}>
-            {referralPending > 0 && <>{formatMoney(referralPending)} pending this month</>}
-            {referralPending > 0 && referralPaid > 0 && " · "}
-            {referralPaid > 0 && <>{formatMoney(referralPaid)} paid this month</>}
-          </Text>
-        </>
-      )}
+      <Text style={emailStyles.label}>Your account</Text>
+      <EmailFacts
+        items={[
+          ["Plan", planLabel],
+          ["Credits remaining", creditsRemaining.toLocaleString("en-US")],
+          ...(hasReferralActivity && referralPending > 0 ? [["Referral earnings pending this month", formatMoney(referralPending)] as [string, string]] : []),
+          ...(hasReferralActivity && referralPaid > 0 ? [["Referral earnings paid this month", formatMoney(referralPaid)] as [string, string]] : []),
+        ]}
+      />
 
-      <Text style={{ margin: "20px 0 8px", fontSize: "13px", fontWeight: 700, color: "#16161d" }}>
-        Your Plan
-      </Text>
-      <Text style={emailStyles.text}>
-        {planLabel} plan · {creditsRemaining} credit{creditsRemaining === 1 ? "" : "s"} remaining
-      </Text>
-
-      <div style={{ marginTop: "12px" }}>
-        <EmailButton href={`${APP_URL}/content-hub`}>Open Content Hub</EmailButton>
-      </div>
-
+      <EmailButton href={`${APP_URL}/content-hub`}>Open Content Hub</EmailButton>
       <Text style={emailStyles.muted}>
-        Have a great week! You can turn these off anytime in Settings &gt; Account &gt; Notifications.
+        Have a great week. You can turn these emails off any time in Settings &gt; Account &gt; Notifications.
       </Text>
     </EmailLayout>
   )

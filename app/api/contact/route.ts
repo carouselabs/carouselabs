@@ -3,6 +3,8 @@ import { NextResponse } from "next/server"
 import { Ratelimit } from "@upstash/ratelimit"
 import { Redis } from "@upstash/redis"
 import { Resend } from "resend"
+import { render } from "@react-email/render"
+import { ContactMessageEmail } from "@/emails/ContactMessageEmail"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -41,14 +43,6 @@ async function readContactBody(req: Request): Promise<unknown> {
     clearTimeout(timer)
     void reader.cancel().catch(() => {})
   }
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
 }
 
 export async function POST(req: Request) {
@@ -107,14 +101,8 @@ export async function POST(req: Request) {
       to: SUPPORT_EMAIL,
       replyTo: email,
       subject: `[CarouseLabs Contact] ${subject} from ${name}`,
-      html: `
-        <h2>New contact form submission</h2>
-        <p><strong>Name:</strong> ${escapeHtml(name)}</p>
-        <p><strong>Email:</strong> ${escapeHtml(email)}</p>
-        <p><strong>Subject:</strong> ${escapeHtml(subject)}</p>
-        <p><strong>Message:</strong></p>
-        <p style="white-space:pre-wrap">${escapeHtml(message)}</p>
-      `,
+      // React escapes every value, so the sender's text can't become HTML.
+      html: await render(ContactMessageEmail({ name, email, subject, message })),
     })
 
     if (error) {

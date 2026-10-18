@@ -1,6 +1,6 @@
 import * as React from "react"
-import { Heading, Text } from "@react-email/components"
-import { EMPLOYEE_URL, EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
+import { Text } from "@react-email/components"
+import { EMPLOYEE_URL, EmailButton, EmailFacts, EmailLayout, emailStyles } from "./EmailLayout"
 
 // Subject: "Attendance notice — [date]"
 export function InternAbsentWarningEmail({
@@ -17,21 +17,24 @@ export function InternAbsentWarningEmail({
   attendanceRate: number
 }) {
   return (
-    <EmailLayout preview={`You were marked absent on ${date} — please review your attendance record`}>
-      <Heading style={emailStyles.heading}>Attendance notice</Heading>
+    <EmailLayout audience="intern" hero="attendance" preview={`You were marked absent on ${date}. Here's your attendance so far.`}>
+      <Text style={emailStyles.text}>Hi {name},</Text>
       <Text style={emailStyles.text}>
-        Hi {name}, you were marked absent on {date}.
+        You were marked absent on <strong style={emailStyles.strong}>{date}</strong>.
       </Text>
       <Text style={emailStyles.text}>
-        Please make sure to be present and on time going forward — consistent attendance is an
-        important part of your internship and affects your overall evaluation.
+        Regular attendance is part of how your internship is evaluated, so please be present and on time going forward. If
+        you can&apos;t make it on a given day, let your admin know in advance.
       </Text>
-      <ul style={emailStyles.list}>
-        <li>Days present: {presentDays}</li>
-        <li>Days absent: {absentDays}</li>
-        <li>Attendance rate: {attendanceRate}%</li>
-      </ul>
-      <EmailButton href={EMPLOYEE_URL}>Review Your Record</EmailButton>
+      <EmailFacts
+        items={[
+          ["Days present", presentDays],
+          ["Days absent", absentDays],
+          ["Attendance rate", `${attendanceRate}%`],
+        ]}
+      />
+      <EmailButton href={EMPLOYEE_URL}>Review your record</EmailButton>
+      <Text style={emailStyles.muted}>Think this is a mistake? Message the team from Support in your portal.</Text>
     </EmailLayout>
   )
 }

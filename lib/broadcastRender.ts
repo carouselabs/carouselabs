@@ -3,6 +3,10 @@
 // from both the broadcasts API route and the client-side preview modal.
 // Minimal, dependency-free markdown subset (bold/italic/links/paragraphs) —
 // not a full CommonMark parser, just enough for a quick announcement email.
+// The wrapper matches emails/EmailLayout.tsx (logo, painted hero, serif
+// heading, footer), written as plain table HTML so it renders the same here.
+import { APP_URL, EMAIL_COLORS as C, EMAIL_IMAGES, SANS, SERIF } from "@/emails/theme"
+import { heroAlt } from "@/emails/art"
 
 // ── Dynamic variables ───────────────────────────────────────────────
 // The catalog lives here (not lib/broadcastVariables.ts) specifically so
@@ -50,7 +54,7 @@ export function renderBroadcastBodyHtml(markdown: string): string {
   const withInline = escaped
     // [text](https://url) — only http(s) links are linkified; anything else
     // (javascript:, data:, etc.) is left as plain escaped text.
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" style="color:#7C3AED">$1</a>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, `<a href="$2" style="color:${C.violet}">$1</a>`)
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
 
@@ -61,11 +65,27 @@ export function renderBroadcastBodyHtml(markdown: string): string {
 }
 
 export function renderBroadcastEmailHtml(subject: string, markdown: string): string {
+  const footer = `font-size:12px;line-height:1.6;color:${C.muted};margin:0 0 8px`
+  const footerLink = `color:${C.muted};text-decoration:underline`
   return `
-    <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
-      <div style="font-size:15px;font-weight:700;color:#7C3AED;margin-bottom:24px">CarouseLabs</div>
-      <h1 style="font-size:20px;margin:0 0 16px;color:#0A0A0A">${escapeHtml(subject)}</h1>
-      <div style="font-size:14px;line-height:1.6;color:#333">${renderBroadcastBodyHtml(markdown)}</div>
-    </div>
-  `
+<div style="margin:0;padding:32px 12px;background-color:${C.page};font-family:${SANS}">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;margin:0 auto;background-color:${C.card};border:1px solid ${C.line};border-radius:18px">
+    <tr><td style="padding:24px 32px 20px">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="vertical-align:middle"><a href="${APP_URL}" style="text-decoration:none"><img src="${EMAIL_IMAGES}/logo.png" width="168" height="30" alt="CarouseLabs" style="display:block;border:0"></a></td>
+        <td align="right" style="vertical-align:middle"><a href="${APP_URL}/sign-in" style="border:1px solid ${C.ink};border-radius:999px;padding:7px 15px;font-size:13px;font-weight:600;color:${C.ink};text-decoration:none;white-space:nowrap">Sign in</a></td>
+      </tr></table>
+    </td></tr>
+    <tr><td style="padding:0 32px"><img src="${EMAIL_IMAGES}/hero-broadcast.jpg" width="576" alt="${heroAlt("broadcast")}" style="display:block;width:100%;max-width:576px;height:auto;border-radius:14px;border:0"></td></tr>
+    <tr><td style="padding:32px 40px 30px">
+      <h1 style="margin:0 0 14px;font-family:${SERIF};font-size:28px;font-weight:400;line-height:1.2;letter-spacing:-0.01em;color:${C.ink}">${escapeHtml(subject)}</h1>
+      <div style="font-size:16px;line-height:1.65;color:${C.body}">${renderBroadcastBodyHtml(markdown)}</div>
+    </td></tr>
+  </table>
+  <div style="max-width:640px;margin:0 auto;padding:24px 32px 8px;text-align:center">
+    <p style="${footer}">CarouseLabs — your AI social media content studio.</p>
+    <p style="${footer}"><a href="${APP_URL}" style="${footerLink}">${APP_URL.replace(/^https?:\/\//, "")}</a> &middot; <a href="${APP_URL}/privacy" style="${footerLink}">Privacy</a> &middot; <a href="${APP_URL}/terms" style="${footerLink}">Terms</a></p>
+    <p style="${footer};margin:0">&copy; ${new Date().getFullYear()} CarouseLabs</p>
+  </div>
+</div>`
 }

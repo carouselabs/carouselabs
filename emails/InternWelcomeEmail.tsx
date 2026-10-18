@@ -1,8 +1,8 @@
 import * as React from "react"
-import { Heading, Text } from "@react-email/components"
-import { EmailButton, EmailLayout, emailStyles } from "./EmailLayout"
+import { Text } from "@react-email/components"
+import { EmailButton, EmailFacts, EmailLayout, EmailSteps, emailStyles } from "./EmailLayout"
 
-// Subject: "Welcome to CarouseLabs, [name]! 🎉"
+// Subject: "Welcome to CarouseLabs, [name]"
 export function InternWelcomeEmail({
   name,
   role,
@@ -19,26 +19,32 @@ export function InternWelcomeEmail({
   email: string
 }) {
   return (
-    <EmailLayout preview={`Welcome to CarouseLabs, ${name}! Here's how to get started.`}>
-      <Heading style={emailStyles.heading}>Welcome to CarouseLabs, {name}!</Heading>
+    <EmailLayout audience="intern" hero="intern-welcome" preview={`Welcome to CarouseLabs, ${name}. Here's how your first days work.`}>
+      <Text style={emailStyles.text}>Hi {name},</Text>
       <Text style={emailStyles.text}>
-        We&apos;re excited to have you on the team{role ? ` as our ${role}` : ""}. Here&apos;s what you need
-        to know to get started:
+        Welcome to CarouseLabs. We&apos;re glad to have you on the team{role ? ` as our ${role}` : ""}, and we&apos;re looking
+        forward to what you&apos;ll make here.
       </Text>
-      <ul style={emailStyles.list}>
-        {role && <li>Your role: {role}</li>}
-        <li>Start date: {joinDate}</li>
-        <li>
-          You have {leaveAllowance} leave day{leaveAllowance === 1 ? "" : "s"} for your internship
-        </li>
-      </ul>
-      <Text style={emailStyles.text}>
-        Your admin will assign daily tasks. Check your portal daily to see your points and log your
-        attendance.
-      </Text>
-      <EmailButton href={loginUrl}>Sign in to your intern portal</EmailButton>
+      <EmailFacts
+        items={[
+          ...(role ? [["Your role", role] as [string, string]] : []),
+          ["Start date", joinDate],
+          ["Leave for your internship", `${leaveAllowance} day${leaveAllowance === 1 ? "" : "s"}`],
+        ]}
+      />
+      <Text style={emailStyles.label}>How it works</Text>
+      <EmailSteps
+        steps={[
+          <>
+            Sign in to your intern portal with <strong style={emailStyles.strong}>{email}</strong>.
+          </>,
+          "Check the portal each day. Your admin assigns your tasks there.",
+          "Log your attendance and watch your points grow as you complete tasks.",
+        ]}
+      />
+      <EmailButton href={loginUrl}>Open your intern portal</EmailButton>
       <Text style={emailStyles.muted}>
-        Sign in with <strong>{email}</strong> — this must be the exact email address to access your portal.
+        Sign in with exactly {email}. Other addresses won&apos;t have access to your portal.
       </Text>
     </EmailLayout>
   )

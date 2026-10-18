@@ -113,7 +113,8 @@ export function EngageAccessGrantedEmail({
   storeUrls,
   email,
 }: {
-  // Formatted end date, or null for lifetime access.
+  // Formatted end date, or null for lifetime access. The email never shows
+  // the date; it only says "for life" when there isn't one.
   until: string | null
   platform?: GrantedExtensions
   storeUrls: { linkedin: string | null; x: string | null }
@@ -150,13 +151,12 @@ export function EngageAccessGrantedEmail({
       <Section style={{ textAlign: "center", padding: "0 8px 12px" }}>
         <Text style={{ ...emailStyles.text, margin: "0 0 20px", fontSize: "17px" }}>
           We&apos;re giving a small group of creators free, unlimited access to {copy.product}. Your profile qualified, so your
-          access is already on: free and unlimited{" "}
-          {until ? (
+          access is already on
+          {/* A grant's end date is never shown; only a lifetime grant says so. */}
+          {until === null && (
             <>
-              until <strong style={emailStyles.strong}>{until}</strong>
+              , free and unlimited <strong style={emailStyles.strong}>for life</strong>
             </>
-          ) : (
-            <strong style={emailStyles.strong}>for life</strong>
           )}
           .
         </Text>

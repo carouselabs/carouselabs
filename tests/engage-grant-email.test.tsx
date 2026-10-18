@@ -30,8 +30,11 @@ describe("Engage access granted email", () => {
     for (const feature of ["Comments that sound like you", "Connection notes that get accepted", "An assistant for your messages", "safe for your account"]) {
       expect(out).toContain(feature)
     }
-    expect(out).toContain("until <strong")
-    expect(out).toContain("10 Nov 2026")
+    // The grant's end date is never shown, and a dated grant isn't "for life".
+    expect(out).not.toContain("10 Nov 2026")
+    expect(out).not.toContain("until")
+    expect(out).not.toContain("for life")
+    expect(out).toContain("access is already on")
   })
 
   it("a grant for both links both, as two separate extensions", () => {

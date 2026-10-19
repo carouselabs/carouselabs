@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import { startNavigation } from "./NavigationProgress"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { CornerDownLeft, Search } from "lucide-react"
 
@@ -43,6 +44,7 @@ export function GoToPalette({
 
   const go = (href: string) => {
     setOpen(false)
+    startNavigation(href)
     router.push(href)
   }
 

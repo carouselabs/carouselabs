@@ -5,7 +5,7 @@
 // a dropdown that switches between them (LinkedIn's at /extension/*, X's at
 // /extension/x/*), staying on the same tab. The tabs themselves live in the
 // app header's second row (components/shell/nav.ts subNavItems).
-import Link from "next/link"
+import { NavLink } from "@/components/shell/NavigationProgress"
 import { usePathname } from "next/navigation"
 import { useEffect, useId, useRef, useState } from "react"
 import { Check, ChevronDown } from "lucide-react"
@@ -78,7 +78,7 @@ function ExtensionSwitcher({ platform, tabPath }: { platform: EngagePlatform; ta
               const current = p === platform
               return (
                 <li key={p}>
-                  <Link
+                  <NavLink
                     href={`${ext.base}${tabPath}`}
                     aria-current={current ? "page" : undefined}
                     onClick={() => setOpen(false)}
@@ -93,7 +93,7 @@ function ExtensionSwitcher({ platform, tabPath }: { platform: EngagePlatform; ta
                       <span className="text-caption text-muted-foreground">{ext.summary}</span>
                     </span>
                     {current && <Check className="size-4 shrink-0 text-brand" aria-hidden />}
-                  </Link>
+                  </NavLink>
                 </li>
               )
             })}

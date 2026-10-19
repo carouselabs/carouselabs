@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useClerk } from "@clerk/nextjs"
 import {
@@ -28,6 +27,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuLinkItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -38,6 +38,7 @@ import { useIdeaSessionStore } from "@/lib/store/ideaSessionStore"
 import { useCreditStore } from "@/lib/store/creditStore"
 import { ENGAGE_EXTENSIONS, ENGAGE_PLATFORMS } from "@/components/extension/engageExtensions"
 import { GoToPalette } from "./GoToPalette"
+import { NavLink, NavigationProgress } from "./NavigationProgress"
 import { PlanBadge } from "./PlanBadge"
 import { GROUPS, SETTINGS_ITEMS, groupOf, isActiveItem, subNavItems, type GroupId, type NavItem } from "./nav"
 
@@ -105,15 +106,16 @@ function useSignOut() {
 
 function accountItems(isEmployeeSubdomain: boolean) {
   return [
-    { label: "View Profile", href: "/settings/profile", icon: <User aria-hidden /> },
-    { label: "Billing", href: "/settings/billing", icon: <CreditCard aria-hidden /> },
-    // The full settings area doesn't apply to an intern-only account.
-    ...(isEmployeeSubdomain ? [] : [{ label: "Settings", href: "/settings", icon: <Settings aria-hidden /> }]),
+    { id: "profile", label: "View Profile", href: "/settings/profile", icon: <User aria-hidden /> },
+    { id: "billing", label: "Billing", href: "/settings/billing", icon: <CreditCard aria-hidden /> },
+    // The full settings area doesn't apply to an intern-only account. It goes
+    // straight to the first tab: /settings only redirects there, which costs
+    // a second round trip.
+    ...(isEmployeeSubdomain ? [] : [{ id: "settings", label: "Settings", href: "/settings/profile", icon: <Settings aria-hidden /> }]),
   ]
 }
 
 function AccountMenu({ user, isEmployeeSubdomain }: { user: CurrentUser | null; isEmployeeSubdomain: boolean }) {
-  const router = useRouter()
   const signOut = useSignOut()
   if (!user) return <span className="size-8 shrink-0 animate-pulse rounded-full bg-skeleton" aria-hidden />
   const displayName = user.name ?? user.email.split("@")[0]
@@ -144,10 +146,10 @@ function AccountMenu({ user, isEmployeeSubdomain }: { user: CurrentUser | null; 
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         {accountItems(isEmployeeSubdomain).map((item) => (
-          <DropdownMenuItem key={item.href} onClick={() => router.push(item.href)} className="[&_svg]:text-muted-foreground">
+          <DropdownMenuLinkItem key={item.id} render={<NavLink href={item.href} />} className="[&_svg]:text-muted-foreground">
             {item.icon}
             {item.label}
-          </DropdownMenuItem>
+          </DropdownMenuLinkItem>
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={signOut}>
@@ -162,7 +164,6 @@ function AccountMenu({ user, isEmployeeSubdomain }: { user: CurrentUser | null; 
 /* Desktop pieces ──────────────────────────────────────────────────── */
 
 function NewPostMenu() {
-  const router = useRouter()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -174,9 +175,9 @@ function NewPostMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={8} className="w-56">
         {GROUPS[0].items.slice(0, 2).map((item) => (
-          <DropdownMenuItem key={item.href} onClick={() => router.push(item.href)}>
+          <DropdownMenuLinkItem key={item.href} render={<NavLink href={item.href} />}>
             {item.label}
-          </DropdownMenuItem>
+          </DropdownMenuLinkItem>
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -215,14 +216,14 @@ function SubNav({ items, pathname }: { items: NavItem[]; pathname: string }) {
   return (
     <nav aria-label="Section" className="no-scrollbar -mb-px flex min-w-0 gap-5 overflow-x-auto">
       {items.map((item) => (
-        <Link
+        <NavLink
           key={item.href}
           href={item.href}
           aria-current={isActiveItem(item.href, pathname) ? "page" : undefined}
           className="relative flex h-11 shrink-0 items-center text-label whitespace-nowrap text-muted-foreground transition-colors duration-(--motion-fast) hover:text-foreground aria-[current=page]:font-medium aria-[current=page]:text-foreground aria-[current=page]:after:absolute aria-[current=page]:after:inset-x-0 aria-[current=page]:after:bottom-0 aria-[current=page]:after:h-0.5 aria-[current=page]:after:rounded-full aria-[current=page]:after:bg-foreground"
         >
           {item.label}
-        </Link>
+        </NavLink>
       ))}
     </nav>
   )
@@ -263,10 +264,10 @@ function MobileTabBar({
           const cls =
             "flex h-14 flex-col items-center justify-center gap-1 text-[11px] font-medium text-muted-foreground aria-[current=true]:text-foreground [&_svg]:size-5"
           return t.href ? (
-            <Link key={t.id} href={t.href} aria-current={active === t.id ? "true" : undefined} className={cls}>
+            <NavLink key={t.id} href={t.href} aria-current={active === t.id ? "true" : undefined} className={cls}>
               {t.icon}
               {t.label}
-            </Link>
+            </NavLink>
           ) : (
             <button
               key={t.id}
@@ -299,14 +300,14 @@ function MobileTabBar({
           <ul className="flex flex-col">
             {sheet?.items?.map((item) => (
               <li key={item.href} className="border-b border-border last:border-b-0">
-                <Link
+                <NavLink
                   href={item.href}
                   onClick={close}
                   aria-current={pathname === item.href ? "page" : undefined}
                   className="flex h-12 items-center text-body aria-[current=page]:font-semibold"
                 >
                   {item.label}
-                </Link>
+                </NavLink>
               </li>
             ))}
           </ul>
@@ -382,7 +383,7 @@ export function AppChrome({
 
   const youItems = [
     ...accountItems(isEmployeeSubdomain)
-      .filter((i) => i.href !== "/settings")
+      .filter((i) => i.id !== "settings")
       .map(({ label, href }) => ({ label, href })),
     ...(isEmployeeSubdomain ? [] : SETTINGS_ITEMS.filter((i) => i.href !== "/settings/profile" && i.href !== "/settings/billing")),
     ...(isAdmin ? [{ label: "Admin", href: "/admin" }] : []),
@@ -405,6 +406,7 @@ export function AppChrome({
 
   return (
     <>
+      <NavigationProgress />
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-(--z-toast) focus:rounded-control-sm focus:bg-surface-raised focus:px-3 focus:py-2 focus:text-label focus:shadow-popover"
@@ -413,24 +415,24 @@ export function AppChrome({
       </a>
       <header className="relative z-(--z-header) shrink-0 border-b border-border bg-background/90 backdrop-blur-sm">
         <div className="flex h-14 items-center gap-3 px-6 md:gap-4 md:px-10 lg:gap-6">
-          <Link href={isEmployeeSubdomain ? "/intern" : "/dashboard"} className="flex shrink-0 items-center gap-2 rounded-control-sm">
+          <NavLink href={isEmployeeSubdomain ? "/intern" : "/dashboard"} className="flex shrink-0 items-center gap-2 rounded-control-sm">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/icon.png" alt="CarouseLabs" className="size-7 rounded-lg object-cover" />
             <span className="hidden text-body font-semibold tracking-[-0.02em] lg:inline" aria-hidden>
               CarouseLabs
             </span>
-          </Link>
+          </NavLink>
 
           <nav aria-label="Main" className="hidden items-center gap-1 md:flex">
             {primary.map((g) => (
-              <Link
+              <NavLink
                 key={g.id}
                 href={g.href}
                 aria-current={g.id === activeGroupId ? "true" : undefined}
                 className="inline-flex h-9 items-center rounded-control-sm px-3 text-label font-medium text-muted-foreground transition-colors duration-(--motion-fast) hover:bg-surface-muted hover:text-foreground aria-[current=true]:bg-surface-muted aria-[current=true]:text-foreground"
               >
                 {g.label}
-              </Link>
+              </NavLink>
             ))}
           </nav>
 
@@ -440,13 +442,13 @@ export function AppChrome({
                 employee.carouselabs.com "/admin" would just bounce back here
                 (see proxy.ts), so hide it there entirely. */}
             {isAdmin && (
-              <Link
+              <NavLink
                 href="/admin"
                 className="hidden h-7 items-center gap-1.5 rounded-control-sm bg-foreground px-2.5 text-caption font-semibold text-background transition-opacity duration-(--motion-fast) hover:opacity-85 md:inline-flex"
               >
                 <ConsoleMark />
                 Admin
-              </Link>
+              </NavLink>
             )}
             {!isEmployeeSubdomain && user && <Credits user={user} className="min-w-0 truncate md:hidden lg:inline" />}
             {isDashboard && (

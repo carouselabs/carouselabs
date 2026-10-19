@@ -1,9 +1,14 @@
+import { cache } from "react"
 import { auth, currentUser } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 import { db } from "@/lib/db"
 import { applyPendingPrefill } from "@/lib/profile/pendingPrefill"
 
-export async function getCurrentUser() {
+// One lookup per page render: the (app) layout and the page both ask who the
+// user is, and React's cache() lets the second call reuse the first answer
+// instead of querying the database again. It only remembers within a single
+// server render; API routes, which run outside one, look up fresh each call.
+export const getCurrentUser = cache(async function getCurrentUser() {
   const { userId } = await auth()
   if (!userId) return null
 
@@ -100,7 +105,7 @@ export async function getCurrentUser() {
     include: { profile: true, subscription: true },
   })
   return refreshed && !refreshed.deletedAt && !refreshed.suspendedAt ? refreshed : null
-}
+})
 
 export async function requireUser() {
   const user = await getCurrentUser()

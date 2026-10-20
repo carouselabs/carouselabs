@@ -4,7 +4,8 @@
 // table sourced from audit logs (action=SEND_BROADCAST).
 import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { Send, Eye, Mail, CalendarClock, Braces, UserSearch } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Send, Eye, Mail, CalendarClock, Braces, UserSearch, ListChecks } from "lucide-react"
 import {
   AdminButton,
   AdminCard,
@@ -20,9 +21,11 @@ import { renderBroadcastEmailHtml, applyVariables, AVAILABLE_VARIABLES, type Var
 import { useToast } from "@/components/admin/Toast"
 import { TemplatePicker } from "@/components/admin/TemplatePicker"
 import { SEGMENT_TYPES } from "@/lib/segments"
+import { CAMPAIGN_DAILY_LIMIT } from "@/lib/campaignRules"
 
 type Audience = (typeof SEGMENT_TYPES)[number]["value"] | "custom"
-type SendMode = "now" | "schedule"
+// "campaign": made into a campaign and sent from its own page in batches you pick.
+type SendMode = "now" | "schedule" | "campaign"
 
 // datetime-local's `min` — a few minutes out, so a schedule submitted right
 // at page-load doesn't immediately fail the "must be in the future" check.
@@ -48,6 +51,7 @@ function parseCustomList(raw: string): string[] {
 
 export function BroadcastComposer() {
   const { toast } = useToast()
+  const router = useRouter()
   const [audience, setAudience] = useState<Audience>("all")
   const [segmentValue, setSegmentValue] = useState("")
   const [customList, setCustomList] = useState("")
@@ -102,7 +106,7 @@ export function BroadcastComposer() {
     subject.trim().length > 0 && body.trim().length > 0 && (audience !== "custom" || recipients.length > 0)
   // The picker's `min` (see minScheduleValue) already steers away from past
   // times in the UI; the API route is the authoritative future-time check.
-  const valid = contentValid && (sendMode === "now" || scheduledFor.trim().length > 0)
+  const valid = contentValid && (sendMode !== "schedule" || scheduledFor.trim().length > 0)
 
   const sendRequest = (extra: Record<string, unknown>) =>
     fetch("/api/admin/broadcasts", {
@@ -132,6 +136,22 @@ export function BroadcastComposer() {
         ...extra,
       }),
     })
+
+  const campaignRequest = (extra: Record<string, unknown>) =>
+    fetch("/api/admin/campaigns", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subject,
+        body,
+        recipients,
+        recipientValue: selectedSegment?.needsValue ? segmentValue.trim() || undefined : undefined,
+        ...extra,
+      }),
+    })
+
+  const requestFor = (extra: Record<string, unknown>) =>
+    sendMode === "now" ? sendRequest(extra) : sendMode === "schedule" ? scheduleRequest(extra) : campaignRequest(extra)
 
   function insertVariable(key: string) {
     const token = `{{${key}}}`
@@ -211,7 +231,7 @@ export function BroadcastComposer() {
     }
     setResolvingRecipients(true)
     try {
-      const res = await (sendMode === "now" ? sendRequest({ dryRun: true }) : scheduleRequest({ dryRun: true }))
+      const res = await requestFor({ dryRun: true })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error)
       if (data.count === 0) {
@@ -229,9 +249,15 @@ export function BroadcastComposer() {
   const sendBroadcast = async () => {
     setSending(true)
     try {
-      const res = await (sendMode === "now" ? sendRequest({}) : scheduleRequest({}))
+      const res = await requestFor({})
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error)
+      if (sendMode === "campaign") {
+        // Nothing is sent yet: the campaign page is where batches go out.
+        toast(`Campaign created for ${data.total} people. Pick who to send to first.`, "success")
+        router.push(`/admin/broadcasts/campaigns/${data.id}`)
+        return
+      }
       // Some not sent: say why (Resend's reason, e.g. its daily quota).
       toast(
         sendMode === "now"
@@ -255,7 +281,14 @@ export function BroadcastComposer() {
   return (
     // Compose on the left; what was sent beside it on wide screens.
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start">
-      <div className="flex justify-end xl:col-span-2">
+      <div className="flex justify-end gap-4 xl:col-span-2">
+        <Link
+          href="/admin/broadcasts/campaigns"
+          className="inline-flex items-center gap-1.5 text-caption font-medium text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ListChecks className="h-3.5 w-3.5" />
+          Campaigns
+        </Link>
         <Link
           href="/admin/scheduled-emails"
           className="inline-flex items-center gap-1.5 text-caption font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -269,11 +302,12 @@ export function BroadcastComposer() {
         <div className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-caption font-semibold text-muted-foreground">When</label>
-            <div className="flex w-fit rounded-control-sm border border-border bg-background p-1">
+            <div className="flex w-fit flex-wrap rounded-control-sm border border-border bg-background p-1">
               {(
                 [
                   { key: "now", label: "Send Now" },
                   { key: "schedule", label: "Schedule for Later" },
+                  { key: "campaign", label: "Campaign: send in batches" },
                 ] as const
               ).map((opt) => (
                 <button
@@ -288,6 +322,12 @@ export function BroadcastComposer() {
                 </button>
               ))}
             </div>
+            {sendMode === "campaign" && (
+              <p className="text-caption text-muted-foreground/80">
+                Nothing is sent yet. You get a list of everyone it&apos;s for, tick who to send to (or the next 10), and come back
+                for the rest. Nobody gets it twice.
+              </p>
+            )}
             {sendMode === "schedule" && (
               <AdminInput
                 type="datetime-local"
@@ -462,11 +502,21 @@ export function BroadcastComposer() {
               loading={resolvingRecipients}
               className="ml-auto"
             >
-              {sendMode === "now" ? <Send className="h-3.5 w-3.5" /> : <CalendarClock className="h-3.5 w-3.5" />}
-              {sendMode === "now" ? "Send Broadcast" : "Schedule Broadcast"}
+              {sendMode === "now" ? (
+                <Send className="h-3.5 w-3.5" />
+              ) : sendMode === "schedule" ? (
+                <CalendarClock className="h-3.5 w-3.5" />
+              ) : (
+                <ListChecks className="h-3.5 w-3.5" />
+              )}
+              {sendMode === "now" ? "Send Broadcast" : sendMode === "schedule" ? "Schedule Broadcast" : "Create Campaign"}
             </AdminButton>
           </div>
-          <p className="text-caption text-muted-foreground/80">Limited to one real broadcast per hour. Test sends don&apos;t count.</p>
+          <p className="text-caption text-muted-foreground/80">
+            {sendMode === "campaign"
+              ? `Campaigns aren't limited per hour: up to ${CAMPAIGN_DAILY_LIMIT} emails a day go out, in batches you pick.`
+              : "Limited to one real broadcast per hour. Test sends don't count."}
+          </p>
         </div>
       </AdminCard>
 
@@ -528,15 +578,19 @@ export function BroadcastComposer() {
         open={confirmCount !== null}
         onClose={() => setConfirmCount(null)}
         loading={sending}
-        title={sendMode === "now" ? "Send this broadcast?" : "Schedule this broadcast?"}
+        title={
+          sendMode === "now" ? "Send this broadcast?" : sendMode === "schedule" ? "Schedule this broadcast?" : "Create this campaign?"
+        }
         body={
           sendMode === "now"
             ? `This will email ${confirmCount ?? 0} recipient${confirmCount === 1 ? "" : "s"}. This can't be undone.`
-            : `This will email ${confirmCount ?? 0} recipient${confirmCount === 1 ? "" : "s"} on ${
-                scheduledFor ? new Date(scheduledFor).toLocaleString() : ""
-              }.`
+            : sendMode === "schedule"
+              ? `This will email ${confirmCount ?? 0} recipient${confirmCount === 1 ? "" : "s"} on ${
+                  scheduledFor ? new Date(scheduledFor).toLocaleString() : ""
+                }.`
+              : `A campaign for ${confirmCount ?? 0} ${confirmCount === 1 ? "person" : "people"}. Nothing is sent yet: you'll pick who gets it, a batch at a time.`
         }
-        confirmLabel={sendMode === "now" ? `Send to ${confirmCount ?? 0}` : "Schedule"}
+        confirmLabel={sendMode === "now" ? `Send to ${confirmCount ?? 0}` : sendMode === "schedule" ? "Schedule" : "Create campaign"}
         onConfirm={sendBroadcast}
       />
     </div>

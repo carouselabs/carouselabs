@@ -1330,6 +1330,54 @@ model ScheduledEmail {
   @@index([status, scheduledFor])
 }
 
+// An email sent to a fixed list of people in batches the admin picks
+// (Admin → Broadcasts → Campaigns): tick some, send, they're marked sent,
+// carry on later. The list is taken when the campaign is created, the email
+// never changes once made, and each person gets it at most once
+// (lib/campaigns.ts). SQL: scripts/email-campaigns.sql.
+model EmailCampaign {
+  id            String   @id @default(cuid())
+  subject       String
+  body          String   @db.Text
+  // Where the list came from, for display: a lib/segments.ts value or "custom".
+  audience      String
+  audienceValue String?
+  // Set by the AI email writer: its painted picture, stickers and layout.
+  // Null for an email written by hand (rendered like a broadcast).
+  design        Json?
+  status        String   @default("active") // "active" | "archived"
+  createdBy     String // admin email
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  recipients    EmailCampaignRecipient[]
+
+  @@index([createdAt])
+}
+
+model EmailCampaignRecipient {
+  id         String        @id @default(cuid())
+  campaignId String
+  campaign   EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  // Null for a typed address with no CarouseLabs account (sent unpersonalized).
+  userId     String?
+  email      String
+  name       String?
+  status     String        @default("pending") // "pending" | "sending" | "sent" | "failed"
+  sentAt     DateTime?
+  // Why it wasn't sent (Resend's reason), shown beside the person.
+  error      String?
+  // The send (one click of Send) that took this person: claims them so two
+  // clicks can't both send to them, and groups who went out together.
+  batchId    String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@unique([campaignId, email])
+  @@index([campaignId, status])
+  // The daily allowance counts what campaigns sent in the last 24 hours.
+  @@index([status, sentAt])
+}
+
 // ── Referral program ──────────────────────────────────────────────
 // One row per successfully-attributed signup — created once in the Clerk
 // user.created webhook (see lib/referral.ts + app/api/webhooks/clerk) after

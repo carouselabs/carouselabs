@@ -20,6 +20,8 @@ import { SettingsForm } from "@/components/admin/SettingsForm"
 import { PrefillUserForm } from "@/components/admin/PrefillUserForm"
 import type { OverviewStats } from "@/lib/adminStats"
 import { PHASE_5B_PAGES } from "./phase5b"
+import { CampaignsList } from "@/components/admin/CampaignsList"
+import { CampaignView } from "@/components/admin/CampaignView"
 
 // Development-only: the admin pages in the real admin frame (dark theme,
 // sidebar), with example data, without signing in. Pages that load their own
@@ -32,6 +34,7 @@ import { PHASE_5B_PAGES } from "./phase5b"
 //   /design-preview/admin/[subscriptions|posts|credits|referrals|tasks|analytics|audit-logs|settings|prefill-user]
 //   Phase 5b: engage[/users[/eu1]|access|controls|ai|errors|health|sessions|audit], interns[/i1[/checklist]|broadcast],
 //   broadcasts, sequences[/new|/q1], scheduled-emails
+//   Campaigns: broadcasts/campaigns[/c1]
 
 // Example "now", read once when the module loads.
 const NOW = new Date()
@@ -148,6 +151,8 @@ const PAGES: Record<string, () => ReactNode> = {
   settings: () => <SettingsForm />,
   "prefill-user": () => <PrefillUserForm />,
   ...PHASE_5B_PAGES,
+  "broadcasts/campaigns": () => <CampaignsList />,
+  "broadcasts/campaigns/c1": () => <CampaignView id="c1" />,
 }
 
 export default async function AdminPreview({ params }: { params: Promise<{ path?: string[] }> }) {

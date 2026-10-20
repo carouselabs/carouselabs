@@ -32,6 +32,10 @@ export const SEGMENT_TYPES = [
   // Signed in to that extension or generated with it (lib/engage/audience.ts).
   { value: "engage_linkedin", label: "CarouseLabs Engage for LinkedIn users", needsValue: false },
   { value: "engage_x", label: "CarouseLabs Engage for X users", needsValue: false },
+  // Signed in to that extension but made at most one generation with it
+  // (lib/engage/audience.ts lowUseEngageUsers).
+  { value: "engage_linkedin_low", label: "Engage for LinkedIn: installed, used once or never", needsValue: false },
+  { value: "engage_x_low", label: "Engage for X: installed, used once or never", needsValue: false },
 ] as const
 
 export type SegmentType = (typeof SEGMENT_TYPES)[number]["value"]

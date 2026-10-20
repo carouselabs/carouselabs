@@ -4,7 +4,7 @@
 // server-only imports so the client-side preview modal can use it too.
 import { db } from "@/lib/db"
 import { availableCredits } from "@/lib/credits"
-import { ENGAGE_SEGMENTS, usesEngageWhere } from "@/lib/engage/audience"
+import { ENGAGE_LOW_USE_SEGMENTS, ENGAGE_SEGMENTS, lowUseEngageUsers, usesEngageWhere } from "@/lib/engage/audience"
 import type { SegmentType } from "@/lib/segments"
 import type { Resend } from "resend"
 import { applyVariables, renderBroadcastEmailHtml } from "@/lib/broadcastRender"
@@ -91,6 +91,11 @@ export async function resolveRecipients(
   }
 
   // Users of one Engage extension (LinkedIn or X).
+  const lowUsePlatform = ENGAGE_LOW_USE_SEGMENTS[recipients]
+  if (lowUsePlatform) {
+    return (await lowUseEngageUsers(lowUsePlatform)).map((u) => ({ userId: u.id, email: u.email }))
+  }
+
   const engagePlatform = ENGAGE_SEGMENTS[recipients]
   if (engagePlatform) {
     const users = await db.user.findMany({

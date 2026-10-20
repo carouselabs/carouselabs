@@ -35,7 +35,7 @@ import { EmailWriter } from "@/components/admin/EmailWriter"
 //   /design-preview/admin/[subscriptions|posts|credits|referrals|tasks|analytics|audit-logs|settings|prefill-user]
 //   Phase 5b: engage[/users[/eu1]|access|controls|ai|errors|health|sessions|audit], interns[/i1[/checklist]|broadcast],
 //   broadcasts, sequences[/new|/q1], scheduled-emails
-//   Campaigns: broadcasts/campaigns[/c1], broadcasts/writer
+//   Campaigns: broadcasts/campaigns[/c1], broadcasts/writer, users/u1/email (personal email)
 
 // Example "now", read once when the module loads.
 const NOW = new Date()
@@ -155,6 +155,9 @@ const PAGES: Record<string, () => ReactNode> = {
   "broadcasts/campaigns": () => <CampaignsList />,
   "broadcasts/campaigns/c1": () => <CampaignView id="c1" />,
   "broadcasts/writer": () => <EmailWriter />,
+  "users/u1/email": () => (
+    <EmailWriter recipient={{ id: "u1", email: "priya@example.com", name: "Priya Sharma", firstName: "Priya" }} />
+  ),
 }
 
 export default async function AdminPreview({ params }: { params: Promise<{ path?: string[] }> }) {

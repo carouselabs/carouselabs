@@ -5,7 +5,8 @@
 // and confirms anything that takes access away.
 import { useState, type ReactNode } from "react"
 import Link from "next/link"
-import { ArrowLeft, Copy, Gift, LogOut, PauseCircle, PlayCircle, RotateCcw, SlidersHorizontal, X } from "lucide-react"
+import { ArrowLeft, Copy, Gift, LogOut, PauseCircle, PlayCircle, RotateCcw, SlidersHorizontal, Sparkles, X } from "lucide-react"
+import { buttonVariants } from "@/components/ui/button"
 import { AdminLineChart } from "@/components/admin/charts"
 import { AdminButton, AdminInput, AdminSelect, Modal, fmtDate, fmtDateTime } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
@@ -211,6 +212,14 @@ export function EngageUserDetail({ userId }: { userId: string }) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {/* A personal email to just them, written with AI (/admin/users/[id]/email). */}
+          <Link
+            href={`/admin/users/${user.id}/email`}
+            className={buttonVariants({ variant: "outline", size: "sm", className: "border-border bg-surface-muted hover:bg-surface-raised" })}
+          >
+            <Sparkles className="h-3.5 w-3.5" aria-hidden />
+            Send email with AI
+          </Link>
           <AdminButton onClick={() => setDialog("grant")}>
             <Gift className="h-3.5 w-3.5" aria-hidden />
             Grant free access

@@ -1,6 +1,8 @@
 "use client"
 
-// /admin/broadcasts/writer — the AI email writer. Describe the email in plain
+// /admin/broadcasts/writer — the AI email writer. Also opened from a
+// person's admin profile (/admin/users/[id]/email) to write and send a
+// personal email to just them: the writer then knows their account facts. Describe the email in plain
 // words; the writer drafts it (subject, preview line, body) and proposes the
 // picture and stickers. Nothing is painted until you approve the art (edit
 // the ideas first if you like); every picture is painted new for this email.
@@ -10,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Brush, ListChecks, Mail, RotateCcw, Send, Sparkles } from "lucide-react"
-import { AdminButton, AdminCard, AdminInput, AdminSelect, ConfirmModal } from "@/components/admin/ui"
+import { AdminButton, AdminCard, AdminInput, AdminSelect, ConfirmModal, fmtDateTime } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
 import { SEGMENT_TYPES } from "@/lib/segments"
 import { carryArt, designStickers, isFullyPainted, unpaintedArt, type EmailDesign } from "@/lib/emailDesign"
@@ -24,6 +26,14 @@ const STARTERS = [
   "Tell Free users what Pro adds, without being pushy.",
   "Welcome back people who haven't opened CarouseLabs in a month.",
 ]
+const personStarters = (first: string) => [
+  `${first} installed Engage but has barely used it. Write a friendly note showing the one thing worth trying first.`,
+  `Check in with ${first}: ask how CarouseLabs is going and offer help if anything's in the way.`,
+  `Thank ${first} for being with us, and point out what they haven't tried yet that fits how they use it.`,
+]
+
+export type EmailRecipient = { id: string; email: string; name: string | null; firstName: string }
+type SentEmail = { id: string; sentAt: string; by: string; subject: string; picture: string | null }
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
@@ -32,8 +42,13 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   return data as T
 }
 
-export function EmailWriter() {
+export function EmailWriter({ recipient }: { recipient?: EmailRecipient } = {}) {
   const { toast } = useToast()
+  // Each person's draft is kept apart from the others and from broadcast drafts.
+  const storageKey = recipient ? `${STORAGE_KEY}:${recipient.id}` : STORAGE_KEY
+  const [sending, setSending] = useState(false)
+  const [confirmSend, setConfirmSend] = useState(false)
+  const [sent, setSent] = useState<SentEmail[] | null>(null)
   const router = useRouter()
   const [turns, setTurns] = useState<WriterTurn[]>([])
   const [design, setDesign] = useState<EmailDesign | null>(null)
@@ -55,19 +70,33 @@ export function EmailWriter() {
   // A draft survives a reload (this browser only).
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null")
+      const saved = JSON.parse(localStorage.getItem(storageKey) ?? "null")
       // eslint-disable-next-line react-hooks/set-state-in-effect -- restoring once from browser storage
       if (saved?.turns) setTurns(saved.turns)
       if (saved?.design) setDesign(saved.design)
     } catch {}
     restored.current = true
-  }, [])
+  }, [storageKey])
   useEffect(() => {
     if (!restored.current) return
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ turns, design }))
+      localStorage.setItem(storageKey, JSON.stringify({ turns, design }))
     } catch {}
-  }, [turns, design])
+  }, [turns, design, storageKey])
+
+  // The personal emails already sent to this person.
+  const loadSent = useCallback(async () => {
+    if (!recipient) return
+    try {
+      const res = await fetch(`/api/admin/users/${recipient.id}/email`)
+      const data = await res.json().catch(() => ({}))
+      setSent(res.ok ? data.emails : [])
+    } catch {
+      setSent([])
+    }
+  }, [recipient])
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- loadSent sets state after its fetch
+  useEffect(() => void loadSent(), [loadSent])
   useEffect(() => {
     // Braces matter: newer browsers return a Promise from scrollIntoView, and an effect may only return a cleanup.
     chatEnd.current?.scrollIntoView({ block: "end" })
@@ -105,6 +134,7 @@ export function EmailWriter() {
         request: text,
         history,
         current: design,
+        recipientUserId: recipient?.id,
       })
       setTurns((t) => [...t, { role: "writer", text: data.reply }])
       setDesign(data.design)
@@ -221,7 +251,7 @@ export function EmailWriter() {
     try {
       const data = await postJson<{ id: string; total: number }>("/api/admin/campaigns", campaignBody())
       try {
-        localStorage.removeItem(STORAGE_KEY)
+        localStorage.removeItem(storageKey)
       } catch {}
       toast(`Campaign created for ${data.total} people. Pick who to send to first.`, "success")
       router.push(`/admin/broadcasts/campaigns/${data.id}`)
@@ -229,6 +259,25 @@ export function EmailWriter() {
       toast(e instanceof Error ? e.message : "Couldn't create the campaign", "error")
       setCreating(false)
       setConfirmCount(null)
+    }
+  }
+
+  async function sendToPerson() {
+    if (!design || !recipient) return
+    setSending(true)
+    try {
+      const data = await postJson<{ sentTo: string }>(`/api/admin/users/${recipient.id}/email`, { design })
+      toast(`Sent to ${data.sentTo}`, "success")
+      try {
+        localStorage.removeItem(storageKey)
+      } catch {}
+      startOver()
+      await loadSent()
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't send it", "error")
+    } finally {
+      setSending(false)
+      setConfirmSend(false)
     }
   }
 
@@ -247,10 +296,13 @@ export function EmailWriter() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lead font-bold text-foreground">Write with AI</h2>
+          <h2 className="text-lead font-bold text-foreground">
+            {recipient ? `Email ${recipient.name ?? recipient.email}` : "Write with AI"}
+          </h2>
           <p className="mt-0.5 text-caption text-muted-foreground">
-            Say who it&apos;s for and what it should do. The writer drafts it and suggests a picture and stickers; you approve
-            them before anything is painted.
+            {recipient
+              ? `A personal email to ${recipient.email} only. Say what you want to tell them; the writer knows their plan and how they use CarouseLabs, and suggests a picture and stickers you approve before anything is painted.`
+              : "Say who it's for and what it should do. The writer drafts it and suggests a picture and stickers; you approve them before anything is painted."}
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -265,11 +317,11 @@ export function EmailWriter() {
             </button>
           )}
           <Link
-            href="/admin/broadcasts"
+            href={recipient ? `/admin/users/${recipient.id}` : "/admin/broadcasts"}
             className="inline-flex items-center gap-1.5 text-caption font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-            Broadcasts
+            {recipient ? "Their profile" : "Broadcasts"}
           </Link>
         </div>
       </div>
@@ -283,7 +335,7 @@ export function EmailWriter() {
                 {turns.length === 0 && !writing && (
                   <div className="flex flex-col gap-2">
                     <p className="text-caption text-muted-foreground">Try one of these, or write your own:</p>
-                    {STARTERS.map((s) => (
+                    {(recipient ? personStarters(recipient.firstName) : STARTERS).map((s) => (
                       <button
                         key={s}
                         type="button"
@@ -466,8 +518,58 @@ export function EmailWriter() {
             </AdminCard>
           )}
 
+          {/* A personal email: test it, then send it to them */}
+          {recipient && design && (
+            <AdminCard title="Send it">
+              <div className="flex flex-col gap-4">
+                <p className="text-label text-foreground">
+                  To <span className="font-semibold">{recipient.name ?? recipient.firstName}</span>{" "}
+                  <span className="text-muted-foreground">&lt;{recipient.email}&gt;</span>
+                </p>
+                {!painted && <p className="text-caption text-warning">Paint the picture and stickers before testing or sending.</p>}
+                <div className="flex flex-wrap gap-2">
+                  <AdminButton variant="secondary" onClick={() => void sendTest()} loading={testing} disabled={!painted}>
+                    <Mail aria-hidden />
+                    Send test to me
+                  </AdminButton>
+                  <AdminButton onClick={() => setConfirmSend(true)} disabled={!painted} className="ml-auto">
+                    <Send aria-hidden />
+                    Send to {recipient.firstName}
+                  </AdminButton>
+                </div>
+              </div>
+            </AdminCard>
+          )}
+
+          {recipient && (
+            <AdminCard title={`Emails sent to ${recipient.firstName}`}>
+              {sent === null ? (
+                <p className="text-caption text-muted-foreground">Loading…</p>
+              ) : sent.length === 0 ? (
+                <p className="text-caption text-muted-foreground">No personal emails yet.</p>
+              ) : (
+                <ul className="flex flex-col divide-y divide-border">
+                  {sent.map((e) => (
+                    <li key={e.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                      {e.picture && (
+                        // eslint-disable-next-line @next/next/no-img-element -- a thumbnail of R2 art
+                        <img src={e.picture} alt="" className="h-9 w-14 shrink-0 rounded-detail object-cover" />
+                      )}
+                      <span className="flex min-w-0 flex-col">
+                        <span className="truncate text-label text-foreground">{e.subject}</span>
+                        <span className="text-caption text-muted-foreground">
+                          {fmtDateTime(e.sentAt)} · {e.by}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </AdminCard>
+          )}
+
           {/* Who it's for, test, campaign */}
-          {design && (
+          {!recipient && design && (
             <AdminCard title="Send it">
               <div className="flex flex-col gap-4">
                 <div className="space-y-1.5">
@@ -575,6 +677,18 @@ export function EmailWriter() {
           )}
         </AdminCard>
       </div>
+
+      {recipient && (
+        <ConfirmModal
+          open={confirmSend}
+          onClose={() => setConfirmSend(false)}
+          loading={sending}
+          title={`Send this to ${recipient.name ?? recipient.firstName}?`}
+          body={`"${design?.subject ?? ""}" goes to ${recipient.email} now. This can't be undone.`}
+          confirmLabel={`Send to ${recipient.firstName}`}
+          onConfirm={() => void sendToPerson()}
+        />
+      )}
 
       <ConfirmModal
         open={confirmCount !== null}

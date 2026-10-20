@@ -60,35 +60,68 @@ export function generationsUsed(counts: { trial: number; history: number; aiCall
 }
 
 /** Everyone (or just `onlyUserId`) who installed that extension and used it once or never. */
+/**
+ * How much each of these people has used one extension: real generations
+ * (the highest of the three counts above) and when they last used it.
+ */
+export async function engageUsage(
+  platform: EngagePlatform,
+  users: { id: string; extensionTrialUsed: number; xTrialUsed: number }[],
+): Promise<Map<string, { generations: number; lastUsedAt: Date | null }>> {
+  const ids = users.map((u) => u.id)
+  const [history, calls] = ids.length
+    ? await Promise.all([
+        db.commentHistory.groupBy({
+          by: ["userId"],
+          where: { userId: { in: ids }, kind: { in: [...kindsFor(platform)] } },
+          _count: { _all: true },
+          _max: { createdAt: true },
+        }),
+        db.engageAiCall.groupBy({
+          by: ["userId"],
+          where: { userId: { in: ids }, outcome: "ok", kind: { in: GENERATION_KINDS[platform] } },
+          _count: { _all: true },
+          _max: { createdAt: true },
+        }),
+      ])
+    : [[], []]
+  const historyBy = new Map(history.map((h) => [h.userId, h]))
+  const callsBy = new Map(calls.flatMap((c) => (c.userId ? [[c.userId, c] as const] : [])))
+  const latest = (...dates: (Date | null | undefined)[]) =>
+    dates.reduce<Date | null>((a, d) => (d && (!a || d > a) ? d : a), null)
+  return new Map(
+    users.map((u) => {
+      const h = historyBy.get(u.id)
+      const c = callsBy.get(u.id)
+      return [
+        u.id,
+        {
+          generations: generationsUsed({
+            trial: platform === "x" ? u.xTrialUsed : u.extensionTrialUsed,
+            history: h?._count._all ?? 0,
+            aiCalls: c?._count._all ?? 0,
+          }),
+          lastUsedAt: latest(h?._max?.createdAt, c?._max?.createdAt),
+        },
+      ]
+    }),
+  )
+}
+
+/** Everyone (or just `onlyUserId`) who installed that extension and used it once or never. */
 export async function lowUseEngageUsers(platform: EngagePlatform, onlyUserId?: string): Promise<{ id: string; email: string }[]> {
   const users = await db.user.findMany({
     where: { deletedAt: null, ...(onlyUserId ? { id: onlyUserId } : {}), extensionTokens: { some: tokenOf(platform) } },
     select: { id: true, email: true, extensionTrialUsed: true, xTrialUsed: true },
   })
   if (users.length === 0) return []
-  const ids = users.map((u) => u.id)
-  const [history, calls] = await Promise.all([
-    db.commentHistory.groupBy({
-      by: ["userId"],
-      where: { userId: { in: ids }, kind: { in: [...kindsFor(platform)] } },
-      _count: { _all: true },
-    }),
-    db.engageAiCall.groupBy({
-      by: ["userId"],
-      where: { userId: { in: ids }, outcome: "ok", kind: { in: GENERATION_KINDS[platform] } },
-      _count: { _all: true },
-    }),
-  ])
-  const historyBy = new Map(history.map((h) => [h.userId, h._count._all]))
-  const callsBy = new Map(calls.flatMap((c) => (c.userId ? [[c.userId, c._count._all] as const] : [])))
+  const usage = await engageUsage(platform, users)
   return users
-    .filter(
-      (u) =>
-        generationsUsed({
-          trial: platform === "x" ? u.xTrialUsed : u.extensionTrialUsed,
-          history: historyBy.get(u.id) ?? 0,
-          aiCalls: callsBy.get(u.id) ?? 0,
-        }) <= LOW_USE_MAX_GENERATIONS,
-    )
+    .filter((u) => (usage.get(u.id)?.generations ?? 0) <= LOW_USE_MAX_GENERATIONS)
     .map((u) => ({ id: u.id, email: u.email }))
+}
+
+/** Whether this person is signed in to that extension (the sign it's installed). */
+export async function signedInToEngage(platform: EngagePlatform, userId: string): Promise<boolean> {
+  return (await db.extensionToken.count({ where: { userId, ...tokenOf(platform) } })) > 0
 }

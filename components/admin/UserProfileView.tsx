@@ -2,7 +2,8 @@
 // band, their posts as the main canvas, and the admin actions in a side panel.
 // The page loads the user (app/(admin)/admin/users/[userId]/page.tsx).
 import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Sparkles } from "lucide-react"
+import { buttonVariants } from "@/components/ui/button"
 import type { PostFormat } from "@prisma/client"
 import { postCreditCost } from "@/lib/adminStats"
 import { PlanBadge } from "@/components/admin/ui"
@@ -129,6 +130,11 @@ export function UserProfileView({ user, sub, plan, creditsRemaining, posts }: Us
               {user.profile?.headline ? ` · ${user.profile.headline}` : ""}
             </p>
           </div>
+          {/* A personal email to just them, written with AI (/admin/users/[id]/email). */}
+          <Link href={`/admin/users/${user.id}/email`} className={buttonVariants({ variant: "brand", size: "sm", className: "shrink-0" })}>
+            <Sparkles aria-hidden />
+            Send email with AI
+          </Link>
         </div>
 
         <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-border pt-6 lg:grid-cols-4">

@@ -93,6 +93,7 @@ function isActive(href: string, pathname: string): boolean {
 }
 
 function pageTitle(pathname: string): string {
+  if (pathname.startsWith("/admin/users/") && pathname.endsWith("/email")) return "Email with AI"
   if (pathname.startsWith("/admin/users/") && pathname !== "/admin/users") return "User Profile"
   if (pathname.startsWith("/admin/interns/") && pathname !== "/admin/interns") return "Intern Profile"
   if (pathname.startsWith("/admin/engage/users/")) return "Engage user"

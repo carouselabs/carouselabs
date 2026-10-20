@@ -75,7 +75,19 @@ const DESIGN_SHAPE = `{
   ]
 }`
 
-function systemPrompt(): string {
+// For a personal email to one person (from their admin profile): who they
+// are, from their account, so the email gets their situation right.
+function personSection(about: { facts: string } | undefined): string {
+  if (!about) return ""
+  return `
+
+THIS EMAIL GOES TO ONE PERSON
+It's a personal email from the CarouseLabs team to the person below, sent only to them. Their account, as of today:
+${about.facts}
+Use this to get their situation right and to choose what's worth saying (what they haven't tried yet, what fits their plan). Write like a person who knows them, not like a report: never recite numbers back at them, never mention data, tracking or "our records", and don't say anything they'd be surprised we know. You may use their first name directly instead of {{firstName}}.`
+}
+
+function systemPrompt(about?: { facts: string }): string {
   return `You write emails for CarouseLabs with the admin who runs it. You're the writer at a premium product company: warm, clear, specific and confident. Every email you write is something a person chose to read; respect that.
 
 THE PRODUCT (the only facts you may use):
@@ -92,7 +104,7 @@ RULES
 - hero.lead and hero.accent: the headline painted into the email's picture, read as one line: lead plain, accent in italics. Each 1–4 words; the accent ends with a full stop. Like "You made the cut." / "Engage is on us.", or "Running low" / "on credits.". No merge fields.
 - hero.scene: one tangible object or a tiny still life that is a visual metaphor for the email, in one sentence ("an open tin of brand-new coloured pencils", "a paper airplane snagged on a thin branch"). No people, faces, hands, screens, phones, logos, text, letters or numbers. It's painted in a fixed hand-painted gouache style; don't describe style or colours.
 - Stickers only appear in a "features" block (2–4 rows): each sticker idea is one simple object ("a light bulb", "a fountain pen"), all different. Use features only when the email really lists features or benefits.
-- When the admin asks for a change, change only that. Keep everything else exactly as it was, including hero.scene and every sticker idea, so the pictures already painted can be kept. Change the scene or a sticker only when asked or when the email's topic changed.
+- When the admin asks for a change, change only that. Keep everything else exactly as it was, including hero.scene and every sticker idea, so the pictures already painted can be kept. Change the scene or a sticker only when asked or when the email's topic changed.${personSection(about)}
 
 ANSWER
 Reply with one JSON object and nothing else:
@@ -109,7 +121,13 @@ export class EmailWriterError extends Error {}
  * writer's turns are its replies), `current` the latest draft (null at first).
  * Painted art is carried over wherever the idea didn't change.
  */
-export async function writeEmail(input: { history: WriterTurn[]; request: string; current: EmailDesign | null }): Promise<{
+export async function writeEmail(input: {
+  history: WriterTurn[]
+  request: string
+  current: EmailDesign | null
+  // A personal email to one person: their account facts (lib/emailRecipientFacts.ts).
+  about?: { facts: string }
+}): Promise<{
   reply: string
   design: EmailDesign
 }> {
@@ -129,7 +147,7 @@ export async function writeEmail(input: { history: WriterTurn[]; request: string
     const response = await anthropic.messages.create({
       model: EMAIL_WRITER_MODEL,
       max_tokens: 6000,
-      system: systemPrompt(),
+      system: systemPrompt(input.about),
       messages,
     })
     const raw = response.content

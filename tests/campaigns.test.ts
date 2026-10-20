@@ -2,7 +2,7 @@
 // they're marked sent, nobody gets the email twice, and sending stops at the
 // day's limit (Resend's free plan). lib/campaignRules.ts + lib/campaigns.ts,
 // against an in-memory list instead of the database.
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Resend } from "resend"
 
 type Row = {
@@ -19,7 +19,8 @@ type Row = {
 }
 
 const store = vi.hoisted(() => ({
-  campaigns: [] as { id: string; subject: string; body: string; status: string }[],
+  campaigns: [] as { id: string; subject: string; body: string; status: string; design?: unknown }[],
+  designedTo: [] as string[][],
   rows: [] as Row[],
   sentTo: [] as string[][],
   failNext: null as null | { failedTo: string[]; error: string },
@@ -57,6 +58,12 @@ vi.mock("@/lib/db", () => ({
   },
 }))
 vi.mock("@/lib/auditLog", () => ({ logAdminAction: vi.fn(async () => {}) }))
+vi.mock("@/lib/emailDesignRender", () => ({
+  sendDesignedEmails: vi.fn(async (_resend: unknown, _from: string, recipients: { email: string }[]) => {
+    store.designedTo.push(recipients.map((r) => r.email))
+    return { sent: recipients.length, failed: 0, failedTo: [] }
+  }),
+}))
 vi.mock("@/lib/broadcast", () => ({
   resolveRecipients: vi.fn(),
   // Records who each send went to; fails the addresses in store.failNext.
@@ -91,6 +98,7 @@ function seed(people: number, campaignStatus = "active") {
     updatedAt: new Date(),
   }))
   store.sentTo = []
+  store.designedTo = []
   store.failNext = null
 }
 
@@ -200,5 +208,46 @@ describe("sending a campaign in batches", () => {
     expect(statusOf("r0")).toBe("failed")
     expect(store.rows[0].error).toMatch(/may or may not have arrived/)
     expect(statusOf("r1")).toBe("sending")
+  })
+})
+
+describe("campaigns written with AI", () => {
+  const R2 = "https://art.example.test"
+  const art = (n: string) => `${R2}/email-art/2026-10/${n}`
+  const design = (heroUrl: string | undefined) => ({
+    version: 1,
+    subject: "Three quick wins with Engage",
+    preview: "Start with one comment, written in your voice.",
+    hero: { lead: "Your first comment", accent: "takes a minute.", scene: "two paper cups and a string", paintingUrl: art("p.jpg"), imageUrl: heroUrl },
+    blocks: [
+      { type: "text", text: "Hi {{firstName}}," },
+      { type: "button", label: "Open LinkedIn", href: "https://www.linkedin.com/feed/" },
+    ],
+  })
+
+  beforeEach(() => {
+    vi.stubEnv("CLOUDFLARE_R2_PUBLIC_URL", R2)
+    seed(20)
+  })
+  afterEach(() => vi.unstubAllEnvs())
+
+  it("sends the designed email, not the plain broadcast", async () => {
+    store.campaigns[0].design = design(art("h.jpg"))
+    const result = await send(ids(0, 3))
+    expect(result.sent).toBe(3)
+    expect(store.designedTo).toEqual([["person0@example.test", "person1@example.test", "person2@example.test"]])
+    expect(store.sentTo).toEqual([])
+  })
+
+  it("refuses a design whose picture isn't painted, before anyone is marked sending", async () => {
+    store.campaigns[0].design = design(undefined)
+    await expect(send(ids(0, 3))).rejects.toThrow(/Paint the picture/)
+    expect(store.rows.slice(0, 3).map((r) => r.status)).toEqual(["pending", "pending", "pending"])
+  })
+
+  it("refuses a design pointing at a picture that isn't ours", async () => {
+    store.campaigns[0].design = design("https://elsewhere.example.com/x.jpg")
+    await expect(send(["r0"])).rejects.toThrow(/isn't one of ours/)
+    expect(store.designedTo).toEqual([])
   })
 })

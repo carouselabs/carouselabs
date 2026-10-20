@@ -6,6 +6,11 @@ const nextConfig: NextConfig = {
   // Keep this application isolated from unrelated parent lockfiles.
   turbopack: { root: path.resolve(__dirname) },
   outputFileTracingRoot: path.resolve(__dirname),
+  // The AI email writer sets headlines in Fraunces, read from assets/fonts at
+  // runtime (lib/emailArt.tsx): ship the fonts with that function.
+  outputFileTracingIncludes: {
+    "/api/admin/email-writer/paint": ["./assets/fonts/**/*"],
+  },
   // Audit builds can coexist with a developer's running dev server.
   distDir: process.env.NEXT_BUILD_DIR || ".next",
   experimental: {

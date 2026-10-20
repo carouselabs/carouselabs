@@ -20,7 +20,6 @@ import {
   tableCls,
 } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
-import { renderBroadcastEmailHtml } from "@/lib/broadcastRender"
 import { CAMPAIGN_DAILY_LIMIT, NEXT_BATCH_SIZE, canSend, nextUnsent, type CampaignProgress } from "@/lib/campaignRules"
 import { ProgressBar } from "./CampaignsList"
 import { RECIPIENT_STATUS, audienceLabel } from "./campaignLabels"
@@ -42,6 +41,7 @@ type Campaign = {
   audience: string
   audienceValue: string | null
   status: string
+  design: unknown
   createdBy: string
   createdAt: string
   recipients: Recipient[]
@@ -62,7 +62,8 @@ export function CampaignView({ id }: { id: string }) {
   const [page, setPage] = useState(0)
   const [confirming, setConfirming] = useState(false)
   const [sending, setSending] = useState(false)
-  const [previewing, setPreviewing] = useState(false)
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
+  const [loadingPreview, setLoadingPreview] = useState(false)
   const [testing, setTesting] = useState(false)
   const [archiving, setArchiving] = useState(false)
 
@@ -165,15 +166,25 @@ export function CampaignView({ id }: { id: string }) {
     }
   }
 
+  async function openPreview() {
+    setLoadingPreview(true)
+    try {
+      const res = await fetch(`/api/admin/campaigns/${id}/preview`)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? "Couldn't load the preview")
+      setPreviewHtml(data.html)
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't load the preview", "error")
+    } finally {
+      setLoadingPreview(false)
+    }
+  }
+
   async function sendTest() {
     setTesting(true)
     try {
-      // The Broadcasts route's test send: only to the signed-in admin, personalized for them.
-      const res = await fetch("/api/admin/broadcasts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject: campaign!.subject, body: campaign!.body, recipients: "all", test: true }),
-      })
+      // Only to the signed-in admin, personalized for them; nobody on the list is marked.
+      const res = await fetch(`/api/admin/campaigns/${id}/test`, { method: "POST" })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? "Test send failed")
       toast(`Test sent to ${data.sentTo}`, "success")
@@ -228,11 +239,12 @@ export function CampaignView({ id }: { id: string }) {
               <p className="mt-1 text-caption text-muted-foreground">
                 {audienceLabel(campaign.audience, campaign.audienceValue)} · {progress.total} people · created{" "}
                 {fmtDate(campaign.createdAt)} by {campaign.createdBy}
+                {campaign.design != null && <span className="font-medium text-brand"> · Written with AI</span>}
                 {archived && <span className="font-medium text-warning"> · Archived</span>}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <AdminButton variant="secondary" onClick={() => setPreviewing(true)}>
+              <AdminButton variant="secondary" onClick={() => void openPreview()} loading={loadingPreview}>
                 <Eye aria-hidden />
                 Preview
               </AdminButton>
@@ -417,10 +429,12 @@ export function CampaignView({ id }: { id: string }) {
         </div>
       </AdminCard>
 
-      <Modal open={previewing} onClose={() => setPreviewing(false)} title="Email preview" wide>
-        <div
-          className="max-h-[65vh] overflow-y-auto rounded-control-sm bg-white"
-          dangerouslySetInnerHTML={{ __html: renderBroadcastEmailHtml(campaign.subject, campaign.body) }}
+      <Modal open={previewHtml !== null} onClose={() => setPreviewHtml(null)} title="Email preview" wide>
+        <iframe
+          title="Email preview"
+          srcDoc={previewHtml ?? ""}
+          className="h-[65vh] w-full rounded-control-sm border-0 bg-white"
+          sandbox=""
         />
       </Modal>
 

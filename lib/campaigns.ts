@@ -10,6 +10,9 @@ import type { Resend } from "resend"
 import { db } from "@/lib/db"
 import { logAdminAction } from "@/lib/auditLog"
 import { resolveRecipients, sendUserBroadcast, type BroadcastRecipients } from "@/lib/broadcast"
+import { emailDesignSchema, type EmailDesign } from "@/lib/emailDesign"
+import { artProblem } from "@/lib/emailArtCheck"
+import { sendDesignedEmails } from "@/lib/emailDesignRender"
 import {
   CAMPAIGN_DAILY_LIMIT,
   CAMPAIGN_MAX_RECIPIENTS,
@@ -39,6 +42,8 @@ export async function createCampaign(input: {
   body: string
   recipients: BroadcastRecipients
   audienceValue: string | null
+  // An AI-written email (subject and body are then its subject and plain text).
+  design?: EmailDesign
 }) {
   const people = await resolveRecipients(input.recipients, input.audienceValue)
   if (people.length === 0) throw new CampaignError("No one matches that selection")
@@ -67,6 +72,7 @@ export async function createCampaign(input: {
       body: input.body,
       audience: Array.isArray(input.recipients) ? "custom" : input.recipients,
       audienceValue: input.audienceValue,
+      design: input.design ?? undefined,
       createdBy: input.adminEmail,
       recipients: { createMany: { data: rows } },
     },
@@ -76,7 +82,7 @@ export async function createCampaign(input: {
   await logAdminAction({
     adminEmail: input.adminEmail,
     action: "CREATE_CAMPAIGN",
-    details: `"${input.subject}" → ${rows.length} people (${Array.isArray(input.recipients) ? "custom list" : input.recipients})`,
+    details: `"${input.subject}" → ${rows.length} people (${Array.isArray(input.recipients) ? "custom list" : input.recipients})${input.design ? " · written with AI" : ""}`,
   })
   return { id: campaign.id, total: rows.length }
 }
@@ -102,6 +108,20 @@ async function releaseStuckSends(campaignId: string, now: Date) {
     where: { campaignId, status: "sending", updatedAt: { lt: new Date(now.getTime() - STUCK_SENDING_MS) } },
     data: { status: "failed", error: "Sending was cut off, so it may or may not have arrived. Check before sending again." },
   })
+}
+
+/**
+ * A campaign's AI-written design, checked: null for an email written by hand.
+ * A design that's broken or points at art that isn't ours or isn't painted
+ * is refused rather than sent.
+ */
+export function campaignDesign(stored: unknown): EmailDesign | null {
+  if (stored === null || stored === undefined) return null
+  const parsed = emailDesignSchema.safeParse(stored)
+  if (!parsed.success) throw new CampaignError("This campaign's email can't be read. Make it again from the writer.")
+  const problem = artProblem(parsed.data, { painted: true })
+  if (problem) throw new CampaignError(problem)
+  return parsed.data
 }
 
 export async function listCampaigns() {
@@ -169,10 +189,11 @@ export async function sendCampaignBatch(input: {
 
   const campaign = await db.emailCampaign.findUnique({
     where: { id: input.campaignId },
-    select: { id: true, subject: true, body: true, status: true },
+    select: { id: true, subject: true, body: true, status: true, design: true },
   })
   if (!campaign) throw new CampaignError("Campaign not found", 404)
   if (campaign.status === "archived") throw new CampaignError("This campaign is archived. Restore it to send.")
+  const design = campaignDesign(campaign.design)
 
   await releaseStuckSends(campaign.id, now)
   const { left } = await campaignAllowance(now)
@@ -200,14 +221,11 @@ export async function sendCampaignBatch(input: {
     return { sent: 0, failed: 0, skipped, error: undefined, left }
   }
 
-  const result = await sendUserBroadcast(
-    input.resend,
-    input.from,
-    claimed.map((r) => ({ userId: r.userId, email: r.email })),
-    campaign.subject,
-    campaign.body,
-    `campaign-${campaign.id}-${batchId}`,
-  )
+  const people = claimed.map((r) => ({ userId: r.userId, email: r.email }))
+  const idempotencyPrefix = `campaign-${campaign.id}-${batchId}`
+  const result = design
+    ? await sendDesignedEmails(input.resend, input.from, people, design, idempotencyPrefix)
+    : await sendUserBroadcast(input.resend, input.from, people, campaign.subject, campaign.body, idempotencyPrefix)
 
   const failedTo = new Set(result.failedTo.map((e) => e.toLowerCase()))
   const failedIds = claimed.filter((r) => failedTo.has(r.email.toLowerCase())).map((r) => r.id)

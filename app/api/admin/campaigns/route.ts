@@ -1,6 +1,7 @@
 // /api/admin/campaigns — email campaigns sent in batches the admin picks.
 //   GET                → every campaign with its progress (newest first)
 //   POST { subject, body, recipients: <segment>|string[], recipientValue?, dryRun? }
+//        or { design, recipients, … } for an AI-written email (its art must be painted)
 //        dryRun: true  → how many people it would have, nothing is created
 //        otherwise     → creates the campaign and its list; nothing is sent
 import { NextResponse } from "next/server"
@@ -8,13 +9,16 @@ import { z } from "zod"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { CampaignError, countCampaignAudience, createCampaign, listCampaigns } from "@/lib/campaigns"
 import type { BroadcastRecipients } from "@/lib/broadcast"
+import { designPlainText, emailDesignSchema } from "@/lib/emailDesign"
+import { artProblem } from "@/lib/emailArtCheck"
 import { SEGMENT_TYPES } from "@/lib/segments"
 
 const segmentValues = SEGMENT_TYPES.map((s) => s.value) as [string, ...string[]]
 
 const createBody = z.object({
-  subject: z.string().trim().min(1, "Write a subject").max(300),
-  body: z.string().trim().min(1, "Write the email").max(50_000),
+  subject: z.string().trim().min(1, "Write a subject").max(300).optional(),
+  body: z.string().trim().min(1, "Write the email").max(50_000).optional(),
+  design: emailDesignSchema.optional(),
   recipients: z.union([z.enum(segmentValues), z.array(z.string().max(320)).min(1, "Add at least one email").max(10_000)]),
   recipientValue: z.string().trim().max(20).nullish(),
   dryRun: z.boolean().optional(),
@@ -34,7 +38,15 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid campaign" }, { status: 400 })
   }
-  const { subject, body, dryRun } = parsed.data
+  const { design, dryRun } = parsed.data
+  if (design) {
+    const problem = artProblem(design, { painted: true })
+    if (problem) return NextResponse.json({ error: problem }, { status: 400 })
+  } else if (!parsed.data.subject || !parsed.data.body) {
+    return NextResponse.json({ error: "Write a subject and the email" }, { status: 400 })
+  }
+  const subject = design ? design.subject : parsed.data.subject!
+  const body = design ? designPlainText(design) : parsed.data.body!
   // Checked above against lib/segments.ts, or a list of addresses.
   const recipients = parsed.data.recipients as BroadcastRecipients
   const audienceValue = parsed.data.recipientValue || null
@@ -43,7 +55,7 @@ export async function POST(req: Request) {
     if (dryRun) {
       return NextResponse.json({ ok: true, dryRun: true, count: await countCampaignAudience(recipients, audienceValue) })
     }
-    const campaign = await createCampaign({ adminEmail: admin.email, subject, body, recipients, audienceValue })
+    const campaign = await createCampaign({ adminEmail: admin.email, subject, body, recipients, audienceValue, design })
     return NextResponse.json({ ok: true, ...campaign }, { status: 201 })
   } catch (err) {
     if (err instanceof CampaignError) return NextResponse.json({ error: err.message }, { status: err.status })

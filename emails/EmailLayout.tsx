@@ -89,15 +89,17 @@ export function EmailLayout({
   footerNote,
 }: {
   preview: string
-  // The painted image the email opens with; its headline is in the image
-  // (emails/art.ts has the words).
-  hero: EmailHero
+  // The painted image the email opens with; its headline is in the image.
+  // One of the fixed ones (emails/art.ts has the words), or a picture the AI
+  // email writer painted for this email (its headline as the alt text).
+  hero: EmailHero | { src: string; alt: string }
   children: React.ReactNode
   audience?: EmailAudience
   // An extra line above the standard footer, e.g. why they got this email.
   footerNote?: React.ReactNode
 }) {
   const pill = HEADER_LINK[audience]
+  const heroImage = typeof hero === "string" ? { src: `${EMAIL_IMAGES}/hero-${hero}.jpg`, alt: heroAlt(hero) } : hero
   return (
     <Html lang="en">
       <Head>
@@ -141,9 +143,9 @@ export function EmailLayout({
 
           <Section className="px" style={{ padding: "0 32px" }}>
             <Img
-              src={`${EMAIL_IMAGES}/hero-${hero}.jpg`}
+              src={heroImage.src}
               width="576"
-              alt={heroAlt(hero)}
+              alt={heroImage.alt}
               style={{ display: "block", width: "100%", maxWidth: "576px", height: "auto", borderRadius: "14px" }}
             />
           </Section>
@@ -262,14 +264,25 @@ export function EmailFacts({ items }: { items: [label: string, value: React.Reac
   )
 }
 
-// Feature rows, each marked by a painted sticker.
-export function EmailFeatures({ items }: { items: { sticker: EmailSticker; title: string; text: React.ReactNode }[] }) {
+// Feature rows, each marked by a painted sticker: one of the fixed ones, or
+// one the AI email writer painted ({ src }).
+export function EmailFeatures({
+  items,
+}: {
+  items: { sticker: EmailSticker | { src: string }; title: string; text: React.ReactNode }[]
+}) {
   return (
     <>
       {items.map((f) => (
         <Row key={f.title} style={{ marginBottom: "18px" }}>
           <Column style={{ width: "68px", verticalAlign: "top" }}>
-            <Img src={`${EMAIL_IMAGES}/sticker-${f.sticker}.png`} width="54" height="54" alt="" style={{ display: "block" }} />
+            <Img
+              src={typeof f.sticker === "string" ? `${EMAIL_IMAGES}/sticker-${f.sticker}.png` : f.sticker.src}
+              width="54"
+              height="54"
+              alt=""
+              style={{ display: "block" }}
+            />
           </Column>
           <Column style={{ verticalAlign: "top" }}>
             <Text style={{ margin: "2px 0 3px", fontSize: "16px", fontWeight: 600, lineHeight: "1.4", color: C.ink }}>{f.title}</Text>

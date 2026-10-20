@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Send, Eye, Mail, CalendarClock, Braces, UserSearch, ListChecks } from "lucide-react"
+import { Send, Eye, Mail, CalendarClock, Braces, UserSearch, ListChecks, Sparkles } from "lucide-react"
 import {
   AdminButton,
   AdminCard,
@@ -281,7 +281,14 @@ export function BroadcastComposer() {
   return (
     // Compose on the left; what was sent beside it on wide screens.
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start">
-      <div className="flex justify-end gap-4 xl:col-span-2">
+      <div className="flex flex-wrap items-center justify-end gap-4 xl:col-span-2">
+        <Link
+          href="/admin/broadcasts/writer"
+          className="mr-auto inline-flex items-center gap-1.5 rounded-control-sm bg-brand/15 px-3 py-1.5 text-caption font-semibold text-foreground transition-colors hover:bg-brand/25"
+        >
+          <Sparkles className="h-3.5 w-3.5 text-brand" />
+          Write with AI
+        </Link>
         <Link
           href="/admin/broadcasts/campaigns"
           className="inline-flex items-center gap-1.5 text-caption font-medium text-muted-foreground hover:text-foreground transition-colors"

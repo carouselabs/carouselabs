@@ -22,6 +22,7 @@ import type { OverviewStats } from "@/lib/adminStats"
 import { PHASE_5B_PAGES } from "./phase5b"
 import { CampaignsList } from "@/components/admin/CampaignsList"
 import { CampaignView } from "@/components/admin/CampaignView"
+import { EmailWriter } from "@/components/admin/EmailWriter"
 
 // Development-only: the admin pages in the real admin frame (dark theme,
 // sidebar), with example data, without signing in. Pages that load their own
@@ -34,7 +35,7 @@ import { CampaignView } from "@/components/admin/CampaignView"
 //   /design-preview/admin/[subscriptions|posts|credits|referrals|tasks|analytics|audit-logs|settings|prefill-user]
 //   Phase 5b: engage[/users[/eu1]|access|controls|ai|errors|health|sessions|audit], interns[/i1[/checklist]|broadcast],
 //   broadcasts, sequences[/new|/q1], scheduled-emails
-//   Campaigns: broadcasts/campaigns[/c1]
+//   Campaigns: broadcasts/campaigns[/c1], broadcasts/writer
 
 // Example "now", read once when the module loads.
 const NOW = new Date()
@@ -153,6 +154,7 @@ const PAGES: Record<string, () => ReactNode> = {
   ...PHASE_5B_PAGES,
   "broadcasts/campaigns": () => <CampaignsList />,
   "broadcasts/campaigns/c1": () => <CampaignView id="c1" />,
+  "broadcasts/writer": () => <EmailWriter />,
 }
 
 export default async function AdminPreview({ params }: { params: Promise<{ path?: string[] }> }) {

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 const mocks = vi.hoisted(() => ({ subscription: vi.fn() }))
-vi.mock("@/lib/db", () => ({ db: { extensionSubscription: { findUnique: mocks.subscription } } }))
+// No special prices here (tests/engage-price.test.tsx covers those).
+vi.mock("@/lib/db", () => ({ db: { extensionSubscription: { findUnique: mocks.subscription }, engagePrice: { findMany: async () => [] } } }))
 import { extensionCheckoutFor } from "@/lib/extensionCheckout"
 import { verifyBillingIdentity } from "@/lib/billingIdentity"
 

@@ -165,3 +165,35 @@ describe("Account screen plan", () => {
     await waitFor(() => expect(getExtensionAccess()).toBeNull());
   });
 });
+
+describe("a special price an admin set", () => {
+  const special = { cents: 500, standardCents: 1500, special: true, endsAt: null };
+
+  it("shows on the unlock card with the usual price struck through", () => {
+    setExtensionAccess(access({ freeUsed: 10, price: special }));
+    render(<UnlockCard />);
+    const button = screen.getByRole("button", { name: "Get unlimited — Usually $15, for you $5/month" });
+    expect(button.querySelector("s")?.textContent).toBe("$15");
+    expect(screen.getByText(/messages for/).textContent).toContain("$5/month. Cancel anytime.");
+  });
+
+  it("shows on the Account screen too", async () => {
+    chromeMock().__store.extensionToken = "cl_cmt_live";
+    server({ "/api/ext/me": { status: 200, body: me(access({ freeUsed: 4, price: special })) } });
+    render(<AccountScreen />);
+    expect(await screen.findByRole("button", { name: "Get unlimited — Usually $15, for you $5/month" })).toBeTruthy();
+  });
+
+  it("a higher price, or none from an older server, shows plainly", () => {
+    setExtensionAccess(access({ freeUsed: 10, price: { cents: 2000, standardCents: 1500, special: true, endsAt: null } }));
+    const { rerender } = render(<UnlockCard />);
+    expect(screen.getByRole("button", { name: "Get unlimited — $20/month" }).querySelector("s")).toBeNull();
+    setExtensionAccess(access({ freeUsed: 10 }));
+    rerender(<UnlockCard />);
+    expect(screen.getByRole("button", { name: "Get unlimited — $15/month" })).toBeTruthy();
+  });
+});
+
+function me(extension: ExtensionAccess) {
+  return { email: "a@b.co", plan: "FREE", commentsThisMonth: 0, commentsToday: 0, extension };
+}

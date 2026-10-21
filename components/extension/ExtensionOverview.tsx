@@ -8,10 +8,11 @@ import { ArrowRight, MessageSquare, MessagesSquare, Reply, UserPlus, type Lucide
 import { db } from "@/lib/db"
 import { extAccessSummary, type ExtAccessSummary } from "@/lib/extAccess"
 import { tokenPlatform, type EngagePlatform } from "@/lib/engage/features"
-import { EXTENSION_CHECKOUT_PATH, EXTENSION_PLAN, X_EXTENSION_CHECKOUT_PATH, X_EXTENSION_PLAN } from "@/lib/plans"
+import { EXTENSION_CHECKOUT_PATH, X_EXTENSION_CHECKOUT_PATH } from "@/lib/plans"
 import { BillingRefresher } from "@/components/billing/BillingRefresher"
 import { buttonVariants } from "@/components/ui/button"
 import { extensionStatusLine } from "./ExtensionPlanSection"
+import { ExtensionPrice } from "./ExtensionPrice"
 import { DevicesList } from "./DevicesList"
 import { InstallSteps } from "./InstallSteps"
 import { ENGAGE_EXTENSIONS, EngageIcon } from "./engageExtensions"
@@ -30,8 +31,8 @@ const ACTIVITY: Record<EngagePlatform, { kind: string; label: string; icon: Luci
 }
 
 const CHECKOUT = {
-  linkedin: { path: EXTENSION_CHECKOUT_PATH, price: EXTENSION_PLAN.price },
-  x: { path: X_EXTENSION_CHECKOUT_PATH, price: X_EXTENSION_PLAN.price },
+  linkedin: { path: EXTENSION_CHECKOUT_PATH },
+  x: { path: X_EXTENSION_CHECKOUT_PATH },
 }
 
 const card = "rounded-card border border-border bg-surface-raised p-5 flex flex-col gap-4"
@@ -73,7 +74,7 @@ function OtherExtension({ platform, ext }: { platform: EngagePlatform; ext: ExtA
               isX ? "text-black" : "text-brand",
             ].join(" ")}
           >
-            Get unlimited — ${CHECKOUT[platform].price}/month
+            Get unlimited — <ExtensionPrice price={ext.price} />
             <ArrowRight className="size-4" aria-hidden />
           </a>
         )}
@@ -171,7 +172,7 @@ export function ExtensionOverviewView({
             </div>
             {ext.access === "free" ? (
               <a href={CHECKOUT[platform].path} className={buttonVariants({ variant: "brand" })}>
-                Get unlimited — ${CHECKOUT[platform].price}/month
+                Get unlimited — <ExtensionPrice price={ext.price} />
                 <ArrowRight aria-hidden />
               </a>
             ) : (

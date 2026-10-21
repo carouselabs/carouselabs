@@ -6,12 +6,12 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import {
-  EXTENSION_PRICE_LABEL,
   freeGenerationsLeft,
   openCheckout,
   refreshExtensionAccess,
   useExtensionAccess,
 } from "@/lib/extensionAccess";
+import { PriceText } from "./PriceText";
 
 function useCheckout() {
   const [opening, setOpening] = useState(false);
@@ -43,11 +43,17 @@ export function UnlockCard() {
       <div className="space-y-1">
         <p className="text-sm font-semibold">You&apos;ve used your {limit} free generations</p>
         <p className="text-xs text-muted-foreground">
-          Get unlimited comments, replies, connection notes and messages for {EXTENSION_PRICE_LABEL}. Cancel anytime.
+          Get unlimited comments, replies, connection notes and messages for <PriceText access={access} />. Cancel anytime.
         </p>
       </div>
       <Button className="w-full" loading={opening} onClick={start}>
-        {opening ? "Opening checkout…" : `Get unlimited — ${EXTENSION_PRICE_LABEL}`}
+        {opening ? (
+          "Opening checkout…"
+        ) : (
+          <>
+            Get unlimited — <PriceText access={access} />
+          </>
+        )}
       </Button>
       <div className="text-center">
         <button

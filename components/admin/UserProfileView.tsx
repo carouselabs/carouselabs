@@ -9,6 +9,7 @@ import { postCreditCost } from "@/lib/adminStats"
 import { PlanBadge } from "@/components/admin/ui"
 import { tableCls } from "@/components/admin/tableStyles"
 import { UserAdminActions } from "@/components/admin/UserAdminActions"
+import { EngagePriceCard } from "@/components/admin/engage/EngagePriceCard"
 
 // fmtDate/fmtDateTime live in components/admin/ui.tsx, which is a "use
 // client" module — every export of a client module becomes a client
@@ -196,7 +197,7 @@ export function UserProfileView({ user, sub, plan, creditsRemaining, posts }: Us
         </section>
 
         {/* Admin actions — a side panel beside the posts */}
-        <div className="min-w-0 xl:sticky xl:top-0 xl:self-start">
+        <div className="flex min-w-0 flex-col gap-6 xl:sticky xl:top-0 xl:self-start">
           <UserAdminActions
             userId={user.id}
             email={user.email}
@@ -204,6 +205,8 @@ export function UserProfileView({ user, sub, plan, creditsRemaining, posts }: Us
             suspended={!!user.suspendedAt}
             adminNote={user.adminNote}
           />
+          {/* What they pay for each Engage extension: usual or special. */}
+          <EngagePriceCard userId={user.id} />
         </div>
       </div>
     </div>

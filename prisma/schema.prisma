@@ -149,6 +149,7 @@ model User {
   // ── Engage admin (admin.carouselabs.com → Engage) ──
   engageControl EngageUserControl?
   engageGrants  EngageAccessGrant[]
+  engagePrices  EngagePrice[]
   engageUsage   EngageUsageCounter[]
   engageClients EngageClientInfo[]
   engageErrors  EngageClientError[]
@@ -972,6 +973,28 @@ model EngageUserControl {
   suspendReason   String?   @db.Text
   updatedAt       DateTime  @updatedAt
   updatedBy       String?
+}
+
+// A price an admin set for one person on one extension, instead of the
+// usual $15/month (scripts/engage-price.sql). Their checkout charges it, and
+// Lemon Squeezy keeps it for every renewal. endsAt: the last moment they can
+// buy at this price (null = until an admin changes it); a subscription
+// already bought keeps its price after that. One row per person and
+// extension; removing it deletes the row (the audit log keeps the history).
+model EngagePrice {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // "linkedin" or "x": the two are sold separately.
+  platform   String
+  priceCents Int
+  endsAt     DateTime?
+  reason     String    @db.Text
+  setBy      String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([userId, platform])
 }
 
 // Unlimited Engage access given by an admin, outside Lemon Squeezy. endsAt

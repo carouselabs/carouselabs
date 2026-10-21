@@ -13,6 +13,7 @@ import {
   X_EXTENSION_STORE_URL,
 } from "@/lib/plans"
 import type { ExtAccessSummary } from "@/lib/extAccess"
+import { ExtensionPrice } from "./ExtensionPrice"
 import type { EngagePlatform } from "@/lib/engage/features"
 
 const shortDate = (iso: string) =>
@@ -54,7 +55,8 @@ export function ExtensionPlanSection({ ext, platform = "linkedin" }: { ext: ExtA
       </a>
     ) : ext.access === "free" && checkoutConfigured ? (
       <a href={isX ? X_EXTENSION_CHECKOUT_PATH : EXTENSION_CHECKOUT_PATH} className={ctaClass}>
-        {isX ? `Get Engage for X — $${plan.price}/month` : `Get the extension — $${plan.price}/month`}
+        {isX ? "Get Engage for X — " : "Get the extension — "}
+        <ExtensionPrice price={ext.price} />
       </a>
     ) : ext.access === "free" ? (
       <p className="text-caption text-muted-foreground">Checkout isn&apos;t available right now. Please try again later.</p>
@@ -83,6 +85,8 @@ export function ExtensionPlanSection({ ext, platform = "linkedin" }: { ext: ExtA
         cta={cta}
         showTrialNote={ext.access === "free"}
         plan={plan}
+        // Only someone still deciding needs a special price spelt out.
+        price={ext.access === "free" ? ext.price : undefined}
       />
     </div>
   )

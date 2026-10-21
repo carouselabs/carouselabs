@@ -26,6 +26,7 @@ import { InternPortalView } from "@/components/intern/InternPortalView"
 import type { DayCell } from "@/components/intern/PerformanceCalendar"
 import { ENGAGE_FEATURES } from "@/lib/engage/features"
 import type { ExtAccessSummary } from "@/lib/extAccess"
+import { parseDollars, priceFor, standardPrice } from "@/lib/engage/priceRules"
 
 // Development-only: the Engage and Settings pages in the real app frame,
 // with example data, without signing in. Pages that load their own data in
@@ -38,11 +39,19 @@ import type { ExtAccessSummary } from "@/lib/extAccess"
 //   /design-preview/workspace/settings/[profile|voice-presets|billing|referrals|start-page|account]
 //   /design-preview/workspace/content-hub[/ideas] · toolkit · thumbnail · intern
 //   ?access=unlimited      the extension plan is paid (default: free); also Toolkit
+//   ?price=5               a special price an admin set (dollars, until Nov 30); also Toolkit
 //   ?ended=1               Intern: the internship has ended
 //   ?plan=PRO|GROWTH       the web plan on Settings → Billing (default: FREE)
 
 const features = Object.fromEntries(ENGAGE_FEATURES.map((f) => [f, true])) as ExtAccessSummary["features"]
-function exampleAccess(access: string | undefined): ExtAccessSummary {
+function examplePrice(price: string | undefined) {
+  const cents = price ? parseDollars(price) : null
+  return cents
+    ? priceFor("linkedin", { priceCents: cents, endsAt: new Date("2026-11-30T23:59:59.000Z") }, new Date("2026-10-21T00:00:00.000Z"))
+    : standardPrice("linkedin")
+}
+
+function exampleAccess(access: string | undefined, price?: string): ExtAccessSummary {
   const paid = access === "unlimited"
   return {
     access: paid ? "unlimited" : "free",
@@ -56,12 +65,13 @@ function exampleAccess(access: string | undefined): ExtAccessSummary {
     grantEndsAt: null,
     suspended: false,
     features,
+    price: examplePrice(price),
   }
 }
 
-function Engage({ platform, tab, access }: { platform: "linkedin" | "x"; tab: string; access?: string }) {
+function Engage({ platform, tab, access, price }: { platform: "linkedin" | "x"; tab: string; access?: string; price?: string }) {
   const base = platform === "x" ? "/extension/x" : "/extension"
-  const ext = exampleAccess(access)
+  const ext = exampleAccess(access, price)
   const pages: Record<string, ReactNode> = {
     "": (
       <ExtensionOverviewView
@@ -188,7 +198,7 @@ export default async function WorkspacePreview({
   searchParams,
 }: {
   params: Promise<{ path: string[] }>
-  searchParams: Promise<{ access?: string; plan?: string; ended?: string }>
+  searchParams: Promise<{ access?: string; plan?: string; ended?: string; price?: string }>
 }) {
   if (process.env.NODE_ENV !== "development") notFound()
   const { userId } = await auth()
@@ -200,7 +210,7 @@ export default async function WorkspacePreview({
     )
   }
   const { path } = await params
-  const { access, plan, ended } = await searchParams
+  const { access, plan, ended, price } = await searchParams
   const [area, sub = ""] = path
 
   let pathname: string
@@ -208,7 +218,7 @@ export default async function WorkspacePreview({
   if (area === "engage" || area === "engage-x") {
     const platform = area === "engage-x" ? "x" : "linkedin"
     pathname = `${platform === "x" ? "/extension/x" : "/extension"}${sub ? `/${sub}` : ""}`
-    content = <Engage platform={platform} tab={sub} access={access} />
+    content = <Engage platform={platform} tab={sub} access={access} price={price} />
   } else if (area === "settings") {
     pathname = `/settings/${sub}`
     content = <Settings page={sub} plan={plan} />
@@ -217,7 +227,12 @@ export default async function WorkspacePreview({
     content = sub ? <IdeasBoardPage /> : <ContentHubClient />
   } else if (area === "toolkit") {
     pathname = "/toolkit"
-    content = <ToolkitView unlimited={{ linkedin: access === "unlimited", x: false }} />
+    content = (
+      <ToolkitView
+        unlimited={{ linkedin: access === "unlimited", x: false }}
+        prices={{ linkedin: examplePrice(price), x: standardPrice("x") }}
+      />
+    )
   } else if (area === "thumbnail") {
     pathname = "/thumbnail"
     content = <ThumbnailClient />

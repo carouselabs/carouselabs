@@ -6,11 +6,15 @@
 // The link carries the account's id: the webhook (lib/extensionBilling.ts)
 // credits the subscription to custom_data.user_id, never to the email typed
 // at checkout, so a purchase can't land on the wrong account.
+//
+// Someone an admin gave a special price (lib/engage/price.ts) gets a checkout
+// made for them at that price instead of the shared link.
 import { db } from "@/lib/db"
 import { isExtensionSubscriptionActive } from "@/lib/extensionAccessRules"
 import { signBillingIdentity } from "@/lib/billingIdentity"
 import { extensionVariantIds } from "@/lib/extensionBilling"
 import { X_EXTENSION_CHECKOUT_URL } from "@/lib/plans"
+import { loadEngagePrice } from "@/lib/engage/price"
 import type { EngagePlatform } from "@/lib/engage/features"
 
 export type ExtensionCheckout =
@@ -41,15 +45,97 @@ export async function extensionCheckoutFor(
     return { kind: "unavailable" }
   }
 
+  const custom = {
+    user_id: user.id,
+    // Binds the purchase to this account for this product: the webhook
+    // accepts the user id only with this signature (lib/extensionBilling.ts).
+    identity_signature: signBillingIdentity(user.id, String(variant)),
+    // Informational only: the webhook decides the product by its variant.
+    kind: platform === "x" ? "x_extension" : "extension",
+  }
+
+  const price = await loadEngagePrice(user.id, platform)
+  if (price.special) {
+    // Never fall back to the shared link: it would charge the usual price to
+    // someone who was promised less.
+    const url = await specialPriceCheckoutUrl({
+      variant,
+      cents: price.cents,
+      email: user.email,
+      custom,
+      expiresAt: checkoutExpiry(price.endsAt ? new Date(price.endsAt) : null, new Date()),
+    })
+    return url ? { kind: "checkout", url } : { kind: "unavailable" }
+  }
+
   let url: URL
   try { url = new URL(base) } catch { return { kind: "unavailable" } }
   if (url.protocol !== "https:") return { kind: "unavailable" }
   url.searchParams.set("checkout[email]", user.email)
-  url.searchParams.set("checkout[custom][user_id]", user.id)
-  // Binds the purchase to this account for this product: the webhook accepts
-  // the user id only with this signature (lib/extensionBilling.ts).
-  url.searchParams.set("checkout[custom][identity_signature]", signBillingIdentity(user.id, String(variant)))
-  // Informational only: the webhook decides the product by its variant.
-  url.searchParams.set("checkout[custom][kind]", platform === "x" ? "x_extension" : "extension")
+  for (const [key, value] of Object.entries(custom)) url.searchParams.set(`checkout[custom][${key}]`, value)
   return { kind: "checkout", url: url.toString() }
+}
+
+// A checkout made for one person is opened straight away, so it needn't
+// last: a day, or less when their special price ends sooner.
+const CHECKOUT_LIFETIME_MS = 24 * 60 * 60 * 1000
+
+export function checkoutExpiry(priceEndsAt: Date | null, now: Date): Date {
+  const dayLater = new Date(now.getTime() + CHECKOUT_LIFETIME_MS)
+  return priceEndsAt && priceEndsAt < dayLater ? priceEndsAt : dayLater
+}
+
+// The shared checkout link always charges the product's own price, so a
+// special price needs a checkout of its own: Lemon Squeezy's Create Checkout
+// API with custom_price, which it also uses for every renewal payment.
+// null when it can't be made (not configured, or Lemon Squeezy said no).
+export async function specialPriceCheckoutUrl(input: {
+  variant: number
+  cents: number
+  email: string
+  custom: Record<string, string>
+  expiresAt: Date
+}): Promise<string | null> {
+  const store = process.env.LEMONSQUEEZY_STORE_ID
+  const apiKey = process.env.LEMONSQUEEZY_API_KEY
+  if (!store || !apiKey) {
+    console.error("[extensionCheckout] special price checkout needs LEMONSQUEEZY_STORE_ID and LEMONSQUEEZY_API_KEY")
+    return null
+  }
+  try {
+    const res = await fetch("https://api.lemonsqueezy.com/v1/checkouts", {
+      method: "POST",
+      signal: AbortSignal.timeout(15000),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/vnd.api+json",
+        Accept: "application/vnd.api+json",
+      },
+      body: JSON.stringify({
+        data: {
+          type: "checkouts",
+          attributes: {
+            custom_price: input.cents,
+            product_options: { enabled_variants: [input.variant] },
+            checkout_data: { email: input.email, custom: input.custom },
+            expires_at: input.expiresAt.toISOString(),
+          },
+          relationships: {
+            store: { data: { type: "stores", id: String(store) } },
+            variant: { data: { type: "variants", id: String(input.variant) } },
+          },
+        },
+      }),
+    })
+    if (!res.ok) {
+      console.error(`[extensionCheckout] Lemon Squeezy refused a special price checkout (${res.status})`)
+      return null
+    }
+    const body = (await res.json().catch(() => null)) as { data?: { attributes?: { url?: unknown } } } | null
+    const url = body?.data?.attributes?.url
+    return typeof url === "string" && url.startsWith("https://") ? url : null
+  } catch {
+    console.error("[extensionCheckout] couldn't reach Lemon Squeezy for a special price checkout")
+    return null
+  }
 }

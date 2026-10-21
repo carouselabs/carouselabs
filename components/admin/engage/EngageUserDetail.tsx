@@ -24,6 +24,7 @@ const GENERATION_LABELS: Record<string, string> = {
 import { GRANT_DURATIONS, GRANT_DURATION_LABELS, type GrantDuration } from "@/lib/engage/grants"
 import type { EngageUserDetail as Detail } from "@/lib/engage/userDetail"
 import { AccessEditor } from "./AccessEditor"
+import { EngagePriceCard } from "./EngagePriceCard"
 import { GrantAccessModal } from "./GrantAccessForm"
 import {
   EmptyState,
@@ -157,7 +158,7 @@ export function EngageUserDetail({ userId }: { userId: string }) {
     const sub = p === "x" ? data.xSubscription : data.subscription
     const label =
       paywall.source === "subscription"
-        ? "Paid ($15/month)"
+        ? "Paid"
         : paywall.source === "grant"
           ? "Free access (granted)"
           : paywall.source === "testing"
@@ -398,6 +399,8 @@ export function EngageUserDetail({ userId }: { userId: string }) {
                 </ul>
               )}
             </section>
+
+            <EngagePriceCard userId={user.id} />
 
             <section className="rounded-card border border-border bg-surface px-4 py-3">
               <h2 className="mb-2 text-label font-semibold text-foreground">Subscriptions (Lemon Squeezy)</h2>

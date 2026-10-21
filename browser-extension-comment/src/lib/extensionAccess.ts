@@ -9,7 +9,19 @@
 import { useSyncExternalStore } from "react";
 import { apiFetch, ApiError, type ExtensionAccess, type MeResponse } from "@/lib/api";
 
-export const EXTENSION_PRICE_LABEL = "$15/month";
+// The usual price, for a server that doesn't say (older than special prices).
+const USUAL_PRICE_CENTS = 1500;
+
+const usd = (cents: number) => (cents % 100 === 0 ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`);
+
+// What this account pays per month: the usual $15, or a special price an
+// admin set for it (lib/engage/priceRules.ts on the server). `was`: the
+// usual price, shown struck through before a lower special one.
+export function extensionPrice(access: ExtensionAccess | null): { label: string; was: string | null } {
+  const price = access?.price;
+  const was = price?.special && price.cents < price.standardCents ? usd(price.standardCents) : null;
+  return { label: `${usd(price?.cents ?? USUAL_PRICE_CENTS)}/month`, was };
+}
 // Mirrors EXT_FREE_GENERATIONS in lib/extensionAccessRules.ts. Only used if a
 // paywall 402 arrives before /api/ext/me has answered.
 const FREE_GENERATIONS = 10;

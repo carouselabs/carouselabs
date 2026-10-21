@@ -3,12 +3,12 @@ import Link from "next/link"
 import { ArrowRight, ExternalLink } from "lucide-react"
 import { buttonVariants } from "@/components/ui/button"
 import { PageHeader } from "@/components/patterns/PageHeader"
+import { ExtensionPrice } from "@/components/extension/ExtensionPrice"
+import { standardPrice, type EngagePriceInfo } from "@/lib/engage/priceRules"
 import {
   EXTENSION_CHECKOUT_PATH,
-  EXTENSION_PLAN,
   EXTENSION_STORE_URL,
   X_EXTENSION_CHECKOUT_PATH,
-  X_EXTENSION_PLAN,
   X_EXTENSION_STORE_URL,
 } from "@/lib/plans"
 
@@ -78,7 +78,7 @@ const secondaryClass = buttonVariants({
 // The paid extension's second button: buy it, or show it's already unlocked.
 // Installing and trying it is free (10 generations), so Install stays the
 // primary action once the listing is live.
-function PlanCta({ unlimited, platform }: { unlimited: boolean; platform: "linkedin" | "x" }) {
+function PlanCta({ unlimited, platform, price }: { unlimited: boolean; platform: "linkedin" | "x"; price: EngagePriceInfo }) {
   if (unlimited) {
     return (
       <Link href={platform === "x" ? "/extension/x" : "/extension"} className={secondaryClass}>
@@ -86,10 +86,9 @@ function PlanCta({ unlimited, platform }: { unlimited: boolean; platform: "linke
       </Link>
     )
   }
-  const price = platform === "x" ? X_EXTENSION_PLAN.price : EXTENSION_PLAN.price
   return (
     <a href={platform === "x" ? X_EXTENSION_CHECKOUT_PATH : EXTENSION_CHECKOUT_PATH} className={secondaryClass}>
-      Get unlimited — ${price}/month
+      Get unlimited — <ExtensionPrice price={price} />
     </a>
   )
 }
@@ -125,8 +124,15 @@ function Cta({ tool }: { tool: ToolCard }) {
   )
 }
 
-/** `unlimited`: which paid extensions this account already has. */
-export function ToolkitView({ unlimited }: { unlimited: { linkedin: boolean; x: boolean } }) {
+/** `unlimited`: which paid extensions this account already has; `prices`:
+ * what it pays for each (a special price an admin set, or the usual one). */
+export function ToolkitView({
+  unlimited,
+  prices = { linkedin: standardPrice("linkedin"), x: standardPrice("x") },
+}: {
+  unlimited: { linkedin: boolean; x: boolean }
+  prices?: { linkedin: EngagePriceInfo; x: EngagePriceInfo }
+}) {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
       <PageHeader title="Toolkit" description="Every CarouseLabs tool and browser extension, in one place." />
@@ -164,7 +170,7 @@ export function ToolkitView({ unlimited }: { unlimited: { linkedin: boolean; x: 
                 {/* A paid extension with no listing yet shows only its plan
                     button, never a dead "Coming soon". */}
                 {!(tool.kind === "extension" && tool.paid && !tool.storeUrl) && <Cta tool={tool} />}
-                {tool.kind === "extension" && tool.paid && <PlanCta unlimited={unlimited[tool.paid]} platform={tool.paid} />}
+                {tool.kind === "extension" && tool.paid && <PlanCta unlimited={unlimited[tool.paid]} platform={tool.paid} price={prices[tool.paid]} />}
               </div>
             </li>
           )

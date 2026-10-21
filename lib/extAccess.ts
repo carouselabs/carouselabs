@@ -16,9 +16,11 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { COMMENT_CREDITS_ENFORCED } from "@/lib/commentCredits"
-import { EXT_FREE_GENERATIONS, EXT_PRICE_LABEL, isExtensionSubscriptionActive } from "@/lib/extensionAccessRules"
+import { EXT_FREE_GENERATIONS, isExtensionSubscriptionActive } from "@/lib/extensionAccessRules"
 import { isEngageSchemaMissing, loadEngageAccess } from "@/lib/engage/access"
 import { ENGAGE_FEATURES, type EngageFeature, type EngagePlatform } from "@/lib/engage/features"
+import { loadEngagePrice } from "@/lib/engage/price"
+import { STANDARD_PRICE_CENTS, monthlyLabel, type EngagePriceInfo } from "@/lib/engage/priceRules"
 
 export interface ExtAccessSummary {
   access: "unlimited" | "free" | "testing"
@@ -39,6 +41,9 @@ export interface ExtAccessSummary {
   // these as "turned off for this account", and a pause says so itself when
   // someone tries to use it.
   features: Record<EngageFeature, boolean>
+  // What this person pays for this extension: the usual price, or a special
+  // one an admin set for them (lib/engage/price.ts).
+  price: EngagePriceInfo
 }
 
 const ALL_ON = Object.fromEntries(ENGAGE_FEATURES.map((f) => [f, true])) as Record<EngageFeature, boolean>
@@ -52,16 +57,20 @@ function findSubscription(userId: string, platform: EngagePlatform) {
 
 // One extension's plan, for the panel (/api/ext/me) and the website.
 export async function extAccessSummary(userId: string, platform: EngagePlatform = "linkedin"): Promise<ExtAccessSummary> {
-  const sub = await findSubscription(userId, platform).catch((err) => {
-    // The X table not there yet (scripts/x-billing.sql not run): no X subscription.
-    if (platform === "x" && isEngageSchemaMissing(err)) return null
-    throw err
-  })
+  const [sub, price] = await Promise.all([
+    findSubscription(userId, platform).catch((err) => {
+      // The X table not there yet (scripts/x-billing.sql not run): no X subscription.
+      if (platform === "x" && isEngageSchemaMissing(err)) return null
+      throw err
+    }),
+    loadEngagePrice(userId, platform),
+  ])
   const billing = {
     status: sub?.status ?? null,
     renewsAt: sub?.renewsAt?.toISOString() ?? null,
     endsAt: sub?.endsAt?.toISOString() ?? null,
     manageUrl: sub?.customerPortalUrl ?? null,
+    price,
   }
 
   try {
@@ -137,10 +146,12 @@ const PRODUCT_NAMES: Record<EngagePlatform, string> = {
   x: "CarouseLabs Engage for X",
 }
 
-function paywallResponse(freeLimit: number, platform: EngagePlatform): NextResponse {
+// Quotes this person's own price: a special one if an admin set it.
+async function paywallResponse(userId: string, freeLimit: number, platform: EngagePlatform): Promise<NextResponse> {
+  const price = await loadEngagePrice(userId, platform).catch(() => null)
   return NextResponse.json(
     {
-      error: `You've used your ${freeLimit} free generations. Get unlimited with ${PRODUCT_NAMES[platform]} for ${EXT_PRICE_LABEL} to keep going.`,
+      error: `You've used your ${freeLimit} free generations. Get unlimited with ${PRODUCT_NAMES[platform]} for ${monthlyLabel(price?.cents ?? STANDARD_PRICE_CENTS[platform])} to keep going.`,
       requiresSubscription: true,
     },
     { status: 402 },
@@ -159,7 +170,7 @@ export async function reserveFreeGeneration(
       where: { id: userId, xTrialUsed: { lt: freeLimit } },
       data: { xTrialUsed: { increment: 1 } },
     })
-    if (count === 0) return { ok: false, response: paywallResponse(freeLimit, platform) }
+    if (count === 0) return { ok: false, response: await paywallResponse(userId, freeLimit, platform) }
     const after = await db.user.findUnique({ where: { id: userId }, select: { xTrialUsed: true } })
     return {
       ok: true,
@@ -176,7 +187,7 @@ export async function reserveFreeGeneration(
     where: { id: userId, extensionTrialUsed: { lt: freeLimit } },
     data: { extensionTrialUsed: { increment: 1 } },
   })
-  if (count === 0) return { ok: false, response: paywallResponse(freeLimit, platform) }
+  if (count === 0) return { ok: false, response: await paywallResponse(userId, freeLimit, platform) }
 
   const after = await db.user.findUnique({ where: { id: userId }, select: { extensionTrialUsed: true } })
   return {

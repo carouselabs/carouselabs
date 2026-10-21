@@ -328,7 +328,7 @@ describe("Engage user page", () => {
     const summary = within(await screen.findByRole("region", { name: "Access summary" }));
     expect(summary.getByText("LinkedIn plan")).toBeTruthy();
     expect(summary.getByText("X plan")).toBeTruthy();
-    expect(summary.getByText("Paid ($15/month)")).toBeTruthy();
+    expect(summary.getByText("Paid")).toBeTruthy();
     expect(summary.getByText("Free plan")).toBeTruthy();
     expect(summary.getByText("4 / 10 free used")).toBeTruthy();
     expect(summary.getByText(/^Renews /)).toBeTruthy();

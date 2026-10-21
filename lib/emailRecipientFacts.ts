@@ -6,6 +6,8 @@
 import { db } from "@/lib/db"
 import { resolveVariables } from "@/lib/broadcastVariables"
 import { loadEngageAccess } from "@/lib/engage/access"
+import { loadEngagePrices } from "@/lib/engage/price"
+import { monthlyLabel, type EngagePriceInfo } from "@/lib/engage/priceRules"
 import { engageUsage, signedInToEngage } from "@/lib/engage/audience"
 import { ENGAGE_EXTENSIONS } from "@/components/extension/engageExtensions"
 import type { EngagePlatform } from "@/lib/engage/features"
@@ -20,9 +22,18 @@ function when(date: Date | null | undefined, now: Date): string {
   return days <= 0 ? `today (${on})` : days === 1 ? `yesterday (${on})` : `${days} days ago (${on})`
 }
 
+// A special price an admin set for them, so the email never quotes $15.
+function priceLine(price: EngagePriceInfo | undefined): string {
+  if (!price?.special) return ""
+  const until = price.endsAt
+    ? `, which they can buy at until ${new Date(price.endsAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })}`
+    : ""
+  return `; their own special price is ${monthlyLabel(price.cents)} instead of the usual ${monthlyLabel(price.standardCents)}${until}`
+}
+
 function accessLine(access: PaywallAccess | undefined): string {
   if (!access) return "unknown"
-  if (access.source === "subscription") return "pays for it ($15/month)"
+  if (access.source === "subscription") return "pays for it"
   if (access.source === "grant") {
     return access.activeGrant?.endsAt
       ? `has free unlimited access we gave them, until ${new Date(access.activeGrant.endsAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`
@@ -55,9 +66,10 @@ export async function recipientFacts(userId: string, now: Date = new Date()): Pr
   })
   if (!user || user.deletedAt) return null
 
-  const [values, access, ...perPlatform] = await Promise.all([
+  const [values, access, prices, ...perPlatform] = await Promise.all([
     resolveVariables(user.id),
     loadEngageAccess(user.id, now).catch(() => null),
+    loadEngagePrices(user.id, now).catch(() => null),
     ...(["linkedin", "x"] as EngagePlatform[]).map(async (platform) => ({
       platform,
       signedIn: await signedInToEngage(platform, user.id),
@@ -75,9 +87,9 @@ export async function recipientFacts(userId: string, now: Date = new Date()): Pr
     p?.targetAudience ? `Who they write for: ${p.targetAudience}` : null,
     ...perPlatform.map(({ platform, signedIn, usage }) => {
       const name = ENGAGE_EXTENSIONS[platform].name
-      if (!signedIn && !usage?.generations) return `${name}: hasn't signed in to it (may not have installed it).`
+      if (!signedIn && !usage?.generations) return `${name}: hasn't signed in to it (may not have installed it)${priceLine(prices?.[platform])}.`
       return (
-        `${name}: ${signedIn ? "signed in" : "not signed in now"}; ${accessLine(access?.platforms[platform])}; ` +
+        `${name}: ${signedIn ? "signed in" : "not signed in now"}; ${accessLine(access?.platforms[platform])}${priceLine(prices?.[platform])}; ` +
         `${usage?.generations ?? 0} generation${usage?.generations === 1 ? "" : "s"} so far; last used ${when(usage?.lastUsedAt, now)}.`
       )
     }),

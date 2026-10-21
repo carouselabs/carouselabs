@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { clearAccountData } from "@/lib/account";
 import {
-  EXTENSION_PRICE_LABEL,
   freeGenerationsLeft,
   openCheckout,
   setExtensionAccess,
@@ -16,6 +15,7 @@ import {
 import { WEBSITE_PATH } from "@/lib/platform";
 import { Initials } from "../Initials";
 import { ScreenHeader } from "../ScreenHeader";
+import { PriceText } from "../PriceText";
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
@@ -208,7 +208,13 @@ export function AccountScreen() {
                     {access.access === "free" && (
                       <Button className="w-full" loading={openingCheckout} onClick={handleGetUnlimited}>
                         {!openingCheckout && <Sparkles aria-hidden />}
-                        {openingCheckout ? "Opening checkout…" : `Get unlimited — ${EXTENSION_PRICE_LABEL}`}
+                        {openingCheckout ? (
+                          "Opening checkout…"
+                        ) : (
+                          <>
+                            Get unlimited — <PriceText access={access} />
+                          </>
+                        )}
                       </Button>
                     )}
                     {access.access === "unlimited" && access.source !== "grant" && access.manageUrl && (

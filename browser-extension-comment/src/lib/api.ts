@@ -153,6 +153,9 @@ export interface ExtensionAccess {
   suspended?: boolean;
   // false for a feature an admin switched off for this account.
   features?: Partial<Record<"comments" | "replies" | "connection_notes" | "messages", boolean>>;
+  // What this account pays per month, in cents: the usual price, or a
+  // special one an admin set for it (absent on servers before special prices).
+  price?: { cents: number; standardCents: number; special: boolean; endsAt: string | null };
 }
 
 export interface MeResponse {

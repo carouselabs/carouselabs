@@ -3,6 +3,8 @@ import { Check, Puzzle } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { EXTENSION_PLAN } from "@/lib/plans"
+import { formatUsd, type EngagePriceInfo } from "@/lib/engage/priceRules"
+import { isDiscount, priceEndDate } from "@/components/extension/ExtensionPrice"
 
 type EngagePlan = {
   name: string
@@ -18,7 +20,8 @@ type EngagePlan = {
  * One Chrome extension plan (Engage for LinkedIn or for X), sold separately
  * from the studio plans. Values from lib/plans.ts. Used by the landing page,
  * the extension's Plan & payments page and Settings → Billing
- * (components/extension/ExtensionPlanSection).
+ * (components/extension/ExtensionPlanSection). `price`: what this account
+ * pays, when it isn't the plan's usual price (a special price an admin set).
  */
 export function EngagePlanCard({
   plan = EXTENSION_PLAN,
@@ -26,13 +29,16 @@ export function EngagePlanCard({
   status,
   showTrialNote = true,
   className,
+  price,
 }: {
   plan?: EngagePlan
   cta: ReactNode
   status?: ReactNode
   showTrialNote?: boolean
   className?: string
+  price?: EngagePriceInfo
 }) {
+  const special = price?.special ? price : null
   return (
     <div className={cn("flex h-full flex-col gap-6 rounded-showcase border border-border bg-surface-raised p-6 sm:p-8", className)}>
       <div className="flex flex-col gap-3">
@@ -44,10 +50,24 @@ export function EngagePlanCard({
         <p className="text-label text-muted-foreground">{plan.tagline}</p>
       </div>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="text-[2.5rem] leading-none font-semibold tracking-[-0.03em] tabular-nums">${plan.price}</span>
+        {special && isDiscount(special) && (
+          <s className="text-title-sm leading-none font-medium text-muted-foreground tabular-nums">
+            <span className="sr-only">Usually </span>
+            {formatUsd(special.standardCents)}
+          </s>
+        )}
+        <span className="text-[2.5rem] leading-none font-semibold tracking-[-0.03em] tabular-nums">
+          {special ? formatUsd(special.cents) : `$${plan.price}`}
+        </span>
         <span className="text-label text-muted-foreground">{plan.priceSuffix}</span>
         <span className="ml-1 rounded-full bg-brand-soft px-2.5 py-0.5 text-caption font-medium text-brand">Unlimited</span>
       </div>
+      {special && (
+        <p className="-mt-3 text-caption font-medium text-brand">
+          Your special price{special.endsAt ? `, available until ${priceEndDate(special.endsAt)}` : ""}. You keep it every month
+          you stay subscribed.
+        </p>
+      )}
       {status}
       <div className="flex flex-col gap-2">
         {cta}

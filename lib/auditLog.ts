@@ -66,6 +66,9 @@ export type AdminAuditAction =
   | "ENGAGE_DELETE_NOTE"
   | "ENGAGE_ADD_TAG"
   | "ENGAGE_REMOVE_TAG"
+  // A special price for one person on one extension (lib/engage/price.ts)
+  | "ENGAGE_SET_PRICE"
+  | "ENGAGE_REMOVE_PRICE"
   // Settings for everyone (admin → Engage → Controls)
   | "ENGAGE_PAUSE_FEATURE"
   | "ENGAGE_RESUME_FEATURE"

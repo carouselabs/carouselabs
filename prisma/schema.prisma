@@ -993,6 +993,13 @@ model EngagePrice {
   setBy      String
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+  // The person's own once-only Lemon Squeezy discount that turns the usual
+  // price into this one at checkout (lib/engage/priceDiscount.ts), made at
+  // their first checkout and reused until it's used or the price changes.
+  // lemonDiscountCents: how much it takes off.
+  lemonDiscountId    String?
+  lemonDiscountCode  String?
+  lemonDiscountCents Int?
 
   @@unique([userId, platform])
 }

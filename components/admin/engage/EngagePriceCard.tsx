@@ -258,6 +258,7 @@ export function EngagePriceCard({ userId }: { userId: string }) {
                         ? `Can buy at it until ${fmtDate(special.endsAt)}. `
                         : "No end date. "}
                     “{special.reason}” · {special.setBy}, {fmtDate(special.updatedAt)}
+                    {special.discountCode && ` · Lemon Squeezy discount ${special.discountCode}`}
                   </p>
                 )}
                 {data.subscribed?.[row.platform] && (

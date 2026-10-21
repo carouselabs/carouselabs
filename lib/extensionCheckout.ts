@@ -15,6 +15,7 @@ import { signBillingIdentity } from "@/lib/billingIdentity"
 import { extensionVariantIds } from "@/lib/extensionBilling"
 import { X_EXTENSION_CHECKOUT_URL } from "@/lib/plans"
 import { loadEngagePrice } from "@/lib/engage/price"
+import { discountCodeFor, variantPriceCents } from "@/lib/engage/priceDiscount"
 import type { EngagePlatform } from "@/lib/engage/features"
 
 export type ExtensionCheckout =
@@ -59,6 +60,8 @@ export async function extensionCheckoutFor(
     // Never fall back to the shared link: it would charge the usual price to
     // someone who was promised less.
     const url = await specialPriceCheckoutUrl({
+      userId: user.id,
+      platform,
       variant,
       cents: price.cents,
       email: user.email,
@@ -86,10 +89,16 @@ export function checkoutExpiry(priceEndsAt: Date | null, now: Date): Date {
 }
 
 // The shared checkout link always charges the product's own price, so a
-// special price needs a checkout of its own: Lemon Squeezy's Create Checkout
-// API with custom_price, which it also uses for every renewal payment.
-// null when it can't be made (not configured, or Lemon Squeezy said no).
+// special price needs a checkout of its own (Lemon Squeezy's Create Checkout
+// API). It carries the person's own discount from the product's price
+// (lib/engage/priceDiscount.ts), which the checkout shows as such. When
+// there's nothing to take off (the product already costs that or less) or
+// no discount can be made, a custom_price instead: the same charge, now and
+// at every renewal, with the product's usual price still printed beside it.
+// null when no checkout can be made (not configured, or Lemon Squeezy said no).
 export async function specialPriceCheckoutUrl(input: {
+  userId: string
+  platform: EngagePlatform
   variant: number
   cents: number
   email: string
@@ -102,6 +111,19 @@ export async function specialPriceCheckoutUrl(input: {
     console.error("[extensionCheckout] special price checkout needs LEMONSQUEEZY_STORE_ID and LEMONSQUEEZY_API_KEY")
     return null
   }
+  const listCents = await variantPriceCents(input.variant)
+  const code =
+    listCents !== null && listCents > input.cents
+      ? await discountCodeFor({
+          userId: input.userId,
+          platform: input.platform,
+          variant: input.variant,
+          offCents: listCents - input.cents,
+        }).catch(() => null)
+      : null
+  const charge = code
+    ? { checkout_data: { email: input.email, custom: input.custom, discount_code: code } }
+    : { custom_price: input.cents, checkout_data: { email: input.email, custom: input.custom } }
   try {
     const res = await fetch("https://api.lemonsqueezy.com/v1/checkouts", {
       method: "POST",
@@ -115,9 +137,8 @@ export async function specialPriceCheckoutUrl(input: {
         data: {
           type: "checkouts",
           attributes: {
-            custom_price: input.cents,
+            ...charge,
             product_options: { enabled_variants: [input.variant] },
-            checkout_data: { email: input.email, custom: input.custom },
             expires_at: input.expiresAt.toISOString(),
           },
           relationships: {

@@ -5,6 +5,7 @@
 import { db } from "@/lib/db"
 import { logAdminAction } from "@/lib/auditLog"
 import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
+import { retireDiscount } from "@/lib/engage/priceDiscount"
 import { formatUsd, priceFor, standardPrice, type EngagePriceInfo } from "@/lib/engage/priceRules"
 import type { EngagePlatform } from "@/lib/engage/features"
 
@@ -48,6 +49,8 @@ export async function adminEngagePrices(userId: string, now: Date = new Date()) 
         reason: row.reason,
         setBy: row.setBy,
         updatedAt: row.updatedAt,
+        // The Lemon Squeezy discount its checkout uses, once one was made.
+        discountCode: row.lemonDiscountCode,
         ended: !!row.endsAt && row.endsAt.getTime() <= now.getTime(),
       },
     }
@@ -71,7 +74,15 @@ export async function setEngagePrice(input: {
 }) {
   const where = { userId_platform: { userId: input.user.id, platform: input.platform } }
   const before = await db.engagePrice.findUnique({ where })
-  const data = { priceCents: input.priceCents, endsAt: input.endsAt, reason: input.reason, setBy: input.admin }
+  // A new amount needs a new checkout discount (lib/engage/priceDiscount.ts).
+  const repriced = !!before && before.priceCents !== input.priceCents
+  const data = {
+    priceCents: input.priceCents,
+    endsAt: input.endsAt,
+    reason: input.reason,
+    setBy: input.admin,
+    ...(repriced ? { lemonDiscountId: null, lemonDiscountCode: null, lemonDiscountCents: null } : {}),
+  }
   const row = await db.engagePrice.upsert({
     where,
     create: { userId: input.user.id, platform: input.platform, ...data },
@@ -89,6 +100,7 @@ export async function setEngagePrice(input: {
     newValue: { platform: input.platform, priceCents: input.priceCents, endsAt: input.endsAt?.toISOString() ?? null },
     reason: input.reason,
   })
+  if (repriced) await retireDiscount(before.lemonDiscountId)
   return row
 }
 
@@ -116,5 +128,6 @@ export async function removeEngagePrice(input: {
     newValue: null,
     reason: input.reason,
   })
+  await retireDiscount(before.lemonDiscountId)
   return true
 }

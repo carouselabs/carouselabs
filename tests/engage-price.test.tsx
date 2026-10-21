@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 // Special prices for an Engage extension: an admin sets one person's price
-// (e.g. $5 instead of $15), their checkout charges it through a checkout made
-// for them, and they see it with the usual price struck through.
+// (e.g. $5 instead of $15), their checkout charges it as their own discount
+// from the usual price, and they see it with the usual price struck through.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 
-type Row = { id: string; userId: string; platform: string; priceCents: number; endsAt: Date | null; reason: string; setBy: string; createdAt: Date; updatedAt: Date }
+type Row = {
+  id: string; userId: string; platform: string; priceCents: number; endsAt: Date | null; reason: string; setBy: string; createdAt: Date; updatedAt: Date
+  lemonDiscountId?: string | null; lemonDiscountCode?: string | null; lemonDiscountCents?: number | null
+}
 
 const mocks = vi.hoisted(() => ({
   rows: [] as Row[],
@@ -34,6 +37,11 @@ vi.mock("@/lib/db", () => {
           const row = { id: `p${mocks.rows.length + 1}`, createdAt: new Date(), updatedAt: new Date(), ...create } as Row
           mocks.rows.push(row)
           return row
+        }),
+        updateMany: vi.fn(async ({ where, data }: { where: Partial<Row>; data: Partial<Row> }) => {
+          const hits = mocks.rows.filter((r) => Object.entries(where).every(([k, v]) => r[k as keyof Row] === v))
+          hits.forEach((r) => Object.assign(r, data))
+          return { count: hits.length }
         }),
         delete: vi.fn(async ({ where }: { where: { userId_platform: { userId: string; platform: string } } }) => {
           mocks.rows = mocks.rows.filter((r) => !key(where)(r))
@@ -114,54 +122,177 @@ describe("the price rules", () => {
 })
 
 describe("checkout", () => {
-  const lemon = (body: unknown = { data: { attributes: { url: "https://carouselabs.lemonsqueezy.com/checkout/custom/abc" } } }, status = 201) => {
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      void url
-      void init
-      return new Response(JSON.stringify(body), { status })
-    })
-    vi.stubGlobal("fetch", fetchMock)
-    return fetchMock
+  // A small Lemon Squeezy: the product's price, discounts made and deleted,
+  // which were redeemed, and the checkouts made.
+  type Made = { id: string; attributes: Record<string, unknown>; relationships: Record<string, { data: unknown }> }
+  type Checkout = { attributes: Record<string, any>; relationships: unknown } // eslint-disable-line @typescript-eslint/no-explicit-any
+  function fakeLemon(over: Partial<{ variantPrice: number; refuse: string[] }> = {}) {
+    const state = {
+      variantPrice: over.variantPrice ?? 1500,
+      refuse: new Set(over.refuse ?? []),
+      redeemed: new Set<string>(),
+      made: [] as Made[],
+      deleted: [] as string[],
+      checkouts: [] as Checkout[],
+    }
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const path = url.replace("https://api.lemonsqueezy.com/v1/", "")
+        const method = init?.method ?? "GET"
+        const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
+        if (method === "GET" && path.startsWith("variants/")) return json({ data: { attributes: { price: state.variantPrice } } })
+        if (method === "GET" && path.startsWith("discount-redemptions")) {
+          const id = new URL(`https://x/${path}`).searchParams.get("filter[discount_id]") ?? ""
+          return json({ data: state.redeemed.has(id) ? [{ id: "r1" }] : [] })
+        }
+        if (method === "POST" && path === "discounts") {
+          if (state.refuse.has("discount")) return json({ errors: [{ detail: "nope" }] }, 422)
+          const made = { id: `d${state.made.length + 1}`, ...JSON.parse(String(init?.body)).data }
+          state.made.push(made)
+          return json({ data: { id: made.id } }, 201)
+        }
+        if (method === "DELETE" && path.startsWith("discounts/")) {
+          state.deleted.push(path.split("/")[1])
+          return new Response(null, { status: 204 })
+        }
+        if (method === "POST" && path === "checkouts") {
+          if (state.refuse.has("checkout")) return json({ errors: [{ detail: "nope" }] }, 422)
+          state.checkouts.push(JSON.parse(String(init?.body)).data)
+          return json({ data: { attributes: { url: "https://carouselabs.lemonsqueezy.com/checkout/custom/abc" } } }, 201)
+        }
+        return json({ error: `unexpected ${method} ${path}` }, 500)
+      }),
+    )
+    return state
   }
+  const buy = () => extensionCheckoutFor({ id: "u1", email: "priya@example.com" })
 
-  it("charges a special price through a checkout made for that person", async () => {
+  it("charges a special price as the person's own once-only discount, shown as such", async () => {
     vi.useFakeTimers({ now: NOW, toFake: ["Date"] })
     mocks.rows = [special(500, new Date("2026-10-22T05:00:00.000Z"))]
-    const fetchMock = lemon()
+    const lemon = fakeLemon()
 
-    const result = await extensionCheckoutFor({ id: "u1", email: "priya@example.com" })
-    expect(result).toEqual({ kind: "checkout", url: "https://carouselabs.lemonsqueezy.com/checkout/custom/abc" })
+    expect(await buy()).toEqual({ kind: "checkout", url: "https://carouselabs.lemonsqueezy.com/checkout/custom/abc" })
 
-    const [url, init] = fetchMock.mock.calls[0]
-    expect(url).toBe("https://api.lemonsqueezy.com/v1/checkouts")
-    expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer test-only-key")
-    const { data } = JSON.parse(String(init?.body))
-    expect(data.attributes.custom_price).toBe(500)
-    expect(data.attributes.product_options.enabled_variants).toEqual([44])
-    expect(data.attributes.checkout_data.email).toBe("priya@example.com")
-    expect(data.relationships).toEqual({ store: { data: { type: "stores", id: "7" } }, variant: { data: { type: "variants", id: "44" } } })
+    // $15 product, $5 special price: $10 off every payment, usable once, only on this extension.
+    const [discount] = lemon.made
+    expect(discount.attributes).toEqual({
+      name: "Special price, Engage for LinkedIn",
+      code: expect.stringMatching(/^CLL[A-Z2-9]{10}$/),
+      amount: 1000,
+      amount_type: "fixed",
+      duration: "forever",
+      is_limited_to_products: true,
+      is_limited_redemptions: true,
+      max_redemptions: 1,
+    })
+    expect(discount.relationships).toEqual({
+      store: { data: { type: "stores", id: "7" } },
+      variants: { data: [{ type: "variants", id: "44" }] },
+    })
+    expect(mocks.rows[0]).toMatchObject({ lemonDiscountId: "d1", lemonDiscountCode: discount.attributes.code, lemonDiscountCents: 1000 })
+
+    const [checkout] = lemon.checkouts
+    expect(checkout.attributes.checkout_data.discount_code).toBe(discount.attributes.code)
+    expect(checkout.attributes.custom_price).toBeUndefined()
+    expect(checkout.attributes.product_options.enabled_variants).toEqual([44])
+    expect(checkout.attributes.checkout_data.email).toBe("priya@example.com")
+    expect(checkout.relationships).toEqual({ store: { data: { type: "stores", id: "7" } }, variant: { data: { type: "variants", id: "44" } } })
     // Bound to this account, exactly like the usual checkout.
-    const custom = data.attributes.checkout_data.custom
+    const custom = checkout.attributes.checkout_data.custom
     expect(custom.user_id).toBe("u1")
     expect(verifyBillingIdentity("u1", "44", custom.identity_signature)).toBe(true)
     // The special price ends in less than a day, so the checkout does too.
-    expect(data.attributes.expires_at).toBe("2026-10-22T05:00:00.000Z")
+    expect(checkout.attributes.expires_at).toBe("2026-10-22T05:00:00.000Z")
+  })
+
+  it("reuses the code while it's unused; a used one is replaced but never deleted", async () => {
+    mocks.rows = [special(500)]
+    const lemon = fakeLemon()
+    await buy()
+    await buy()
+    expect(lemon.made).toHaveLength(1)
+    expect(lemon.checkouts.map((c) => c.attributes.checkout_data.discount_code)).toEqual([
+      lemon.made[0].attributes.code,
+      lemon.made[0].attributes.code,
+    ])
+
+    lemon.redeemed.add("d1")
+    await buy()
+    expect(lemon.made).toHaveLength(2)
+    expect(lemon.checkouts[2].attributes.checkout_data.discount_code).toBe(lemon.made[1].attributes.code)
+    expect(lemon.deleted).toEqual([])
+  })
+
+  it("makes a new code when the product's price changed, deleting the unused old one", async () => {
+    mocks.rows = [{ ...special(500), lemonDiscountId: "d9", lemonDiscountCode: "CLLOLDOLDOLD1", lemonDiscountCents: 1000 }]
+    const lemon = fakeLemon({ variantPrice: 2000 })
+    await buy()
+    expect(lemon.deleted).toEqual(["d9"])
+    expect(lemon.made[0].attributes.amount).toBe(1500)
+    expect(lemon.checkouts[0].attributes.checkout_data.discount_code).toBe(lemon.made[0].attributes.code)
+  })
+
+  it("charges the special price as a custom price when there's nothing to discount or no discount can be made", async () => {
+    mocks.rows = [special(500)]
+    // The product costs less than the special price (as X's does at $0.50).
+    let lemon = fakeLemon({ variantPrice: 50 })
+    await buy()
+    expect(lemon.made).toEqual([])
+    expect(lemon.checkouts[0].attributes).toMatchObject({ custom_price: 500, checkout_data: { email: "priya@example.com" } })
+    expect(lemon.checkouts[0].attributes.checkout_data.discount_code).toBeUndefined()
+
+    lemon = fakeLemon({ refuse: ["discount"] })
+    expect((await buy()).kind).toBe("checkout")
+    expect(lemon.checkouts[0].attributes.custom_price).toBe(500)
   })
 
   it("never falls back to the usual-price link when Lemon Squeezy says no", async () => {
     mocks.rows = [special(500)]
-    lemon({ errors: [{ detail: "nope" }] }, 422)
-    expect(await extensionCheckoutFor({ id: "u1", email: "priya@example.com" })).toEqual({ kind: "unavailable" })
+    fakeLemon({ refuse: ["checkout"] })
+    expect(await buy()).toEqual({ kind: "unavailable" })
     vi.stubEnv("LEMONSQUEEZY_STORE_ID", "")
-    expect(await extensionCheckoutFor({ id: "u1", email: "priya@example.com" })).toEqual({ kind: "unavailable" })
+    expect(await buy()).toEqual({ kind: "unavailable" })
   })
 
   it("keeps the usual shared link for everyone else, and for an ended special price", async () => {
-    const fetchMock = lemon()
+    const lemon = fakeLemon()
     mocks.rows = [special(500, new Date("2026-10-01T23:59:59.000Z")), special(700, null, "x")]
-    const result = await extensionCheckoutFor({ id: "u1", email: "priya@example.com" })
+    const result = await buy()
     expect(result.kind === "checkout" && result.url.startsWith("https://store.lemonsqueezy.com/buy/extension?")).toBe(true)
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(lemon.made).toEqual([])
+    expect(lemon.checkouts).toEqual([])
+  })
+
+  it("an admin's new amount or removal retires the unused discount, never a used one", async () => {
+    const lemon = fakeLemon()
+    const req = (method: string, body: unknown) =>
+      new Request("https://admin.test/api/admin/engage/users/u1/price", { method, body: JSON.stringify(body) })
+    const params = { params: Promise.resolve({ userId: "u1" }) }
+    mocks.rows = [{ ...special(500), lemonDiscountId: "d1", lemonDiscountCode: "CLLAAAAAAAAAA", lemonDiscountCents: 1000 }]
+
+    // Same amount, new end date: the discount stays.
+    await PUT(req("PUT", { platform: "linkedin", priceCents: 500, endsAt: "2099-01-01T23:59:59.000Z", reason: "Longer" }), params)
+    expect(mocks.rows[0].lemonDiscountId).toBe("d1")
+    expect(lemon.deleted).toEqual([])
+
+    // A new amount: forgotten here, deleted there (nobody used it).
+    await PUT(req("PUT", { platform: "linkedin", priceCents: 300, reason: "Cheaper" }), params)
+    expect(mocks.rows[0]).toMatchObject({ priceCents: 300, lemonDiscountId: null, lemonDiscountCode: null, lemonDiscountCents: null })
+    expect(lemon.deleted).toEqual(["d1"])
+
+    // Removed while its discount was used: the discount stays in Lemon Squeezy.
+    Object.assign(mocks.rows[0], { lemonDiscountId: "d2", lemonDiscountCode: "CLLBBBBBBBBBB", lemonDiscountCents: 1200 })
+    lemon.redeemed.add("d2")
+    await DELETE(req("DELETE", { platform: "linkedin", reason: "Back to normal" }), params)
+    expect(mocks.rows).toEqual([])
+    expect(lemon.deleted).toEqual(["d1"])
+
+    // Removed while nobody had used its discount: deleted there too.
+    mocks.rows = [{ ...special(500), lemonDiscountId: "d3", lemonDiscountCode: "CLLCCCCCCCCCC", lemonDiscountCents: 1000 }]
+    await DELETE(req("DELETE", { platform: "linkedin", reason: "Not needed" }), params)
+    expect(lemon.deleted).toEqual(["d1", "d3"])
   })
 
   it("a checkout lasts a day at most", () => {

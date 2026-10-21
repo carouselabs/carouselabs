@@ -39,36 +39,50 @@ const optionClass = (active: boolean) =>
     active ? "border-brand bg-brand-soft" : "border-border bg-surface-raised"
   }`
 
-export function NoteSettingsCard() {
-  const [loaded, setLoaded] = useState(false)
-  const [choice, setChoice] = useState<ContextChoice>("none")
-  const [purpose, setPurpose] = useState("")
-  const [profile, setProfile] = useState<LinkedinProfile>(EMPTY_PROFILE)
+// The form's values from the saved settings; never set means the defaults.
+function formFrom(s: ExtSettings | undefined) {
+  return {
+    choice: s?.connectNoteContext?.choice ?? ("none" as ContextChoice),
+    purpose: s?.connectNoteContext?.purpose ?? "",
+    profile: s?.linkedinProfile ?? EMPTY_PROFILE,
+    preset: s?.connectNoteLength?.preset ?? ("medium" as LengthPreset),
+    minText: String(s?.connectNoteLength?.min ?? PRESETS.medium.min),
+    maxText: String(s?.connectNoteLength?.max ?? PRESETS.medium.max),
+  }
+}
+
+// `initial`: the settings, when the page loaded them on the server; without
+// them the card fetches its own.
+export function NoteSettingsCard({ initial }: { initial?: ExtSettings }) {
+  const start = formFrom(initial)
+  const [loaded, setLoaded] = useState(!!initial)
+  const [choice, setChoice] = useState<ContextChoice>(start.choice)
+  const [purpose, setPurpose] = useState(start.purpose)
+  const [profile, setProfile] = useState<LinkedinProfile>(start.profile)
   const [profileEdited, setProfileEdited] = useState(false)
-  const [preset, setPreset] = useState<LengthPreset>("medium")
-  const [minText, setMinText] = useState(String(PRESETS.medium.min))
-  const [maxText, setMaxText] = useState(String(PRESETS.medium.max))
+  const [preset, setPreset] = useState<LengthPreset>(start.preset)
+  const [minText, setMinText] = useState(start.minText)
+  const [maxText, setMaxText] = useState(start.maxText)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const loadedOnServer = !!initial
   useEffect(() => {
+    if (loadedOnServer) return
     extApi<ExtSettings>("/api/ext/settings")
       .then((s) => {
-        if (s.connectNoteContext) {
-          setChoice(s.connectNoteContext.choice)
-          setPurpose(s.connectNoteContext.purpose)
-        }
-        if (s.linkedinProfile) setProfile(s.linkedinProfile)
-        if (s.connectNoteLength) {
-          setPreset(s.connectNoteLength.preset)
-          setMinText(String(s.connectNoteLength.min))
-          setMaxText(String(s.connectNoteLength.max))
-        }
+        const form = formFrom(s)
+        setChoice(form.choice)
+        setPurpose(form.purpose)
+        setProfile(form.profile)
+        setPreset(form.preset)
+        setMinText(form.minText)
+        setMaxText(form.maxText)
         setLoaded(true)
       })
       .catch((err) => setError(errorMessage(err)))
-  }, [])
+  }, [loadedOnServer])
 
   const min = Number(minText)
   const max = Number(maxText)

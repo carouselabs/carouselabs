@@ -5,25 +5,12 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getExtensionUser } from "@/lib/extensionCommentAuth"
 import { clampReplyLength } from "@/lib/xProfiles"
-import { X_MAX_LENGTH } from "@/lib/xText"
-
-const DEFAULTS = { defaultProfileId: null as string | null, maxReplyLength: X_MAX_LENGTH, insertButtonHidden: false }
-
-function shape(row: typeof DEFAULTS | null) {
-  return {
-    defaultProfileId: row?.defaultProfileId ?? null,
-    maxReplyLength: row?.maxReplyLength ?? X_MAX_LENGTH,
-    insertButtonHidden: row?.insertButtonHidden ?? false,
-  }
-}
-
-const SELECT = { defaultProfileId: true, maxReplyLength: true, insertButtonHidden: true } as const
+import { X_SETTINGS_DEFAULTS, X_SETTINGS_SELECT, loadXSettings, xSettingsOf } from "@/lib/extensionData"
 
 export async function GET(req: Request) {
   const user = await getExtensionUser(req)
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 })
-  const row = await db.xUserSettings.findUnique({ where: { userId: user.id }, select: SELECT })
-  return NextResponse.json(shape(row))
+  return NextResponse.json(await loadXSettings(user.id))
 }
 
 // PATCH — any of defaultProfileId (an X profile you can use, or null),
@@ -35,7 +22,7 @@ export async function PATCH(req: Request) {
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
   if (!body || typeof body !== "object") return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
 
-  const data: Partial<typeof DEFAULTS> = {}
+  const data: Partial<typeof X_SETTINGS_DEFAULTS> = {}
 
   if ("defaultProfileId" in body) {
     const id = body.defaultProfileId
@@ -70,9 +57,9 @@ export async function PATCH(req: Request) {
 
   const row = await db.xUserSettings.upsert({
     where: { userId: user.id },
-    create: { ...DEFAULTS, ...data, userId: user.id },
+    create: { ...X_SETTINGS_DEFAULTS, ...data, userId: user.id },
     update: data,
-    select: SELECT,
+    select: X_SETTINGS_SELECT,
   })
-  return NextResponse.json(shape(row))
+  return NextResponse.json(xSettingsOf(row))
 }

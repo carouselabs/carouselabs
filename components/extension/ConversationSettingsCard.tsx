@@ -232,15 +232,25 @@ function profileLink(contactUrl: string): string {
   return contactUrl.startsWith("/x/") ? `https://x.com/${contactUrl.slice(3)}` : `https://www.linkedin.com${contactUrl}`
 }
 
-export function ConversationSettingsCard({ profiles }: { profiles: { id: string; name: string }[] }) {
-  const [contacts, setContacts] = useState<ContactContext[] | null>(null)
+// `initialContacts`: the list, when the page loaded it on the server; without
+// it the card fetches its own.
+export function ConversationSettingsCard({
+  profiles,
+  initialContacts,
+}: {
+  profiles: { id: string; name: string }[]
+  initialContacts?: ContactContext[]
+}) {
+  const [contacts, setContacts] = useState<ContactContext[] | null>(initialContacts ?? null)
   const [error, setError] = useState<string | null>(null)
 
+  const loadedOnServer = !!initialContacts
   useEffect(() => {
+    if (loadedOnServer) return
     extApi<{ contacts: ContactContext[] }>("/api/ext/contacts")
       .then((res) => setContacts(res.contacts))
       .catch((err) => setError(errorMessage(err)))
-  }, [])
+  }, [loadedOnServer])
 
   return (
     <div className="flex flex-col gap-4 rounded-card border border-border bg-surface-raised p-5">

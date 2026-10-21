@@ -4,6 +4,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getExtensionUser } from "@/lib/extensionCommentAuth"
+import { listCommentProfiles } from "@/lib/extensionData"
 import { parseProfileInput } from "@/lib/commentProfiles"
 
 // GET /api/ext/profiles — every isSystem profile (shared, built-in presets —
@@ -16,12 +17,8 @@ export async function GET(req: Request) {
   }
 
   // Recommended presets first, then the original system profiles, then the
-  // user's own. Ordered here rather than in each screen so the Home dropdown,
-  // Profiles list and Settings picker cannot disagree.
-  const profiles = await db.commentProfile.findMany({
-    where: { OR: [{ isSystem: true }, { userId: user.id }] },
-    orderBy: [{ isRecommended: "desc" }, { isSystem: "desc" }, { createdAt: "asc" }],
-  })
+  // user's own (lib/extensionData.ts).
+  const profiles = await listCommentProfiles(user.id)
 
   return NextResponse.json({ profiles })
 }

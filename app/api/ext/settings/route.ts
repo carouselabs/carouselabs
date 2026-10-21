@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getExtensionUser } from "@/lib/extensionCommentAuth"
+import { extensionSettingsOf } from "@/lib/extensionData"
 import { Prisma } from "@prisma/client"
 import {
   parseConnectNoteContext,
@@ -26,18 +27,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 })
   }
 
-  return NextResponse.json({
-    defaultCommentProfileId: user.defaultCommentProfileId,
-    defaultConnectionProfileId: user.defaultConnectionProfileId,
-    defaultMessageProfileId: user.defaultMessageProfileId,
-    defaultLanguage: user.defaultLanguage,
-    // No Insert warning any more; extensions before 1.3.0 still read this.
-    insertWarningHidden: true,
-    connectNoteContext: user.connectNoteContext,
-    connectNoteLength: user.connectNoteLength,
-    linkedinProfile: user.linkedinProfile,
-    insertButtonHidden: user.insertButtonHidden,
-  })
+  return NextResponse.json(extensionSettingsOf(user))
 }
 
 // PATCH — every field is optional, so the client can send just what changed.

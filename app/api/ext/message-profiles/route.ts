@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getExtensionUser } from "@/lib/extensionCommentAuth"
+import { listMessageProfiles } from "@/lib/extensionData"
 import { parseMessageProfileInput } from "@/lib/messageProfiles"
 
 // GET /api/ext/message-profiles — every isSystem profile (the CarouseLabs
@@ -18,10 +19,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 })
   }
 
-  const profiles = await db.messageProfile.findMany({
-    where: { OR: [{ isSystem: true }, { userId: user.id }] },
-    orderBy: [{ isRecommended: "desc" }, { isSystem: "desc" }, { createdAt: "asc" }],
-  })
+  const profiles = await listMessageProfiles(user.id)
 
   return NextResponse.json({ profiles })
 }

@@ -20,7 +20,7 @@ import {
   errorMessage,
   extApi,
   LANGUAGES,
-  type ExtMe,
+  type ContactContext,
   type ExtSettings,
 } from "./api"
 
@@ -84,7 +84,9 @@ type Profile = Record<string, unknown> & {
   isDefault?: boolean
 }
 
-const KINDS: KindDef[] = [
+type LinkedinKindId = Exclude<KindDef["id"], "x">
+
+const KINDS: (KindDef & { id: LinkedinKindId })[] = [
   {
     id: "comment",
     label: "Comments & replies",
@@ -717,21 +719,48 @@ function VoiceSpecimen({
 
 type Editing = { initial: Draft; existingId: string | null } | null
 
-type ProfileList = { profiles: Profile[]; defaultProfileId?: string | null }
+export type ProfileList = { profiles: Profile[]; defaultProfileId?: string | null }
+type LinkedinDefaults = Pick<ExtSettings, LinkedinDefaultKey>
 
-// `me` carries the LinkedIn defaults; X reply profiles (settingsEndpoint)
-// read theirs from the list instead and need no `me`.
+const linkedinDefaults = (s: ExtSettings): LinkedinDefaults => ({
+  defaultCommentProfileId: s.defaultCommentProfileId,
+  defaultConnectionProfileId: s.defaultConnectionProfileId,
+  defaultMessageProfileId: s.defaultMessageProfileId,
+})
+
+// What a panel starts with when its page loaded it on the server, in the
+// routes' own JSON: the list, plus the note settings (connection kind) and
+// the remembered conversations (message kind).
+export interface KindPanelInitial {
+  list: ProfileList
+  settings?: ExtSettings
+  contacts?: ContactContext[]
+}
+
+// Everything Custom tones shows, loaded on the server
+// (app/(app)/extension/profiles/page.tsx).
+export interface ProfilesInitial {
+  settings: ExtSettings
+  lists: Record<LinkedinKindId, ProfileList>
+  contacts: ContactContext[]
+}
+
+// `defaults` are the LinkedIn defaults; X reply profiles (settingsEndpoint)
+// read theirs from the list instead and need none. Without `initial` the
+// panel fetches its own list.
 export function KindPanel({
   kind,
-  me,
+  defaults,
+  initial,
   onDefaultsChanged,
 }: {
   kind: KindDef
-  me: ExtMe | null
+  defaults: LinkedinDefaults | null
+  initial?: KindPanelInitial
   onDefaultsChanged: () => void
 }) {
-  const [profiles, setProfiles] = useState<Profile[] | null>(null)
-  const [listDefault, setListDefault] = useState<string | null>(null)
+  const [profiles, setProfiles] = useState<Profile[] | null>(initial?.list.profiles ?? null)
+  const [listDefault, setListDefault] = useState<string | null>(initial?.list.defaultProfileId ?? null)
   const [editing, setEditing] = useState<Editing>(null)
   const [error, setError] = useState<string | null>(null)
   // Which profile the panel on the right shows (null: the default).
@@ -752,7 +781,9 @@ export function KindPanel({
     }
   }, [kind.endpoint, apply])
 
+  const loadedOnServer = !!initial
   useEffect(() => {
+    if (loadedOnServer) return
     let cancelled = false
     extApi<ProfileList>(kind.endpoint)
       .then((res) => !cancelled && apply(res))
@@ -760,7 +791,7 @@ export function KindPanel({
     return () => {
       cancelled = true
     }
-  }, [kind.endpoint, apply])
+  }, [kind.endpoint, apply, loadedOnServer])
 
   const custom = profiles?.filter((p) => !p.isSystem) ?? []
   const builtIn = profiles?.filter((p) => p.isSystem) ?? []
@@ -768,7 +799,7 @@ export function KindPanel({
   // The account's explicit default, else the shared built-in default.
   const explicitDefault = kind.settingsEndpoint
     ? listDefault
-    : (me?.[kind.defaultKey as LinkedinDefaultKey] ?? null)
+    : (defaults?.[kind.defaultKey as LinkedinDefaultKey] ?? null)
   const defaultId =
     (explicitDefault && profiles?.some((p) => p.id === explicitDefault) ? explicitDefault : null) ??
     builtIn.find((p) => p.isDefault)?.id ??
@@ -917,30 +948,39 @@ export function KindPanel({
       </div>
 
       {/* Settings that apply to every note / every conversation */}
-      {kind.id === "connection" && <NoteSettingsCard />}
+      {kind.id === "connection" && <NoteSettingsCard initial={initial?.settings} />}
       {kind.id === "message" && profiles && (
-        <ConversationSettingsCard profiles={profiles.map((p) => ({ id: p.id, name: p.name }))} />
+        <ConversationSettingsCard
+          profiles={profiles.map((p) => ({ id: p.id, name: p.name }))}
+          initialContacts={initial?.contacts}
+        />
       )}
     </div>
   )
 }
 
-export function ProfilesManager() {
-  const [kindId, setKindId] = useState<KindDef["id"]>("comment")
-  const [me, setMe] = useState<ExtMe | null>(null)
+// With `initial` (the real page) everything arrives with the page and nothing
+// is fetched on load; without it (the design preview) each part fetches its
+// own. All three kinds stay mounted, the hidden ones too, so switching
+// between them is instant and keeps whatever each one had open.
+export function ProfilesManager({ initial }: { initial?: ProfilesInitial }) {
+  const [kindId, setKindId] = useState<LinkedinKindId>("comment")
+  const [defaults, setDefaults] = useState<LinkedinDefaults | null>(
+    initial ? linkedinDefaults(initial.settings) : null,
+  )
   const [error, setError] = useState<string | null>(null)
 
-  const loadMe = useCallback(() => {
-    extApi<ExtMe>("/api/ext/me")
-      .then(setMe)
+  // The settings route has the defaults, read off the account row alone.
+  const loadDefaults = useCallback(() => {
+    extApi<ExtSettings>("/api/ext/settings")
+      .then((s) => setDefaults(linkedinDefaults(s)))
       .catch((err) => setError(errorMessage(err)))
   }, [])
 
+  const loadedOnServer = !!initial
   useEffect(() => {
-    loadMe()
-  }, [loadMe])
-
-  const kind = KINDS.find((k) => k.id === kindId) ?? KINDS[0]
+    if (!loadedOnServer) loadDefaults()
+  }, [loadedOnServer, loadDefaults])
 
   return (
     <div className="flex flex-col gap-8">
@@ -961,11 +1001,18 @@ export function ProfilesManager() {
       </div>
 
       {error && <p className="text-label text-danger">{error}</p>}
-      {me ? (
-        <KindPanel key={kind.id} kind={kind} me={me} onDefaultsChanged={loadMe} />
-      ) : (
-        !error && <p className="text-label text-muted-foreground">Loading…</p>
-      )}
+      {defaults
+        ? KINDS.map((k) => (
+            <div key={k.id} hidden={k.id !== kindId}>
+              <KindPanel
+                kind={k}
+                defaults={defaults}
+                initial={initial && { list: initial.lists[k.id], settings: initial.settings, contacts: initial.contacts }}
+                onDefaultsChanged={loadDefaults}
+              />
+            </div>
+          ))
+        : !error && <p className="text-label text-muted-foreground">Loading…</p>}
     </div>
   )
 }

@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getExtensionUser } from "@/lib/extensionCommentAuth"
+import { listConnectionProfiles } from "@/lib/extensionData"
 import { parseConnectionProfileInput } from "@/lib/connectionProfiles"
 
 // GET /api/ext/connection-profiles — every isSystem profile (the CarouseLabs
@@ -19,10 +20,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 })
   }
 
-  const profiles = await db.connectionProfile.findMany({
-    where: { OR: [{ isSystem: true }, { userId: user.id }] },
-    orderBy: [{ isRecommended: "desc" }, { isSystem: "desc" }, { createdAt: "asc" }],
-  })
+  const profiles = await listConnectionProfiles(user.id)
 
   return NextResponse.json({ profiles })
 }

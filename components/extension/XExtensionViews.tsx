@@ -8,14 +8,14 @@
 import { useCallback, useEffect, useState } from "react"
 import { Check, Loader2 } from "lucide-react"
 import { X_MAX_LENGTH, X_PREMIUM_REPLY_LENGTH } from "@/lib/xText"
-import { KindPanel, xKind } from "./ProfilesManager"
+import { KindPanel, xKind, type ProfileList } from "./ProfilesManager"
 import { Row, selectClass } from "./ExtensionSettingsForm"
 import { errorMessage, extApi, type CommentProfile, type XSettings } from "./api"
 
 // X's settings, which the reply profiles need too (X Premium sets how long a
-// reply may be).
-function useXSettings() {
-  const [settings, setSettings] = useState<XSettings | null>(null)
+// reply may be). `initial`: when the page loaded them on the server.
+function useXSettings(initial?: XSettings) {
+  const [settings, setSettings] = useState<XSettings | null>(initial ?? null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(() => {
@@ -24,9 +24,10 @@ function useXSettings() {
       .catch((err) => setError(errorMessage(err)))
   }, [])
 
+  const loadedOnServer = !!initial
   useEffect(() => {
-    load()
-  }, [load])
+    if (!loadedOnServer) load()
+  }, [loadedOnServer, load])
 
   return { settings, setSettings, error, load }
 }
@@ -145,14 +146,27 @@ function XSettingsForm({ settings, onSaved }: { settings: XSettings; onSaved: (n
 }
 
 // Extension → Engage for X → Reply profiles.
-export function XReplyProfiles() {
-  const { settings, error, load } = useXSettings()
+// What Reply profiles shows, loaded on the server
+// (app/(app)/extension/x/profiles/page.tsx).
+export interface XProfilesInitial {
+  settings: XSettings
+  list: ProfileList
+}
+
+// Without `initial` (the design preview) it fetches its own.
+export function XReplyProfiles({ initial }: { initial?: XProfilesInitial }) {
+  const { settings, error, load } = useXSettings(initial?.settings)
 
   if (error) return <p className="text-label text-danger">{error}</p>
   if (!settings) return <p className="text-label text-muted-foreground">Loading…</p>
   return (
     <div className="flex flex-col gap-6">
-      <KindPanel kind={xKind(settings.maxReplyLength)} me={null} onDefaultsChanged={load} />
+      <KindPanel
+        kind={xKind(settings.maxReplyLength)}
+        defaults={null}
+        initial={initial && { list: initial.list }}
+        onDefaultsChanged={load}
+      />
       <p className="text-caption text-muted-foreground">
         The reasons behind your X chats are shared with LinkedIn: edit them under{" "}
         <a href="/extension/profiles" className="font-medium text-brand hover:underline">

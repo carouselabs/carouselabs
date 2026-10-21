@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getExtensionUser } from "@/lib/extensionCommentAuth"
+import { listXProfiles } from "@/lib/extensionData"
 import { parseProfileInput } from "@/lib/commentProfiles"
 import { X_MAX_PROFILE_LENGTH, xLengthProblem } from "@/lib/xProfiles"
 
@@ -15,10 +16,7 @@ export async function GET(req: Request) {
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 })
 
   const [profiles, settings] = await Promise.all([
-    db.xProfile.findMany({
-      where: { OR: [{ isSystem: true }, { userId: user.id }] },
-      orderBy: [{ isRecommended: "desc" }, { isSystem: "desc" }, { createdAt: "asc" }],
-    }),
+    listXProfiles(user.id),
     db.xUserSettings.findUnique({ where: { userId: user.id }, select: { defaultProfileId: true } }),
   ])
 

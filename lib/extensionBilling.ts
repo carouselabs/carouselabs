@@ -21,6 +21,7 @@ import type { Prisma } from "@prisma/client"
 import { verifyBillingIdentity } from "@/lib/billingIdentity"
 import { createCommissionForPayment } from "@/lib/referral"
 import { X_EXTENSION_VARIANT_ID } from "@/lib/plans"
+import { markIntroUsed } from "@/lib/engage/priceIntro"
 import {
   extensionPlatformOfPayload,
   shouldApplyToStored,
@@ -125,7 +126,13 @@ type SubscriptionAttributes = {
 
 const asDate = (value: string | null | undefined) => (value ? new Date(value) : null)
 
-export async function handleExtensionWebhook(payload: ExtensionWebhookPayload, client: Prisma.TransactionClient = db): Promise<void> {
+// afterCommit: runs a job once the webhook's transaction has committed (the
+// route's after-commit queue), so it can never undo saving the purchase.
+export async function handleExtensionWebhook(
+  payload: ExtensionWebhookPayload,
+  client: Prisma.TransactionClient = db,
+  afterCommit?: (job: () => Promise<unknown>) => Promise<void> | void,
+): Promise<void> {
   const eventName = payload.meta?.event_name ?? ""
   const platform = await extensionWebhookPlatform(payload, client)
   if (!platform) {
@@ -177,6 +184,8 @@ export async function handleExtensionWebhook(payload: ExtensionWebhookPayload, c
   }
   await table.save(userId, fields)
   console.log(`[extensionBilling] ${platform} ${eventName}: user ${userId} → ${fields.status}`)
+  // A new purchase spends any intro offer they had (lib/engage/priceIntro.ts).
+  if (eventName === "subscription_created") await afterCommit?.(() => markIntroUsed(userId, platform))
 }
 
 // Referrers earn 8% of every extension payment, the same as for a web plan

@@ -2,14 +2,25 @@
 
 // One person's price for each Engage extension, on their Engage page and
 // their Users profile: the usual $15/month, or a special price an admin set
-// (lib/engage/price.ts), which their checkout charges and Lemon Squeezy keeps
-// for every renewal. Loads and saves through
+// (lib/engage/price.ts), either every month or as an intro offer for their
+// first 1–12 months, which their checkout charges through their own Lemon
+// Squeezy discount. Loads and saves through
 // /api/admin/engage/users/[userId]/price; every change asks why.
 import { useState } from "react"
 import { Tag } from "lucide-react"
-import { AdminButton, AdminInput, Modal, fmtDate } from "@/components/admin/ui"
+import { AdminButton, AdminInput, AdminSelect, Modal, fmtDate } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
-import { MAX_PRICE_CENTS, MIN_PRICE_CENTS, formatUsd, monthlyLabel, parseDollars } from "@/lib/engage/priceRules"
+import {
+  MAX_INTRO_MONTHS,
+  MAX_PRICE_CENTS,
+  MIN_PRICE_CENTS,
+  formatUsd,
+  monthlyLabel,
+  offerLabel,
+  parseDollars,
+  shortPriceLabel,
+  type EngagePriceInfo,
+} from "@/lib/engage/priceRules"
 import type { adminEngagePrices } from "@/lib/engage/price"
 import { ErrorState, Pill, SkeletonBlock, adminSend, useAdminApi } from "./shared"
 
@@ -23,6 +34,15 @@ const NAMES: Record<Platform, string> = { linkedin: "Engage for LinkedIn", x: "E
 // Today as YYYY-MM-DD, the earliest end date the form offers.
 const today = () => new Date().toISOString().slice(0, 10)
 
+// A stored special price as the person sees it.
+const asOffer = (cents: number, standardCents: number, introMonths: number | null): EngagePriceInfo => ({
+  cents,
+  standardCents,
+  special: true,
+  endsAt: null,
+  introMonths,
+})
+
 function SetPriceModal({
   row,
   onClose,
@@ -30,10 +50,13 @@ function SetPriceModal({
 }: {
   row: PriceRow
   onClose: () => void
-  onSave: (body: { priceCents: number; endsAt: string | null; reason: string }) => Promise<void>
+  onSave: (body: { priceCents: number; introMonths: number | null; endsAt: string | null; reason: string }) => Promise<void>
 }) {
   const current = row.special && !row.special.ended ? row.special : null
   const [dollars, setDollars] = useState(current ? (current.priceCents / 100).toFixed(current.priceCents % 100 ? 2 : 0) : "")
+  // "every": this price every month; "intro": only the first `months`, then the usual price.
+  const [mode, setMode] = useState<"every" | "intro">(current?.introMonths ? "intro" : "every")
+  const [months, setMonths] = useState(current?.introMonths ?? 1)
   const [endDate, setEndDate] = useState(current?.endsAt ? current.endsAt.slice(0, 10) : "")
   const [reason, setReason] = useState("")
   const [busy, setBusy] = useState(false)
@@ -47,9 +70,12 @@ function SetPriceModal({
         ? "Write a price like 5 or 4.99"
         : cents < MIN_PRICE_CENTS || cents > MAX_PRICE_CENTS
           ? `Between ${formatUsd(MIN_PRICE_CENTS)} and ${formatUsd(MAX_PRICE_CENTS)}`
-          : cents === row.standardCents
-            ? `That's the usual price. Remove the special price instead.`
-            : null
+          : mode === "intro" && cents >= row.standardCents
+            ? `An intro price must be less than the usual ${formatUsd(row.standardCents)}`
+            : cents === row.standardCents
+              ? `That's the usual price. Remove the special price instead.`
+              : null
+  const introMonths = mode === "intro" ? months : null
 
   return (
     <Modal open onClose={onClose} title={`${current ? "Change" : "Set"} price for ${NAMES[row.platform]}`}>
@@ -62,7 +88,12 @@ function SetPriceModal({
           setError(null)
           try {
             // The end date is the last day they can buy at this price, to its end.
-            await onSave({ priceCents: cents, endsAt: endDate ? new Date(`${endDate}T23:59:59.000Z`).toISOString() : null, reason })
+            await onSave({
+              priceCents: cents,
+              introMonths,
+              endsAt: endDate ? new Date(`${endDate}T23:59:59.000Z`).toISOString() : null,
+              reason,
+            })
           } catch (err) {
             setError(err instanceof Error ? err.message : "Something went wrong")
           } finally {
@@ -71,9 +102,41 @@ function SetPriceModal({
         }}
       >
         <p className="text-caption leading-relaxed text-muted-foreground">
-          Usually {monthlyLabel(row.standardCents)}. Their next checkout charges this price, and they keep it every month
-          they stay subscribed.
+          Usually {monthlyLabel(row.standardCents)}. Their next checkout charges this price: every month they stay
+          subscribed, or only for their first months and then the usual price.
         </p>
+        {row.special?.introUsedAt && (
+          <p className="rounded-control-sm bg-surface-muted px-3 py-2 text-caption text-foreground">
+            They bought with their intro offer on {fmtDate(row.special.introUsedAt)}. Saving an offer gives them one
+            again.
+          </p>
+        )}
+        <fieldset className="space-y-2">
+          <legend className="mb-1.5 text-caption font-medium text-muted-foreground">How long</legend>
+          <label className="flex items-center gap-2 text-label text-foreground">
+            <input type="radio" name="price-mode" checked={mode === "every"} onChange={() => setMode("every")} />
+            Every month
+          </label>
+          <label className="flex flex-wrap items-center gap-2 text-label text-foreground">
+            <input type="radio" name="price-mode" checked={mode === "intro"} onChange={() => setMode("intro")} />
+            Only the first
+            <AdminSelect
+              aria-label="Months at this price"
+              value={months}
+              onChange={(e) => {
+                setMonths(Number(e.target.value))
+                setMode("intro")
+              }}
+            >
+              {Array.from({ length: MAX_INTRO_MONTHS }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </AdminSelect>
+            {months === 1 ? "month" : "months"}, then {monthlyLabel(row.standardCents)}
+          </label>
+        </fieldset>
         <label className="block space-y-1.5">
           <span className="text-caption font-medium text-muted-foreground">Price per month (USD)</span>
           <div className="flex items-center gap-2">
@@ -94,7 +157,8 @@ function SetPriceModal({
               <span className="text-caption text-foreground">
                 They&apos;ll see{" "}
                 {cents < row.standardCents && <s className="text-muted-foreground">{formatUsd(row.standardCents)}</s>}{" "}
-                <span className="font-semibold">{monthlyLabel(cents)}</span>
+                <span className="font-semibold">{shortPriceLabel(asOffer(cents, row.standardCents, introMonths))}</span>
+                {introMonths && <>, then {monthlyLabel(row.standardCents)}</>}
               </span>
             )}
           </div>
@@ -219,7 +283,8 @@ export function EngagePriceCard({ userId }: { userId: string }) {
         <ul className="divide-y divide-border">
           {data.prices.map((row) => {
             const special = row.special
-            const live = special && !special.ended
+            // A spent intro offer is shown, but they pay the usual price again.
+            const live = special && !special.ended && !special.introUsedAt
             return (
               <li key={row.platform} aria-label={`${NAMES[row.platform]} price`} className="space-y-1.5 px-4 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -228,11 +293,16 @@ export function EngagePriceCard({ userId }: { userId: string }) {
                     <span className="flex flex-wrap items-center gap-1.5 text-label text-foreground">
                       {live ? (
                         <>
-                          <Pill tone="violet">Special</Pill>
+                          <Pill tone="violet">{special.introMonths ? "Intro offer" : "Special"}</Pill>
                           {special.priceCents < row.standardCents && (
                             <s className="text-muted-foreground">{formatUsd(row.standardCents)}</s>
                           )}
-                          <span className="font-semibold tabular-nums">{monthlyLabel(special.priceCents)}</span>
+                          <span className="font-semibold tabular-nums">
+                            {shortPriceLabel(asOffer(special.priceCents, row.standardCents, special.introMonths))}
+                          </span>
+                          {special.introMonths && (
+                            <span className="text-caption text-muted-foreground">then {monthlyLabel(row.standardCents)}</span>
+                          )}
                         </>
                       ) : (
                         <span className="tabular-nums">Usual price, {monthlyLabel(row.standardCents)}</span>
@@ -252,8 +322,10 @@ export function EngagePriceCard({ userId }: { userId: string }) {
                 </div>
                 {special && (
                   <p className="text-caption text-muted-foreground">
-                    {special.ended
-                      ? `Ended ${fmtDate(special.endsAt)}: was ${monthlyLabel(special.priceCents)}. `
+                    {special.introUsedAt && !special.ended
+                      ? `Intro offer used ${fmtDate(special.introUsedAt)}: was ${offerLabel(asOffer(special.priceCents, row.standardCents, special.introMonths))}. `
+                      : special.ended
+                      ? `Ended ${fmtDate(special.endsAt)}: was ${offerLabel(asOffer(special.priceCents, row.standardCents, special.introMonths))}. `
                       : special.endsAt
                         ? `Can buy at it until ${fmtDate(special.endsAt)}. `
                         : "No end date. "}
@@ -279,7 +351,7 @@ export function EngagePriceCard({ userId }: { userId: string }) {
           onClose={() => setEditing(null)}
           onSave={async (body) => {
             await adminSend(url, "PUT", { platform: editing.row.platform, ...body })
-            done(`${NAMES[editing.row.platform]} price set to ${monthlyLabel(body.priceCents)}`)
+            done(`${NAMES[editing.row.platform]}: ${offerLabel(asOffer(body.priceCents, editing.row.standardCents, body.introMonths))}`)
           }}
         />
       )}

@@ -4,8 +4,9 @@
 // would charge the same but still show the usual "$15.00 billed every month"
 // beside it. One discount per person and extension: once-only, limited to
 // that extension, taking off the difference for every payment ("forever"),
-// made at their first checkout and remembered on their price row so later
-// checkouts reuse it.
+// or for an intro offer only the first N monthly payments ("repeating"),
+// after which Lemon Squeezy charges the usual price. Made at their first
+// checkout and remembered on their price row so later checkouts reuse it.
 //
 // Deliberately cautious where Lemon Squeezy's docs are silent: a discount
 // gets no expiry date of its own (the special price's end date is enforced
@@ -13,6 +14,7 @@
 // nobody has redeemed it.
 import crypto from "node:crypto"
 import { db } from "@/lib/db"
+import { markIntroUsed } from "@/lib/engage/priceIntro"
 import type { EngagePlatform } from "@/lib/engage/features"
 
 const API = "https://api.lemonsqueezy.com/v1"
@@ -66,7 +68,12 @@ export function newDiscountCode(platform: EngagePlatform): string {
   return `CL${platform === "x" ? "X" : "L"}${Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("")}`
 }
 
-async function createDiscount(platform: EngagePlatform, variant: number, offCents: number): Promise<{ id: string; code: string } | null> {
+async function createDiscount(
+  platform: EngagePlatform,
+  variant: number,
+  offCents: number,
+  months: number | null,
+): Promise<{ id: string; code: string } | null> {
   const code = newDiscountCode(platform)
   try {
     const answer = await lemon("POST", "discounts", {
@@ -77,7 +84,7 @@ async function createDiscount(platform: EngagePlatform, variant: number, offCent
           code,
           amount: offCents,
           amount_type: "fixed",
-          duration: "forever",
+          ...(months ? { duration: "repeating", duration_in_months: months } : { duration: "forever" }),
           is_limited_to_products: true,
           is_limited_redemptions: true,
           max_redemptions: 1,
@@ -103,26 +110,34 @@ async function createDiscount(platform: EngagePlatform, variant: number, offCent
 /**
  * The person's discount code for their special price on this extension:
  * the remembered one while it's unused and still takes off `offCents`,
- * otherwise a new one (an unused old one is deleted). null when Lemon
- * Squeezy can't make one; the caller then charges the price another way.
+ * otherwise a new one (an unused old one is deleted). `months`: an intro
+ * offer's length (null: every month). An intro whose code was already
+ * redeemed is spent: { spent: true }, and they pay the usual price. null
+ * when Lemon Squeezy can't make one.
  */
 export async function discountCodeFor(input: {
   userId: string
   platform: EngagePlatform
   variant: number
   offCents: number
-}): Promise<string | null> {
+  months: number | null
+}): Promise<{ code: string } | { spent: true } | null> {
   const where = { userId_platform: { userId: input.userId, platform: input.platform } }
   const row = await db.engagePrice.findUnique({ where })
   if (!row) return null
 
   if (row.lemonDiscountId && row.lemonDiscountCode) {
     const used = await redeemed(row.lemonDiscountId)
-    if (!used && row.lemonDiscountCents === input.offCents) return row.lemonDiscountCode
+    if (used && input.months) {
+      // They bought with their intro offer (the webhook marks this too).
+      await markIntroUsed(input.userId, input.platform)
+      return { spent: true }
+    }
+    if (!used && row.lemonDiscountCents === input.offCents) return { code: row.lemonDiscountCode }
     if (!used) await deleteDiscount(row.lemonDiscountId)
   }
 
-  const made = await createDiscount(input.platform, input.variant, input.offCents)
+  const made = await createDiscount(input.platform, input.variant, input.offCents, input.months)
   if (!made) return null
   // Only onto the price it was made for: if an admin changed it meanwhile,
   // the next checkout makes a fresh one.
@@ -130,7 +145,7 @@ export async function discountCodeFor(input: {
     where: { userId: input.userId, platform: input.platform, priceCents: row.priceCents },
     data: { lemonDiscountId: made.id, lemonDiscountCode: made.code, lemonDiscountCents: input.offCents },
   })
-  return made.code
+  return { code: made.code }
 }
 
 async function deleteDiscount(discountId: string): Promise<void> {

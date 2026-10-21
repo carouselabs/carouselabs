@@ -141,7 +141,7 @@ async function processWebhook(
     // maps unknown variants to Pro, so an extension purchase would grant web
     // Pro, and its later expiry would downgrade the buyer's web plan to Free.
     if (await isExtensionWebhook(payload, db)) {
-      await handleExtensionWebhook(payload, db)
+      await handleExtensionWebhook(payload, db, safeEmail)
       return new Response("OK", { status: 200 })
     }
 

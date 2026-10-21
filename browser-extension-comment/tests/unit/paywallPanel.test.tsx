@@ -184,6 +184,17 @@ describe("a special price an admin set", () => {
     expect(await screen.findByRole("button", { name: "Get unlimited — Usually $15, for you $5/month" })).toBeTruthy();
   });
 
+  it("an intro offer: the price, for how long, and what it becomes", () => {
+    setExtensionAccess(access({ freeUsed: 10, price: { cents: 100, standardCents: 1500, special: true, endsAt: null, introMonths: 1 } }));
+    const { rerender } = render(<UnlockCard />);
+    expect(screen.getByRole("button", { name: "Get unlimited — Usually $15, for you $1 first month" })).toBeTruthy();
+    expect(screen.getByText(/messages for/).textContent).toContain("$1 first month, then $15/month. Cancel anytime.");
+
+    setExtensionAccess(access({ freeUsed: 10, price: { cents: 100, standardCents: 1500, special: true, endsAt: null, introMonths: 3 } }));
+    rerender(<UnlockCard />);
+    expect(screen.getByRole("button", { name: "Get unlimited — Usually $15, for you $1/month for 3 months" })).toBeTruthy();
+  });
+
   it("a higher price, or none from an older server, shows plainly", () => {
     setExtensionAccess(access({ freeUsed: 10, price: { cents: 2000, standardCents: 1500, special: true, endsAt: null } }));
     const { rerender } = render(<UnlockCard />);

@@ -20,7 +20,7 @@ import { EXT_FREE_GENERATIONS, isExtensionSubscriptionActive } from "@/lib/exten
 import { isEngageSchemaMissing, loadEngageAccess } from "@/lib/engage/access"
 import { ENGAGE_FEATURES, type EngageFeature, type EngagePlatform } from "@/lib/engage/features"
 import { loadEngagePrice } from "@/lib/engage/price"
-import { STANDARD_PRICE_CENTS, monthlyLabel, type EngagePriceInfo } from "@/lib/engage/priceRules"
+import { STANDARD_PRICE_CENTS, monthlyLabel, shortPriceLabel, type EngagePriceInfo } from "@/lib/engage/priceRules"
 
 export interface ExtAccessSummary {
   access: "unlimited" | "free" | "testing"
@@ -149,9 +149,14 @@ const PRODUCT_NAMES: Record<EngagePlatform, string> = {
 // Quotes this person's own price: a special one if an admin set it.
 async function paywallResponse(userId: string, freeLimit: number, platform: EngagePlatform): Promise<NextResponse> {
   const price = await loadEngagePrice(userId, platform).catch(() => null)
+  const priceText = !price
+    ? monthlyLabel(STANDARD_PRICE_CENTS[platform])
+    : price.introMonths
+      ? `${shortPriceLabel(price)} (then ${monthlyLabel(price.standardCents)})`
+      : monthlyLabel(price.cents)
   return NextResponse.json(
     {
-      error: `You've used your ${freeLimit} free generations. Get unlimited with ${PRODUCT_NAMES[platform]} for ${monthlyLabel(price?.cents ?? STANDARD_PRICE_CENTS[platform])} to keep going.`,
+      error: `You've used your ${freeLimit} free generations. Get unlimited with ${PRODUCT_NAMES[platform]} for ${priceText} to keep going.`,
       requiresSubscription: true,
     },
     { status: 402 },

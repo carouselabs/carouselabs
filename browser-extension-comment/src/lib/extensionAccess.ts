@@ -14,13 +14,22 @@ const USUAL_PRICE_CENTS = 1500;
 
 const usd = (cents: number) => (cents % 100 === 0 ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`);
 
-// What this account pays per month: the usual $15, or a special price an
-// admin set for it (lib/engage/priceRules.ts on the server). `was`: the
-// usual price, shown struck through before a lower special one.
-export function extensionPrice(access: ExtensionAccess | null): { label: string; was: string | null } {
+// What this account pays: the usual $15/month, or a special price an admin
+// set for it (lib/engage/priceRules.ts on the server), every month or as an
+// intro offer: "$1 first month", "$1/month for 3 months". `was`: the usual
+// price, shown struck through before a lower special one; `then`: what an
+// intro offer becomes ("then $15/month").
+export function extensionPrice(access: ExtensionAccess | null): { label: string; was: string | null; then: string | null } {
   const price = access?.price;
+  const cents = price?.cents ?? USUAL_PRICE_CENTS;
   const was = price?.special && price.cents < price.standardCents ? usd(price.standardCents) : null;
-  return { label: `${usd(price?.cents ?? USUAL_PRICE_CENTS)}/month`, was };
+  const intro = price?.special ? (price.introMonths ?? null) : null;
+  if (!intro) return { label: `${usd(cents)}/month`, was, then: null };
+  return {
+    label: intro === 1 ? `${usd(cents)} first month` : `${usd(cents)}/month for ${intro} months`,
+    was,
+    then: `then ${usd(price!.standardCents)}/month`,
+  };
 }
 // Mirrors EXT_FREE_GENERATIONS in lib/extensionAccessRules.ts. Only used if a
 // paywall 402 arrives before /api/ext/me has answered.

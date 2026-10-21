@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import crypto from "node:crypto"
 
 const mocks = vi.hoisted(() => ({
-  db: { $transaction: vi.fn(), processedWebhookEvent: { findUnique: vi.fn() } },
+  db: { $transaction: vi.fn(), processedWebhookEvent: { findUnique: vi.fn() }, engagePrice: { updateMany: vi.fn() } },
   emails: { sendUpgradedToProEmail: vi.fn(), sendSubscriptionCancelledEmail: vi.fn(), sendMonthlyResetEmail: vi.fn(), sendTopUpEmail: vi.fn() },
   commission: vi.fn(),
 }))
@@ -26,7 +26,7 @@ function transactionClient() {
       findFirst: vi.fn(async ({ where }) => [...ledger].some(id => where.eventId.in.includes(id)) ? { id: "event" } : null),
       create: vi.fn(async ({ data }) => { if (ledger.has(data.eventId)) throw { code: "P2002" }; ledger.add(data.eventId) }),
     },
-    extensionSubscription: { findUnique: vi.fn(async () => null) },
+    extensionSubscription: { findUnique: vi.fn(async () => null), upsert: vi.fn(async () => ({})) },
     // CarouseLabs Engage for X's subscriptions (sold separately); none stored.
     xSubscription: { findUnique: vi.fn(async () => null) },
     user: {
@@ -155,6 +155,28 @@ describe("Lemon Squeezy billing boundaries (mocked database)", () => {
     expect((await POST(request(payload))).status).toBe(503)
     expect(ledger.size).toBe(0)
   })
+  it("spends an intro offer once a signed extension purchase is saved, and never undoes the purchase", async () => {
+    const created = (id: string) => ({
+      meta: { event_name: "subscription_created", custom_data: { user_id: user.id, identity_signature: signBillingIdentity(user.id, "44") } },
+      data: { type: "subscriptions", id, attributes: { variant_id: 44, status: "active" } },
+    })
+    // Only after the purchase is committed.
+    let savedFirst: boolean | null = null
+    mocks.db.engagePrice.updateMany.mockImplementation(async () => { savedFirst = committed; return { count: 1 } })
+    expect((await POST(request(created("extension-1")))).status).toBe(200)
+    expect(savedFirst).toBe(true)
+    expect(mocks.db.engagePrice.updateMany).toHaveBeenCalledWith({
+      where: { userId: user.id, platform: "linkedin", introMonths: { not: null }, introUsedAt: null },
+      data: { introUsedAt: expect.any(Date) },
+    })
+
+    // Failing to mark it never turns a saved purchase into an error.
+    committed = false
+    mocks.db.engagePrice.updateMany.mockRejectedValue(new Error("database hiccup"))
+    expect((await POST(request(created("extension-2")))).status).toBe(200)
+    expect(committed).toBe(true)
+  })
+
   it("does not map unknown products to Pro", async () => {
     sub.lsVariantId = "999"
     expect((await POST(request(invoice()))).status).toBe(503)

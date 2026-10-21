@@ -43,7 +43,7 @@ export function UnlockCard() {
       <div className="space-y-1">
         <p className="text-sm font-semibold">You&apos;ve used your {limit} free generations</p>
         <p className="text-xs text-muted-foreground">
-          Get unlimited comments, replies, connection notes and messages for <PriceText access={access} />. Cancel anytime.
+          Get unlimited comments, replies, connection notes and messages for <PriceText access={access} withThen />. Cancel anytime.
         </p>
       </div>
       <Button className="w-full" loading={opening} onClick={start}>

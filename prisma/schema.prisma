@@ -988,6 +988,11 @@ model EngagePrice {
   // "linkedin" or "x": the two are sold separately.
   platform   String
   priceCents Int
+  // An intro offer: priceCents only for the first introMonths monthly
+  // payments (1–12), then the usual price. null = priceCents every month.
+  // introUsedAt: when they bought with it; the offer is then spent.
+  introMonths Int?
+  introUsedAt DateTime?
   endsAt     DateTime?
   reason     String    @db.Text
   setBy      String

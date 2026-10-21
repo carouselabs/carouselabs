@@ -8,7 +8,12 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 type Row = {
   id: string; userId: string; platform: string; priceCents: number; endsAt: Date | null; reason: string; setBy: string; createdAt: Date; updatedAt: Date
   lemonDiscountId?: string | null; lemonDiscountCode?: string | null; lemonDiscountCents?: number | null
+  introMonths?: number | null; introUsedAt?: Date | null
 }
+
+// Prisma's where for one field: a value, or { not: value }; unset counts as null.
+const matches = (value: unknown, want: unknown) =>
+  want !== null && typeof want === "object" && "not" in want ? (value ?? null) !== (want as { not: unknown }).not : (value ?? null) === want
 
 const mocks = vi.hoisted(() => ({
   rows: [] as Row[],
@@ -39,7 +44,7 @@ vi.mock("@/lib/db", () => {
           return row
         }),
         updateMany: vi.fn(async ({ where, data }: { where: Partial<Row>; data: Partial<Row> }) => {
-          const hits = mocks.rows.filter((r) => Object.entries(where).every(([k, v]) => r[k as keyof Row] === v))
+          const hits = mocks.rows.filter((r) => Object.entries(where).every(([k, v]) => matches(r[k as keyof Row], v)))
           hits.forEach((r) => Object.assign(r, data))
           return { count: hits.length }
         }),
@@ -61,7 +66,8 @@ vi.mock("@/lib/db", () => {
 })
 vi.mock("@/lib/engage/adminAccess", () => ({ requireEngagePermission: mocks.gate }))
 
-import { formatUsd, parseDollars, priceFor, standardPrice } from "@/lib/engage/priceRules"
+import { formatUsd, offerLabel, parseDollars, priceFor, shortPriceLabel, standardPrice } from "@/lib/engage/priceRules"
+import { markIntroUsed } from "@/lib/engage/priceIntro"
 import { extensionCheckoutFor, checkoutExpiry } from "@/lib/extensionCheckout"
 import { verifyBillingIdentity } from "@/lib/billingIdentity"
 import { reserveFreeGeneration } from "@/lib/extAccess"
@@ -99,14 +105,33 @@ afterEach(() => {
 
 describe("the price rules", () => {
   it("is the usual $15 unless a special price is set and still open", () => {
-    expect(priceFor("linkedin", null, NOW)).toEqual({ cents: 1500, standardCents: 1500, special: false, endsAt: null })
-    expect(priceFor("linkedin", { priceCents: 500, endsAt: null }, NOW)).toEqual({ cents: 500, standardCents: 1500, special: true, endsAt: null })
+    expect(priceFor("linkedin", null, NOW)).toEqual({ cents: 1500, standardCents: 1500, special: false, endsAt: null, introMonths: null })
+    expect(priceFor("linkedin", { priceCents: 500, endsAt: null }, NOW)).toEqual({ cents: 500, standardCents: 1500, special: true, endsAt: null, introMonths: null })
     const ends = new Date("2026-11-30T23:59:59.000Z")
     expect(priceFor("x", { priceCents: 500, endsAt: ends }, NOW)).toMatchObject({ cents: 500, special: true, endsAt: ends.toISOString() })
     // Its last day has passed: the usual price again.
     expect(priceFor("linkedin", { priceCents: 500, endsAt: new Date("2026-10-20T23:59:59.000Z") }, NOW)).toEqual(standardPrice("linkedin"))
     // The usual price set as "special" is no special price.
     expect(priceFor("linkedin", { priceCents: 1500, endsAt: null }, NOW).special).toBe(false)
+  })
+
+  it("an intro offer: cheaper than the usual price, until they've bought with it", () => {
+    const intro = (over = {}) => ({ priceCents: 100, endsAt: null, introMonths: 3, introUsedAt: null, ...over })
+    expect(priceFor("linkedin", intro(), NOW)).toEqual({ cents: 100, standardCents: 1500, special: true, endsAt: null, introMonths: 3 })
+    expect(priceFor("linkedin", intro({ introUsedAt: NOW }), NOW)).toEqual(standardPrice("linkedin"))
+    expect(priceFor("linkedin", intro({ priceCents: 1500 }), NOW).special).toBe(false)
+    expect(priceFor("linkedin", intro({ priceCents: 2000 }), NOW).special).toBe(false)
+    expect(priceFor("linkedin", intro({ endsAt: new Date("2026-10-01T00:00:00.000Z") }), NOW).special).toBe(false)
+  })
+
+  it("says an offer in words", () => {
+    const every = priceFor("linkedin", { priceCents: 500, endsAt: null }, NOW)
+    const first = priceFor("linkedin", { priceCents: 100, endsAt: null, introMonths: 1 }, NOW)
+    const three = priceFor("linkedin", { priceCents: 100, endsAt: null, introMonths: 3 }, NOW)
+    expect([shortPriceLabel(every), shortPriceLabel(first), shortPriceLabel(three)]).toEqual(["$5/month", "$1 first month", "$1/month for 3 months"])
+    expect(offerLabel(every)).toBe("$5/month")
+    expect(offerLabel(first)).toBe("$1 for your first month, then $15/month")
+    expect(offerLabel(three)).toBe("$1/month for your first 3 months, then $15/month")
   })
 
   it("reads dollars the way an admin types them", () => {
@@ -295,6 +320,56 @@ describe("checkout", () => {
     expect(lemon.deleted).toEqual(["d1", "d3"])
   })
 
+  it("an intro offer: a discount for its months only, then Lemon Squeezy charges the usual price", async () => {
+    mocks.rows = [{ ...special(100), introMonths: 3 }]
+    const lemon = fakeLemon()
+    expect((await buy()).kind).toBe("checkout")
+    expect(lemon.made[0].attributes).toMatchObject({ amount: 1400, duration: "repeating", duration_in_months: 3, max_redemptions: 1 })
+    expect(lemon.checkouts[0].attributes.checkout_data.discount_code).toBe(lemon.made[0].attributes.code)
+    expect(lemon.checkouts[0].attributes.custom_price).toBeUndefined()
+    // Unused: the same code next time.
+    await buy()
+    expect(lemon.made).toHaveLength(1)
+  })
+
+  it("an intro offer they bought with is spent: the usual checkout, and marked so", async () => {
+    mocks.rows = [{ ...special(100), introMonths: 1, lemonDiscountId: "d1", lemonDiscountCode: "CLLAAAAAAAAAA", lemonDiscountCents: 1400 }]
+    const lemon = fakeLemon()
+    lemon.redeemed.add("d1")
+    const result = await buy()
+    expect(result.kind === "checkout" && result.url.startsWith("https://store.lemonsqueezy.com/buy/extension?")).toBe(true)
+    expect(lemon.made).toEqual([])
+    expect(lemon.checkouts).toEqual([])
+    expect(mocks.rows[0].introUsedAt).toBeInstanceOf(Date)
+    // From now on they're simply on the usual price.
+    fakeLemon()
+    const again = await buy()
+    expect(again.kind === "checkout" && again.url.startsWith("https://store.lemonsqueezy.com/buy/extension?")).toBe(true)
+  })
+
+  it("an intro offer never becomes a custom price: no discount, no checkout", async () => {
+    mocks.rows = [{ ...special(100), introMonths: 2 }]
+    const lemon = fakeLemon({ refuse: ["discount"] })
+    expect(await buy()).toEqual({ kind: "unavailable" })
+    expect(lemon.checkouts).toEqual([])
+
+    // The product already costs no more than the intro price: the usual checkout.
+    fakeLemon({ variantPrice: 50 })
+    const result = await buy()
+    expect(result.kind === "checkout" && result.url.startsWith("https://store.lemonsqueezy.com/buy/extension?")).toBe(true)
+  })
+
+  it("buying spends an intro offer, and only an unspent intro offer", async () => {
+    const at = new Date("2026-10-21T12:00:00.000Z")
+    mocks.rows = [{ ...special(100), introMonths: 1 }, special(700, null, "x")]
+    await markIntroUsed("u1", "linkedin", at)
+    await markIntroUsed("u1", "x", at)
+    expect(mocks.rows[0].introUsedAt).toEqual(at)
+    expect(mocks.rows[1].introUsedAt ?? null).toBeNull()
+    await markIntroUsed("u1", "linkedin", new Date("2026-12-01T00:00:00.000Z"))
+    expect(mocks.rows[0].introUsedAt).toEqual(at)
+  })
+
   it("a checkout lasts a day at most", () => {
     expect(checkoutExpiry(null, NOW).toISOString()).toBe("2026-10-22T10:00:00.000Z")
     expect(checkoutExpiry(new Date("2026-12-01T00:00:00.000Z"), NOW).toISOString()).toBe("2026-10-22T10:00:00.000Z")
@@ -313,6 +388,11 @@ describe("the paywall message", () => {
     const usual = await reserveFreeGeneration("u1", 10)
     if (usual.ok) return
     expect((await usual.response.json()).error).toContain("for $15/month to keep going")
+
+    mocks.rows = [{ ...special(100), introMonths: 1 }]
+    const intro = await reserveFreeGeneration("u1", 10)
+    if (intro.ok) return
+    expect((await intro.response.json()).error).toContain("for $1 first month (then $15/month) to keep going")
   })
 })
 
@@ -353,11 +433,34 @@ describe("the admin route", () => {
       { platform: "linkedin", priceCents: 500, endsAt: "2020-01-01T00:00:00.000Z", reason: "Past" },
       { platform: "linkedin", priceCents: 500, reason: "" },
       { platform: "web", priceCents: 500, reason: "Not an extension" },
+      { platform: "linkedin", priceCents: 100, introMonths: 0, reason: "No months" },
+      { platform: "linkedin", priceCents: 100, introMonths: 13, reason: "Too many months" },
+      { platform: "linkedin", priceCents: 1500, introMonths: 1, reason: "Intro at the usual price" },
     ]) {
       expect((await call(PUT, body)).status).toBe(400)
     }
     expect(mocks.rows).toEqual([])
     expect((await call(PUT, { platform: "x", priceCents: 500, reason: "Someone else" }, "PUT", "nobody")).status).toBe(404)
+  })
+
+  it("sets an intro offer, and saving one again makes a used one available again", async () => {
+    await call(PUT, { platform: "linkedin", priceCents: 100, introMonths: 3, reason: "Launch offer" })
+    expect(mocks.rows[0]).toMatchObject({ priceCents: 100, introMonths: 3, introUsedAt: null })
+    expect(mocks.audit[0]).toMatchObject({ newValue: { priceCents: 100, introMonths: 3 } })
+    expect(String(mocks.audit[0].details)).toContain("for the first 3 months, then the usual price")
+
+    mocks.rows[0].introUsedAt = NOW
+    await call(PUT, { platform: "linkedin", priceCents: 100, introMonths: 3, reason: "Once more" })
+    expect(mocks.rows[0].introUsedAt).toBeNull()
+
+    // A different length at the same price needs a new checkout discount.
+    Object.assign(mocks.rows[0], { lemonDiscountId: "d1", lemonDiscountCode: "CLLAAAAAAAAAA", lemonDiscountCents: 1400 })
+    await call(PUT, { platform: "linkedin", priceCents: 100, introMonths: 1, reason: "Shorter" })
+    expect(mocks.rows[0]).toMatchObject({ introMonths: 1, lemonDiscountId: null, lemonDiscountCode: null })
+
+    // Every month again.
+    await call(PUT, { platform: "linkedin", priceCents: 500, reason: "Every month" })
+    expect(mocks.rows[0]).toMatchObject({ priceCents: 500, introMonths: null })
   })
 
   it("needs access-management permission to change a price, view permission to see one", async () => {
@@ -422,8 +525,43 @@ describe("the admin card", () => {
     await waitFor(() => expect(sent).toHaveLength(1))
     expect(sent[0]).toEqual({
       method: "PUT",
-      body: { platform: "linkedin", priceCents: 500, endsAt: "2099-11-30T23:59:59.000Z", reason: "Early supporter" },
+      body: { platform: "linkedin", priceCents: 500, introMonths: null, endsAt: "2099-11-30T23:59:59.000Z", reason: "Early supporter" },
     })
+  })
+
+  it("sets an intro offer for the first months, then the usual price", async () => {
+    const sent = serve(answer(null))
+    render(<EngagePriceCard userId="u1" />)
+    const linkedin = within(await screen.findByRole("listitem", { name: "Engage for LinkedIn price" }))
+    fireEvent.click(linkedin.getByRole("button", { name: "Set price" }))
+    const dialog = within(await screen.findByRole("dialog"))
+    fireEvent.change(dialog.getByLabelText("Months at this price"), { target: { value: "3" } })
+    expect((dialog.getByRole("radio", { name: /Only the first/ }) as HTMLInputElement).checked).toBe(true)
+    fireEvent.change(dialog.getByPlaceholderText("5"), { target: { value: "15" } })
+    expect(dialog.getByText("An intro price must be less than the usual $15")).toBeTruthy()
+    fireEvent.change(dialog.getByPlaceholderText("5"), { target: { value: "1" } })
+    expect(dialog.getByText("$1/month for 3 months")).toBeTruthy()
+    fireEvent.change(dialog.getByLabelText(/Reason/), { target: { value: "Launch offer" } })
+    fireEvent.click(dialog.getByRole("button", { name: "Save price" }))
+    await waitFor(() => expect(sent).toHaveLength(1))
+    expect(sent[0].body).toEqual({ platform: "linkedin", priceCents: 100, introMonths: 3, endsAt: null, reason: "Launch offer" })
+  })
+
+  it("shows an intro offer, and one they've used", async () => {
+    const offer = { priceCents: 100, introMonths: 1, endsAt: null, reason: "Launch", setBy: "admin@carouselabs.com", updatedAt: NOW.toISOString(), ended: false, discountCode: null }
+    serve(answer({ ...offer, introUsedAt: null }))
+    render(<EngagePriceCard userId="u1" />)
+    let linkedin = within(await screen.findByRole("listitem", { name: "Engage for LinkedIn price" }))
+    expect(linkedin.getByText("Intro offer")).toBeTruthy()
+    expect(linkedin.getByText("$1 first month")).toBeTruthy()
+    expect(linkedin.getByText("then $15/month")).toBeTruthy()
+    cleanup()
+
+    serve(answer({ ...offer, introUsedAt: "2026-10-20T10:00:00.000Z" }))
+    render(<EngagePriceCard userId="u1" />)
+    linkedin = within(await screen.findByRole("listitem", { name: "Engage for LinkedIn price" }))
+    expect(linkedin.getByText("Usual price, $15/month")).toBeTruthy()
+    expect(linkedin.getByText(/Intro offer used .*: was \$1 for your first month, then \$15\/month/)).toBeTruthy()
   })
 
   it("shows a special price struck against the usual one, warns when already subscribed, and removes it", async () => {
@@ -467,6 +605,15 @@ describe("what the person sees on the website", () => {
     expect(screen.getAllByText("$15").every((el) => el.closest("s"))).toBe(true)
     expect(screen.getByText(/Your special price, available until Nov 30, 2026/)).toBeTruthy()
     expect(screen.getByRole("link", { name: /Get the extension/ }).textContent).toContain("$5/month")
+  })
+
+  it("an intro offer: the price, for how long, and what comes after", () => {
+    const price = priceFor("linkedin", { priceCents: 100, endsAt: null, introMonths: 1 }, NOW)
+    render(<ExtensionPlanSection ext={ext(price)} />)
+    expect(screen.getByText("$1").className).toContain("text-[2.5rem]")
+    expect(screen.getByText("first month")).toBeTruthy()
+    expect(screen.getByText(/Your special offer: \$1 for your first month, then \$15\/month/)).toBeTruthy()
+    expect(screen.getByRole("link", { name: /Get the extension/ }).textContent).toContain("$1 first month")
   })
 
   it("the usual price for everyone else", () => {

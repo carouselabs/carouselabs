@@ -28,6 +28,10 @@ function priceLine(price: EngagePriceInfo | undefined): string {
   const until = price.endsAt
     ? `, which they can buy at until ${new Date(price.endsAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })}`
     : ""
+  if (price.introMonths) {
+    const months = price.introMonths === 1 ? "their first month" : `their first ${price.introMonths} months`
+    return `; their own intro offer is ${monthlyLabel(price.cents)} for ${months}, then the usual ${monthlyLabel(price.standardCents)}${until}`
+  }
   return `; their own special price is ${monthlyLabel(price.cents)} instead of the usual ${monthlyLabel(price.standardCents)}${until}`
 }
 

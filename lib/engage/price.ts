@@ -45,6 +45,9 @@ export async function adminEngagePrices(userId: string, now: Date = new Date()) 
       standardCents: standardPrice(platform).cents,
       special: row && {
         priceCents: row.priceCents,
+        // An intro offer: that many first months, then the usual price.
+        introMonths: row.introMonths,
+        introUsedAt: row.introUsedAt,
         endsAt: row.endsAt,
         reason: row.reason,
         setBy: row.setBy,
@@ -59,25 +62,38 @@ export async function adminEngagePrices(userId: string, now: Date = new Date()) 
 
 const NAMES: Record<EngagePlatform, string> = { linkedin: "LinkedIn", x: "X" }
 
-function describe(platform: EngagePlatform, cents: number, endsAt: Date | null): string {
-  return `${NAMES[platform]} price ${formatUsd(cents)}/month${endsAt ? ` until ${endsAt.toISOString().slice(0, 10)}` : ""}`
+function describe(platform: EngagePlatform, cents: number, introMonths: number | null, endsAt: Date | null): string {
+  const charge = introMonths ? `${formatUsd(cents)}/month for the first ${introMonths} month${introMonths === 1 ? "" : "s"}, then the usual price` : `${formatUsd(cents)}/month`
+  return `${NAMES[platform]} price ${charge}${endsAt ? `, offered until ${endsAt.toISOString().slice(0, 10)}` : ""}`
 }
+
+const snapshot = (platform: EngagePlatform, row: { priceCents: number; introMonths: number | null; endsAt: Date | null }) => ({
+  platform,
+  priceCents: row.priceCents,
+  introMonths: row.introMonths,
+  endsAt: row.endsAt?.toISOString() ?? null,
+})
 
 export async function setEngagePrice(input: {
   admin: string
   user: { id: string; email: string }
   platform: EngagePlatform
   priceCents: number
+  // null: every month; 1–12: an intro offer for that many first months.
+  introMonths: number | null
   endsAt: Date | null
   reason: string
   ip?: string
 }) {
   const where = { userId_platform: { userId: input.user.id, platform: input.platform } }
   const before = await db.engagePrice.findUnique({ where })
-  // A new amount needs a new checkout discount (lib/engage/priceDiscount.ts).
-  const repriced = !!before && before.priceCents !== input.priceCents
+  // A new amount or length needs a new checkout discount (lib/engage/priceDiscount.ts).
+  const repriced = !!before && (before.priceCents !== input.priceCents || (before.introMonths ?? null) !== input.introMonths)
   const data = {
     priceCents: input.priceCents,
+    introMonths: input.introMonths,
+    // Saving an offer always makes it available again, even one they used.
+    introUsedAt: null,
     endsAt: input.endsAt,
     reason: input.reason,
     setBy: input.admin,
@@ -93,11 +109,11 @@ export async function setEngagePrice(input: {
     action: "ENGAGE_SET_PRICE",
     targetUserId: input.user.id,
     targetEmail: input.user.email,
-    details: `Set ${describe(input.platform, input.priceCents, input.endsAt)}`,
+    details: `Set ${describe(input.platform, input.priceCents, input.introMonths, input.endsAt)}`,
     ipAddress: input.ip,
     product: "engage",
-    oldValue: before && { platform: input.platform, priceCents: before.priceCents, endsAt: before.endsAt?.toISOString() ?? null },
-    newValue: { platform: input.platform, priceCents: input.priceCents, endsAt: input.endsAt?.toISOString() ?? null },
+    oldValue: before && snapshot(input.platform, before),
+    newValue: snapshot(input.platform, input),
     reason: input.reason,
   })
   if (repriced) await retireDiscount(before.lemonDiscountId)
@@ -121,10 +137,10 @@ export async function removeEngagePrice(input: {
     action: "ENGAGE_REMOVE_PRICE",
     targetUserId: input.user.id,
     targetEmail: input.user.email,
-    details: `Removed ${describe(input.platform, before.priceCents, before.endsAt)}; back to the usual price`,
+    details: `Removed ${describe(input.platform, before.priceCents, before.introMonths, before.endsAt)}; back to the usual price`,
     ipAddress: input.ip,
     product: "engage",
-    oldValue: { platform: input.platform, priceCents: before.priceCents, endsAt: before.endsAt?.toISOString() ?? null },
+    oldValue: snapshot(input.platform, before),
     newValue: null,
     reason: input.reason,
   })

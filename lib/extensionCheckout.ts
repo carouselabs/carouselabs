@@ -57,18 +57,21 @@ export async function extensionCheckoutFor(
 
   const price = await loadEngagePrice(user.id, platform)
   if (price.special) {
-    // Never fall back to the shared link: it would charge the usual price to
-    // someone who was promised less.
-    const url = await specialPriceCheckoutUrl({
+    // Never fall back to the shared link when it can't be made: that would
+    // charge the usual price to someone who was promised less. Only a spent
+    // (or pointless) intro offer sends them to the usual checkout below.
+    const special = await specialPriceCheckoutUrl({
       userId: user.id,
       platform,
       variant,
       cents: price.cents,
+      introMonths: price.introMonths,
       email: user.email,
       custom,
       expiresAt: checkoutExpiry(price.endsAt ? new Date(price.endsAt) : null, new Date()),
     })
-    return url ? { kind: "checkout", url } : { kind: "unavailable" }
+    if (!special) return { kind: "unavailable" }
+    if ("url" in special) return { kind: "checkout", url: special.url }
   }
 
   let url: URL
@@ -91,20 +94,26 @@ export function checkoutExpiry(priceEndsAt: Date | null, now: Date): Date {
 // The shared checkout link always charges the product's own price, so a
 // special price needs a checkout of its own (Lemon Squeezy's Create Checkout
 // API). It carries the person's own discount from the product's price
-// (lib/engage/priceDiscount.ts), which the checkout shows as such. When
-// there's nothing to take off (the product already costs that or less) or
-// no discount can be made, a custom_price instead: the same charge, now and
-// at every renewal, with the product's usual price still printed beside it.
+// (lib/engage/priceDiscount.ts), which the checkout shows as such.
+//
+// Every month: when there's nothing to take off (the product already costs
+// that or less) or no discount can be made, a custom_price instead: the same
+// charge, now and at every renewal, with the product's usual price still
+// printed beside it.
+// An intro offer: only a discount can end after its months, so without one
+// there's no checkout. When the product costs no more than the intro price,
+// or they already used their intro, { usual: true }: the usual checkout.
 // null when no checkout can be made (not configured, or Lemon Squeezy said no).
 export async function specialPriceCheckoutUrl(input: {
   userId: string
   platform: EngagePlatform
   variant: number
   cents: number
+  introMonths: number | null
   email: string
   custom: Record<string, string>
   expiresAt: Date
-}): Promise<string | null> {
+}): Promise<{ url: string } | { usual: true } | null> {
   const store = process.env.LEMONSQUEEZY_STORE_ID
   const apiKey = process.env.LEMONSQUEEZY_API_KEY
   if (!store || !apiKey) {
@@ -112,17 +121,20 @@ export async function specialPriceCheckoutUrl(input: {
     return null
   }
   const listCents = await variantPriceCents(input.variant)
-  const code =
+  const discount =
     listCents !== null && listCents > input.cents
       ? await discountCodeFor({
           userId: input.userId,
           platform: input.platform,
           variant: input.variant,
           offCents: listCents - input.cents,
+          months: input.introMonths,
         }).catch(() => null)
       : null
-  const charge = code
-    ? { checkout_data: { email: input.email, custom: input.custom, discount_code: code } }
+  if (discount && "spent" in discount) return { usual: true }
+  if (input.introMonths && !discount) return listCents !== null && listCents <= input.cents ? { usual: true } : null
+  const charge = discount
+    ? { checkout_data: { email: input.email, custom: input.custom, discount_code: discount.code } }
     : { custom_price: input.cents, checkout_data: { email: input.email, custom: input.custom } }
   try {
     const res = await fetch("https://api.lemonsqueezy.com/v1/checkouts", {
@@ -154,7 +166,7 @@ export async function specialPriceCheckoutUrl(input: {
     }
     const body = (await res.json().catch(() => null)) as { data?: { attributes?: { url?: unknown } } } | null
     const url = body?.data?.attributes?.url
-    return typeof url === "string" && url.startsWith("https://") ? url : null
+    return typeof url === "string" && url.startsWith("https://") ? { url } : null
   } catch {
     console.error("[extensionCheckout] couldn't reach Lemon Squeezy for a special price checkout")
     return null

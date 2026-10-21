@@ -3,7 +3,7 @@ import { Check, Puzzle } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { EXTENSION_PLAN } from "@/lib/plans"
-import { formatUsd, type EngagePriceInfo } from "@/lib/engage/priceRules"
+import { formatUsd, offerLabel, type EngagePriceInfo } from "@/lib/engage/priceRules"
 import { isDiscount, priceEndDate } from "@/components/extension/ExtensionPrice"
 
 type EngagePlan = {
@@ -59,13 +59,20 @@ export function EngagePlanCard({
         <span className="text-[2.5rem] leading-none font-semibold tracking-[-0.03em] tabular-nums">
           {special ? formatUsd(special.cents) : `$${plan.price}`}
         </span>
-        <span className="text-label text-muted-foreground">{plan.priceSuffix}</span>
+        <span className="text-label text-muted-foreground">
+          {special?.introMonths === 1
+            ? "first month"
+            : special?.introMonths
+              ? `${plan.priceSuffix} for ${special.introMonths} months`
+              : plan.priceSuffix}
+        </span>
         <span className="ml-1 rounded-full bg-brand-soft px-2.5 py-0.5 text-caption font-medium text-brand">Unlimited</span>
       </div>
       {special && (
         <p className="-mt-3 text-caption font-medium text-brand">
-          Your special price{special.endsAt ? `, available until ${priceEndDate(special.endsAt)}` : ""}. You keep it every month
-          you stay subscribed.
+          {special.introMonths ? `Your special offer: ${offerLabel(special)}` : "Your special price"}
+          {special.endsAt ? `, available until ${priceEndDate(special.endsAt)}` : ""}.
+          {special.introMonths ? "" : " You keep it every month you stay subscribed."}
         </p>
       )}
       {status}

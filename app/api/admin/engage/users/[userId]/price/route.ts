@@ -1,7 +1,9 @@
 // /api/admin/engage/users/[userId]/price — this person's own price for each
 // Engage extension, instead of the usual $15/month (lib/engage/price.ts).
 //   GET    → { prices: [...linkedin, x], subscribed: { linkedin, x } }
-//   PUT    { platform, priceCents, endsAt?, reason } → set or change it
+//   PUT    { platform, priceCents, introMonths?, endsAt?, reason } → set or
+//          change it; introMonths 1–12 makes it an intro offer for that many
+//          first months, then the usual price (null: every month)
 //   DELETE { platform, reason } → back to the usual price
 // A new price only reaches their next checkout: a subscription they already
 // have keeps what it costs (Lemon Squeezy can't reprice it).
@@ -11,7 +13,7 @@ import { db } from "@/lib/db"
 import { requireEngagePermission } from "@/lib/engage/adminAccess"
 import { findTargetUser, notFound, parseBody } from "@/lib/engage/adminApi"
 import { adminEngagePrices, removeEngagePrice, setEngagePrice } from "@/lib/engage/price"
-import { MAX_PRICE_CENTS, MIN_PRICE_CENTS, formatUsd } from "@/lib/engage/priceRules"
+import { MAX_INTRO_MONTHS, MAX_PRICE_CENTS, MIN_PRICE_CENTS, STANDARD_PRICE_CENTS, formatUsd } from "@/lib/engage/priceRules"
 import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
 import { isExtensionSubscriptionActive } from "@/lib/extensionAccessRules"
 import { getRequestIp } from "@/lib/auditLog"
@@ -28,6 +30,7 @@ const setBody = z.object({
     .int("Whole cents only")
     .min(MIN_PRICE_CENTS, `At least ${formatUsd(MIN_PRICE_CENTS)}`)
     .max(MAX_PRICE_CENTS, `At most ${formatUsd(MAX_PRICE_CENTS)}`),
+  introMonths: z.number().int("Whole months only").min(1, "At least 1 month").max(MAX_INTRO_MONTHS, `At most ${MAX_INTRO_MONTHS} months`).nullable().default(null),
   endsAt: z.iso.datetime().nullable().default(null),
   reason,
 })
@@ -68,6 +71,10 @@ export async function PUT(req: Request, { params }: Params) {
   if (endsAt && endsAt.getTime() <= Date.now()) {
     return NextResponse.json({ error: "endsAt: Pick a date in the future" }, { status: 400 })
   }
+  const usual = STANDARD_PRICE_CENTS[parsed.data.platform]
+  if (parsed.data.introMonths !== null && parsed.data.priceCents >= usual) {
+    return NextResponse.json({ error: `priceCents: An intro price must be less than the usual ${formatUsd(usual)}` }, { status: 400 })
+  }
 
   try {
     await setEngagePrice({
@@ -75,6 +82,7 @@ export async function PUT(req: Request, { params }: Params) {
       user,
       platform: parsed.data.platform,
       priceCents: parsed.data.priceCents,
+      introMonths: parsed.data.introMonths,
       endsAt,
       reason: parsed.data.reason,
       ip: getRequestIp(req),

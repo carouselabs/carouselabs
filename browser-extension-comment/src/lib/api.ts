@@ -155,7 +155,9 @@ export interface ExtensionAccess {
   features?: Partial<Record<"comments" | "replies" | "connection_notes" | "messages", boolean>>;
   // What this account pays per month, in cents: the usual price, or a
   // special one an admin set for it (absent on servers before special prices).
-  price?: { cents: number; standardCents: number; special: boolean; endsAt: string | null };
+  // introMonths: the special price is only for that many first months, then
+  // standardCents (absent or null: every month).
+  price?: { cents: number; standardCents: number; special: boolean; endsAt: string | null; introMonths?: number | null };
 }
 
 export interface MeResponse {

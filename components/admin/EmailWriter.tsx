@@ -5,7 +5,9 @@
 // personal email to just them: the writer then knows their account facts. Describe the email in plain
 // words; the writer drafts it (subject, preview line, body) and proposes the
 // picture and stickers. Nothing is painted until you approve the art (edit
-// the ideas first if you like); every picture is painted new for this email.
+// the ideas first if you like). Saved art from earlier emails is reused where
+// it fits (the writer suggests it, or pick it from the library), so only
+// what's new is painted.
 // Refine by chatting, test it in your inbox, then make it a campaign and send
 // it in batches (lib/campaigns.ts).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -16,6 +18,8 @@ import { AdminButton, AdminCard, AdminInput, AdminSelect, ConfirmModal, fmtDateT
 import { useToast } from "@/components/admin/Toast"
 import { SEGMENT_TYPES } from "@/lib/segments"
 import { carryArt, designStickers, isFullyPainted, unpaintedArt, type EmailDesign } from "@/lib/emailDesign"
+import { artActionLabel, paintingsNeeded } from "@/lib/emailArtReuse"
+import { EmailArtPicker, type SavedArtItem } from "@/components/admin/EmailArtPicker"
 import type { WriterTurn } from "@/lib/ai/emailWriter"
 
 type Audience = (typeof SEGMENT_TYPES)[number]["value"] | "custom"
@@ -64,6 +68,8 @@ export function EmailWriter({ recipient }: { recipient?: EmailRecipient } = {}) 
   const [testing, setTesting] = useState(false)
   const [confirmCount, setConfirmCount] = useState<number | null>(null)
   const [creating, setCreating] = useState(false)
+  // The saved-art picker: for the picture, or for the sticker with this idea.
+  const [picker, setPicker] = useState<null | { kind: "picture" } | { kind: "sticker"; idea: string }>(null)
   const chatEnd = useRef<HTMLDivElement>(null)
   const restored = useRef(false)
 
@@ -206,6 +212,31 @@ export function EmailWriter({ recipient }: { recipient?: EmailRecipient } = {}) 
     }
   }
 
+  // Saved art is already painted: it goes straight in, past carryArt (which
+  // would drop it for having a new description). A saved picture only needs
+  // this email's headline drawn on.
+  function pickSaved(art: SavedArtItem) {
+    const target = picker
+    setPicker(null)
+    if (!target || !design) return
+    if (target.kind === "picture") {
+      setDesign({ ...design, hero: { ...design.hero, scene: art.description, paintingUrl: art.url, imageUrl: undefined } })
+      return
+    }
+    if (designStickers(design).some((s) => s.idea === art.description && s.idea !== target.idea)) {
+      toast("That sticker is already in this email", "error")
+      return
+    }
+    setDesign({
+      ...design,
+      blocks: design.blocks.map((b) =>
+        b.type === "features"
+          ? { ...b, items: b.items.map((i) => (i.sticker.idea === target.idea ? { ...i, sticker: { idea: art.description, imageUrl: art.url } } : i)) }
+          : b,
+      ),
+    })
+  }
+
   function paintMissing() {
     if (!design) return
     const jobs: Promise<void>[] = []
@@ -289,6 +320,7 @@ export function EmailWriter({ recipient }: { recipient?: EmailRecipient } = {}) 
   }
 
   const missing = useMemo(() => (design ? unpaintedArt(design) : null), [design])
+  const paintLabel = design ? artActionLabel(paintingsNeeded(design)) : ""
   const painted = design ? isFullyPainted(design) : false
   const anyPainting = painting.size > 0
 
@@ -409,7 +441,7 @@ export function EmailWriter({ recipient }: { recipient?: EmailRecipient } = {}) 
                 missing && (missing.hero || missing.stickers > 0) ? (
                   <AdminButton onClick={paintMissing} loading={anyPainting} disabled={anyPainting}>
                     <Brush aria-hidden />
-                    {anyPainting ? "Painting…" : `Paint ${missing.hero ? "picture" : ""}${missing.hero && missing.stickers ? " & " : ""}${missing.stickers ? `${missing.stickers} sticker${missing.stickers === 1 ? "" : "s"}` : ""}`}
+                    {anyPainting ? "Painting…" : paintLabel}
                   </AdminButton>
                 ) : (
                   <span className="text-caption font-medium text-success">All painted</span>
@@ -418,7 +450,8 @@ export function EmailWriter({ recipient }: { recipient?: EmailRecipient } = {}) 
             >
               <div className="flex flex-col gap-5">
                 <p className="text-caption text-muted-foreground">
-                  Check the ideas, change anything you like, then paint. Every picture is new for this email; each takes about a minute.
+                  Check the ideas, change anything you like, then paint. Saved pictures and stickers cost nothing to reuse; new ones
+                  take about a minute each.
                 </p>
                 <div className="grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)]">
                   <div className="relative aspect-[5/3] overflow-hidden rounded-control border border-border bg-background">
@@ -456,16 +489,26 @@ export function EmailWriter({ recipient }: { recipient?: EmailRecipient } = {}) 
                       onChange={(e) => editDesign((d) => ({ ...d, hero: { ...d.hero, scene: e.target.value } }))}
                       className="w-full rounded-control-sm border border-border bg-background p-2.5 text-caption text-foreground outline-none focus:border-brand"
                     />
-                    {design.hero.imageUrl && (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
                       <button
                         type="button"
                         disabled={painting.has("hero")}
-                        onClick={() => void paintHero(design, { fresh: true })}
-                        className="self-start text-caption font-medium text-muted-foreground hover:text-foreground disabled:opacity-50"
+                        onClick={() => setPicker({ kind: "picture" })}
+                        className="text-caption font-medium text-brand hover:underline disabled:opacity-50"
                       >
-                        Paint a new picture
+                        Use a saved picture
                       </button>
-                    )}
+                      {design.hero.imageUrl && (
+                        <button
+                          type="button"
+                          disabled={painting.has("hero")}
+                          onClick={() => void paintHero(design, { fresh: true })}
+                          className="text-caption font-medium text-muted-foreground hover:text-foreground disabled:opacity-50"
+                        >
+                          Paint a new picture
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -500,6 +543,15 @@ export function EmailWriter({ recipient }: { recipient?: EmailRecipient } = {}) 
                             }))
                           }}
                         />
+                        <button
+                          type="button"
+                          disabled={painting.has(s.idea)}
+                          onClick={() => setPicker({ kind: "sticker", idea: s.idea })}
+                          aria-label={`Use a saved sticker instead of ${s.idea}`}
+                          className="shrink-0 text-caption font-medium text-brand hover:underline disabled:opacity-50"
+                        >
+                          Saved…
+                        </button>
                         {s.imageUrl && (
                           <button
                             type="button"
@@ -515,6 +567,7 @@ export function EmailWriter({ recipient }: { recipient?: EmailRecipient } = {}) 
                   </div>
                 )}
               </div>
+              {picker && <EmailArtPicker kind={picker.kind} onPick={pickSaved} onClose={() => setPicker(null)} />}
             </AdminCard>
           )}
 

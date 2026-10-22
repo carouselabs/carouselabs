@@ -3,7 +3,9 @@
 // describes an email in plain words, Claude writes it as a structured design
 // (lib/emailDesign.ts), and each later message revises it. Claude also
 // proposes the picture (a still life + its headline) and the stickers; they're
-// painted only once the admin approves (lib/emailArt.tsx).
+// painted only once the admin approves (lib/emailArt.tsx). It's shown the
+// saved art (lib/emailArtLibrary.ts) and reuses a picture or sticker whenever
+// one fits, so only what's new costs a painting (lib/emailArtReuse.ts).
 //
 // It writes only from the real product facts below, which are read from the
 // same code the pricing page uses, so they can't go out of date.
@@ -12,6 +14,7 @@ import { APP_URL } from "@/emails/theme"
 import { AVAILABLE_VARIABLES } from "@/lib/broadcastRender"
 import { carryArt, designStickers, emailDesignSchema, type EmailDesign } from "@/lib/emailDesign"
 import { parseJsonObject } from "@/lib/ai/jsonAnswer"
+import { applySavedArt, savedPicks, type SavedArtRef } from "@/lib/emailArtReuse"
 import {
   CREDIT_COST_LINES,
   EXTENSION_PLAN,
@@ -63,11 +66,11 @@ const DESIGN_SHAPE = `{
   "version": 1,
   "subject": "…",
   "preview": "…",
-  "hero": { "lead": "…", "accent": "…", "scene": "…" },
+  "hero": { "lead": "…", "accent": "…", "scene": "…", "saved": "<a saved picture's id, or leave it out>" },
   "blocks": [
     { "type": "text", "text": "Hi {{firstName}},\\n\\nParagraph… **bold**, *italic*, [link text](https://carouselabs.com/…)" },
     { "type": "heading", "text": "…" },
-    { "type": "features", "items": [ { "title": "…", "text": "…", "sticker": { "idea": "a paper airplane" } } ] },
+    { "type": "features", "items": [ { "title": "…", "text": "…", "sticker": { "idea": "a paper airplane" } }, { "title": "…", "text": "…", "sticker": { "idea": "<a saved sticker's description>", "saved": "<its id>" } } ] },
     { "type": "steps", "items": ["…", "…"] },
     { "type": "facts", "items": [["Label", "Value"]] },
     { "type": "button", "label": "…", "href": "https://…" },
@@ -87,7 +90,24 @@ ${about.facts}
 Use this to get their situation right and to choose what's worth saying (what they haven't tried yet, what fits their plan). Write like a person who knows them, not like a report: never recite numbers back at them, never mention data, tracking or "our records", and don't say anything they'd be surprised we know. You may use their first name directly instead of {{firstName}}.`
 }
 
-function systemPrompt(about?: { facts: string }): string {
+export type ArtLibrary = { pictures: SavedArtRef[]; stickers: SavedArtRef[] }
+
+// The art already painted for earlier emails. Reusing it costs nothing;
+// painting new costs money, so the writer prefers a saved one that fits.
+function librarySection(library: ArtLibrary | undefined): string {
+  if (!library || (library.pictures.length === 0 && library.stickers.length === 0)) return ""
+  const list = (items: SavedArtRef[]) => items.map((a) => `- [${a.id}] ${a.description}`).join("\n") || "(none yet)"
+  return `
+
+SAVED ART (painted for earlier emails: reusing one is free, painting a new one costs money)
+Pictures (bare paintings; this email's headline is drawn on fresh, so any headline works):
+${list(library.pictures)}
+Stickers:
+${list(library.stickers)}
+Reuse whenever one fits well: when a saved picture is a good visual metaphor for this email, set hero.saved to its id and hero.scene to its description exactly; for a feature that a saved sticker suits, give the sticker { "idea": its description exactly, "saved": its id }. Only ids from these lists. Paint new (no "saved") only for what nothing here fits. A sticker idea must still be different from the others in the email.`
+}
+
+function systemPrompt(about?: { facts: string }, library?: ArtLibrary): string {
   return `You write emails for CarouseLabs with the admin who runs it. You're the writer at a premium product company: warm, clear, specific and confident. Every email you write is something a person chose to read; respect that.
 
 THE PRODUCT (the only facts you may use):
@@ -104,12 +124,12 @@ RULES
 - hero.lead and hero.accent: the headline painted into the email's picture, read as one line: lead plain, accent in italics. Each 1–4 words; the accent ends with a full stop. Like "You made the cut." / "Engage is on us.", or "Running low" / "on credits.". No merge fields.
 - hero.scene: one tangible object or a tiny still life that is a visual metaphor for the email, in one sentence ("an open tin of brand-new coloured pencils", "a paper airplane snagged on a thin branch"). No people, faces, hands, screens, phones, logos, text, letters or numbers. It's painted in a fixed hand-painted gouache style; don't describe style or colours.
 - Stickers only appear in a "features" block (2–4 rows): each sticker idea is one simple object ("a light bulb", "a fountain pen"), all different. Use features only when the email really lists features or benefits.
-- When the admin asks for a change, change only that. Keep everything else exactly as it was, including hero.scene and every sticker idea, so the pictures already painted can be kept. Change the scene or a sticker only when asked or when the email's topic changed.${personSection(about)}
+- When the admin asks for a change, change only that. Keep everything else exactly as it was, including hero.scene and every sticker idea, so the pictures already painted can be kept. Change the scene or a sticker only when asked or when the email's topic changed.${librarySection(library)}${personSection(about)}
 
 ANSWER
 Reply with one JSON object and nothing else:
 { "reply": "a short message to the admin", "design": ${DESIGN_SHAPE} }
-"reply" is 2–5 plain sentences: what you wrote or changed, then the art plan in this form: "Picture: <scene>, with the headline "<lead> <accent>". Stickers: <ideas, or none>." End by asking them to approve the picture and stickers (or say what to change) before they're painted. When the draft says some art is already painted and you kept it unchanged, say it stays as painted instead of asking again; ask only about art that's new or changed. If something important is missing, ask that one question too.`
+"reply" is 2–5 plain sentences: what you wrote or changed, then the art plan in this form: "Picture: <scene> (saved, no new painting | new painting), with the headline "<lead> <accent>". Stickers: <ideas, each marked saved or new, or none>." End by asking them to approve the picture and stickers (or say what to change) before anything new is painted. When the draft says some art is already painted and you kept it unchanged, say it stays as painted instead of asking again; ask only about art that's new or changed. If something important is missing, ask that one question too.`
 }
 
 export type WriterTurn = { role: "admin" | "writer"; text: string }
@@ -127,6 +147,8 @@ export async function writeEmail(input: {
   current: EmailDesign | null
   // A personal email to one person: their account facts (lib/emailRecipientFacts.ts).
   about?: { facts: string }
+  // The saved art it may reuse (lib/emailArtLibrary.ts).
+  library?: ArtLibrary
 }): Promise<{
   reply: string
   design: EmailDesign
@@ -147,7 +169,7 @@ export async function writeEmail(input: {
     const response = await anthropic.messages.create({
       model: EMAIL_WRITER_MODEL,
       max_tokens: 6000,
-      system: systemPrompt(input.about),
+      system: systemPrompt(input.about, input.library),
       messages,
     })
     const raw = response.content
@@ -160,7 +182,10 @@ export async function writeEmail(input: {
       parsed?.design && typeof parsed.design === "object" ? { ...(parsed.design as object), version: 1 } : null,
     )
     if (reply && design.success) {
-      return { reply: reply.slice(0, 2000), design: carryArt(input.current, design.data) }
+      // Painted art carries over where the idea stayed; saved art it chose is put in.
+      const carried = carryArt(input.current, design.data)
+      const withSaved = input.library ? applySavedArt(carried, savedPicks(parsed?.design), input.library) : carried
+      return { reply: reply.slice(0, 2000), design: withSaved }
     }
     lastProblem =
       response.stop_reason === "max_tokens"
@@ -176,7 +201,7 @@ export async function writeEmail(input: {
 // Which art is already painted, so the writer doesn't ask to approve it again.
 function paintedNote(design: EmailDesign): string {
   const stickers = designStickers(design).filter((s) => s.imageUrl).map((s) => `"${s.idea}"`)
-  const parts = [design.hero.imageUrl ? "the picture" : null, stickers.length ? `the stickers ${stickers.join(", ")}` : null].filter(Boolean)
+  const parts = [design.hero.paintingUrl ? "the picture" : null, stickers.length ? `the stickers ${stickers.join(", ")}` : null].filter(Boolean)
   return parts.length ? `Already painted: ${parts.join(" and ")}.` : "Nothing is painted yet."
 }
 

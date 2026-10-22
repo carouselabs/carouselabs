@@ -1,5 +1,7 @@
 // POST /api/admin/email-writer/paint — paints the art for an AI-written email
-// (lib/emailArt.tsx), new each time, after the admin approved the idea.
+// (lib/emailArt.tsx), after the admin approved the idea. Every new picture and
+// sticker joins the saved art (lib/emailArtLibrary.ts), so later emails can
+// reuse it instead of painting again.
 //   { kind: "scene", scene }                       → { url }  the bare painting
 //   { kind: "headline", paintingUrl, lead, accent } → { url }  painting + headline (the hero)
 //   { kind: "sticker", idea }                      → { url }  a cut-out sticker
@@ -9,6 +11,7 @@ import { Redis } from "@upstash/redis"
 import { z } from "zod"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { isOurArt, paintHeroScene, paintSticker, setHeadline } from "@/lib/emailArt"
+import { saveArt } from "@/lib/emailArtLibrary"
 
 // A painting takes the image model up to a minute or two.
 export const maxDuration = 300
@@ -53,6 +56,8 @@ export async function POST(req: Request) {
         : job.kind === "headline"
           ? await setHeadline(job.paintingUrl, job.lead, job.accent)
           : await paintSticker(job.idea)
+    if (job.kind === "scene") await saveArt("picture", url, job.scene, admin.email)
+    if (job.kind === "sticker") await saveArt("sticker", url, job.idea, admin.email)
     return NextResponse.json({ url })
   } catch (err) {
     console.error("[email-writer] painting failed:", err instanceof Error ? err.message : err)

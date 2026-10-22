@@ -2,7 +2,8 @@
 // an email (lib/ai/emailWriter.ts).
 //   body: { request, history: [{ role: "admin"|"writer", text }], current: EmailDesign | null, recipientUserId? }
 //   recipientUserId: a personal email to that one person; the writer gets their account facts
-//   → { reply, design }   (painted art carried over where the idea didn't change)
+//   → { reply, design }   (painted art carried over where the idea didn't change,
+//                          and saved art the writer chose put in)
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
@@ -10,6 +11,7 @@ import { emailDesignSchema } from "@/lib/emailDesign"
 import { artProblem } from "@/lib/emailArtCheck"
 import { EmailWriterError, writeEmail } from "@/lib/ai/emailWriter"
 import { recipientFacts } from "@/lib/emailRecipientFacts"
+import { writerLibrary } from "@/lib/emailArtLibrary"
 
 export const maxDuration = 240
 
@@ -38,7 +40,8 @@ export async function POST(req: Request) {
     about = { facts: person.text }
   }
   try {
-    return NextResponse.json(await writeEmail({ request, history, current, about }))
+    const library = await writerLibrary()
+    return NextResponse.json(await writeEmail({ request, history, current, about, library }))
   } catch (err) {
     if (err instanceof EmailWriterError) return NextResponse.json({ error: err.message }, { status: 502 })
     console.error("[email-writer] draft failed:", err instanceof Error ? err.message : err)

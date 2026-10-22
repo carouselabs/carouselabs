@@ -1413,6 +1413,23 @@ model EmailCampaignRecipient {
   @@index([status, sentAt])
 }
 
+// The AI email writer's saved art (scripts/email-art-library.sql): every
+// bare painting and sticker it has painted, with what it shows, so a later
+// email can reuse one instead of paying to paint it again (lib/
+// emailArtLibrary.ts). kind: "picture" (a painting with no headline; the
+// headline is drawn on fresh for each email) or "sticker". Removing one from
+// the library deletes the row only: emails already sent still show the file.
+model EmailArt {
+  id          String   @id @default(cuid())
+  kind        String
+  url         String   @unique
+  description String   @db.Text
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  @@index([kind, createdAt])
+}
+
 // ── Referral program ──────────────────────────────────────────────
 // One row per successfully-attributed signup — created once in the Clerk
 // user.created webhook (see lib/referral.ts + app/api/webhooks/clerk) after

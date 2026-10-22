@@ -7,7 +7,7 @@
 // twice and stops at the day's limit (lib/campaigns.ts).
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { Archive, ArchiveRestore, ArrowLeft, Check, Eye, ListChecks, Mail, Search, Send, X } from "lucide-react"
+import { Archive, ArchiveRestore, ArrowLeft, Check, Eye, ListChecks, Mail, Repeat, Search, Send, UserPlus, X } from "lucide-react"
 import {
   AdminButton,
   AdminCard,
@@ -22,6 +22,8 @@ import {
 import { useToast } from "@/components/admin/Toast"
 import { CAMPAIGN_DAILY_LIMIT, NEXT_BATCH_SIZE, campaignEngagement, canSend, nextUnsent, percentOf, type CampaignProgress } from "@/lib/campaignRules"
 import { SeenStatus } from "./SeenStatus"
+import { UseAgainDialog } from "./UseAgainDialog"
+import { AddPeopleDialog } from "./AddPeopleDialog"
 import { ProgressBar } from "./CampaignsList"
 import { RECIPIENT_STATUS, audienceLabel } from "./campaignLabels"
 
@@ -72,6 +74,8 @@ export function CampaignView({ id }: { id: string }) {
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [testing, setTesting] = useState(false)
   const [archiving, setArchiving] = useState(false)
+  // Use again (a new campaign, the writer, one person) or Add people to this one.
+  const [reuse, setReuse] = useState<null | "again" | "add">(null)
 
   const load = useCallback(async () => {
     try {
@@ -243,6 +247,9 @@ export function CampaignView({ id }: { id: string }) {
         All campaigns
       </Link>
 
+      {reuse === "again" && <UseAgainDialog source={`campaign:${campaign.id}`} subject={campaign.subject} onClose={() => setReuse(null)} />}
+      {reuse === "add" && <AddPeopleDialog campaignId={campaign.id} onClose={() => setReuse(null)} onAdded={() => void load()} />}
+
       {/* The email and how far it's got */}
       <AdminCard>
         <div className="flex flex-col gap-5">
@@ -264,6 +271,14 @@ export function CampaignView({ id }: { id: string }) {
               <AdminButton variant="secondary" onClick={() => void sendTest()} loading={testing}>
                 <Mail aria-hidden />
                 Send test to me
+              </AdminButton>
+              <AdminButton variant="secondary" onClick={() => setReuse("add")} disabled={archived}>
+                <UserPlus aria-hidden />
+                Add people
+              </AdminButton>
+              <AdminButton variant="secondary" onClick={() => setReuse("again")}>
+                <Repeat aria-hidden />
+                Use again
               </AdminButton>
               <AdminButton variant="ghost" onClick={() => void setArchived(!archived)} loading={archiving}>
                 {archived ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />}

@@ -100,6 +100,7 @@ function pageTitle(pathname: string): string {
   if (pathname === "/admin/engage") return "Engage overview"
   if (pathname === "/admin/broadcasts/writer") return "Write with AI"
   if (pathname === "/admin/broadcasts/campaigns") return "Campaigns"
+  if (pathname === "/admin/broadcasts/sent") return "Sent emails"
   if (pathname.startsWith("/admin/broadcasts/campaigns/")) return "Campaign"
   const item = [...NAV].sort((a, b) => b.href.length - a.href.length).find((n) => pathname.startsWith(n.href))
   return item ? item.label : "Admin"

@@ -21,6 +21,7 @@ import { carryArt, designStickers, isFullyPainted, unpaintedArt, type EmailDesig
 import { artActionLabel, paintingsNeeded } from "@/lib/emailArtReuse"
 import { EmailArtPicker, type SavedArtItem } from "@/components/admin/EmailArtPicker"
 import { SeenStatus, type SeenInfo } from "@/components/admin/SeenStatus"
+import { UseAgainDialog } from "@/components/admin/UseAgainDialog"
 import type { WriterTurn } from "@/lib/ai/emailWriter"
 
 type Audience = (typeof SEGMENT_TYPES)[number]["value"] | "custom"
@@ -39,7 +40,8 @@ const personStarters = (first: string) => [
 
 export type EmailRecipient = { id: string; email: string; name: string | null; firstName: string }
 // tracked: emails sent before tracking existed have no seen/clicked.
-type SentEmail = { id: string; sentAt: string; by: string; subject: string; picture: string | null; tracked?: boolean } & Partial<SeenInfo>
+// reuse: "personal:<id>" when it was kept in full and can be used again.
+type SentEmail = { id: string; sentAt: string; by: string; subject: string; picture: string | null; tracked?: boolean; reuse?: string | null } & Partial<SeenInfo>
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
@@ -48,7 +50,9 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   return data as T
 }
 
-export function EmailWriter({ recipient }: { recipient?: EmailRecipient } = {}) {
+// reuse: "campaign:<id>" | "personal:<id>" | "template:<id>": an email sent
+// before, opened here to edit and send again (Broadcasts → Sent emails).
+export function EmailWriter({ recipient, reuse }: { recipient?: EmailRecipient; reuse?: string } = {}) {
   const { toast } = useToast()
   // Each person's draft is kept apart from the others and from broadcast drafts.
   const storageKey = recipient ? `${STORAGE_KEY}:${recipient.id}` : STORAGE_KEY
@@ -72,6 +76,7 @@ export function EmailWriter({ recipient }: { recipient?: EmailRecipient } = {}) 
   const [creating, setCreating] = useState(false)
   // The saved-art picker: for the picture, or for the sticker with this idea.
   const [picker, setPicker] = useState<null | { kind: "picture" } | { kind: "sticker"; idea: string }>(null)
+  const [usingAgain, setUsingAgain] = useState<SentEmail | null>(null)
   const chatEnd = useRef<HTMLDivElement>(null)
   const restored = useRef(false)
 
@@ -91,6 +96,32 @@ export function EmailWriter({ recipient }: { recipient?: EmailRecipient } = {}) 
       localStorage.setItem(storageKey, JSON.stringify({ turns, design }))
     } catch {}
   }, [turns, design, storageKey])
+
+  // An email to use again replaces the draft, art and all; the address bar
+  // forgets it so a reload keeps the edits.
+  useEffect(() => {
+    if (!reuse) return
+    let cancelled = false
+    fetch(`/api/admin/sent-emails/content?source=${encodeURIComponent(reuse)}`)
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error ?? "Couldn't load that email")
+        if (cancelled) return
+        if (!data.design) throw new Error("That email was written without the AI writer, so it can't be edited here")
+        setDesign(data.design)
+        setTurns([
+          {
+            role: "writer",
+            text: `Loaded "${data.subject}" to use again. Its picture and stickers are already painted. Change anything you like${data.mentionsName ? `; it still says "${data.mentionsName}" by name, so ask me to change that to their own name` : ""}, then send it.`,
+          },
+        ])
+        window.history.replaceState(null, "", window.location.pathname)
+      })
+      .catch((err) => !cancelled && toast(err instanceof Error ? err.message : "Couldn't load that email", "error"))
+    return () => {
+      cancelled = true
+    }
+  }, [reuse, toast])
 
   // The personal emails already sent to this person.
   const loadSent = useCallback(async () => {
@@ -598,6 +629,7 @@ export function EmailWriter({ recipient }: { recipient?: EmailRecipient } = {}) 
 
           {recipient && (
             <AdminCard title={`Emails sent to ${recipient.firstName}`}>
+              {usingAgain?.reuse && <UseAgainDialog source={usingAgain.reuse} subject={usingAgain.subject} onClose={() => setUsingAgain(null)} />}
               {sent === null ? (
                 <p className="text-caption text-muted-foreground">Loading…</p>
               ) : sent.length === 0 ? (
@@ -621,6 +653,15 @@ export function EmailWriter({ recipient }: { recipient?: EmailRecipient } = {}) 
                           </span>
                         )}
                       </span>
+                      {e.reuse && (
+                        <button
+                          type="button"
+                          onClick={() => setUsingAgain(e)}
+                          className="ml-auto shrink-0 text-caption font-medium text-brand hover:underline"
+                        >
+                          Use again
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>

@@ -55,6 +55,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
         openCount: track?.openCount ?? 0,
         clickedAt: track?.clickedAt ?? null,
         clickCount: track?.clickCount ?? 0,
+        // Kept in full (lib/sentEmails.ts): it can be used again.
+        reuse: track?.design && value.emailId ? `personal:${value.emailId}` : null,
       }
     }),
   })
@@ -80,7 +82,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
   const emailId = randomUUID()
   let tracked = false
   try {
-    await db.personalEmailTrack.create({ data: { emailId, userId: user.id } })
+    // The email itself is kept too, so it can be used again (lib/sentEmails.ts).
+    await db.personalEmailTrack.create({ data: { emailId, userId: user.id, subject: copy.subject, design } })
     tracked = true
   } catch {
     // No tracking table yet (scripts/email-tracking.sql): send it untracked.

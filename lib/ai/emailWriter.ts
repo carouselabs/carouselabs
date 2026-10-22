@@ -87,7 +87,7 @@ function personSection(about: { facts: string } | undefined): string {
 THIS EMAIL GOES TO ONE PERSON
 It's a personal email from the CarouseLabs team to the person below, sent only to them. Their account, as of today:
 ${about.facts}
-Use this to get their situation right and to choose what's worth saying (what they haven't tried yet, what fits their plan). Write like a person who knows them, not like a report: never recite numbers back at them, never mention data, tracking or "our records", and don't say anything they'd be surprised we know. You may use their first name directly instead of {{firstName}}.`
+Use this to get their situation right and to choose what's worth saying (what they haven't tried yet, what fits their plan). Write like a person who knows them, not like a report: never recite numbers back at them, never mention data, tracking or "our records", and don't say anything they'd be surprised we know. Write their name only as {{firstName}}, never spelled out, in the subject too: it becomes their name when it's sent, and keeps the email usable for other people later.`
 }
 
 export type ArtLibrary = { pictures: SavedArtRef[]; stickers: SavedArtRef[] }

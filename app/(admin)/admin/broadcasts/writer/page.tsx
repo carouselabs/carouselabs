@@ -4,6 +4,9 @@ import { EmailWriter } from "@/components/admin/EmailWriter"
 
 export const dynamic = "force-dynamic"
 
-export default function AdminEmailWriterPage() {
-  return <EmailWriter />
+// ?reuse=campaign:<id>|personal:<id>|template:<id> opens an email sent before
+// (Broadcasts → Sent emails → Use again → Edit first).
+export default async function AdminEmailWriterPage({ searchParams }: { searchParams: Promise<{ reuse?: string }> }) {
+  const { reuse } = await searchParams
+  return <EmailWriter reuse={reuse} />
 }

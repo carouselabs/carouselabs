@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Send, Eye, Mail, CalendarClock, Braces, UserSearch, ListChecks, Sparkles } from "lucide-react"
+import { Send, Eye, Mail, CalendarClock, Braces, UserSearch, ListChecks, Repeat, Sparkles } from "lucide-react"
 import {
   AdminButton,
   AdminCard,
@@ -295,6 +295,13 @@ export function BroadcastComposer() {
         >
           <ListChecks className="h-3.5 w-3.5" />
           Campaigns
+        </Link>
+        <Link
+          href="/admin/broadcasts/sent"
+          className="inline-flex items-center gap-1.5 text-caption font-medium text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Repeat className="h-3.5 w-3.5" />
+          Sent emails
         </Link>
         <Link
           href="/admin/scheduled-emails"

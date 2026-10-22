@@ -15,6 +15,8 @@ interface Template {
   name: string
   subject: string
   body: string
+  // Set on templates starred from an AI-written email (lib/sentEmails.ts).
+  design?: unknown
 }
 
 export function TemplatePicker({
@@ -39,7 +41,9 @@ export function TemplatePicker({
     try {
       const res = await fetch("/api/admin/email-templates")
       if (!res.ok) throw new Error()
-      setTemplates((await res.json()).templates)
+      // AI-written templates are used from Broadcasts → Sent emails: loading
+      // one here would keep only its plain text.
+      setTemplates(((await res.json()).templates as Template[]).filter((t) => !t.design))
     } catch {
       setTemplates([])
       toast("Failed to load templates", "error")

@@ -1430,9 +1430,13 @@ model EmailCampaignRecipient {
 // Whether a personal email (Admin → a user → Send email with AI) was opened
 // ("seen") and clicked (lib/emailTracking.ts). emailId is the id its audit
 // log entry carries (AuditLog.newValue.emailId), made when it was sent.
+// subject and design keep the email itself, so it can be used again
+// (lib/sentEmails.ts); emails sent before that have neither.
 model PersonalEmailTrack {
   emailId      String    @id
   userId       String
+  subject      String?
+  design       Json?
   openedAt     DateTime?
   lastOpenedAt DateTime?
   openCount    Int       @default(0)
@@ -1524,6 +1528,15 @@ model EmailTemplate {
   body      String   @db.Text
   createdBy String
   createdAt DateTime @default(now())
+  // A template starred from a sent email in Admin → Broadcasts → Sent emails
+  // (lib/sentEmails.ts) also keeps the AI-written email itself (design), and
+  // where it came from: sourceKind "campaign" (EmailCampaign.id) or
+  // "personal" (PersonalEmailTrack.emailId). Plain templates have neither.
+  design     Json?
+  sourceKind String?
+  sourceId   String?
+
+  @@index([sourceKind, sourceId])
 }
 
 // ── Email marketing: sequences ──────────────────────────────────────

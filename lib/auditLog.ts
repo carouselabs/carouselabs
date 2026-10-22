@@ -24,6 +24,11 @@ export type AdminAuditAction =
   | "ARCHIVE_CAMPAIGN"
   | "RESTORE_CAMPAIGN"
   | "SEND_PERSONAL_EMAIL"
+  // Using emails again (lib/sentEmails.ts): people added to a campaign, and
+  // emails starred as templates.
+  | "ADD_CAMPAIGN_RECIPIENTS"
+  | "SAVE_EMAIL_TEMPLATE"
+  | "RENAME_EMAIL_TEMPLATE"
   | "CREATE_INTERN"
   | "UPDATE_INTERN"
   | "DELETE_INTERN"

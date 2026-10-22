@@ -238,7 +238,7 @@ describe("personal emails", () => {
   it("each one is tracked: its own row, the image and tracked links, and its id in the log", async () => {
     expect((await post()).status).toBe(200)
     const emailId = m.trackCreate.mock.calls[0][0].data.emailId as string
-    expect(m.trackCreate).toHaveBeenCalledWith({ data: { emailId, userId: "u1" } })
+    expect(m.trackCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ emailId, userId: "u1" }) })
     const html = m.send.mock.calls[0][0].html as string
     const token = trackingToken({ kind: "personal", id: emailId })!
     expect(html).toContain(`/api/email-track/open/${token}`)

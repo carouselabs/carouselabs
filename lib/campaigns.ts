@@ -46,26 +46,11 @@ export async function createCampaign(input: {
   // An AI-written email (subject and body are then its subject and plain text).
   design?: EmailDesign
 }) {
-  const people = await resolveRecipients(input.recipients, input.audienceValue)
-  if (people.length === 0) throw new CampaignError("No one matches that selection")
-  if (people.length > CAMPAIGN_MAX_RECIPIENTS) {
-    throw new CampaignError(`A campaign can have up to ${CAMPAIGN_MAX_RECIPIENTS.toLocaleString("en-US")} people (${people.length.toLocaleString("en-US")} matched)`)
+  const rows = await audienceRows(input.recipients, input.audienceValue)
+  if (rows.length === 0) throw new CampaignError("No one matches that selection")
+  if (rows.length > CAMPAIGN_MAX_RECIPIENTS) {
+    throw new CampaignError(`A campaign can have up to ${CAMPAIGN_MAX_RECIPIENTS.toLocaleString("en-US")} people (${rows.length.toLocaleString("en-US")} matched)`)
   }
-
-  // Names make the list readable; the email stays the key.
-  const userIds = people.flatMap((p) => (p.userId ? [p.userId] : []))
-  const named = userIds.length
-    ? await db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, profile: { select: { name: true } } } })
-    : []
-  const nameById = new Map(named.map((u) => [u.id, u.profile?.name?.trim() || null]))
-
-  const seen = new Set<string>()
-  const rows = people.flatMap((p) => {
-    const email = p.email.trim().toLowerCase()
-    if (seen.has(email)) return []
-    seen.add(email)
-    return [{ userId: p.userId, email, name: p.userId ? (nameById.get(p.userId) ?? null) : null }]
-  })
 
   const campaign = await db.emailCampaign.create({
     data: {
@@ -86,6 +71,63 @@ export async function createCampaign(input: {
     details: `"${input.subject}" → ${rows.length} people (${Array.isArray(input.recipients) ? "custom list" : input.recipients})${input.design ? " · written with AI" : ""}`,
   })
   return { id: campaign.id, total: rows.length }
+}
+
+// The people an audience means, one row each by email, with names to make
+// the list readable (the email stays the key).
+async function audienceRows(recipients: BroadcastRecipients, audienceValue: string | null) {
+  const people = await resolveRecipients(recipients, audienceValue)
+  const userIds = people.flatMap((p) => (p.userId ? [p.userId] : []))
+  const named = userIds.length
+    ? await db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, profile: { select: { name: true } } } })
+    : []
+  const nameById = new Map(named.map((u) => [u.id, u.profile?.name?.trim() || null]))
+
+  const seen = new Set<string>()
+  return people.flatMap((p) => {
+    const email = p.email.trim().toLowerCase()
+    if (seen.has(email)) return []
+    seen.add(email)
+    return [{ userId: p.userId, email, name: p.userId ? (nameById.get(p.userId) ?? null) : null }]
+  })
+}
+
+/**
+ * Adds more people to a campaign (Use again → Add people). Anyone already on
+ * its list is skipped, so nobody can get it twice. dryRun: only counts them.
+ */
+export async function addCampaignRecipients(input: {
+  campaignId: string
+  adminEmail: string
+  recipients: BroadcastRecipients
+  audienceValue: string | null
+  dryRun?: boolean
+}): Promise<{ added: number; already: number }> {
+  const campaign = await db.emailCampaign.findUnique({ where: { id: input.campaignId }, select: { subject: true, status: true } })
+  if (!campaign) throw new CampaignError("Campaign not found", 404)
+  if (campaign.status === "archived") throw new CampaignError("This campaign is archived. Restore it to add people.")
+
+  const rows = await audienceRows(input.recipients, input.audienceValue)
+  if (rows.length === 0) throw new CampaignError("No one matches that selection")
+  const onList = await db.emailCampaignRecipient.findMany({ where: { campaignId: input.campaignId }, select: { email: true } })
+  const existing = new Set(onList.map((r) => r.email.toLowerCase()))
+  const fresh = rows.filter((r) => !existing.has(r.email))
+  if (onList.length + fresh.length > CAMPAIGN_MAX_RECIPIENTS) {
+    throw new CampaignError(`A campaign can have up to ${CAMPAIGN_MAX_RECIPIENTS.toLocaleString("en-US")} people (it would have ${(onList.length + fresh.length).toLocaleString("en-US")})`)
+  }
+  if (input.dryRun || fresh.length === 0) return { added: input.dryRun ? fresh.length : 0, already: rows.length - fresh.length }
+
+  // skipDuplicates: someone added by another click meanwhile still gets it once.
+  const { count } = await db.emailCampaignRecipient.createMany({
+    data: fresh.map((r) => ({ ...r, campaignId: input.campaignId })),
+    skipDuplicates: true,
+  })
+  await logAdminAction({
+    adminEmail: input.adminEmail,
+    action: "ADD_CAMPAIGN_RECIPIENTS",
+    details: `"${campaign.subject}" + ${count} people (${Array.isArray(input.recipients) ? "custom list" : input.recipients}); ${rows.length - fresh.length} already on it`,
+  })
+  return { added: count, already: rows.length - count }
 }
 
 async function statusCounts(where: { campaignId?: string }) {

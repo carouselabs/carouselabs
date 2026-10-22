@@ -21,6 +21,8 @@ type Row = {
 const store = vi.hoisted(() => ({
   campaigns: [] as { id: string; subject: string; body: string; status: string; design?: unknown }[],
   designedTo: [] as string[][],
+  // Each copy's tracking token, in send order.
+  tokens: [] as (string | null)[],
   rows: [] as Row[],
   sentTo: [] as string[][],
   failNext: null as null | { failedTo: string[]; error: string },
@@ -59,16 +61,18 @@ vi.mock("@/lib/db", () => ({
 }))
 vi.mock("@/lib/auditLog", () => ({ logAdminAction: vi.fn(async () => {}) }))
 vi.mock("@/lib/emailDesignRender", () => ({
-  sendDesignedEmails: vi.fn(async (_resend: unknown, _from: string, recipients: { email: string }[]) => {
+  sendDesignedEmails: vi.fn(async (_resend: unknown, _from: string, recipients: { email: string; trackingToken?: string | null }[]) => {
     store.designedTo.push(recipients.map((r) => r.email))
+    store.tokens.push(...recipients.map((r) => r.trackingToken ?? null))
     return { sent: recipients.length, failed: 0, failedTo: [] }
   }),
 }))
 vi.mock("@/lib/broadcast", () => ({
   resolveRecipients: vi.fn(),
   // Records who each send went to; fails the addresses in store.failNext.
-  sendUserBroadcast: vi.fn(async (_resend: unknown, _from: string, recipients: { email: string }[]) => {
+  sendUserBroadcast: vi.fn(async (_resend: unknown, _from: string, recipients: { email: string; trackingToken?: string | null }[]) => {
     store.sentTo.push(recipients.map((r) => r.email))
+    store.tokens.push(...recipients.map((r) => r.trackingToken ?? null))
     const fail = store.failNext
     store.failNext = null
     const failedTo = fail ? recipients.map((r) => r.email).filter((e) => fail.failedTo.includes(e)) : []
@@ -78,6 +82,7 @@ vi.mock("@/lib/broadcast", () => ({
 
 import { CAMPAIGN_DAILY_LIMIT, allowanceLeft, campaignProgress, nextUnsent } from "@/lib/campaignRules"
 import { CampaignError, sendCampaignBatch } from "@/lib/campaigns"
+import { readTrackingToken } from "@/lib/emailTracking"
 
 const resend = {} as Resend
 const send = (recipientIds: string[], campaignId = "c1") =>
@@ -99,6 +104,7 @@ function seed(people: number, campaignStatus = "active") {
   }))
   store.sentTo = []
   store.designedTo = []
+  store.tokens = []
   store.failNext = null
 }
 
@@ -143,6 +149,17 @@ describe("sending a campaign in batches", () => {
     for (const id of ids(0, 10)) expect(statusOf(id)).toBe("sent")
     expect(store.rows.find((r) => r.id === "r0")!.sentAt).toBeInstanceOf(Date)
     for (const id of ids(10, 75)) expect(statusOf(id)).toBe("pending")
+  })
+
+  it("each person's copy is tracked to their own row", async () => {
+    vi.stubEnv("CLERK_SECRET_KEY", "test-only-secret")
+    seed(3)
+    await send(["r0", "r2"])
+    expect(store.tokens.map((t) => (t ? readTrackingToken(t) : null))).toEqual([
+      { kind: "campaign", id: "r0" },
+      { kind: "campaign", id: "r2" },
+    ])
+    vi.unstubAllEnvs()
   })
 
   it("never sends anyone the email twice: a second click on the same people sends nobody", async () => {

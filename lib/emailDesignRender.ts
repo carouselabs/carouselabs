@@ -11,6 +11,7 @@ import { applyVariables, type VariableValues } from "@/lib/broadcastRender"
 import { resolveVariablesMany } from "@/lib/broadcastVariables"
 import { sendInBatches, type BatchSendResult } from "@/lib/emailBatchSend"
 import type { EmailDesign } from "@/lib/emailDesign"
+import { withTracking } from "@/lib/emailTracking"
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#x27;")
@@ -61,11 +62,12 @@ export function personalizeDesignedEmail(
   return { subject: applyVariables(subject, all), html: applyVariables(html, escaped) }
 }
 
-/** Sends the designed email to each person, personalized, in batches of 100. */
+/** Sends the designed email to each person, personalized (and tracked when
+ * they carry a trackingToken, lib/emailTracking.ts), in batches of 100. */
 export async function sendDesignedEmails(
   resend: Resend,
   from: string,
-  recipients: { userId: string | null; email: string }[],
+  recipients: { userId: string | null; email: string; trackingToken?: string | null }[],
   design: EmailDesign,
   idempotencyPrefix: string,
 ): Promise<BatchSendResult> {
@@ -78,7 +80,7 @@ export async function sendDesignedEmails(
       const variables = await resolveVariablesMany(batch.flatMap((r) => (r.userId ? [r.userId] : [])))
       return batch.map((r) => {
         const copy = personalizeDesignedEmail(html, design.subject, r.userId ? variables.get(r.userId) : undefined)
-        return { to: r.email, subject: copy.subject, html: copy.html }
+        return { to: r.email, subject: copy.subject, html: r.trackingToken ? withTracking(copy.html, r.trackingToken) : copy.html }
       })
     },
     { idempotencyPrefix },

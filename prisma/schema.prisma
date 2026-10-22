@@ -1404,6 +1404,14 @@ model EmailCampaignRecipient {
   // The send (one click of Send) that took this person: claims them so two
   // clicks can't both send to them, and groups who went out together.
   batchId    String?
+  // Whether they opened ("seen") and clicked it (lib/emailTracking.ts,
+  // scripts/email-tracking.sql). openedAt: first seen (a click counts too);
+  // the counts are every load and every click.
+  openedAt     DateTime?
+  lastOpenedAt DateTime?
+  openCount    Int       @default(0)
+  clickedAt    DateTime?
+  clickCount   Int       @default(0)
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
 
@@ -1419,6 +1427,22 @@ model EmailCampaignRecipient {
 // emailArtLibrary.ts). kind: "picture" (a painting with no headline; the
 // headline is drawn on fresh for each email) or "sticker". Removing one from
 // the library deletes the row only: emails already sent still show the file.
+// Whether a personal email (Admin → a user → Send email with AI) was opened
+// ("seen") and clicked (lib/emailTracking.ts). emailId is the id its audit
+// log entry carries (AuditLog.newValue.emailId), made when it was sent.
+model PersonalEmailTrack {
+  emailId      String    @id
+  userId       String
+  openedAt     DateTime?
+  lastOpenedAt DateTime?
+  openCount    Int       @default(0)
+  clickedAt    DateTime?
+  clickCount   Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+}
+
 model EmailArt {
   id          String   @id @default(cuid())
   kind        String

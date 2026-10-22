@@ -132,7 +132,8 @@ describe("sending it to them", () => {
         action: "SEND_PERSONAL_EMAIL",
         targetUserId: "u1",
         targetEmail: "priya@example.com",
-        newValue: { subject: "A quick one for you, Priya", picture: art("h.jpg") },
+        // No tracking table in this test's database: sent untracked.
+        newValue: { subject: "A quick one for you, Priya", picture: art("h.jpg"), emailId: null },
       }),
     )
   })
@@ -162,7 +163,19 @@ describe("sending it to them", () => {
     m.auditRows = [{ id: "a1", createdAt: NOW, adminEmail: "admin@carouselabs.com", newValue: { subject: "Hi", picture: art("h.jpg") } }]
     const res = await GET(new Request("http://x"), { params: Promise.resolve({ userId: "u1" }) })
     expect((await res.json()).emails).toEqual([
-      { id: "a1", sentAt: NOW.toISOString(), by: "admin@carouselabs.com", subject: "Hi", picture: art("h.jpg") },
+      {
+        id: "a1",
+        sentAt: NOW.toISOString(),
+        by: "admin@carouselabs.com",
+        subject: "Hi",
+        picture: art("h.jpg"),
+        // Sent before tracking: nothing seen or clicked to show.
+        tracked: false,
+        openedAt: null,
+        openCount: 0,
+        clickedAt: null,
+        clickCount: 0,
+      },
     ])
   })
 })

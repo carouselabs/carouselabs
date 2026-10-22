@@ -20,7 +20,8 @@ import {
   tableCls,
 } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
-import { CAMPAIGN_DAILY_LIMIT, NEXT_BATCH_SIZE, canSend, nextUnsent, type CampaignProgress } from "@/lib/campaignRules"
+import { CAMPAIGN_DAILY_LIMIT, NEXT_BATCH_SIZE, campaignEngagement, canSend, nextUnsent, percentOf, type CampaignProgress } from "@/lib/campaignRules"
+import { SeenStatus } from "./SeenStatus"
 import { ProgressBar } from "./CampaignsList"
 import { RECIPIENT_STATUS, audienceLabel } from "./campaignLabels"
 
@@ -32,6 +33,11 @@ type Recipient = {
   status: string
   sentAt: string | null
   error: string | null
+  // Seen and clicked (lib/emailTracking.ts).
+  openedAt: string | null
+  openCount: number
+  clickedAt: string | null
+  clickCount: number
 }
 
 type Campaign = {
@@ -49,7 +55,7 @@ type Campaign = {
   allowance: { limit: number; sentInLast24h: number; left: number }
 }
 
-type Filter = "all" | "pending" | "sent" | "failed"
+type Filter = "all" | "pending" | "sent" | "failed" | "seen" | "unseen"
 const PAGE_SIZE = 100
 
 export function CampaignView({ id }: { id: string }) {
@@ -82,11 +88,16 @@ export function CampaignView({ id }: { id: string }) {
   useEffect(() => void load(), [load])
 
   const recipients = useMemo(() => campaign?.recipients ?? [], [campaign])
+  const engagement = useMemo(() => campaignEngagement(recipients), [recipients])
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
     return recipients.filter(
       (r) =>
-        (filter === "all" || r.status === filter || (filter === "pending" && r.status === "sending")) &&
+        (filter === "all" ||
+          r.status === filter ||
+          (filter === "pending" && r.status === "sending") ||
+          (filter === "seen" && r.status === "sent" && !!r.openedAt) ||
+          (filter === "unseen" && r.status === "sent" && !r.openedAt)) &&
         (!q || r.email.includes(q) || (r.name ?? "").toLowerCase().includes(q)),
     )
   }, [recipients, filter, query])
@@ -218,6 +229,8 @@ export function CampaignView({ id }: { id: string }) {
     { key: "pending", label: "Not sent", n: progress.pending + progress.sending },
     { key: "sent", label: "Sent", n: progress.sent },
     { key: "failed", label: "Failed", n: progress.failed },
+    { key: "seen", label: "Seen", n: engagement.seen },
+    { key: "unseen", label: "Not seen", n: engagement.sent - engagement.seen },
   ]
 
   return (
@@ -275,6 +288,16 @@ export function CampaignView({ id }: { id: string }) {
               </span>
             </div>
             <ProgressBar progress={progress} className="h-2" />
+            {engagement.sent > 0 && (
+              <p className="text-label tabular-nums text-foreground" aria-label="Seen and clicked">
+                Seen by <span className="font-semibold">{engagement.seen}</span> of {engagement.sent} sent ({percentOf(engagement.seen, engagement.sent)})
+                <span className="text-muted-foreground"> · </span>
+                Clicked by <span className="font-semibold">{engagement.clicked}</span> ({percentOf(engagement.clicked, engagement.sent)})
+                <span className="block text-caption text-muted-foreground/80">
+                  Seen is a good guess: some email apps load the email by themselves, others block it. A click is certain.
+                </span>
+              </p>
+            )}
             <p className="text-caption text-muted-foreground/80">
               Resend&apos;s free plan sends 100 emails a day for the whole account, so campaigns stop at {CAMPAIGN_DAILY_LIMIT} in any 24
               hours and leave the rest for automatic emails (welcome, credits, posts).
@@ -365,12 +388,13 @@ export function CampaignView({ id }: { id: string }) {
                   <th className={tableCls.th}>Email</th>
                   <th className={tableCls.th}>Status</th>
                   <th className={tableCls.th}>When / why</th>
+                  <th className={tableCls.th}>Seen</th>
                 </tr>
               </thead>
               <tbody>
                 {shown.length === 0 && (
                   <tr>
-                    <td className={tableCls.td} colSpan={5}>
+                    <td className={tableCls.td} colSpan={6}>
                       Nobody here.
                     </td>
                   </tr>
@@ -404,6 +428,7 @@ export function CampaignView({ id }: { id: string }) {
                       <td className={`${tableCls.td} max-w-[320px] truncate text-muted-foreground`} title={r.error ?? undefined}>
                         {r.status === "sent" && r.sentAt ? fmtDateTime(r.sentAt) : r.status === "failed" ? r.error : ""}
                       </td>
+                      <td className={`${tableCls.td} text-caption`}>{r.status === "sent" && <SeenStatus {...r} />}</td>
                     </tr>
                   )
                 })}

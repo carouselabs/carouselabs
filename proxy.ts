@@ -51,6 +51,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/contact(.*)",
   "/api/verify-certificate(.*)", // Public — looks up a certificate by its own opaque code, no session
   "/api/start-page/click(.*)", // Public — click-tracking redirect, hit by anonymous Start Page visitors
+  "/api/email-track(.*)", // Public — the invisible image and link redirect in tracked emails (lib/emailTracking.ts), loaded by inboxes
   "/api/webhooks/clerk(.*)",
   "/api/webhooks/lemonsqueezy(.*)",
   "/api/webhooks/resend(.*)",

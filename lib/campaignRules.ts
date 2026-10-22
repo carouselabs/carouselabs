@@ -63,3 +63,17 @@ export function campaignProgress(counts: Partial<Record<CampaignRecipientStatus,
   const total = sent + failed + pending + sending
   return { total, sent, failed, pending, sending, complete: total > 0 && sent === total }
 }
+
+// Of the people a campaign was sent to, how many saw it and how many clicked
+// (lib/emailTracking.ts). "Seen" is a good guess (see there); a click is certain.
+export function campaignEngagement(recipients: { status: string; openedAt?: unknown; clickedAt?: unknown }[]): {
+  sent: number
+  seen: number
+  clicked: number
+} {
+  const sent = recipients.filter((r) => r.status === "sent")
+  return { sent: sent.length, seen: sent.filter((r) => !!r.openedAt).length, clicked: sent.filter((r) => !!r.clickedAt).length }
+}
+
+// "45%" of the sent; "0%" when nothing is sent.
+export const percentOf = (part: number, whole: number) => `${whole ? Math.round((part / whole) * 100) : 0}%`

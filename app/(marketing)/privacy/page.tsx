@@ -45,6 +45,10 @@ export default function PrivacyPage() {
           <li>Provide, operate, personalize, and maintain the Service.</li>
           <li>Generate AI content tailored to your brand profile and inputs.</li>
           <li>Process payments, manage subscriptions and credits, and send service-related emails.</li>
+          <li>
+            Learn whether the emails we send you were opened and their links clicked, using a small
+            image and links that pass through our site, so we know which emails are useful.
+          </li>
           <li>Detect, investigate, and prevent fraud, abuse, and security incidents.</li>
           <li>Analyze usage to improve features, reliability, and performance.</li>
           <li>Comply with legal obligations and enforce our Terms & Conditions.</li>

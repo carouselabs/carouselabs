@@ -20,6 +20,7 @@ import { SEGMENT_TYPES } from "@/lib/segments"
 import { carryArt, designStickers, isFullyPainted, unpaintedArt, type EmailDesign } from "@/lib/emailDesign"
 import { artActionLabel, paintingsNeeded } from "@/lib/emailArtReuse"
 import { EmailArtPicker, type SavedArtItem } from "@/components/admin/EmailArtPicker"
+import { SeenStatus, type SeenInfo } from "@/components/admin/SeenStatus"
 import type { WriterTurn } from "@/lib/ai/emailWriter"
 
 type Audience = (typeof SEGMENT_TYPES)[number]["value"] | "custom"
@@ -37,7 +38,8 @@ const personStarters = (first: string) => [
 ]
 
 export type EmailRecipient = { id: string; email: string; name: string | null; firstName: string }
-type SentEmail = { id: string; sentAt: string; by: string; subject: string; picture: string | null }
+// tracked: emails sent before tracking existed have no seen/clicked.
+type SentEmail = { id: string; sentAt: string; by: string; subject: string; picture: string | null; tracked?: boolean } & Partial<SeenInfo>
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
@@ -613,6 +615,11 @@ export function EmailWriter({ recipient }: { recipient?: EmailRecipient } = {}) 
                         <span className="text-caption text-muted-foreground">
                           {fmtDateTime(e.sentAt)} · {e.by}
                         </span>
+                        {e.tracked && (
+                          <span className="text-caption">
+                            <SeenStatus openedAt={e.openedAt ?? null} openCount={e.openCount ?? 0} clickedAt={e.clickedAt ?? null} clickCount={e.clickCount ?? 0} />
+                          </span>
+                        )}
                       </span>
                     </li>
                   ))}

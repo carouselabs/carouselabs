@@ -10,6 +10,7 @@ import type { Resend } from "resend"
 import { applyVariables, renderBroadcastEmailHtml } from "@/lib/broadcastRender"
 import { resolveVariablesMany } from "@/lib/broadcastVariables"
 import { sendInBatches, type BatchSendResult } from "@/lib/emailBatchSend"
+import { withTracking } from "@/lib/emailTracking"
 
 // segmentValue is only meaningful for "inactive" (days) and "low_credits"
 // (credit threshold) — see lib/segments.ts for the shared catalog the UI
@@ -24,6 +25,9 @@ export type BroadcastRecipients = SegmentType | string[]
 export interface BroadcastRecipient {
   userId: string | null
   email: string
+  // Their copy carries this token's invisible image and tracked links
+  // (lib/emailTracking.ts): campaigns set it, plain broadcasts don't.
+  trackingToken?: string | null
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -155,7 +159,8 @@ export async function sendUserBroadcast(
         const values = r.userId ? variables.get(r.userId) : undefined
         const finalSubject = values ? applyVariables(subject, values) : subject
         const finalBody = values ? applyVariables(body, values) : body
-        return { to: r.email, subject: finalSubject, html: renderBroadcastEmailHtml(finalSubject, finalBody) }
+        const html = renderBroadcastEmailHtml(finalSubject, finalBody)
+        return { to: r.email, subject: finalSubject, html: r.trackingToken ? withTracking(html, r.trackingToken) : html }
       })
     },
     { idempotencyPrefix },

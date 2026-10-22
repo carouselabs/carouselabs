@@ -21,6 +21,7 @@ import {
   campaignProgress,
   type CampaignRecipientStatus,
 } from "@/lib/campaignRules"
+import { trackingToken } from "@/lib/emailTracking"
 
 export class CampaignError extends Error {
   constructor(
@@ -151,7 +152,21 @@ export async function getCampaign(id: string) {
     include: {
       recipients: {
         orderBy: [{ createdAt: "asc" }, { email: "asc" }],
-        select: { id: true, email: true, name: true, userId: true, status: true, sentAt: true, error: true },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          userId: true,
+          status: true,
+          sentAt: true,
+          error: true,
+          // Seen and clicked (lib/emailTracking.ts).
+          openedAt: true,
+          lastOpenedAt: true,
+          openCount: true,
+          clickedAt: true,
+          clickCount: true,
+        },
       },
     },
   })
@@ -221,7 +236,8 @@ export async function sendCampaignBatch(input: {
     return { sent: 0, failed: 0, skipped, error: undefined, left }
   }
 
-  const people = claimed.map((r) => ({ userId: r.userId, email: r.email }))
+  // Each copy is tracked: seen and clicked land on this recipient's row.
+  const people = claimed.map((r) => ({ userId: r.userId, email: r.email, trackingToken: trackingToken({ kind: "campaign", id: r.id }) }))
   const idempotencyPrefix = `campaign-${campaign.id}-${batchId}`
   const result = design
     ? await sendDesignedEmails(input.resend, input.from, people, design, idempotencyPrefix)

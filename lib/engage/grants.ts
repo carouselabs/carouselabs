@@ -25,6 +25,7 @@ export const GRANT_PLATFORM_LABELS: Record<GrantPlatform, string> = {
   both: "LinkedIn + X",
   linkedin: "LinkedIn",
   x: "X",
+  reddit: "Reddit",
 }
 
 // The extensions each kind of grant unlocks. "both" means LinkedIn + X, as
@@ -33,6 +34,7 @@ export const GRANT_COVERS: Record<GrantPlatform, readonly EngagePlatform[]> = {
   both: ["linkedin", "x"],
   linkedin: ["linkedin"],
   x: ["x"],
+  reddit: ["reddit"],
 }
 
 // The stored grant.platform values that unlock this extension.

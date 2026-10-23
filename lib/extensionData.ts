@@ -37,6 +37,9 @@ export const listMessageProfiles = (userId: string) =>
 export const listXProfiles = (userId: string) =>
   db.xProfile.findMany({ where: visibleTo(userId), orderBy: order() })
 
+export const listRedditProfiles = (userId: string) =>
+  db.redditProfile.findMany({ where: visibleTo(userId), orderBy: order() })
+
 // ── LinkedIn extension settings (GET /api/ext/settings) ─────────────────────
 // All of it lives on the user's own row, so it costs no query of its own.
 
@@ -112,4 +115,25 @@ export function xSettingsOf(row: typeof X_SETTINGS_DEFAULTS | null) {
 
 export async function loadXSettings(userId: string) {
   return xSettingsOf(await db.xUserSettings.findUnique({ where: { userId }, select: X_SETTINGS_SELECT }))
+}
+
+// ── Reddit extension settings (GET /api/ext/reddit/settings) ────────────────
+// Its own row (RedditUserSettings); none yet means the defaults.
+
+export const REDDIT_SETTINGS_DEFAULTS = {
+  defaultProfileId: null as string | null,
+  insertButtonHidden: false,
+}
+
+export const REDDIT_SETTINGS_SELECT = { defaultProfileId: true, insertButtonHidden: true } as const
+
+export function redditSettingsOf(row: typeof REDDIT_SETTINGS_DEFAULTS | null) {
+  return {
+    defaultProfileId: row?.defaultProfileId ?? null,
+    insertButtonHidden: row?.insertButtonHidden ?? false,
+  }
+}
+
+export async function loadRedditSettings(userId: string) {
+  return redditSettingsOf(await db.redditUserSettings.findUnique({ where: { userId }, select: REDDIT_SETTINGS_SELECT }))
 }

@@ -15,18 +15,24 @@ export type HistoryKind = (typeof HISTORY_KINDS)[number]
 export const X_HISTORY_KINDS = ["x_reply", "x_message"] as const
 export type XHistoryKind = (typeof X_HISTORY_KINDS)[number]
 
+// CarouseLabs Engage for Reddit's: comments (on a post or replying to a
+// comment) and chat messages.
+export const REDDIT_HISTORY_KINDS = ["reddit_comment", "reddit_message"] as const
+
 export type HistoryPlatform = EngagePlatform
 
 // Each extension's own kinds.
 export const PLATFORM_HISTORY_KINDS: Record<EngagePlatform, readonly string[]> = {
   linkedin: HISTORY_KINDS,
   x: X_HISTORY_KINDS,
+  reddit: REDDIT_HISTORY_KINDS,
 }
 
 // The kind a Messages-screen reply is saved as, per extension.
 export const MESSAGE_HISTORY_KINDS: Record<EngagePlatform, string> = {
   linkedin: "message",
   x: "x_message",
+  reddit: "reddit_message",
 }
 
 export function isHistoryKind(value: unknown): value is HistoryKind {

@@ -9,12 +9,17 @@ export type GrantedExtensions = GrantPlatform
 
 // Each extension's button, and its page on the website when it has no store
 // listing yet.
-const GET_LABELS: Record<EngagePlatform, string> = { linkedin: "Get Engage for LinkedIn", x: "Get Engage for X" }
-const WEBSITE_PAGES: Record<EngagePlatform, string> = { linkedin: "/extension", x: "/extension/x" }
+const GET_LABELS: Record<EngagePlatform, string> = {
+  linkedin: "Get Engage for LinkedIn",
+  x: "Get Engage for X",
+  reddit: "Get Engage for Reddit",
+}
+const WEBSITE_PAGES: Record<EngagePlatform, string> = { linkedin: "/extension", x: "/extension/x", reddit: "/extension/reddit" }
 
-const NAMES = {
+const NAMES: Record<GrantedExtensions, string> = {
   linkedin: "CarouseLabs Engage",
   x: "CarouseLabs Engage for X",
+  reddit: "CarouseLabs Engage for Reddit",
   both: "CarouseLabs Engage for LinkedIn and X",
 }
 
@@ -69,6 +74,23 @@ const FEATURES: Record<GrantedExtensions, Feature[]> = {
       text: "Engage never posts, likes or sends anything on its own. Every word goes out because you clicked send, so your X account stays safe.",
     },
   ],
+  reddit: [
+    {
+      sticker: "comment",
+      title: "Comments that sound like a real Redditor",
+      text: "Generate a reply to any post or comment in seconds. It reads the thread and the subreddit's rules first, and writes in your tone and your language.",
+    },
+    {
+      sticker: "chat",
+      title: "An assistant for your chats",
+      text: "Train an AI agent to chat with the people you meet on Reddit, in your voice. It drafts every reply; you choose what gets sent.",
+    },
+    {
+      sticker: "shield",
+      title: "Free, and safe for your account",
+      text: "Engage never posts, votes or sends anything on its own. Every word goes out because you clicked send, so your Reddit account stays safe.",
+    },
+  ],
   both: [
     {
       sticker: "comment",
@@ -105,6 +127,12 @@ const COPY: Record<GrantedExtensions, { product: string; site: string; install: 
     site: "X",
     install: "Install Engage for X from the Chrome Web Store.",
     open: "Open X. Engage is right there when you reply or open a DM.",
+  },
+  reddit: {
+    product: "CarouseLabs Engage for Reddit, our AI assistant for Reddit",
+    site: "Reddit",
+    install: "Install Engage for Reddit from the Chrome Web Store.",
+    open: "Open Reddit. Engage is right there when you reply to a post or a comment.",
   },
   both: {
     product: "CarouseLabs Engage, our AI assistants for LinkedIn and X",

@@ -17,7 +17,7 @@ export interface MessagesSite {
   // The server route, and the contact as it takes it.
   endpoint: string;
   contactBody(conversation: CapturedConversation): Record<string, unknown>;
-  reportFeature: "messages" | "x_messages";
+  reportFeature: "messages" | "x_messages" | "reddit_messages";
   words: {
     description: string;
     openFirst: string;
@@ -88,4 +88,22 @@ const X: MessagesSite = {
   },
 };
 
-export const MESSAGES_SITE: MessagesSite = forPlatform({ linkedin: LINKEDIN, x: X });
+// Reddit chats come later: until then the Reddit panel has no Messages screen
+// and nothing on Reddit answers these.
+const REDDIT: MessagesSite = {
+  readMessage: { type: "carouselabs:reddit-read-chat" },
+  toConversation: () => null,
+  insertMessage: (text, conversation) => ({ type: "carouselabs:reddit-insert-chat", text, expect: { threadPath: conversation.threadPath } }),
+  endpoint: "/api/ext/reddit/message",
+  contactBody: (conversation) => ({ name: conversation.contact.name }),
+  reportFeature: "reddit_messages",
+  words: {
+    description: "Write the next message in a Reddit chat.",
+    openFirst: "Open a chat on Reddit",
+    openInTab: "Open a chat on Reddit in the active tab first.",
+    openToInsert: "Open the chat on Reddit in the active tab, then try again.",
+    insertFailed: "Couldn't insert into Reddit. Try Copy instead.",
+  },
+};
+
+export const MESSAGES_SITE: MessagesSite = forPlatform({ linkedin: LINKEDIN, x: X, reddit: REDDIT });

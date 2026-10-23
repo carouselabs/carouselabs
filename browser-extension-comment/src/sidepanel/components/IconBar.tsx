@@ -19,15 +19,17 @@ const ICONS: Record<Screen, LucideIcon> = {
 interface IconBarProps {
   activeScreen: Screen;
   onSelect: (screen: Screen) => void;
+  // The screens this panel has, in SCREENS order; all of them by default.
+  screens?: Screen[];
   // A screen with something for the person right now (Messages while a
   // LinkedIn conversation is open), marked with a dot until they go there.
   attention?: { screen: Screen; description: string } | null;
 }
 
-export function IconBar({ activeScreen, onSelect, attention }: IconBarProps) {
+export function IconBar({ activeScreen, onSelect, attention, screens }: IconBarProps) {
   return (
     <nav aria-label="Screens" className="flex w-12 shrink-0 flex-col items-center gap-1 border-l border-border py-2">
-      {SCREENS.map(({ id, label }) => {
+      {SCREENS.filter(({ id }) => !screens || screens.includes(id)).map(({ id, label }) => {
         const Icon = ICONS[id];
         const isActive = activeScreen === id;
         const flagged = attention?.screen === id && !isActive;

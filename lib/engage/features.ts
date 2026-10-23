@@ -3,15 +3,26 @@
 // or framework imports: shared by the rules, the gate, the admin API and the
 // admin UI.
 
-// Features with their own switch and their own day/month limits.
-// The last two are CarouseLabs Engage for X's (a separate extension on the same
-// account and plan).
-export const ENGAGE_FEATURES = ["comments", "replies", "connection_notes", "messages", "x_replies", "x_messages"] as const
+// Features with their own switch and their own day/month limits: LinkedIn's,
+// then CarouseLabs Engage for X's, then CarouseLabs Engage for Reddit's
+// (separate extensions on the same account, each sold separately).
+export const ENGAGE_FEATURES = [
+  "comments",
+  "replies",
+  "connection_notes",
+  "messages",
+  "x_replies",
+  "x_messages",
+  "reddit_comments",
+  "reddit_messages",
+] as const
 export type EngageFeature = (typeof ENGAGE_FEATURES)[number]
 
 // Each extension's own features, for views that show one at a time.
 export const LINKEDIN_FEATURES: EngageFeature[] = ["comments", "replies", "connection_notes", "messages"]
 export const X_FEATURES: EngageFeature[] = ["x_replies", "x_messages"]
+// Reddit's comments cover both comments on a post and replies to comments.
+export const REDDIT_FEATURES: EngageFeature[] = ["reddit_comments", "reddit_messages"]
 
 // The extensions on one account, each sold separately. LinkedIn is the
 // original: whatever isn't marked as another extension's (a sign-in, a
@@ -19,15 +30,23 @@ export const X_FEATURES: EngageFeature[] = ["x_replies", "x_messages"]
 // Per-extension facts are Records keyed by platform, never "X, otherwise
 // LinkedIn", so adding an extension here makes every place that needs its own
 // answer fail to compile until it has one.
-export const ENGAGE_PLATFORMS = ["linkedin", "x"] as const
+export const ENGAGE_PLATFORMS = ["linkedin", "x", "reddit"] as const
 export type EngagePlatform = (typeof ENGAGE_PLATFORMS)[number]
 // Every extension that came after LinkedIn, the ones that mark their own.
 export type NewerPlatform = Exclude<EngagePlatform, "linkedin">
 export const NEWER_PLATFORMS: NewerPlatform[] = ENGAGE_PLATFORMS.filter((p): p is NewerPlatform => p !== "linkedin")
-export const PLATFORM_LABELS: Record<EngagePlatform, string> = { linkedin: "LinkedIn", x: "X" }
+export const PLATFORM_LABELS: Record<EngagePlatform, string> = { linkedin: "LinkedIn", x: "X", reddit: "Reddit" }
 // The site's name where the AI reads it (prompts).
-export const PLATFORM_SITE_NAMES: Record<EngagePlatform, string> = { linkedin: "LinkedIn", x: "X (formerly Twitter)" }
-export const PLATFORM_FEATURES: Record<EngagePlatform, EngageFeature[]> = { linkedin: LINKEDIN_FEATURES, x: X_FEATURES }
+export const PLATFORM_SITE_NAMES: Record<EngagePlatform, string> = {
+  linkedin: "LinkedIn",
+  x: "X (formerly Twitter)",
+  reddit: "Reddit",
+}
+export const PLATFORM_FEATURES: Record<EngagePlatform, EngageFeature[]> = {
+  linkedin: LINKEDIN_FEATURES,
+  x: X_FEATURES,
+  reddit: REDDIT_FEATURES,
+}
 
 // The newer extensions' features. LinkedIn's figures are everything else, so
 // errors and AI calls that name no extension (insert, read, auth) stay
@@ -47,7 +66,7 @@ export function parseEngagePlatform(value: unknown): EngagePlatform {
 // How the newer extensions' sign-ins are labelled (ExtensionToken.device, set
 // by app/api/ext/auth/exchange): the only record of which extension a token
 // belongs to. Anything else, including no label, is the LinkedIn extension.
-export const DEVICE_PREFIXES: Record<NewerPlatform, string> = { x: "X extension" }
+export const DEVICE_PREFIXES: Record<NewerPlatform, string> = { x: "X extension", reddit: "Reddit extension" }
 export const X_DEVICE_PREFIX = DEVICE_PREFIXES.x
 export function tokenPlatform(device: string | null | undefined): EngagePlatform {
   return NEWER_PLATFORMS.find((p) => device?.startsWith(DEVICE_PREFIXES[p])) ?? "linkedin"
@@ -69,6 +88,8 @@ export const FEATURE_LABELS: Record<EngageFeature, string> = {
   messages: "Conversation assistant",
   x_replies: "X replies",
   x_messages: "X messages",
+  reddit_comments: "Reddit comments",
+  reddit_messages: "Reddit messages",
 }
 
 // What a generation counts as. Shorter/Longer and the profile builder's Test
@@ -76,8 +97,9 @@ export const FEATURE_LABELS: Record<EngageFeature, string> = {
 // those switches, count toward the daily cap and free generations, and are
 // counted separately so usage figures stay honest.
 // x_rewrites / x_tests are the same tools in CarouseLabs Engage for X, which
-// follow its X replies switch.
-export const TOOL_KINDS = ["rewrites", "tests", "x_rewrites", "x_tests"] as const
+// follow its X replies switch; reddit_rewrites / reddit_tests Reddit's, which
+// follow its Reddit comments switch.
+export const TOOL_KINDS = ["rewrites", "tests", "x_rewrites", "x_tests", "reddit_rewrites", "reddit_tests"] as const
 export type EngageToolKind = (typeof TOOL_KINDS)[number]
 export type EngageUsageKind = EngageFeature | EngageToolKind
 
@@ -89,6 +111,8 @@ export const TOOL_FEATURES: Record<EngageToolKind, EngageFeature> = {
   tests: "comments",
   x_rewrites: "x_replies",
   x_tests: "x_replies",
+  reddit_rewrites: "reddit_comments",
+  reddit_tests: "reddit_comments",
 }
 
 export function isToolKind(kind: EngageUsageKind): kind is EngageToolKind {
@@ -103,6 +127,7 @@ export const PLATFORM_KINDS: Record<
 > = {
   linkedin: { rewrites: "rewrites", tests: "tests", messages: "messages" },
   x: { rewrites: "x_rewrites", tests: "x_tests", messages: "x_messages" },
+  reddit: { rewrites: "reddit_rewrites", tests: "reddit_tests", messages: "reddit_messages" },
 }
 
 export const USAGE_KIND_LABELS: Record<EngageUsageKind, string> = {
@@ -111,6 +136,8 @@ export const USAGE_KIND_LABELS: Record<EngageUsageKind, string> = {
   tests: "Profile tests",
   x_rewrites: "X Shorter / Longer",
   x_tests: "X profile tests",
+  reddit_rewrites: "Reddit Shorter / Longer",
+  reddit_tests: "Reddit profile tests",
 }
 
 export const USAGE_KINDS: EngageUsageKind[] = [...ENGAGE_FEATURES, ...TOOL_KINDS]
@@ -141,6 +168,10 @@ export const USAGE_KIND_NOUNS: Record<EngageUsageKind, string> = {
   tests: "profile tests",
   x_rewrites: "X rewrites",
   x_tests: "X profile tests",
+  reddit_comments: "Reddit comments",
+  reddit_messages: "Reddit messages",
+  reddit_rewrites: "Reddit rewrites",
+  reddit_tests: "Reddit profile tests",
 }
 
 // CommentHistory.kind → usage kind, for history-based figures.
@@ -151,6 +182,8 @@ export const HISTORY_KIND_TO_FEATURE: Record<string, EngageFeature> = {
   message: "messages",
   x_reply: "x_replies",
   x_message: "x_messages",
+  reddit_comment: "reddit_comments",
+  reddit_message: "reddit_messages",
 }
 
 export type Limit = number | "unlimited"

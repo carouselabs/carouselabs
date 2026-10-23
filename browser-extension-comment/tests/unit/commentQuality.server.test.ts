@@ -34,6 +34,7 @@ type Preset = {
 };
 const { SYSTEM_PROFILES } = require("../../../scripts/seed-comment-profiles.js") as { SYSTEM_PROFILES: Preset[] };
 const { X_PRESETS } = require("../../../scripts/x-profile-presets.js") as { X_PRESETS: Preset[] };
+const { REDDIT_PRESETS } = require("../../../scripts/reddit-profile-presets.js") as { REDDIT_PRESETS: Preset[] };
 const { files } = require("../../../scripts/comment-presets-sql.js") as { files: () => Record<string, string> };
 
 const tells = (text: string) => COMMENT_AI_TELLS.filter(({ pattern }) => pattern.test(text)).map((t) => t.label);
@@ -191,11 +192,16 @@ describe("recent comments in the prompt", () => {
 });
 
 describe("the built-in presets", () => {
-  const all = [...SYSTEM_PROFILES.map((p) => ({ ...p, site: "LinkedIn" })), ...X_PRESETS.map((p) => ({ ...p, site: "X" }))];
+  const all = [
+    ...SYSTEM_PROFILES.map((p) => ({ ...p, site: "LinkedIn" })),
+    ...X_PRESETS.map((p) => ({ ...p, site: "X" })),
+    ...REDDIT_PRESETS.map((p) => ({ ...p, site: "Reddit" })),
+  ];
 
-  it("are all there: 11 for LinkedIn, 7 for X, each with voice samples and rules", () => {
+  it("are all there: 11 for LinkedIn, 7 for X, 5 for Reddit, each with voice samples and rules", () => {
     expect(SYSTEM_PROFILES).toHaveLength(11);
     expect(X_PRESETS).toHaveLength(7);
+    expect(REDDIT_PRESETS).toHaveLength(5);
     for (const p of all) {
       expect(p.samples?.length ?? 0, p.id).toBeGreaterThanOrEqual(3);
       expect(p.alwaysDo, p.id).toBeTruthy();
@@ -234,7 +240,8 @@ describe("the built-in presets", () => {
       expect(p.length, p.id).toMatch(/^\d+-\d+ characters$/);
       const { min, max } = targetLengthRange(p.length);
       expect(min, p.id).toBeGreaterThanOrEqual(15);
-      expect(max, p.id).toBeLessThanOrEqual(p.site === "X" ? 280 : 900);
+      // Reddit takes up to 10,000; its longest preset stays well under that.
+      expect(max, p.id).toBeLessThanOrEqual(p.site === "X" ? 280 : p.site === "Reddit" ? 2000 : 900);
     }
   });
 

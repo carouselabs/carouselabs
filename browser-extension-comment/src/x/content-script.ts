@@ -25,12 +25,12 @@ const DEV = import.meta.env.MODE !== "production";
 if (DEV) console.log("[x-content-script] loaded on", window.location.href);
 
 // Development builds only: Ctrl+Alt+Shift+S saves the page's layout with all
-// text scrubbed, for building against X's Chat (src/x/content/devSnapshot.ts).
+// text scrubbed, for building against X's Chat (src/content/devSnapshot.ts).
 // The MODE check is a build-time constant, so store builds drop it entirely.
 let stopLayoutShortcut: (() => void) | null = null;
 if (import.meta.env.MODE !== "production") {
-  void import("@/x/content/devSnapshot").then(({ listenForLayoutShortcut }) => {
-    stopLayoutShortcut = listenForLayoutShortcut();
+  void import("@/content/devSnapshot").then(({ listenForLayoutShortcut }) => {
+    stopLayoutShortcut = listenForLayoutShortcut("x");
   });
 }
 

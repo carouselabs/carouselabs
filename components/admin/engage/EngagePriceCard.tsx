@@ -29,7 +29,7 @@ type PriceRow = Jsonify<Awaited<ReturnType<typeof adminEngagePrices>>[number]>
 type PriceData = { prices: PriceRow[]; subscribed: Record<Platform, boolean> }
 type Platform = PriceRow["platform"]
 
-const NAMES: Record<Platform, string> = { linkedin: "Engage for LinkedIn", x: "Engage for X" }
+const NAMES: Record<Platform, string> = { linkedin: "Engage for LinkedIn", x: "Engage for X", reddit: "Engage for Reddit" }
 
 // Today as YYYY-MM-DD, the earliest end date the form offers.
 const today = () => new Date().toISOString().slice(0, 10)

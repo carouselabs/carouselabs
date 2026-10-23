@@ -19,6 +19,9 @@ export const BROWSER_CHANNEL = process.env.EXT_BROWSER ?? "chromium";
 const FIXTURES = path.join(ROOT, "tests/fixtures/linkedin");
 // Cleaned copies of real x.com pages, for the X extension (EXT_DIST=dist-x).
 const X_FIXTURES = path.join(ROOT, "tests/fixtures/x");
+// Anonymised copies of real new-Reddit pages, for the Reddit extension
+// (EXT_DIST=dist-reddit).
+const REDDIT_FIXTURES = path.join(ROOT, "tests/fixtures/reddit");
 
 export const SERVER_CONFIG = {
   commentButtonSelector: "button[aria-label^='Comment'], button.comment-button",
@@ -52,6 +55,9 @@ export interface Harness {
   // The same for x.com: path on x.com → a page in tests/fixtures/x.
   xPages: Map<string, string>;
   openX(pathname: string, fixture: string): Promise<Page>;
+  // The same for www.reddit.com: path → a page in tests/fixtures/reddit.
+  redditPages: Map<string, string>;
+  openReddit(pathname: string, fixture: string): Promise<Page>;
   sendToLinkedInTab<T = unknown>(message: unknown): Promise<T>;
   storage(): Promise<Record<string, unknown>>;
 }
@@ -90,6 +96,7 @@ export const test = base.extend<{ harness: Harness; blockedSites: string[] }>({
 
     const pages = new Map<string, string>();
     const xPages = new Map<string, string>();
+    const redditPages = new Map<string, string>();
     const apiResponses = new Map<string, { status: number; body: unknown }>([
       ["/api/ext/config", { status: 200, body: SERVER_CONFIG }],
     ]);
@@ -119,6 +126,15 @@ export const test = base.extend<{ harness: Harness; blockedSites: string[] }>({
           status: 200,
           contentType: "text/html; charset=utf-8",
           body: fs.readFileSync(path.join(X_FIXTURES, fixture), "utf8"),
+        });
+      }
+      if (url.hostname === "www.reddit.com") {
+        const fixture = redditPages.get(url.pathname);
+        if (!fixture) return route.fulfill({ status: 404, body: "" });
+        return route.fulfill({
+          status: 200,
+          contentType: "text/html; charset=utf-8",
+          body: fs.readFileSync(path.join(REDDIT_FIXTURES, fixture), "utf8"),
         });
       }
       if (url.hostname === "carouselabs.com" || url.hostname === "localhost") {
@@ -173,6 +189,28 @@ export const test = base.extend<{ harness: Harness; blockedSites: string[] }>({
             () =>
               worker.evaluate(async () => {
                 const [tab] = await chrome.tabs.query({ url: "https://x.com/*" });
+                try {
+                  return ((await chrome.tabs.sendMessage(tab.id!, { type: "carouselabs:ping" })) as { ok?: boolean })?.ok === true;
+                } catch {
+                  return false;
+                }
+              }),
+            { timeout: 15_000 },
+          )
+          .toBe(true);
+        return page;
+      },
+      redditPages,
+      async openReddit(pathname, fixture) {
+        redditPages.set(pathname, fixture);
+        const page = await context.newPage();
+        await page.goto(`https://www.reddit.com${pathname}`);
+        // Ready once the content script answers a ping, as for X.
+        await expect
+          .poll(
+            () =>
+              worker.evaluate(async () => {
+                const [tab] = await chrome.tabs.query({ url: "https://www.reddit.com/*" });
                 try {
                   return ((await chrome.tabs.sendMessage(tab.id!, { type: "carouselabs:ping" })) as { ok?: boolean })?.ok === true;
                 } catch {

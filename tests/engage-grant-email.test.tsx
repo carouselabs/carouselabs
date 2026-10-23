@@ -6,8 +6,8 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { EngageAccessGrantedEmail, engageAccessGrantedSubject } from "@/emails/EngageAccessGrantedEmail"
 import { APP_URL } from "@/emails/EmailLayout"
 
-const storeUrls = { linkedin: "https://store.example/linkedin", x: "https://store.example/x" }
-const html = (platform: "linkedin" | "x" | "both") =>
+const storeUrls = { linkedin: "https://store.example/linkedin", x: "https://store.example/x", reddit: "https://store.example/reddit" }
+const html = (platform: "linkedin" | "x" | "reddit" | "both") =>
   renderToStaticMarkup(<EngageAccessGrantedEmail until="10 Nov 2026" platform={platform} storeUrls={storeUrls} />)
 
 describe("Engage access granted email", () => {
@@ -48,7 +48,7 @@ describe("Engage access granted email", () => {
 
   it("without a listing, it links the website's install steps for that extension", () => {
     const out = renderToStaticMarkup(
-      <EngageAccessGrantedEmail until={null} platform="x" storeUrls={{ linkedin: null, x: null }} />,
+      <EngageAccessGrantedEmail until={null} platform="x" storeUrls={{ linkedin: null, x: null, reddit: null }} />,
     )
     expect(out).toMatch(/href="[^"]*\/extension\/x"/)
     expect(out).toContain("for life")

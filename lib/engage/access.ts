@@ -15,9 +15,11 @@ export async function loadEngageAccess(userId: string, now: Date = new Date()): 
       deletedAt: true,
       extensionTrialUsed: true,
       xTrialUsed: true,
+      redditTrialUsed: true,
       engageControl: true,
       extensionSubscription: { select: { status: true, endsAt: true } },
       xSubscription: { select: { status: true, endsAt: true } },
+      redditSubscription: { select: { status: true, endsAt: true } },
     },
   })
   if (!user) return null
@@ -47,9 +49,11 @@ export async function loadEngageAccess(userId: string, now: Date = new Date()): 
     control: user.engageControl,
     subscription: user.extensionSubscription,
     xSubscription: user.xSubscription,
+    redditSubscription: user.redditSubscription,
     grants,
     freeUsed: user.extensionTrialUsed,
     xFreeUsed: user.xTrialUsed,
+    redditFreeUsed: user.redditTrialUsed,
     global,
   })
 }

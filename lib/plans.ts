@@ -142,14 +142,27 @@ export const X_EXTENSION_CHECKOUT_PATH = "/checkout/extension?platform=x"
 export const X_EXTENSION_STORE_URL: string | null =
   "https://chromewebstore.google.com/detail/carouselabs-engage-for-x/ehijoiaapdlimkmkoejijammmiahcfbo"
 
+// CarouseLabs Engage for Reddit, sold separately like X: its own $15/month
+// Lemon Squeezy product and its own 10 free generations. Its checkout link
+// and variant id are set once the product exists (LEMONSQUEEZY_REDDIT_*
+// override them); until then its checkout says it isn't available.
+export const REDDIT_EXTENSION_CHECKOUT_URL: string | null = null
+export const REDDIT_EXTENSION_VARIANT_ID = 0
+export const REDDIT_EXTENSION_CHECKOUT_PATH = "/checkout/extension?platform=reddit"
+
+// The Reddit extension's Chrome Web Store listing: null until it is published.
+export const REDDIT_EXTENSION_STORE_URL: string | null = null
+
 // Each extension's own checkout path and store listing, by extension.
 export const EXTENSION_CHECKOUT_PATHS: Record<EngagePlatform, string> = {
   linkedin: EXTENSION_CHECKOUT_PATH,
   x: X_EXTENSION_CHECKOUT_PATH,
+  reddit: REDDIT_EXTENSION_CHECKOUT_PATH,
 }
 export const EXTENSION_STORE_URLS: Record<EngagePlatform, string | null> = {
   linkedin: EXTENSION_STORE_URL,
   x: X_EXTENSION_STORE_URL,
+  reddit: REDDIT_EXTENSION_STORE_URL,
 }
 
 export const X_EXTENSION_PLAN = {
@@ -169,7 +182,28 @@ export const X_EXTENSION_PLAN = {
   note: "For the X extension only. CarouseLabs Engage for LinkedIn is sold separately.",
 } as const
 
-export const EXTENSION_PLANS = { linkedin: EXTENSION_PLAN, x: X_EXTENSION_PLAN } satisfies Record<EngagePlatform, unknown>
+export const REDDIT_EXTENSION_PLAN = {
+  name: "CarouseLabs Engage for Reddit",
+  price: 15,
+  priceSuffix: "/month",
+  freeGenerations: 10,
+  tagline: "Unlimited Reddit comments and replies — written in your own voice, right inside reddit.com.",
+  features: [
+    "Unlimited Reddit comments, replies and chats",
+    "Reads the post, the comment thread and the subreddit's rules before writing",
+    "Voice profiles: Helpful, Casual, Detailed, Funny",
+    "Make your own profiles in your own voice",
+    "Shorter / Longer rewrites in one click",
+    "Insert straight into Reddit — nothing is ever posted or sent for you",
+  ],
+  note: "For the Reddit extension only. CarouseLabs Engage for LinkedIn and for X are sold separately.",
+} as const
+
+export const EXTENSION_PLANS = {
+  linkedin: EXTENSION_PLAN,
+  x: X_EXTENSION_PLAN,
+  reddit: REDDIT_EXTENSION_PLAN,
+} satisfies Record<EngagePlatform, unknown>
 
 export const CREDIT_COST_LINES = [
   "Caption Only = 5 credits · Image + Caption = 15 credits · Carousel = 40 credits",

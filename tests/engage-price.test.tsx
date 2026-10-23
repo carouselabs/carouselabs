@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   gate: vi.fn(),
   subscription: vi.fn(),
   xSubscription: vi.fn(),
+  redditSubscription: vi.fn(),
   trialUpdate: vi.fn(),
 }))
 
@@ -61,6 +62,7 @@ vi.mock("@/lib/db", () => {
       },
       extensionSubscription: { findUnique: mocks.subscription },
       xSubscription: { findUnique: mocks.xSubscription },
+      redditSubscription: { findUnique: mocks.redditSubscription },
     },
   }
 })
@@ -89,6 +91,7 @@ beforeEach(() => {
   mocks.gate.mockResolvedValue({ ok: true, admin: { email: "admin@carouselabs.com" } })
   mocks.subscription.mockResolvedValue(null)
   mocks.xSubscription.mockResolvedValue(null)
+  mocks.redditSubscription.mockResolvedValue(null)
   mocks.trialUpdate.mockResolvedValue({ count: 0 })
   vi.stubEnv("LEMONSQUEEZY_WEBHOOK_SECRET", "test-only-secret")
   vi.stubEnv("LEMONSQUEEZY_EXTENSION_VARIANT_ID", "44")
@@ -469,8 +472,8 @@ describe("the admin route", () => {
     const res = await GET(new Request("https://admin.test/x"), { params: Promise.resolve({ userId: "u1" }) })
     const body = await res.json()
     expect(mocks.gate).toHaveBeenLastCalledWith(expect.any(Request), "engage.view")
-    expect(body.subscribed).toEqual({ linkedin: true, x: false })
-    expect(body.prices.map((p: { platform: string; now: { cents: number } }) => [p.platform, p.now.cents])).toEqual([["linkedin", 500], ["x", 1500]])
+    expect(body.subscribed).toEqual({ linkedin: true, x: false, reddit: false })
+    expect(body.prices.map((p: { platform: string; now: { cents: number } }) => [p.platform, p.now.cents])).toEqual([["linkedin", 500], ["x", 1500], ["reddit", 1500]])
 
     await call(PUT, { platform: "x", priceCents: 500, reason: "Early supporter" })
     expect(mocks.gate).toHaveBeenLastCalledWith(expect.any(Request), "engage.access.manage")
@@ -591,7 +594,16 @@ describe("what the person sees on the website", () => {
   const ext = (price: ExtAccessSummary["price"], access: ExtAccessSummary["access"] = "free"): ExtAccessSummary => ({
     access, freeUsed: 10, freeLimit: 10, status: null, renewsAt: null, endsAt: null, manageUrl: null,
     source: access === "free" ? "free" : "subscription", grantEndsAt: null, suspended: false,
-    features: { comments: true, replies: true, connection_notes: true, messages: true, x_replies: true, x_messages: true },
+    features: {
+      comments: true,
+      replies: true,
+      connection_notes: true,
+      messages: true,
+      x_replies: true,
+      x_messages: true,
+      reddit_comments: true,
+      reddit_messages: true,
+    },
     price,
   })
 

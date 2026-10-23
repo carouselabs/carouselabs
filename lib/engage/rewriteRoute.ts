@@ -24,27 +24,45 @@ import {
 import { callCommentModel, generationDeadline, GenerationTimeout, parseComment, sanitizeComment } from "@/lib/ai/commentModel"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
 import { xLength, X_MAX_LENGTH } from "@/lib/xText"
+import { REDDIT_MAX_LENGTH } from "@/lib/redditText"
 import { PLATFORM_KINDS, type EngagePlatform } from "@/lib/engage/features"
 
 const MAX_COMMENT_CHARS = 4000
 
 export type RewritePlatform = EngagePlatform
 
-// What differs per extension: the log label, how length is measured (X's own
-// count), and a ceiling: a Longer X reply must still fit the account's limit
-// (null: none).
+// What differs per extension: the log label, what the prompt calls the text,
+// how length is measured (X's own count), and a ceiling: a Longer X reply must
+// still fit the account's limit (null: none). `xCount`: the prompt explains
+// X's way of counting.
 const REWRITE_SITES: Record<
   EngagePlatform,
-  { label: string; measure: (text: string) => number; maxLength: ((userId: string) => Promise<number>) | null }
+  {
+    label: string
+    what: string
+    measure: (text: string) => number
+    maxLength: ((userId: string) => Promise<number>) | null
+    xCount: boolean
+  }
 > = {
-  linkedin: { label: "ext/rewrite", measure: (text) => text.length, maxLength: null },
+  linkedin: { label: "ext/rewrite", what: "LinkedIn comment", measure: (text) => text.length, maxLength: null, xCount: false },
   x: {
     label: "ext/x/rewrite",
+    what: "reply on X (formerly Twitter)",
+    xCount: true,
     measure: xLength,
     // The account's reply limit (280, more with X Premium).
     maxLength: async (userId) =>
       (await db.xUserSettings.findUnique({ where: { userId }, select: { maxReplyLength: true } }))?.maxReplyLength ??
       X_MAX_LENGTH,
+  },
+  // A Reddit comment can be up to 10,000 characters.
+  reddit: {
+    label: "ext/reddit/rewrite",
+    what: "Reddit comment",
+    measure: (text) => text.length,
+    maxLength: async () => REDDIT_MAX_LENGTH,
+    xCount: false,
   },
 }
 
@@ -96,7 +114,8 @@ export async function handleRewriteRequest(req: Request, platform: RewritePlatfo
     direction,
     currentLength,
     countSentences(currentComment),
-    site.maxLength ? { maxLength } : undefined,
+    site.xCount ? { maxLength } : undefined,
+    site.what,
   )
   const userMessage = buildRewriteUserMessage(currentComment)
   const { limit } = rewriteBounds(currentLength, direction)

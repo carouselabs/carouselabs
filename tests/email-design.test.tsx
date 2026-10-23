@@ -38,7 +38,7 @@ import { AdminNewSupportMessageEmail } from "@/emails/AdminNewSupportMessageEmai
 import { ContactMessageEmail } from "@/emails/ContactMessageEmail"
 import { renderBroadcastEmailHtml } from "@/lib/broadcastRender"
 
-const store = { linkedin: "https://store.example/linkedin", x: "https://store.example/x" }
+const store = { linkedin: "https://store.example/linkedin", x: "https://store.example/x", reddit: "https://store.example/reddit" }
 const post = { id: "p1", title: "Hooks that work", platform: "linkedin", publishedUrl: "https://linkedin.com/p/1" }
 
 const USER: Record<string, React.ReactElement> = {

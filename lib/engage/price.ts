@@ -58,7 +58,7 @@ export async function adminEngagePrices(userId: string, now: Date = new Date()) 
   })
 }
 
-const NAMES: Record<EngagePlatform, string> = { linkedin: "LinkedIn", x: "X" }
+const NAMES: Record<EngagePlatform, string> = { linkedin: "LinkedIn", x: "X", reddit: "Reddit" }
 
 function describe(platform: EngagePlatform, cents: number, introMonths: number | null, endsAt: Date | null): string {
   const charge = introMonths ? `${formatUsd(cents)}/month for the first ${introMonths} month${introMonths === 1 ? "" : "s"}, then the usual price` : `${formatUsd(cents)}/month`

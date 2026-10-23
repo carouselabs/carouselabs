@@ -66,8 +66,8 @@ export function defaultGlobalSettings(): EngageGlobalSettings {
       EngageFeature,
       FeatureSwitch
     >,
-    insert: { linkedin: true, x: true },
-    minVersion: { linkedin: null, x: null },
+    insert: { linkedin: true, x: true, reddit: true },
+    minVersion: { linkedin: null, x: null, reddit: null },
     models: Object.fromEntries(ENGAGE_FEATURES.map((f) => [f, "luna"])) as Record<EngageFeature, AiModelKey>,
     aiPrices: { ...DEFAULT_AI_PRICES },
   }
@@ -131,6 +131,7 @@ export function requestPlatform(pathname: string): EngagePlatform {
 const PRODUCT_NAMES: Record<EngagePlatform, string> = {
   linkedin: "CarouseLabs Engage",
   x: "CarouseLabs Engage for X",
+  reddit: "CarouseLabs Engage for Reddit",
 }
 
 export function updateRequiredMessage(platform: EngagePlatform): string {

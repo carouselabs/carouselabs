@@ -18,6 +18,7 @@ const fs = require("fs")
 const path = require("path")
 const { SYSTEM_PROFILES } = require("./seed-comment-profiles")
 const { X_PRESETS } = require("./x-profile-presets")
+const { REDDIT_PRESETS } = require("./reddit-profile-presets")
 
 const text = (value) => (value == null ? "NULL" : `'${String(value).replace(/'/g, "''")}'`)
 const array = (values) => `ARRAY[${(values || []).map(text).join(", ")}]::TEXT[]`
@@ -135,11 +136,12 @@ ON CONFLICT (id) DO UPDATE SET
 `
 }
 
-// The INSERT that scripts/x-extension-schema.sql creates the X presets with.
-// Each row's createdAt is a second after the one before, which is the order
-// GET /api/ext/x/profiles lists them in.
-function xInsertSql(x) {
-  const rows = x.map(
+// The INSERT that scripts/x-extension-schema.sql creates the X presets with
+// (and scripts/reddit-extension-schema.sql the Reddit ones). Each row's
+// createdAt is a second after the one before, which is the order
+// GET /api/ext/<site>/profiles lists them in.
+function presetInsertSql(table, site, presets) {
+  const rows = presets.map(
     (p, i) => `  (${text(p.id)}, NULL, ${text(p.name)},
    ${text(p.whoIAm)},
    ${text(p.goal)},
@@ -149,7 +151,7 @@ function xInsertSql(x) {
    ${array(p.samples)},
    ${bool(p.isDefault)}, true, ${bool(p.isRecommended)}, CURRENT_TIMESTAMP + INTERVAL '${i + 1} second${i ? "s" : ""}', CURRENT_TIMESTAMP)`,
   )
-  return `INSERT INTO "XProfile"
+  return `INSERT INTO "${table}"
   ("id", "userId", "name", "whoIAm", "goal", "tone", "length", "emoji", "language", "alwaysDo", "neverDo", "samples", "isDefault", "isSystem", "isRecommended", "createdAt", "updatedAt")
 VALUES
 ${rows.join(",\n")}
@@ -166,7 +168,7 @@ ON CONFLICT ("id") DO UPDATE SET
   "isDefault" = EXCLUDED."isDefault",
   "isSystem" = EXCLUDED."isSystem",
   "isRecommended" = EXCLUDED."isRecommended",
-  -- The list's order (GET /api/ext/x/profiles sorts by it): the times above
+  -- The list's order (GET /api/ext/${site}/profiles sorts by it): the times above
   -- are a second apart so the presets always show in the order written.
   "createdAt" = EXCLUDED."createdAt",
   "updatedAt" = CURRENT_TIMESTAMP;`
@@ -174,16 +176,21 @@ ON CONFLICT ("id") DO UPDATE SET
 
 const X_SCHEMA = path.join(__dirname, "x-extension-schema.sql")
 const X_BLOCK = /INSERT INTO "XProfile"[\s\S]*?"updatedAt" = CURRENT_TIMESTAMP;/
+const REDDIT_SCHEMA = path.join(__dirname, "reddit-extension-schema.sql")
+const REDDIT_BLOCK = /INSERT INTO "RedditProfile"[\s\S]*?"updatedAt" = CURRENT_TIMESTAMP;/
 
 function files() {
   const data = { linkedin: SYSTEM_PROFILES, x: X_PRESETS }
   const schema = fs.readFileSync(X_SCHEMA, "utf8").replace(/\r\n/g, "\n")
   if (!X_BLOCK.test(schema)) throw new Error("x-extension-schema.sql: X presets INSERT not found")
+  const redditSchema = fs.readFileSync(REDDIT_SCHEMA, "utf8").replace(/\r\n/g, "\n")
+  if (!REDDIT_BLOCK.test(redditSchema)) throw new Error("reddit-extension-schema.sql: Reddit presets INSERT not found")
   return {
     [path.join(__dirname, "human-comment-profiles.sql")]: updateSql(data, UPDATE_HEADER),
     [path.join(__dirname, "seed-comment-profiles.sql")]: seedSql(SYSTEM_PROFILES),
     // A function, so "$" in the SQL is never read as a replacement pattern.
-    [X_SCHEMA]: schema.replace(X_BLOCK, () => xInsertSql(X_PRESETS)),
+    [X_SCHEMA]: schema.replace(X_BLOCK, () => presetInsertSql("XProfile", "x", X_PRESETS)),
+    [REDDIT_SCHEMA]: redditSchema.replace(REDDIT_BLOCK, () => presetInsertSql("RedditProfile", "reddit", REDDIT_PRESETS)),
   }
 }
 

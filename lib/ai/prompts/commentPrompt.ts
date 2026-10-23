@@ -417,6 +417,9 @@ export function buildRewriteSystemMessage(
   // CarouseLabs Engage for X: a reply on X, which must stay within xMax
   // characters as X counts them (lib/xText.ts).
   x?: { maxLength: number },
+  // What the text is, in the prompt's words ("Reddit comment"); by default a
+  // LinkedIn comment, or an X reply when `x` is given.
+  what = x ? "reply on X (formerly Twitter)" : "LinkedIn comment",
 ): string {
   const { target: rawTarget, limit } = rewriteBounds(currentLength, direction)
   const target = x ? Math.min(rawTarget, x.maxLength) : rawTarget
@@ -440,7 +443,6 @@ Add substance, not padding: extend the existing point with a concrete
 consequence, or a second beat of the same thought. Do not pad with filler
 phrases or restate what is already there.`
 
-  const what = x ? "reply on X (formerly Twitter)" : "LinkedIn comment"
   const xCeiling = x
     ? `\n\nWhatever the direction, the rewrite must be at most ${x.maxLength} characters as X
 counts them: every link counts 23 and every emoji counts 2.`

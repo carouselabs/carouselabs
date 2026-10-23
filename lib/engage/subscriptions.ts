@@ -8,11 +8,13 @@ import type { EngagePlatform } from "@/lib/engage/features"
 export const SUBSCRIPTION_TABLES = {
   linkedin: "ExtensionSubscription",
   x: "XSubscription",
+  reddit: "RedditSubscription",
 } as const satisfies Record<EngagePlatform, string>
 
 export const FREE_USED_COLUMNS = {
   linkedin: "extensionTrialUsed",
   x: "xTrialUsed",
+  reddit: "redditTrialUsed",
 } as const satisfies Record<EngagePlatform, keyof User>
 export type FreeUsedColumn = (typeof FREE_USED_COLUMNS)[EngagePlatform]
 
@@ -25,6 +27,7 @@ export const FREE_USED_SELECT = Object.fromEntries(Object.values(FREE_USED_COLUM
 const FIND: Record<EngagePlatform, (userId: string) => Promise<ExtensionSubscription | null>> = {
   linkedin: (userId) => db.extensionSubscription.findUnique({ where: { userId } }),
   x: (userId) => db.xSubscription.findUnique({ where: { userId } }),
+  reddit: (userId) => db.redditSubscription.findUnique({ where: { userId } }),
 }
 
 // One extension's stored subscription (all have the same fields).

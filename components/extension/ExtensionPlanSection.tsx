@@ -4,7 +4,7 @@
 // payments, so both always agree.
 import { EngagePlanCard } from "@/components/pricing/EngagePlanCard"
 import { buttonVariants } from "@/components/ui/button"
-import { EXTENSION_PLANS } from "@/lib/plans"
+import { EXTENSION_PLANS, REDDIT_EXTENSION_CHECKOUT_URL } from "@/lib/plans"
 import { ENGAGE_EXTENSIONS } from "./engageExtensions"
 import type { ExtAccessSummary } from "@/lib/extAccess"
 import { ExtensionPrice } from "./ExtensionPrice"
@@ -38,6 +38,12 @@ const PLAN_COPY: Record<EngagePlatform, { manage: string; buy: string; anchor: s
   },
   // X's checkout link has a built-in default (lib/plans.ts).
   x: { manage: "Manage X subscription", buy: "Get Engage for X — ", anchor: "x-extension-plan", checkoutConfigured: () => true },
+  reddit: {
+    manage: "Manage Reddit subscription",
+    buy: "Get Engage for Reddit — ",
+    anchor: "reddit-extension-plan",
+    checkoutConfigured: () => !!(process.env.LEMONSQUEEZY_REDDIT_CHECKOUT_URL || REDDIT_EXTENSION_CHECKOUT_URL),
+  },
 }
 
 export function ExtensionPlanSection({ ext, platform = "linkedin" }: { ext: ExtAccessSummary; platform?: EngagePlatform }) {

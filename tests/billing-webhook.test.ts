@@ -29,6 +29,7 @@ function transactionClient() {
     extensionSubscription: { findUnique: vi.fn(async () => null), upsert: vi.fn(async () => ({})) },
     // CarouseLabs Engage for X's subscriptions (sold separately); none stored.
     xSubscription: { findUnique: vi.fn(async () => null) },
+    redditSubscription: { findUnique: vi.fn(async () => null) },
     user: {
       findUnique: vi.fn(async ({ where }) => where.id === user.id || where.email === user.email ? user : null),
     },

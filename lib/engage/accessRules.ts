@@ -70,7 +70,8 @@ export interface GrantInput {
   reason: string
   grantedBy: string
   createdAt: Date
-  // Which extension it unlocks: "linkedin", "x" or "both" (absent: both).
+  // Which extension it unlocks: "linkedin", "x", "reddit" or "both"
+  // (LinkedIn + X; absent: both).
   platform?: string
 }
 
@@ -87,13 +88,16 @@ export interface EngageAccessInput {
     suspendedAt: Date | null
     suspendReason: string | null
   } | null
-  // The LinkedIn extension's subscription, and the X extension's.
+  // The LinkedIn extension's subscription, the X extension's and the
+  // Reddit extension's.
   subscription: { status: string; endsAt: Date | null } | null
   xSubscription?: { status: string; endsAt: Date | null } | null
+  redditSubscription?: { status: string; endsAt: Date | null } | null
   grants: GrantInput[]
-  // Free generations used on LinkedIn, and on X.
+  // Free generations used on LinkedIn, on X and on Reddit.
   freeUsed: number
   xFreeUsed?: number
+  redditFreeUsed?: number
   // Settings for everyone (admin → Engage → Controls); absent means none.
   global?: Pick<EngageGlobalSettings, "features">
 }
@@ -173,10 +177,12 @@ type StoredSubscription = { status: string; endsAt: Date | null } | null
 const SUBSCRIPTION_OF: Record<EngagePlatform, (input: EngageAccessInput) => StoredSubscription> = {
   linkedin: (input) => input.subscription,
   x: (input) => input.xSubscription ?? null,
+  reddit: (input) => input.redditSubscription ?? null,
 }
 const FREE_USED_OF: Record<EngagePlatform, (input: EngageAccessInput) => number> = {
   linkedin: (input) => input.freeUsed,
   x: (input) => input.xFreeUsed ?? 0,
+  reddit: (input) => input.redditFreeUsed ?? 0,
 }
 
 export function computeEngageAccess(input: EngageAccessInput): EngageAccess {

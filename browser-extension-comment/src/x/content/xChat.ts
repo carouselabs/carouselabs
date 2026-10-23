@@ -1,6 +1,6 @@
 // src/x/content/xChat.ts — reading an X chat (DM) and filling its message
 // box. Written against layouts of X's real Chat saved with the dev-only tool
-// (src/x/content/devSnapshot.ts; test pages in tests/fixtures/x):
+// (src/content/devSnapshot.ts; test pages in tests/fixtures/x):
 //   x.com/i/chat/<id>                         an open chat
 //   [data-testid="xchatEmbedRoute"]           hosts the Chat in an open shadow root
 //   [data-testid="dm-conversation-header"]    the person: a link to x.com/<handle>

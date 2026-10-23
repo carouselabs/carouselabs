@@ -131,6 +131,9 @@ model User {
   // own $15/month subscription (lib/extensionBilling.ts).
   xTrialUsed                 Int                    @default(0)
   xSubscription              XSubscription?
+  // So is the Reddit extension (CarouseLabs Engage for Reddit).
+  redditTrialUsed            Int                    @default(0)
+  redditSubscription         RedditSubscription?
   // Extension settings that used to live only in one browser, moved here so
   // the website's Extension section can edit them too. All nullable: null
   // means "never set", which the extension treats as its old local value
@@ -158,6 +161,9 @@ model User {
   // CarouseLabs Engage for X (scripts/x-extension-schema.sql)
   xProfiles     XProfile[]
   xSettings     XUserSettings?
+  // CarouseLabs Engage for Reddit (scripts/reddit-extension-schema.sql)
+  redditProfiles RedditProfile[]
+  redditSettings RedditUserSettings?
 
   // ── Referral program ──
   referralCode       String?              @unique
@@ -516,6 +522,23 @@ model XSubscription {
   updatedAt         DateTime  @updatedAt
 }
 
+// The Reddit extension's $15/month subscription (CarouseLabs Engage for
+// Reddit), sold separately like X's; same fields, same webhook.
+model RedditSubscription {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lsSubscriptionId  String    @unique
+  lsCustomerId      String?
+  lsVariantId       String?
+  status            String
+  renewsAt          DateTime?
+  endsAt            DateTime?
+  customerPortalUrl String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
 model MessageProfile {
   id            String   @id @default(cuid())
   userId        String?
@@ -634,6 +657,44 @@ model XUserSettings {
   defaultProfileId   String?
   // X Premium accounts can post longer than 280; replies are written to fit.
   maxReplyLength     Int      @default(280)
+  insertButtonHidden Boolean  @default(false)
+  updatedAt          DateTime @default(now()) @updatedAt
+}
+
+// CarouseLabs Engage for Reddit: voice profiles for Reddit comments and
+// replies, its own list like X's (same fields, so the same builder and
+// prompt parts serve it). userId null + isSystem = a CarouseLabs preset.
+// New tables only (scripts/reddit-extension-schema.sql).
+model RedditProfile {
+  id            String   @id @default(cuid())
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  whoIAm        String
+  goal          String
+  tone          String
+  length        String
+  emoji         String   @default("None")
+  language      String   @default("English")
+  alwaysDo      String?
+  neverDo       String?
+  samples       String[]
+  isDefault     Boolean  @default(false)
+  isSystem      Boolean  @default(false)
+  isRecommended Boolean  @default(false)
+  testsUsed     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// The Reddit extension's per-account settings. No row = the defaults.
+model RedditUserSettings {
+  userId             String   @id
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // null = the shared default preset (RedditProfile.isDefault).
+  defaultProfileId   String?
   insertButtonHidden Boolean  @default(false)
   updatedAt          DateTime @default(now()) @updatedAt
 }

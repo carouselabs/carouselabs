@@ -9,6 +9,7 @@ import type { EngagePlatform } from "@/lib/engage/features"
 export const PLATFORM_ORIGINS: Record<EngagePlatform, string[]> = {
   linkedin: ["https://www.linkedin.com"],
   x: ["https://x.com"],
+  reddit: ["https://www.reddit.com"],
 }
 
 export const CONTENT_SCRIPT_ORIGINS = Object.values(PLATFORM_ORIGINS).flat()

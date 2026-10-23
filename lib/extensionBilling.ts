@@ -20,7 +20,7 @@ import { db } from "@/lib/db"
 import type { Prisma } from "@prisma/client"
 import { verifyBillingIdentity } from "@/lib/billingIdentity"
 import { createCommissionForPayment } from "@/lib/referral"
-import { X_EXTENSION_VARIANT_ID } from "@/lib/plans"
+import { REDDIT_EXTENSION_VARIANT_ID, X_EXTENSION_VARIANT_ID } from "@/lib/plans"
 import { ENGAGE_PLATFORMS } from "@/lib/engage/features"
 import { markIntroUsed } from "@/lib/engage/priceIntro"
 import {
@@ -35,6 +35,7 @@ export function extensionVariantIds(): Record<BillingPlatform, number> {
   return {
     linkedin: parseInt(process.env.LEMONSQUEEZY_EXTENSION_VARIANT_ID ?? "0", 10) || 0,
     x: parseInt(process.env.LEMONSQUEEZY_X_VARIANT_ID ?? "", 10) || X_EXTENSION_VARIANT_ID,
+    reddit: parseInt(process.env.LEMONSQUEEZY_REDDIT_VARIANT_ID ?? "", 10) || REDDIT_EXTENSION_VARIANT_ID,
   }
 }
 
@@ -68,6 +69,13 @@ const SUBSCRIPTION_TABLES: Record<BillingPlatform, (client: Prisma.TransactionCl
     bySubscription: (lsSubscriptionId) => client.xSubscription.findUnique({ where: { lsSubscriptionId }, select: { userId: true } }),
     currentFor: (userId) => client.xSubscription.findUnique({ where: { userId }, select: { lsSubscriptionId: true } }),
     save: (userId, fields) => client.xSubscription.upsert({ where: { userId }, create: { userId, ...fields }, update: fields }),
+  }),
+  reddit: (client) => ({
+    bySubscription: (lsSubscriptionId) =>
+      client.redditSubscription.findUnique({ where: { lsSubscriptionId }, select: { userId: true } }),
+    currentFor: (userId) => client.redditSubscription.findUnique({ where: { userId }, select: { lsSubscriptionId: true } }),
+    save: (userId, fields) =>
+      client.redditSubscription.upsert({ where: { userId }, create: { userId, ...fields }, update: fields }),
   }),
 }
 

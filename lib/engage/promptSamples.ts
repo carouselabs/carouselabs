@@ -16,6 +16,7 @@ import { buildConnectionNoteSystemMessage, buildConnectionNoteUserMessage } from
 import { buildMessageSystemMessage, buildMessageUserMessage } from "@/lib/ai/prompts/messagePrompt"
 import { buildXReplySystemMessage, buildXReplyUserMessage } from "@/lib/ai/prompts/xReplyPrompt"
 import { xLength, X_MAX_LENGTH } from "@/lib/xText"
+import { buildRedditCommentSystemMessage, buildRedditCommentUserMessage, type RedditCommentInput } from "@/lib/ai/prompts/redditCommentPrompt"
 import type { EngageFeature } from "@/lib/engage/features"
 
 export interface PromptSample {
@@ -55,6 +56,24 @@ const X_POST = {
   text: "We cut onboarding from 14 steps to 5. Activation went from 31% to 48%.",
   url: "https://x.com/priya/status/1840000000000000001",
   media: ["image"],
+}
+
+// A reply in a Reddit thread, with the subreddit's rules.
+const REDDIT: RedditCommentInput = {
+  subreddit: "r/SaaS",
+  rules: [{ title: "No self-promotion", text: "Don't link your own product unless someone asks for it." }],
+  post: {
+    title: "We cut onboarding from 14 steps to 5",
+    author: "priya_builds",
+    text: "Activation went from 31% to 48%. What would you cut next?",
+    url: "https://www.reddit.com/r/SaaS/comments/abc123/we_cut_onboarding/",
+    flair: "Growth",
+    kind: "text",
+  },
+  replyTo: { author: "sam_lee", text: "Did you cut the team invite step too?", url: "" },
+  chain: [],
+  others: [],
+  isOwnPost: false,
 }
 
 const THREAD = [
@@ -135,6 +154,27 @@ export function promptSamples(): PromptSample[] {
       feature: "x_messages",
       system: buildMessageSystemMessage(REASON, false, "x"),
       user: buildMessageUserMessage({ name: "Sam Lee", headline: "@sam_lee" }, THREAD, undefined, "x"),
+    },
+    {
+      id: "reddit_comment",
+      label: "Reddit reply",
+      feature: "reddit_comments",
+      system: buildRedditCommentSystemMessage(PROFILE, range.max, REDDIT),
+      user: buildRedditCommentUserMessage(REDDIT),
+    },
+    {
+      id: "reddit_rewrite",
+      label: "Shorter (Reddit)",
+      feature: "reddit_comments",
+      system: buildRewriteSystemMessage("shorter", COMMENT.length, countSentences(COMMENT), undefined, "Reddit comment"),
+      user: buildRewriteUserMessage(COMMENT),
+    },
+    {
+      id: "reddit_message",
+      label: "Reddit message",
+      feature: "reddit_messages",
+      system: buildMessageSystemMessage(REASON, false, "reddit"),
+      user: buildMessageUserMessage({ name: "sam_lee", headline: "" }, THREAD, undefined, "reddit"),
     },
   ]
 }

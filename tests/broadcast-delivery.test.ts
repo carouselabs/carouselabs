@@ -166,8 +166,17 @@ describe("the Engage audiences", () => {
     expect(mocks.findMany.mock.calls[0][0].where).toEqual({
       deletedAt: null,
       OR: [
-        // Not labelled as any newer extension's (only X so far).
-        { extensionTokens: { some: { OR: [{ device: null }, { NOT: { OR: [{ device: { startsWith: "X extension" } }] } }] } } },
+        // Not labelled as any newer extension's (X's or Reddit's).
+        {
+          extensionTokens: {
+            some: {
+              OR: [
+                { device: null },
+                { NOT: { OR: [{ device: { startsWith: "X extension" } }, { device: { startsWith: "Reddit extension" } }] } },
+              ],
+            },
+          },
+        },
         { commentHistory: { some: { kind: { in: ["comment", "reply", "connection_note", "message"] } } } },
       ],
     })

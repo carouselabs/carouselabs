@@ -123,6 +123,8 @@ const DM_NOTES: Record<MessagePlatform, string> = {
   linkedin: "",
   x: `\n\nX DMs are more casual than LinkedIn's: write the way people actually text
 on X, short and direct, with no corporate phrasing.`,
+  reddit: `\n\nReddit chats are casual and people there are quick to spot a sales pitch:
+write like a regular Redditor, plain and direct, with no corporate phrasing.`,
 }
 
 // A custom agent (lib/engageAgents.ts) writing instead of a message profile.

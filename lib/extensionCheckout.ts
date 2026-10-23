@@ -12,7 +12,7 @@
 import { isExtensionSubscriptionActive } from "@/lib/extensionAccessRules"
 import { signBillingIdentity } from "@/lib/billingIdentity"
 import { extensionVariantIds } from "@/lib/extensionBilling"
-import { X_EXTENSION_CHECKOUT_URL } from "@/lib/plans"
+import { REDDIT_EXTENSION_CHECKOUT_URL, X_EXTENSION_CHECKOUT_URL } from "@/lib/plans"
 import { loadEngagePrice } from "@/lib/engage/price"
 import { discountCodeFor, variantPriceCents } from "@/lib/engage/priceDiscount"
 import { findEngageSubscription } from "@/lib/engage/subscriptions"
@@ -27,10 +27,11 @@ export type ExtensionCheckout =
 const CHECKOUT_URLS: Record<EngagePlatform, () => string | undefined> = {
   linkedin: () => process.env.LEMONSQUEEZY_EXTENSION_CHECKOUT_URL,
   x: () => process.env.LEMONSQUEEZY_X_CHECKOUT_URL || X_EXTENSION_CHECKOUT_URL,
+  reddit: () => process.env.LEMONSQUEEZY_REDDIT_CHECKOUT_URL || REDDIT_EXTENSION_CHECKOUT_URL || undefined,
 }
 
 // The checkout's informational marker (custom_data.kind).
-const CHECKOUT_KINDS: Record<EngagePlatform, string> = { linkedin: "extension", x: "x_extension" }
+const CHECKOUT_KINDS: Record<EngagePlatform, string> = { linkedin: "extension", x: "x_extension", reddit: "reddit_extension" }
 
 export async function extensionCheckoutFor(
   user: { id: string; email: string },

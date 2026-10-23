@@ -1,4 +1,4 @@
-// The development-only layout saver (src/x/content/devSnapshot.ts) in real
+// The development-only layout saver (src/content/devSnapshot.ts) in real
 // Chromium on the X extension's dev build: Ctrl+Alt+Shift+S downloads the
 // page's structure, reaching into a CLOSED shadow root (where X's Chat
 // sits), with every word scrubbed. Store builds don't contain it.

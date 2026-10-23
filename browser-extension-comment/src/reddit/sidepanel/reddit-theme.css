@@ -1,0 +1,55 @@
+/* CarouseLabs Engage for Reddit: the LinkedIn panel's design
+   (sidepanel/styles.css) in CarouseLabs' own orange, not Reddit's. Buttons
+   are a deep orange so their white text stays readable (#C2410C, 5:1); dark
+   mode puts dark text on a brighter orange. Warm greys throughout. Errors
+   (red), success (green) and warnings keep their colours so they still stand
+   out. Unlayered, so these win over the base tokens they replace. */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 20 14% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 20 14% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 20 14% 10%;
+
+  --primary: 17 88% 40%; /* #C2410C */
+  --primary-foreground: 0 0% 100%;
+  --primary-text: 17 88% 40%;
+
+  --secondary: 30 20% 95%;
+  --secondary-foreground: 20 14% 10%;
+  --muted: 30 20% 96%;
+  --muted-foreground: 20 6% 42%;
+  --accent: 33 100% 96%; /* #FFF7ED */
+  --accent-foreground: 15 79% 34%; /* #9A3412 */
+
+  --border: 30 12% 90%;
+  --input: 30 10% 85%;
+  --ring: 21 90% 48%; /* #EA580C */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: 20 14% 6%;
+    --foreground: 30 20% 93%;
+    --card: 20 10% 9%;
+    --card-foreground: 30 20% 93%;
+    --popover: 20 10% 10%;
+    --popover-foreground: 30 20% 93%;
+
+    --primary: 25 95% 53%; /* #F97316 */
+    --primary-foreground: 20 14% 6%;
+    --primary-text: 27 96% 61%;
+
+    --secondary: 20 8% 16%;
+    --secondary-foreground: 30 20% 93%;
+    --muted: 20 8% 12%;
+    --muted-foreground: 30 8% 62%;
+    --accent: 20 30% 15%;
+    --accent-foreground: 27 96% 72%;
+
+    --border: 20 8% 20%;
+    --input: 20 8% 28%;
+    --ring: 25 95% 53%;
+  }
+}

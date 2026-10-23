@@ -27,6 +27,10 @@ const ACTIVITY: Record<EngagePlatform, { kind: string; label: string; icon: Luci
     { kind: "x_reply", label: "Replies", icon: Reply },
     { kind: "x_message", label: "Messages", icon: MessagesSquare },
   ],
+  reddit: [
+    { kind: "reddit_comment", label: "Comments", icon: MessageSquare },
+    { kind: "reddit_message", label: "Messages", icon: MessagesSquare },
+  ],
 }
 
 const card = "rounded-card border border-border bg-surface-raised p-5 flex flex-col gap-4"

@@ -43,6 +43,29 @@ npx vite build --config vite.x.config.ts --outDir dist-x-store  # the store buil
 
 End-to-end tests for it: `EXT_DIST=dist-x npx playwright test tests/e2e/x*.spec.ts tests/e2e/signIn.spec.ts`.
 
+## CarouseLabs Engage for Reddit
+
+A third extension, for new Reddit (www.reddit.com only), built the same way:
+its own manifest (`manifest.reddit.config.ts`, version `REDDIT_VERSION`),
+orange icons (`public-reddit/`), background, content script and panel
+(`src/reddit/`). Reply under a comment, or "Join the conversation" on a post,
+captures the comment and the comments above it (or the post and its top
+comments) and the subreddit's rules (`src/reddit/content/redditPage.ts`);
+Insert types only into the box for that comment or post.
+
+```
+npm run build:reddit:dev                                                 # dist-reddit/, loads localhost too
+npx vite build --config vite.reddit.config.ts --outDir dist-reddit-store  # the store build
+```
+
+Reddit draws the box you type in after the page loads, inside its
+components' shadow roots, so "Save page as" can't capture it. In a
+development build, Ctrl+Alt+Shift+S on Reddit downloads the page's layout,
+shadow roots included, with every word scrubbed (`src/content/devSnapshot.ts`).
+
+End-to-end tests for it: `EXT_DIST=dist-reddit npx playwright test tests/e2e/redditReply.spec.ts tests/e2e/signIn.spec.ts`,
+on anonymised copies of real Reddit pages (`tests/fixtures/reddit`).
+
 ## Other browsers
 
 The same zips install in every Chromium browser (Chrome, Edge, Brave, Opera,

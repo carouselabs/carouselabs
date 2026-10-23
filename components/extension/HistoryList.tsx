@@ -26,11 +26,17 @@ const FILTERS: Record<Platform, { kind: HistoryKind | null; label: string }[]> =
     { kind: "x_reply", label: "Replies" },
     { kind: "x_message", label: "Messages" },
   ],
+  reddit: [
+    { kind: null, label: "All" },
+    { kind: "reddit_comment", label: "Comments" },
+    { kind: "reddit_message", label: "Messages" },
+  ],
 }
 
 const EMPTY: Record<Platform, string> = {
   linkedin: "Nothing here yet. Everything the extension writes for you on LinkedIn shows up here.",
   x: "Nothing here yet. Every reply and message CarouseLabs Engage for X writes for you shows up here.",
+  reddit: "Nothing here yet. Every comment and message CarouseLabs Engage for Reddit writes for you shows up here.",
 }
 
 const KIND_LABELS: Record<HistoryKind, string> = {
@@ -40,6 +46,8 @@ const KIND_LABELS: Record<HistoryKind, string> = {
   message: "Message",
   x_reply: "Reply",
   x_message: "Message",
+  reddit_comment: "Comment",
+  reddit_message: "Message",
 }
 
 // Who the text was for, in each kind's own words.
@@ -49,11 +57,13 @@ function audience(entry: HistoryEntry): string {
     case "reply":
       return `Reply on ${name}'s post`
     case "x_reply":
+    case "reddit_comment":
       return `Reply to ${name}`
     case "connection_note":
       return `Note to ${name}`
     case "message":
     case "x_message":
+    case "reddit_message":
       return `Message to ${name}`
     default:
       return `Comment on ${name}'s post`
@@ -67,11 +77,13 @@ const LINK_LABELS: Record<HistoryKind, string> = {
   message: "Open chat",
   x_reply: "View post",
   x_message: "Open chat",
+  reddit_comment: "View post",
+  reddit_message: "Open chat",
 }
 
-// Only real LinkedIn and X pages are linked; anything else in postUrl is
-// ignored.
-const LINKED_HOSTS = new Set(["www.linkedin.com", "x.com"])
+// Only real LinkedIn, X and Reddit pages are linked; anything else in
+// postUrl is ignored.
+const LINKED_HOSTS = new Set(["www.linkedin.com", "x.com", "www.reddit.com"])
 function siteHref(url: string): string | null {
   try {
     const parsed = new URL(url)

@@ -163,7 +163,7 @@ export function EngageUserDetail({ userId }: { userId: string }) {
 
   // The extensions are sold separately: each has its own plan, expiry and
   // free generations.
-  const subscriptions = { linkedin: data.subscription, x: data.xSubscription } satisfies Record<
+  const subscriptions = { linkedin: data.subscription, x: data.xSubscription, reddit: data.redditSubscription } satisfies Record<
     (typeof ENGAGE_PLATFORMS)[number],
     unknown
   >

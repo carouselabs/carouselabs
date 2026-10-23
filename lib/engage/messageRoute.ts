@@ -88,6 +88,8 @@ const MESSAGE_SITES: Record<
       typeof path === "string" && path.startsWith("/messaging/thread/") ? linkedInUrl(`https://www.linkedin.com${path}`) : "",
   },
   x: { label: "ext/x/message", contact: parseXContact, threadUrl: xChatUrl },
+  // Reddit chats keep no link in History yet (their addresses aren't read).
+  reddit: { label: "ext/reddit/message", contact: parseContact, threadUrl: () => "" },
 }
 
 // One handler for every extension's DMs. LinkedIn's (app/api/ext/message) and

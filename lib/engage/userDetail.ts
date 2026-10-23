@@ -25,8 +25,11 @@ export async function engageUserDetail(userId: string, now: Date = new Date()) {
       extensionSubscription: {
         select: { status: true, renewsAt: true, endsAt: true, createdAt: true, lsSubscriptionId: true, customerPortalUrl: true },
       },
-      // The X extension is sold separately.
+      // The X and Reddit extensions are sold separately.
       xSubscription: {
+        select: { status: true, renewsAt: true, endsAt: true, createdAt: true, lsSubscriptionId: true, customerPortalUrl: true },
+      },
+      redditSubscription: {
         select: { status: true, renewsAt: true, endsAt: true, createdAt: true, lsSubscriptionId: true, customerPortalUrl: true },
       },
     },
@@ -114,6 +117,7 @@ export async function engageUserDetail(userId: string, now: Date = new Date()) {
     control: user.engageControl,
     subscription: user.extensionSubscription,
     xSubscription: user.xSubscription,
+    redditSubscription: user.redditSubscription,
     usage: {
       // Counted at the moment each generation is allowed (lib/engage/usage.ts):
       // starts when this version deployed.

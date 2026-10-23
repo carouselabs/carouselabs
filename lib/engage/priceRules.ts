@@ -5,12 +5,13 @@
 // monthly payments, then the usual price. Until its end date passes (and,
 // for an intro offer, until they've bought with it) it's the price they see
 // everywhere. Pure, so it's tested directly.
-import { EXTENSION_PLAN, X_EXTENSION_PLAN } from "@/lib/plans"
+import { EXTENSION_PLAN, REDDIT_EXTENSION_PLAN, X_EXTENSION_PLAN } from "@/lib/plans"
 import type { EngagePlatform } from "@/lib/engage/features"
 
 export const STANDARD_PRICE_CENTS: Record<EngagePlatform, number> = {
   linkedin: Math.round(EXTENSION_PLAN.price * 100),
   x: Math.round(X_EXTENSION_PLAN.price * 100),
+  reddit: Math.round(REDDIT_EXTENSION_PLAN.price * 100),
 }
 
 // What an admin may set. Lemon Squeezy needs a positive price; the ceiling

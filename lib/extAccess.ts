@@ -144,6 +144,7 @@ export function onlyOnce(release: () => Promise<void>): () => Promise<void> {
 const PRODUCT_NAMES: Record<EngagePlatform, string> = {
   linkedin: "CarouseLabs Engage for LinkedIn",
   x: "CarouseLabs Engage for X",
+  reddit: "CarouseLabs Engage for Reddit",
 }
 
 // Quotes this person's own price: a special one if an admin set it.

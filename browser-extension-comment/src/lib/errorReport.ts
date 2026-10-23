@@ -11,7 +11,15 @@
 import { apiFetch } from "@/lib/api";
 import { SiteBlocked, TabTimeout } from "@/lib/tabs";
 
-export type ReportFeature = "comments" | "replies" | "connection_notes" | "messages" | "x_replies" | "x_messages";
+export type ReportFeature =
+  | "comments"
+  | "replies"
+  | "connection_notes"
+  | "messages"
+  | "x_replies"
+  | "x_messages"
+  | "reddit_comments"
+  | "reddit_messages";
 
 const DESCRIPTIONS = {
   "insert.box_not_found": "Insert couldn't find LinkedIn's text box.",

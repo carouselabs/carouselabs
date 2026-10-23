@@ -12,8 +12,8 @@ import { PLATFORM_LABELS, type EngageFeature, type EngagePlatform } from "@/lib/
 // pairs: lightness, chroma, colour-blind separation, contrast) on the dark
 // card surface (#201E1B): violet, teal, amber, rose — the same set as the
 // admin charts (components/admin/charts.tsx). Fixed by feature, never by rank.
-// X's two features are only ever charted on their own, so they reuse the
-// set's first two slots.
+// X's and Reddit's two features are only ever charted on their own, so they
+// reuse the set's first two slots.
 export const FEATURE_COLORS: Record<EngageFeature, string> = {
   comments: "#8B5CF6",
   replies: "#0D9488",
@@ -21,6 +21,8 @@ export const FEATURE_COLORS: Record<EngageFeature, string> = {
   messages: "#E11D48",
   x_replies: "#8B5CF6",
   x_messages: "#0D9488",
+  reddit_comments: "#8B5CF6",
+  reddit_messages: "#0D9488",
 }
 
 // ── Data loading ────────────────────────────────────────────────────────

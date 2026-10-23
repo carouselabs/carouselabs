@@ -183,7 +183,7 @@ describe("overview for one extension", () => {
     expect(state.groupBys.find((g) => g.by[0] === "kind")!.where.kind).toEqual({
       in: ["comment", "reply", "connection_note", "message"],
     });
-    expect(state.errorCounts[0].feature).toEqual({ notIn: ["x_replies", "x_messages"] });
+    expect(state.errorCounts[0].feature).toEqual({ notIn: ["x_replies", "x_messages", "reddit_comments", "reddit_messages"] });
     const firstSignIns = state.raw.filter((r) => /AS first FROM "ExtensionToken" t/.test(r.text));
     expect(firstSignIns.length).toBe(2);
     for (const q of firstSignIns) expect(q.text).toMatch(/device IS NULL OR NOT/);

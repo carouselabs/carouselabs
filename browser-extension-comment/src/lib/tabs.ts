@@ -34,7 +34,8 @@ export function isSiteTab(tab: chrome.tabs.Tab | undefined): boolean {
 // reading anything until the person asks.
 // In the X extension, an X chat: "/i/chat/<id>" (src/x/content/xChat.ts).
 export function conversationPath(url: string | undefined | null): string | null {
-  return forPlatform({ linkedin: linkedInThreadPath, x: xChatPath })(url);
+  // Reddit's chats aren't read yet: no conversation is ever "open" there.
+  return forPlatform({ linkedin: linkedInThreadPath, x: xChatPath, reddit: () => null })(url);
 }
 
 function linkedInThreadPath(url: string | undefined | null): string | null {

@@ -87,6 +87,7 @@ interface SavedView {
 const VERSION_CELL: Record<EngagePlatform, (u: UserListRow) => string> = {
   linkedin: (u) => u.extensionVersion ?? "LinkedIn",
   x: (u) => `X ${u.xExtensionVersion ?? ""}`.trim(),
+  reddit: (u) => `Reddit ${u.redditExtensionVersion ?? ""}`.trim(),
 }
 function extensionCell(u: UserListRow): string {
   const parts = u.extensions.map((p) => VERSION_CELL[p](u))

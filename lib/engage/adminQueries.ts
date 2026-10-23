@@ -118,6 +118,7 @@ export interface UserListRow {
   // The LinkedIn extension's version, and the X extension's.
   extensionVersion: string | null
   xExtensionVersion: string | null
+  redditExtensionVersion: string | null
   // The extensions they use (signed in to or generated with).
   extensions: EngagePlatform[]
   tags: string[]
@@ -207,6 +208,7 @@ async function loadUserRows(ids: string[], now: Date): Promise<UserListRow[]> {
         engageControl: { select: { suspendedAt: true, features: true, limits: true, freeGenerations: true } },
         extensionSubscription: { select: { status: true, endsAt: true } },
         xSubscription: { select: { status: true, endsAt: true } },
+        redditSubscription: { select: { status: true, endsAt: true } },
         engageGrants: {
           where: { revokedAt: null },
           select: { startsAt: true, endsAt: true, revokedAt: true, platform: true },
@@ -267,6 +269,7 @@ async function loadUserRows(ids: string[], now: Date): Promise<UserListRow[]> {
     const subscriptions: Record<EngagePlatform, { status: string; endsAt: Date | null } | null> = {
       linkedin: sub,
       x: u.xSubscription,
+      reddit: u.redditSubscription,
     }
     const paidFor = ENGAGE_PLATFORMS.filter((p) => isPaid(subscriptions[p]))
     const paid = paidFor.length > 0
@@ -312,6 +315,7 @@ async function loadUserRows(ids: string[], now: Date): Promise<UserListRow[]> {
         monthTotal,
         extensionVersion: version.get(`${id}:linkedin`) ?? null,
         xExtensionVersion: version.get(`${id}:x`) ?? null,
+        redditExtensionVersion: version.get(`${id}:reddit`) ?? null,
         extensions: ENGAGE_PLATFORMS.filter((p) => uses.get(id)?.has(p)),
         tags: u.adminTags.map((t) => t.tag),
       } satisfies UserListRow,
@@ -329,6 +333,8 @@ export interface OverviewSeriesPoint {
   messages: number
   x_replies: number
   x_messages: number
+  reddit_comments: number
+  reddit_messages: number
   activeUsers: number
   newUsers: number
 }
@@ -414,7 +420,19 @@ export async function engageOverview(
   const points = new Map<string, OverviewSeriesPoint>()
   for (let t = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()); t < to.getTime(); t += 86_400_000) {
     const date = new Date(t).toISOString().slice(0, 10)
-    points.set(date, { date, comments: 0, replies: 0, connection_notes: 0, messages: 0, x_replies: 0, x_messages: 0, activeUsers: 0, newUsers: 0 })
+    points.set(date, {
+      date,
+      comments: 0,
+      replies: 0,
+      connection_notes: 0,
+      messages: 0,
+      x_replies: 0,
+      x_messages: 0,
+      reddit_comments: 0,
+      reddit_messages: 0,
+      activeUsers: 0,
+      newUsers: 0,
+    })
   }
   for (const row of series) {
     const feature = HISTORY_KIND_TO_FEATURE[row.kind]

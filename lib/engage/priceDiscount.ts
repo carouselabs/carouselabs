@@ -18,7 +18,7 @@ import { markIntroUsed } from "@/lib/engage/priceIntro"
 import type { EngagePlatform } from "@/lib/engage/features"
 
 const API = "https://api.lemonsqueezy.com/v1"
-const NAMES: Record<EngagePlatform, string> = { linkedin: "Engage for LinkedIn", x: "Engage for X" }
+const NAMES: Record<EngagePlatform, string> = { linkedin: "Engage for LinkedIn", x: "Engage for X", reddit: "Engage for Reddit" }
 
 type LemonAnswer = { ok: boolean; status: number; body: { data?: unknown } | null }
 
@@ -60,9 +60,9 @@ async function redeemed(discountId: string): Promise<boolean> {
   }
 }
 
-const CODE_LETTERS: Record<EngagePlatform, string> = { linkedin: "L", x: "X" }
+const CODE_LETTERS: Record<EngagePlatform, string> = { linkedin: "L", x: "X", reddit: "R" }
 
-// "CLL" / "CLX" and 10 random letters and digits: uppercase letters and
+// "CLL" / "CLX" / "CLR" and 10 random letters and digits: uppercase letters and
 // numbers are all Lemon Squeezy allows, and nothing in it names the person.
 export function newDiscountCode(platform: EngagePlatform): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"

@@ -230,8 +230,8 @@ export default async function WorkspacePreview({
     pathname = "/toolkit"
     content = (
       <ToolkitView
-        unlimited={{ linkedin: access === "unlimited", x: false }}
-        prices={{ linkedin: examplePrice(price), x: standardPrice("x") }}
+        unlimited={{ linkedin: access === "unlimited", x: false, reddit: false }}
+        prices={{ linkedin: examplePrice(price), x: standardPrice("x"), reddit: standardPrice("reddit") }}
       />
     )
   } else if (area === "thumbnail") {

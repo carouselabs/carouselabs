@@ -24,6 +24,8 @@ const KIND_LABELS: Record<HistoryKind, string> = {
   message: "Message",
   x_reply: "Reply",
   x_message: "Message",
+  reddit_comment: "Comment",
+  reddit_message: "Message",
 };
 
 const LINK_LABELS: Record<HistoryKind, string> = {
@@ -33,6 +35,8 @@ const LINK_LABELS: Record<HistoryKind, string> = {
   message: "Open chat",
   x_reply: "View post",
   x_message: "Open chat",
+  reddit_comment: "View on Reddit",
+  reddit_message: "Open chat",
 };
 
 // The LinkedIn extension's History and the X extension's each show their own
@@ -43,6 +47,12 @@ const HISTORY_SITE = forPlatform({
     origin: "https://x.com/",
     defaultKind: "x_reply" as HistoryKind,
     empty: "Replies and messages you write for X show up here, and on carouselabs.com under Extension.",
+  },
+  reddit: {
+    query: "?platform=reddit",
+    origin: "https://www.reddit.com/",
+    defaultKind: "reddit_comment" as HistoryKind,
+    empty: "Comments you write for Reddit show up here, and on carouselabs.com under Extension.",
   },
   linkedin: {
     query: "",

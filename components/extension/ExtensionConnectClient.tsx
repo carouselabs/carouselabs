@@ -20,8 +20,13 @@ import { parseEngagePlatform, type EngagePlatform } from "@/lib/engage/features"
 const MESSAGE_TYPES: Record<EngagePlatform, string> = {
   linkedin: "carouselabs:extension-token",
   x: "carouselabs:x-extension-token",
+  reddit: "carouselabs:reddit-extension-token",
 }
-const PRODUCT_NAMES: Record<EngagePlatform, string> = { linkedin: "CarouseLabs Engage", x: "CarouseLabs Engage for X" }
+const PRODUCT_NAMES: Record<EngagePlatform, string> = {
+  linkedin: "CarouseLabs Engage",
+  x: "CarouseLabs Engage for X",
+  reddit: "CarouseLabs Engage for Reddit",
+}
 
 type Client = EngagePlatform
 

@@ -23,10 +23,13 @@ export const ENGAGE_EXTENSIONS: Record<
     // What to click on the site once it's installed (install steps).
     startWriting: string
     // Its colour on the website: LinkedIn's in the brand violet, X's in black
-    // and white. `button` is a buttonVariants variant; `card` a solid card
-    // with white text; `text` its colour on white; `storeButton` the Chrome
-    // Web Store button.
+    // and white, Reddit's in orange. `button` is a buttonVariants variant;
+    // `card` a solid card with white text; `text` its colour on white;
+    // `storeButton` the Chrome Web Store button.
     theme: { button: "brand" | "primary"; card: string; text: string; storeButton: string }
+    // Shown on the website (menus, the Extension dropdown, "Also on" cards).
+    // An extension still being built has no pages there yet.
+    launched: boolean
   }
 > = {
   linkedin: {
@@ -43,6 +46,7 @@ export const ENGAGE_EXTENSIONS: Record<
     startWriting:
       "Click Comment, Reply or Connect on LinkedIn, or open a conversation, and the panel writes it in your voice. You review it and post it yourself.",
     theme: { button: "brand", card: "bg-brand", text: "text-brand", storeButton: "bg-brand hover:bg-brand-hover" },
+    launched: true,
   },
   x: {
     name: "CarouseLabs Engage for X",
@@ -63,10 +67,34 @@ export const ENGAGE_EXTENSIONS: Record<
       text: "text-black",
       storeButton: "bg-primary-hover hover:bg-primary-hover",
     },
+    launched: true,
+  },
+  reddit: {
+    name: "CarouseLabs Engage for Reddit",
+    storeName: "CarouseLabs Engage for Reddit",
+    summary: "Comments, replies and chats on Reddit",
+    site: "Reddit",
+    siteUrl: "https://www.reddit.com/",
+    base: "/extension/reddit",
+    storeUrl: EXTENSION_STORE_URLS.reddit,
+    checkoutPath: EXTENSION_CHECKOUT_PATHS.reddit,
+    profilesLabel: "Reply profiles",
+    icon: "/images/extensions/engage-reddit.png",
+    startWriting:
+      "Click Reply under a post or a comment on Reddit, and the panel writes it in your voice, following that subreddit's rules. You review it and post it yourself.",
+    // Its pages come with stage 2; the orange button variant with them.
+    theme: {
+      button: "primary",
+      card: "bg-[#C2410C]",
+      text: "text-[#C2410C]",
+      storeButton: "bg-[#C2410C] hover:bg-[#9A3412]",
+    },
+    launched: false,
   },
 }
 
-export const ENGAGE_PLATFORMS: EngagePlatform[] = [...PLATFORMS]
+// The extensions the website shows (launched ones).
+export const ENGAGE_PLATFORMS: EngagePlatform[] = PLATFORMS.filter((p) => ENGAGE_EXTENSIONS[p].launched)
 
 // The other extensions, each sold separately (the overview's "Also on" cards).
 export function otherPlatforms(platform: EngagePlatform): EngagePlatform[] {

@@ -110,8 +110,8 @@ describe("rules", () => {
     ]);
     expect(s.features.x_replies).toEqual({ enabled: false, message: "Back soon" });
     expect(s.features.comments.enabled).toBe(true);
-    expect(s.insert).toEqual({ linkedin: true, x: true });
-    expect(s.minVersion).toEqual({ linkedin: null, x: null });
+    expect(s.insert).toEqual({ linkedin: true, x: true, reddit: true });
+    expect(s.minVersion).toEqual({ linkedin: null, x: null, reddit: null });
   });
 
   it("compares versions part by part, and treats a missing version as older than any minimum", () => {
@@ -256,7 +256,7 @@ describe("Controls API", () => {
 
   it("switches Insert per extension", async () => {
     await patch({ insert: { platform: "x", enabled: false } });
-    expect((await loadGlobalSettings()).insert).toEqual({ linkedin: true, x: false });
+    expect((await loadGlobalSettings()).insert).toEqual({ linkedin: true, x: false, reddit: true });
     expect(state.audit[0]).toMatchObject({ action: "ENGAGE_SET_INSERT", details: "Insert off for everyone in the X extension" });
   });
 
@@ -266,7 +266,7 @@ describe("Controls API", () => {
     expect(state.settings).toEqual([]);
 
     expect((await patch({ minVersion: { platform: "linkedin", version: "1.3.0" } })).status).toBe(200);
-    expect((await loadGlobalSettings()).minVersion).toEqual({ linkedin: "1.3.0", x: null });
+    expect((await loadGlobalSettings()).minVersion).toEqual({ linkedin: "1.3.0", x: null, reddit: null });
     expect(state.audit[0]).toMatchObject({ action: "ENGAGE_SET_MIN_VERSION", details: "Minimum LinkedIn extension version set to 1.3.0" });
 
     await patch({ minVersion: { platform: "linkedin", version: null } });

@@ -20,7 +20,7 @@ import {
   tableCls,
 } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
-import { CAMPAIGN_DAILY_LIMIT, NEXT_BATCH_SIZE, campaignEngagement, canSend, nextUnsent, percentOf, type CampaignProgress } from "@/lib/campaignRules"
+import { CAMPAIGN_DAILY_LIMIT, DAY_RESETS_AT, NEXT_BATCH_SIZE, campaignEngagement, canSend, nextUnsent, percentOf, type CampaignProgress } from "@/lib/campaignRules"
 import { SeenStatus } from "./SeenStatus"
 import { UseAgainDialog } from "./UseAgainDialog"
 import { AddPeopleDialog } from "./AddPeopleDialog"
@@ -54,7 +54,7 @@ type Campaign = {
   createdAt: string
   recipients: Recipient[]
   progress: CampaignProgress
-  allowance: { limit: number; sentInLast24h: number; left: number }
+  allowance: { limit: number; sentToday: number; left: number }
 }
 
 type Filter = "all" | "pending" | "sent" | "failed" | "seen" | "unseen"
@@ -133,7 +133,7 @@ export function CampaignView({ id }: { id: string }) {
   const selectNext = () => {
     const room = Math.min(NEXT_BATCH_SIZE, Math.max(0, allowance.left - selected.size))
     if (room === 0) {
-      toast(allowance.left === 0 ? "Today's limit is used up. Try again later." : `${allowance.left} can go today, and that many are already ticked.`, "error")
+      toast(allowance.left === 0 ? `Today's limit is used up. It resets at ${DAY_RESETS_AT}.` : `${allowance.left} can go today, and that many are already ticked.`, "error")
       return
     }
     const picked = nextUnsent(recipients, selected, room)
@@ -314,8 +314,8 @@ export function CampaignView({ id }: { id: string }) {
               </p>
             )}
             <p className="text-caption text-muted-foreground/80">
-              Resend&apos;s free plan sends 100 emails a day for the whole account, so campaigns stop at {CAMPAIGN_DAILY_LIMIT} in any 24
-              hours and leave the rest for automatic emails (welcome, credits, posts).
+              Resend&apos;s free plan sends 100 emails a day for the whole account, so campaigns stop at {CAMPAIGN_DAILY_LIMIT} a day
+              and leave the rest for automatic emails (welcome, credits, posts). The day resets at {DAY_RESETS_AT}.
             </p>
           </div>
         </div>

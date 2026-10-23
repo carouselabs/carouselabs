@@ -5,8 +5,18 @@
 
 // Resend's free plan sends 100 emails a day for the WHOLE account, the app's
 // automatic emails (welcome, credits, posts) included. Campaigns stop at 80
-// in any 24 hours so those 20 stay free. Raise this on a paid Resend plan.
+// a day so those 20 stay free. Raise this on a paid Resend plan.
 export const CAMPAIGN_DAILY_LIMIT = 80
+
+// Resend's day is the UTC calendar day: its quota resets at midnight UTC,
+// not 24 hours after each send (docs: knowledge-base/account-quotas-and-
+// limits). Campaigns count the same day, so the allowance fills up again
+// every morning at 5:30 AM in India.
+export const DAY_RESETS_AT = "5:30 AM India time (midnight UTC)"
+
+export function campaignDayStart(now: Date): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+}
 
 export const CAMPAIGN_MAX_RECIPIENTS = 10_000
 
@@ -42,8 +52,8 @@ export function nextUnsent(
 }
 
 /** How many more campaign emails can go out now without passing the daily limit. */
-export function allowanceLeft(sentInLast24h: number, sendingNow: number, limit: number = CAMPAIGN_DAILY_LIMIT): number {
-  return Math.max(0, limit - sentInLast24h - sendingNow)
+export function allowanceLeft(sentToday: number, sendingNow: number, limit: number = CAMPAIGN_DAILY_LIMIT): number {
+  return Math.max(0, limit - sentToday - sendingNow)
 }
 
 export interface CampaignProgress {

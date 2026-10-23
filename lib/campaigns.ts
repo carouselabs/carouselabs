@@ -18,6 +18,8 @@ import {
   CAMPAIGN_MAX_RECIPIENTS,
   STUCK_SENDING_MS,
   allowanceLeft,
+  campaignDayStart,
+  DAY_RESETS_AT,
   campaignProgress,
   type CampaignRecipientStatus,
 } from "@/lib/campaignRules"
@@ -135,13 +137,13 @@ async function statusCounts(where: { campaignId?: string }) {
   return Object.fromEntries(groups.map((g) => [g.status, g._count._all])) as Partial<Record<CampaignRecipientStatus, number>>
 }
 
-/** Campaign emails sent in the last 24 hours plus any sending right now, and what's left of the daily limit. */
+/** Campaign emails sent today (the UTC day, as Resend counts) plus any sending right now, and what's left of the daily limit. */
 export async function campaignAllowance(now: Date = new Date()) {
-  const [sentInLast24h, sendingNow] = await Promise.all([
-    db.emailCampaignRecipient.count({ where: { status: "sent", sentAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) } } }),
+  const [sentToday, sendingNow] = await Promise.all([
+    db.emailCampaignRecipient.count({ where: { status: "sent", sentAt: { gte: campaignDayStart(now) } } }),
     db.emailCampaignRecipient.count({ where: { status: "sending" } }),
   ])
-  return { limit: CAMPAIGN_DAILY_LIMIT, sentInLast24h, left: allowanceLeft(sentInLast24h, sendingNow) }
+  return { limit: CAMPAIGN_DAILY_LIMIT, sentToday, left: allowanceLeft(sentToday, sendingNow) }
 }
 
 // A send cut off mid-way leaves people "sending" forever; after a while they
@@ -257,7 +259,7 @@ export async function sendCampaignBatch(input: {
   if (ids.length > left) {
     throw new CampaignError(
       left === 0
-        ? `Today's limit is used up (${CAMPAIGN_DAILY_LIMIT} campaign emails a day on Resend's free plan). Try again later.`
+        ? `Today's limit is used up (${CAMPAIGN_DAILY_LIMIT} campaign emails a day on Resend's free plan). It resets at ${DAY_RESETS_AT}.`
         : `You can send ${left} more today (${CAMPAIGN_DAILY_LIMIT} a day on Resend's free plan). Pick ${left} or fewer.`,
       429,
     )

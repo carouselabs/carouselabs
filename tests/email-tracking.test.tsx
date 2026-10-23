@@ -298,7 +298,7 @@ describe("the campaign page", () => {
         person("dee", { status: "pending", sentAt: null }),
       ],
       progress: { total: 4, pending: 1, sending: 0, sent: 3, failed: 0, complete: false },
-      allowance: { limit: 80, sentInLast24h: 3, left: 77 },
+      allowance: { limit: 80, sentToday: 3, left: 77 },
     }
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ campaign })))
     render(<CampaignView id="c1" />)

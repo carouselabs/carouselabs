@@ -80,7 +80,7 @@ vi.mock("@/lib/broadcast", () => ({
   }),
 }))
 
-import { CAMPAIGN_DAILY_LIMIT, allowanceLeft, campaignProgress, nextUnsent } from "@/lib/campaignRules"
+import { CAMPAIGN_DAILY_LIMIT, allowanceLeft, campaignDayStart, campaignProgress, nextUnsent } from "@/lib/campaignRules"
 import { CampaignError, sendCampaignBatch } from "@/lib/campaigns"
 import { readTrackingToken } from "@/lib/emailTracking"
 
@@ -210,6 +210,26 @@ describe("sending a campaign in batches", () => {
     const longAgo = new Date(Date.now() - 25 * 60 * 60 * 1000)
     for (const r of store.rows.slice(0, 60)) Object.assign(r, { status: "sent", sentAt: longAgo })
     expect((await send(ids(60, 75))).sent).toBe(15)
+  })
+
+  it("the day is Resend's UTC day: last night's sends are free again from midnight UTC, not 24 hours later", async () => {
+    vi.useFakeTimers({ now: new Date("2026-10-23T00:30:00.000Z"), toFake: ["Date"] })
+    seed(200)
+    // 80 sent an hour ago, yesterday by UTC (11:30 PM UTC = 5 AM in India).
+    const lastNight = new Date("2026-10-22T23:30:00.000Z")
+    for (const r of store.rows.slice(0, CAMPAIGN_DAILY_LIMIT)) Object.assign(r, { status: "sent", sentAt: lastNight })
+    expect((await send(ids(CAMPAIGN_DAILY_LIMIT, CAMPAIGN_DAILY_LIMIT + 10))).sent).toBe(10)
+    // ...and today's do count.
+    await expect(send(ids(CAMPAIGN_DAILY_LIMIT + 10, CAMPAIGN_DAILY_LIMIT + 81))).rejects.toThrow(/You can send 70 more today/)
+    vi.useRealTimers()
+  })
+
+  it("the day starts at midnight UTC, and the limit says when it resets", async () => {
+    expect(campaignDayStart(new Date("2026-10-23T18:45:00.000Z")).toISOString()).toBe("2026-10-23T00:00:00.000Z")
+    expect(campaignDayStart(new Date("2026-10-23T00:00:00.000Z")).toISOString()).toBe("2026-10-23T00:00:00.000Z")
+    seed(100)
+    for (const r of store.rows.slice(0, CAMPAIGN_DAILY_LIMIT)) Object.assign(r, { status: "sent", sentAt: new Date() })
+    await expect(send(["r99"])).rejects.toThrow(/resets at 5:30 AM India time \(midnight UTC\)/)
   })
 
   it("won't send from an archived campaign", async () => {

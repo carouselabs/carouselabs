@@ -229,7 +229,7 @@ export interface ExtConfigResponse {
 export async function fetchExtConfig(): Promise<ExtConfigResponse> {
   const baseUrl = await getApiBaseUrl();
   // Each extension has its own Insert switch (admin → Engage → Controls).
-  const res = await fetch(`${baseUrl}/api/ext/config${PLATFORM === "x" ? "?platform=x" : ""}`);
+  const res = await fetch(`${baseUrl}/api/ext/config${PLATFORM === "linkedin" ? "" : `?platform=${PLATFORM}`}`);
   if (!res.ok) throw new ApiError(res.status, "Failed to load config");
   return (await res.json()) as ExtConfigResponse;
 }

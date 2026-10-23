@@ -7,9 +7,7 @@ import { logAdminAction } from "@/lib/auditLog"
 import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
 import { retireDiscount } from "@/lib/engage/priceDiscount"
 import { formatUsd, priceFor, standardPrice, type EngagePriceInfo } from "@/lib/engage/priceRules"
-import type { EngagePlatform } from "@/lib/engage/features"
-
-const PLATFORMS: EngagePlatform[] = ["linkedin", "x"]
+import { ENGAGE_PLATFORMS, type EngagePlatform } from "@/lib/engage/features"
 
 // The stored rows, or none while the table doesn't exist yet.
 async function storedPrices(userId: string) {
@@ -25,7 +23,7 @@ async function storedPrices(userId: string) {
 export async function loadEngagePrices(userId: string, now: Date = new Date()): Promise<Record<EngagePlatform, EngagePriceInfo>> {
   const rows = await storedPrices(userId)
   return Object.fromEntries(
-    PLATFORMS.map((p) => [p, priceFor(p, rows.find((r) => r.platform === p) ?? null, now)]),
+    ENGAGE_PLATFORMS.map((p) => [p, priceFor(p, rows.find((r) => r.platform === p) ?? null, now)]),
   ) as Record<EngagePlatform, EngagePriceInfo>
 }
 
@@ -37,7 +35,7 @@ export async function loadEngagePrice(userId: string, platform: EngagePlatform, 
 // date has passed, so they can see it ended), and what the person pays now.
 export async function adminEngagePrices(userId: string, now: Date = new Date()) {
   const rows = await storedPrices(userId)
-  return PLATFORMS.map((platform) => {
+  return ENGAGE_PLATFORMS.map((platform) => {
     const row = rows.find((r) => r.platform === platform) ?? null
     return {
       platform,

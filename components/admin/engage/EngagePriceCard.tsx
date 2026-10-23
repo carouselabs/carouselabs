@@ -26,7 +26,7 @@ import { ErrorState, Pill, SkeletonBlock, adminSend, useAdminApi } from "./share
 
 type Jsonify<T> = T extends Date ? string : T extends Array<infer U> ? Jsonify<U>[] : T extends object ? { [K in keyof T]: Jsonify<T[K]> } : T
 type PriceRow = Jsonify<Awaited<ReturnType<typeof adminEngagePrices>>[number]>
-type PriceData = { prices: PriceRow[]; subscribed: Record<"linkedin" | "x", boolean> }
+type PriceData = { prices: PriceRow[]; subscribed: Record<Platform, boolean> }
 type Platform = PriceRow["platform"]
 
 const NAMES: Record<Platform, string> = { linkedin: "Engage for LinkedIn", x: "Engage for X" }

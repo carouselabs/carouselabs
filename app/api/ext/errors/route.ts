@@ -12,6 +12,7 @@ import { Ratelimit } from "@upstash/ratelimit"
 import { Redis } from "@upstash/redis"
 import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken, VERSION_HEADER } from "@/lib/extensionCommentAuth"
+import { ENGAGE_FEATURES } from "@/lib/engage/features"
 
 const limiter = new Ratelimit({
   redis: Redis.fromEnv(),
@@ -21,7 +22,7 @@ const limiter = new Ratelimit({
 })
 
 const body = z.object({
-  feature: z.enum(["comments", "replies", "connection_notes", "messages", "x_replies", "x_messages", "insert", "read", "auth", "other"]),
+  feature: z.enum([...ENGAGE_FEATURES, "insert", "read", "auth", "other"]),
   code: z.string().regex(/^[a-z0-9_.-]{1,48}$/),
   message: z.string().trim().min(1).max(300),
 })

@@ -17,12 +17,15 @@
 // "why can this user do that?" always has a visible answer.
 import { z } from "zod"
 import { isExtensionSubscriptionActive } from "@/lib/extensionAccessRules"
+import { GRANT_COVERS, type GrantPlatform } from "@/lib/engage/grants"
 import {
   ENGAGE_FEATURES,
   ENGAGE_PLATFORMS,
   FEATURE_LABELS,
   LIMIT_KEYS,
   PLAN_FREE_GENERATIONS,
+  featureOfUsageKind,
+  isToolKind,
   planLimit,
   type EngageFeature,
   type EngagePlatform,
@@ -143,8 +146,8 @@ export interface EngageAccess {
 }
 
 export function grantCovers(grant: GrantInput, platform: EngagePlatform): boolean {
-  const p = grant.platform ?? "both"
-  return p === "both" || p === platform
+  const covers: readonly EngagePlatform[] | undefined = GRANT_COVERS[(grant.platform ?? "both") as GrantPlatform]
+  return covers ? covers.includes(platform) : grant.platform === platform
 }
 
 export function isGrantActive(grant: GrantInput, now: Date): boolean {
@@ -165,6 +168,17 @@ export function pickActiveGrant(grants: GrantInput[], now: Date): GrantInput | n
   })
 }
 
+// Each extension's subscription and free generations used, in the input.
+type StoredSubscription = { status: string; endsAt: Date | null } | null
+const SUBSCRIPTION_OF: Record<EngagePlatform, (input: EngageAccessInput) => StoredSubscription> = {
+  linkedin: (input) => input.subscription,
+  x: (input) => input.xSubscription ?? null,
+}
+const FREE_USED_OF: Record<EngagePlatform, (input: EngageAccessInput) => number> = {
+  linkedin: (input) => input.freeUsed,
+  x: (input) => input.xFreeUsed ?? 0,
+}
+
 export function computeEngageAccess(input: EngageAccessInput): EngageAccess {
   const { now } = input
   const features = parseFeatureOverrides(input.control?.features)
@@ -175,10 +189,7 @@ export function computeEngageAccess(input: EngageAccessInput): EngageAccess {
   const freeEffective = freeOverride ?? PLAN_FREE_GENERATIONS
 
   const paywall = (platform: EngagePlatform): PaywallAccess => {
-    const subscriptionActive = isExtensionSubscriptionActive(
-      platform === "x" ? (input.xSubscription ?? null) : input.subscription,
-      now,
-    )
+    const subscriptionActive = isExtensionSubscriptionActive(SUBSCRIPTION_OF[platform](input), now)
     const activeGrant = pickActiveGrant(
       input.grants.filter((g) => grantCovers(g, platform)),
       now,
@@ -191,7 +202,7 @@ export function computeEngageAccess(input: EngageAccessInput): EngageAccess {
           ? "grant"
           : "free"
     const access: PaywallAccess["access"] = source === "testing" ? "testing" : source === "free" ? "free" : "unlimited"
-    const used = Math.max(0, platform === "x" ? (input.xFreeUsed ?? 0) : input.freeUsed)
+    const used = Math.max(0, FREE_USED_OF[platform](input))
     return {
       access,
       source,
@@ -259,9 +270,7 @@ export interface Blocked {
 // comment profile.
 export function featuresFor(kind: EngageUsageKind): EngageFeature[] {
   if (kind === "rewrites") return ["comments", "replies"]
-  if (kind === "tests") return ["comments"]
-  if (kind === "x_rewrites" || kind === "x_tests") return ["x_replies"]
-  return [kind]
+  return [featureOfUsageKind(kind)]
 }
 
 // Whether this user may make this kind of generation at all (before limits
@@ -301,9 +310,7 @@ export function featureLimitsFor(
   access: EngageAccess,
   kind: EngageUsageKind,
 ): { day: Limit; month: Limit } {
-  if (kind === "rewrites" || kind === "tests" || kind === "x_rewrites" || kind === "x_tests") {
-    return { day: "unlimited", month: "unlimited" }
-  }
+  if (isToolKind(kind)) return { day: "unlimited", month: "unlimited" }
   return {
     day: access.limits[`${kind}.day`].effective,
     month: access.limits[`${kind}.month`].effective,

@@ -9,8 +9,9 @@ import { Check, Copy, ExternalLink, Loader2, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { dateTime, errorMessage, extApi, type HistoryEntry, type HistoryKind } from "./api"
+import type { EngagePlatform } from "@/lib/engage/features"
 
-type Platform = "linkedin" | "x"
+type Platform = EngagePlatform
 
 const FILTERS: Record<Platform, { kind: HistoryKind | null; label: string }[]> = {
   linkedin: [
@@ -211,7 +212,7 @@ export function HistoryList({ platform = "linkedin" }: { platform?: Platform } =
 
   const load = useCallback(async (filter: HistoryKind | null, cursor: string | null) => {
     const params = new URLSearchParams({ limit: "30" })
-    if (platform === "x") params.set("platform", "x")
+    if (platform !== "linkedin") params.set("platform", platform)
     if (filter) params.set("kind", filter)
     if (cursor) params.set("cursor", cursor)
     return extApi<{ entries: HistoryEntry[]; nextCursor: string | null }>(`/api/ext/history?${params}`)

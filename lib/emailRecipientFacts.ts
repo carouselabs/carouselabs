@@ -10,7 +10,8 @@ import { loadEngagePrices } from "@/lib/engage/price"
 import { monthlyLabel, type EngagePriceInfo } from "@/lib/engage/priceRules"
 import { engageUsage, signedInToEngage } from "@/lib/engage/audience"
 import { ENGAGE_EXTENSIONS } from "@/components/extension/engageExtensions"
-import type { EngagePlatform } from "@/lib/engage/features"
+import { ENGAGE_PLATFORMS } from "@/lib/engage/features"
+import { FREE_USED_SELECT } from "@/lib/engage/subscriptions"
 import type { PaywallAccess } from "@/lib/engage/accessRules"
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -62,8 +63,7 @@ export async function recipientFacts(userId: string, now: Date = new Date()): Pr
       deletedAt: true,
       createdAt: true,
       updatedAt: true,
-      extensionTrialUsed: true,
-      xTrialUsed: true,
+      ...FREE_USED_SELECT,
       profile: { select: { name: true, headline: true, industry: true, targetAudience: true } },
       _count: { select: { posts: true } },
     },
@@ -74,7 +74,7 @@ export async function recipientFacts(userId: string, now: Date = new Date()): Pr
     resolveVariables(user.id),
     loadEngageAccess(user.id, now).catch(() => null),
     loadEngagePrices(user.id, now).catch(() => null),
-    ...(["linkedin", "x"] as EngagePlatform[]).map(async (platform) => ({
+    ...ENGAGE_PLATFORMS.map(async (platform) => ({
       platform,
       signedIn: await signedInToEngage(platform, user.id),
       usage: (await engageUsage(platform, [user])).get(user.id),

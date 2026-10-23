@@ -1,5 +1,6 @@
 // lib/engage/grants.ts — how long an admin grant lasts. Pure, unit-tested.
 import { z } from "zod"
+import { ENGAGE_PLATFORMS, type EngagePlatform } from "@/lib/engage/features"
 
 export const GRANT_DURATIONS = ["1d", "7d", "14d", "30d", "3m", "6m", "1y", "lifetime", "custom"] as const
 export type GrantDuration = (typeof GRANT_DURATIONS)[number]
@@ -16,14 +17,27 @@ export const GRANT_DURATION_LABELS: Record<GrantDuration, string> = {
   custom: "Custom date",
 }
 
-// Which extension free access unlocks: LinkedIn and X are sold separately.
-// Grants from before that are "both".
-export const GRANT_PLATFORMS = ["both", "linkedin", "x"] as const
+// Which extension free access unlocks: each is sold separately. Grants from
+// before LinkedIn and X were sold separately are "both".
+export const GRANT_PLATFORMS = ["both", ...ENGAGE_PLATFORMS] as const
 export type GrantPlatform = (typeof GRANT_PLATFORMS)[number]
 export const GRANT_PLATFORM_LABELS: Record<GrantPlatform, string> = {
   both: "LinkedIn + X",
   linkedin: "LinkedIn",
   x: "X",
+}
+
+// The extensions each kind of grant unlocks. "both" means LinkedIn + X, as
+// when it was given: an extension added later isn't part of it.
+export const GRANT_COVERS: Record<GrantPlatform, readonly EngagePlatform[]> = {
+  both: ["linkedin", "x"],
+  linkedin: ["linkedin"],
+  x: ["x"],
+}
+
+// The stored grant.platform values that unlock this extension.
+export function grantPlatformsFor(platform: EngagePlatform): GrantPlatform[] {
+  return GRANT_PLATFORMS.filter((g) => GRANT_COVERS[g].includes(platform))
 }
 export const grantPlatformSchema = z.enum(GRANT_PLATFORMS).default("both")
 

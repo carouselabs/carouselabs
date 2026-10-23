@@ -34,7 +34,7 @@ export function InstallSteps({
           <p>
             Open <strong className="font-semibold text-foreground">{info.storeName}</strong> in the Chrome Web Store
             and click <strong className="font-semibold text-foreground">Add to Chrome</strong>.
-            {platform === "x" && " It's a separate extension from the LinkedIn one."}
+            {platform !== "linkedin" && " It's a separate extension from the LinkedIn one."}
           </p>
           {info.storeUrl && (
             <a
@@ -43,7 +43,7 @@ export function InstallSteps({
               rel="noopener noreferrer"
               className={[
                 "mt-1 inline-flex w-fit items-center gap-2 rounded-control px-4 py-2 text-label font-semibold text-white transition-colors",
-                platform === "x" ? "bg-primary-hover hover:bg-primary-hover" : "bg-brand hover:bg-brand-hover",
+                info.theme.storeButton,
               ].join(" ")}
             >
               Open in Chrome Web Store
@@ -85,18 +85,7 @@ export function InstallSteps({
     },
     {
       title: "Start writing",
-      body:
-        platform === "x" ? (
-          <p>
-            Click Reply under a post, or open a chat in Messages, and the panel writes it in your voice. You review
-            it and post it yourself.
-          </p>
-        ) : (
-          <p>
-            Click Comment, Reply or Connect on LinkedIn, or open a conversation, and the panel writes it in your
-            voice. You review it and post it yourself.
-          </p>
-        ),
+      body: <p>{info.startWriting}</p>,
     },
   ]
 

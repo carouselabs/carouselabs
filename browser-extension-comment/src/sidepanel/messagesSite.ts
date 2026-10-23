@@ -2,7 +2,7 @@
 // extension reads LinkedIn conversations; CarouseLabs Engage for X reads X
 // chats (src/x/content/xChat.ts). Same screen, same reasons (MessageProfile),
 // same steps; these are the only differences.
-import { PLATFORM } from "@/lib/platform";
+import { forPlatform } from "@/lib/platform";
 import { READ_CONVERSATION_MESSAGE_TYPE, type CapturedConversation } from "@/lib/messageThread";
 import { X_INSERT_CHAT_MESSAGE_TYPE, X_READ_CHAT_MESSAGE_TYPE } from "@/x/lib/xPost";
 import type { XConversation } from "@/x/content/xChat";
@@ -88,4 +88,4 @@ const X: MessagesSite = {
   },
 };
 
-export const MESSAGES_SITE: MessagesSite = PLATFORM === "x" ? X : LINKEDIN;
+export const MESSAGES_SITE: MessagesSite = forPlatform({ linkedin: LINKEDIN, x: X });

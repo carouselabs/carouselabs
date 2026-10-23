@@ -2,6 +2,7 @@
 // no database or framework imports so they can be unit-tested directly
 // (browser-extension-comment/tests/unit/extensionAccessRules.test.ts).
 // lib/extAccess.ts and lib/extensionBilling.ts apply them.
+import { ENGAGE_PLATFORMS, type EngagePlatform } from "@/lib/engage/features"
 
 // Free generations per account, for life. Every model-backed extension
 // action counts: Generate, Regenerate, Reply, Shorter/Longer, connection
@@ -63,8 +64,8 @@ export function isExtensionPayload(payload: ExtensionWebhookPayload, extensionVa
   return attrs.variant_id === extensionVariantId || attrs.first_order_item?.variant_id === extensionVariantId
 }
 
-// The two extensions are sold separately, each its own Lemon Squeezy product.
-export type BillingPlatform = "linkedin" | "x"
+// The extensions are sold separately, each its own Lemon Squeezy product.
+export type BillingPlatform = EngagePlatform
 
 // Which extension's subscription a webhook is about, from the payload alone:
 // the product's variant. Never the checkout's custom "kind" marker — the
@@ -74,13 +75,11 @@ export type BillingPlatform = "linkedin" | "x"
 // then looks the subscription up in both tables).
 export function extensionPlatformOfPayload(
   payload: ExtensionWebhookPayload,
-  variants: { linkedin: number; x: number },
+  variants: Record<BillingPlatform, number>,
 ): BillingPlatform | null {
   const attrs = payload.data?.attributes ?? {}
   const variant = attrs.variant_id ?? attrs.first_order_item?.variant_id
-  if (variants.x && variant === variants.x) return "x"
-  if (variants.linkedin && variant === variants.linkedin) return "linkedin"
-  return null
+  return ENGAGE_PLATFORMS.find((p) => !!variants[p] && variant === variants[p]) ?? null
 }
 
 // Events can arrive late or out of order. Once a user has a newer

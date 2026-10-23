@@ -9,7 +9,7 @@ import crypto from "node:crypto"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 import { cookieNamesFromHeader, hasClerkSessionCookie } from "@/lib/clerkSessionCookie"
-import { tokenPlatform, type EngagePlatform } from "@/lib/engage/features"
+import { parseEngagePlatform, tokenPlatform, type EngagePlatform } from "@/lib/engage/features"
 import type { User } from "@prisma/client"
 
 // Which extension each authenticated request came from, read from its token
@@ -24,7 +24,7 @@ const callerPlatforms = new WeakMap<Request, EngagePlatform>()
 export function extensionCallerPlatform(req: Request): EngagePlatform {
   const fromToken = callerPlatforms.get(req)
   if (fromToken) return fromToken
-  return new URL(req.url).searchParams.get("platform") === "x" ? "x" : "linkedin"
+  return parseEngagePlatform(new URL(req.url).searchParams.get("platform"))
 }
 
 const TOKEN_PREFIX = "cl_cmt_"

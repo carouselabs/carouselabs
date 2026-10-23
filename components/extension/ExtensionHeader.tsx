@@ -119,7 +119,7 @@ export function ExtensionHeader({ pathname: pathnameOverride }: { pathname?: str
       {/* Keyed by the page, so going somewhere else closes the menu. */}
       <ExtensionSwitcher key={pathname} platform={platform} tabPath={tabPathOf(pathname)} />
       <p className="max-w-2xl text-body text-muted-foreground">
-        {platform === "x"
+        {platform !== "linkedin"
           ? `Everything ${ext.name} uses, in one place. It's a separate extension from LinkedIn's, with its own plan.`
           : `Everything ${ext.name} uses, in one place.`}{" "}
         Changes you make here show up in the extension, and changes made in the extension show up here.

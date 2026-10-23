@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react"
 import { ExternalLink } from "lucide-react"
 import { errorMessage, extApi, shortDate, type ExtPayment } from "./api"
+import type { EngagePlatform } from "@/lib/engage/features"
 
 const STATUS_STYLES: Record<string, string> = {
   paid: "text-success bg-success-soft",
@@ -15,12 +16,12 @@ const STATUS_STYLES: Record<string, string> = {
 }
 
 // platform "x": the X extension's payments (sold separately).
-export function PaymentsList({ platform = "linkedin" }: { platform?: "linkedin" | "x" }) {
+export function PaymentsList({ platform = "linkedin" }: { platform?: EngagePlatform }) {
   const [payments, setPayments] = useState<ExtPayment[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    extApi<{ payments: ExtPayment[] }>(platform === "x" ? "/api/ext/payments?platform=x" : "/api/ext/payments")
+    extApi<{ payments: ExtPayment[] }>(platform === "linkedin" ? "/api/ext/payments" : `/api/ext/payments?platform=${platform}`)
       .then((res) => setPayments(res.payments))
       .catch((err) => setError(errorMessage(err)))
   }, [platform])

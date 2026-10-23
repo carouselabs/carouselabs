@@ -6,6 +6,7 @@ import { AppChrome } from "@/components/shell/AppChrome"
 import { AppFrame } from "@/components/shell/AppFrame"
 import { ExtensionHeader } from "@/components/extension/ExtensionHeader"
 import { ExtensionOverviewView } from "@/components/extension/ExtensionOverview"
+import { ENGAGE_EXTENSIONS, otherPlatforms } from "@/components/extension/engageExtensions"
 import { ExtensionBillingView } from "@/components/extension/ExtensionBillingView"
 import { ProfilesManager } from "@/components/extension/ProfilesManager"
 import { AgentsManager } from "@/components/extension/AgentsManager"
@@ -70,7 +71,7 @@ function exampleAccess(access: string | undefined, price?: string): ExtAccessSum
 }
 
 function Engage({ platform, tab, access, price }: { platform: "linkedin" | "x"; tab: string; access?: string; price?: string }) {
-  const base = platform === "x" ? "/extension/x" : "/extension"
+  const base = ENGAGE_EXTENSIONS[platform].base
   const ext = exampleAccess(access, price)
   const pages: Record<string, ReactNode> = {
     "": (
@@ -78,7 +79,7 @@ function Engage({ platform, tab, access, price }: { platform: "linkedin" | "x"; 
         platform={platform}
         email="example@example.com"
         ext={ext}
-        otherExt={exampleAccess(access === "unlimited" ? undefined : "unlimited")}
+        others={otherPlatforms(platform).map((p) => ({ platform: p, ext: exampleAccess(access === "unlimited" ? undefined : "unlimited") }))}
         counts={platform === "x" ? { x_reply: 41, x_message: 6 } : { comment: 128, reply: 37, connection_note: 14, message: 9 }}
         signedInBrowsers={1}
       />

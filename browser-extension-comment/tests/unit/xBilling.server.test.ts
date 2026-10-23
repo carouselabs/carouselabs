@@ -99,6 +99,8 @@ beforeEach(() => {
     extensionSubscription: table(() => state.linkedinSubs),
     xSubscription: table(() => state.xSubs),
     engageAccessGrant: { findMany: vi.fn(async () => state.grants), updateMany: vi.fn(async () => ({ count: 0 })) },
+    // No special prices (lib/engage/price.ts): everyone pays the usual one.
+    engagePrice: { findMany: vi.fn(async () => []) },
     engageSetting: { findMany: vi.fn(async () => []) },
     extensionToken: {
       findFirst: vi.fn(async ({ where }: { where: { tokenHash: string } }) => {

@@ -4,14 +4,8 @@
 // payments, so both always agree.
 import { EngagePlanCard } from "@/components/pricing/EngagePlanCard"
 import { buttonVariants } from "@/components/ui/button"
-import {
-  EXTENSION_CHECKOUT_PATH,
-  EXTENSION_PLAN,
-  EXTENSION_STORE_URL,
-  X_EXTENSION_CHECKOUT_PATH,
-  X_EXTENSION_PLAN,
-  X_EXTENSION_STORE_URL,
-} from "@/lib/plans"
+import { EXTENSION_PLANS } from "@/lib/plans"
+import { ENGAGE_EXTENSIONS } from "./engageExtensions"
 import type { ExtAccessSummary } from "@/lib/extAccess"
 import { ExtensionPrice } from "./ExtensionPrice"
 import type { EngagePlatform } from "@/lib/engage/features"
@@ -35,14 +29,25 @@ export function extensionStatusLine(ext: ExtAccessSummary): string {
 // Billed apart from the web plan (lib/extensionBilling.ts), so it has its own
 // actions: buy, manage, and install. platform "x": CarouseLabs Engage for X,
 // sold separately from the LinkedIn extension.
-export function ExtensionPlanSection({ ext, platform = "linkedin" }: { ext: ExtAccessSummary; platform?: EngagePlatform }) {
-  const isX = platform === "x"
+const PLAN_COPY: Record<EngagePlatform, { manage: string; buy: string; anchor: string; checkoutConfigured: () => boolean }> = {
+  linkedin: {
+    manage: "Manage extension subscription",
+    buy: "Get the extension — ",
+    anchor: "extension-plan",
+    checkoutConfigured: () => !!process.env.LEMONSQUEEZY_EXTENSION_CHECKOUT_URL,
+  },
   // X's checkout link has a built-in default (lib/plans.ts).
-  const checkoutConfigured = isX || !!process.env.LEMONSQUEEZY_EXTENSION_CHECKOUT_URL
-  const plan = isX ? X_EXTENSION_PLAN : EXTENSION_PLAN
-  const storeUrl = isX ? X_EXTENSION_STORE_URL : EXTENSION_STORE_URL
-  // LinkedIn's actions in the brand violet, X's in black and white.
-  const ctaClass = buttonVariants({ variant: isX ? "primary" : "brand", size: "lg", className: "w-full" })
+  x: { manage: "Manage X subscription", buy: "Get Engage for X — ", anchor: "x-extension-plan", checkoutConfigured: () => true },
+}
+
+export function ExtensionPlanSection({ ext, platform = "linkedin" }: { ext: ExtAccessSummary; platform?: EngagePlatform }) {
+  const copy = PLAN_COPY[platform]
+  const info = ENGAGE_EXTENSIONS[platform]
+  const checkoutConfigured = copy.checkoutConfigured()
+  const plan = EXTENSION_PLANS[platform]
+  const storeUrl = info.storeUrl
+  // Each extension's actions in its own colour.
+  const ctaClass = buttonVariants({ variant: info.theme.button, size: "lg", className: "w-full" })
   const cta =
     ext.access === "unlimited" ? (
       <a
@@ -51,11 +56,11 @@ export function ExtensionPlanSection({ ext, platform = "linkedin" }: { ext: ExtA
         rel="noopener noreferrer"
         className={ctaClass}
       >
-        {isX ? "Manage X subscription" : "Manage extension subscription"}
+        {copy.manage}
       </a>
     ) : ext.access === "free" && checkoutConfigured ? (
-      <a href={isX ? X_EXTENSION_CHECKOUT_PATH : EXTENSION_CHECKOUT_PATH} className={ctaClass}>
-        {isX ? "Get Engage for X — " : "Get the extension — "}
+      <a href={info.checkoutPath} className={ctaClass}>
+        {copy.buy}
         <ExtensionPrice price={ext.price} />
       </a>
     ) : ext.access === "free" ? (
@@ -63,7 +68,7 @@ export function ExtensionPlanSection({ ext, platform = "linkedin" }: { ext: ExtA
     ) : null
 
   return (
-    <div id={isX ? "x-extension-plan" : "extension-plan"}>
+    <div id={copy.anchor}>
       <EngagePlanCard
         status={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">

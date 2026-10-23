@@ -45,6 +45,7 @@ const db = vi.hoisted(() => ({
   },
   extensionSubscription: { findUnique: vi.fn(async () => null) },
   engageAccessGrant: { findMany: vi.fn(async () => []), updateMany: vi.fn(async () => ({ count: 0 })) },
+  engagePrice: { findMany: vi.fn(async () => []) },
   auditLog: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { state.audit.push(data); return {}; }) },
 }));
 

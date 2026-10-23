@@ -3,7 +3,7 @@ import { RotateCcw, ShieldOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { browserName, extensionsIconLooks } from "@/lib/browserName";
 import { reportClientError } from "@/lib/errorReport";
-import { PLATFORM, SITE_NAME } from "@/lib/platform";
+import { MAIN_FEATURE, SITE_NAME } from "@/lib/platform";
 import { contentScriptStatus, SITE_HOST } from "@/lib/tabs";
 import { activeTab, onActiveTabChange } from "../activeTab";
 
@@ -26,7 +26,7 @@ export function useSiteBlocked(): { blocked: boolean; checking: boolean; check: 
     running.current = true;
     try {
       const status = await contentScriptStatus(await activeTab());
-      if (status === "blocked") reportClientError(PLATFORM === "x" ? "x_replies" : "comments", "site_blocked");
+      if (status === "blocked") reportClientError(MAIN_FEATURE, "site_blocked");
       return status === "blocked";
     } catch {
       return null;

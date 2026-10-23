@@ -12,6 +12,11 @@ import { findTargetUser, notFound, parseBody } from "@/lib/engage/adminApi"
 import { resetUsage } from "@/lib/engage/usage"
 import { resetExtDailyLimit } from "@/lib/extDailyLimit"
 import { logAdminAction, getRequestIp } from "@/lib/auditLog"
+import { ENGAGE_PLATFORMS, type EngagePlatform } from "@/lib/engage/features"
+import { FREE_USED_COLUMNS, FREE_USED_SELECT } from "@/lib/engage/subscriptions"
+
+const perPlatform = (value: (p: EngagePlatform) => number) =>
+  Object.fromEntries(ENGAGE_PLATFORMS.map((p) => [p, value(p)])) as Record<EngagePlatform, number>
 
 const body = z.object({
   scope: z.enum(["today", "month", "free"]),
@@ -31,16 +36,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
   if (!parsed.ok) return parsed.response
   const { scope, reason } = parsed.data
 
-  let oldValue: { linkedin: number; x: number } | null = null
+  let oldValue: Record<EngagePlatform, number> | null = null
   if (scope === "today") {
     await Promise.all([resetUsage(userId, ["day"]), resetExtDailyLimit(userId)])
   } else if (scope === "month") {
     await resetUsage(userId, ["month"])
   } else {
-    // Both extensions' free generations (each has its own).
-    const before = await db.user.findUnique({ where: { id: userId }, select: { extensionTrialUsed: true, xTrialUsed: true } })
-    oldValue = before ? { linkedin: before.extensionTrialUsed, x: before.xTrialUsed } : null
-    await db.user.update({ where: { id: userId }, data: { extensionTrialUsed: 0, xTrialUsed: 0 } })
+    // Every extension's free generations (each has its own).
+    const before = await db.user.findUnique({ where: { id: userId }, select: FREE_USED_SELECT })
+    oldValue = before ? perPlatform((p) => before[FREE_USED_COLUMNS[p]]) : null
+    await db.user.update({ where: { id: userId }, data: Object.fromEntries(Object.keys(FREE_USED_SELECT).map((c) => [c, 0])) })
   }
 
   await logAdminAction({
@@ -51,7 +56,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
     targetEmail: user.email,
     details: `Reset ${LABELS[scope]}`,
     oldValue: scope === "free" ? { freeUsed: oldValue } : { scope },
-    newValue: scope === "free" ? { freeUsed: { linkedin: 0, x: 0 } } : { scope, count: 0 },
+    newValue: scope === "free" ? { freeUsed: perPlatform(() => 0) } : { scope, count: 0 },
     reason,
     ipAddress: getRequestIp(req),
   })

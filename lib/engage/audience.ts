@@ -6,16 +6,10 @@
 // "Engage for X users" reaches the people that list shows for X.
 import type { Prisma } from "@prisma/client"
 import { db } from "@/lib/db"
-import { ENGAGE_FEATURES, X_DEVICE_PREFIX, X_FEATURES, type EngagePlatform } from "@/lib/engage/features"
+import { PLATFORM_FEATURES, type EngagePlatform } from "@/lib/engage/features"
+import { tokenWhere as tokenOf } from "@/lib/engage/platformQueries"
+import { FREE_USED_COLUMNS, FREE_USED_SELECT, type FreeUsedColumn } from "@/lib/engage/subscriptions"
 import { kindsFor } from "@/lib/extensionHistory"
-
-// A sign-in belongs to the X extension when its device label says so
-// (X_DEVICE_PREFIX); every other one, including unlabelled ones, to LinkedIn.
-function tokenOf(platform: EngagePlatform): Prisma.ExtensionTokenWhereInput {
-  return platform === "x"
-    ? { device: { startsWith: X_DEVICE_PREFIX } }
-    : { OR: [{ device: null }, { NOT: { device: { startsWith: X_DEVICE_PREFIX } } }] }
-}
 
 export function usesEngageWhere(platform: EngagePlatform): Prisma.UserWhereInput {
   return {
@@ -38,7 +32,7 @@ export const ENGAGE_SEGMENTS: Record<string, EngagePlatform> = {
 // replies, connection notes and messages (X: replies and messages).
 //
 // Each record of use undercounts somewhere, so the highest of three counts:
-//   - the free-trial counter (User.extensionTrialUsed / xTrialUsed): lifetime,
+//   - the free-trial counter (FREE_USED_COLUMNS): lifetime,
 //     but only trial generations, so it stays 0 for paid and granted users;
 //   - their saved history (CommentHistory): every generation, last 90 days;
 //   - the AI call log (EngageAiCall, outcome ok): every generation since it
@@ -50,10 +44,6 @@ export const ENGAGE_LOW_USE_SEGMENTS: Record<string, EngagePlatform> = {
   engage_x_low: "x",
 }
 
-const GENERATION_KINDS: Record<EngagePlatform, string[]> = {
-  linkedin: ENGAGE_FEATURES.filter((f) => !X_FEATURES.includes(f)),
-  x: [...X_FEATURES],
-}
 
 export function generationsUsed(counts: { trial: number; history: number; aiCalls: number }): number {
   return Math.max(counts.trial, counts.history, counts.aiCalls)
@@ -66,7 +56,7 @@ export function generationsUsed(counts: { trial: number; history: number; aiCall
  */
 export async function engageUsage(
   platform: EngagePlatform,
-  users: { id: string; extensionTrialUsed: number; xTrialUsed: number }[],
+  users: ({ id: string } & Record<FreeUsedColumn, number>)[],
 ): Promise<Map<string, { generations: number; lastUsedAt: Date | null }>> {
   const ids = users.map((u) => u.id)
   const [history, calls] = ids.length
@@ -79,7 +69,7 @@ export async function engageUsage(
         }),
         db.engageAiCall.groupBy({
           by: ["userId"],
-          where: { userId: { in: ids }, outcome: "ok", kind: { in: GENERATION_KINDS[platform] } },
+          where: { userId: { in: ids }, outcome: "ok", kind: { in: PLATFORM_FEATURES[platform] } },
           _count: { _all: true },
           _max: { createdAt: true },
         }),
@@ -97,7 +87,7 @@ export async function engageUsage(
         u.id,
         {
           generations: generationsUsed({
-            trial: platform === "x" ? u.xTrialUsed : u.extensionTrialUsed,
+            trial: u[FREE_USED_COLUMNS[platform]],
             history: h?._count._all ?? 0,
             aiCalls: c?._count._all ?? 0,
           }),
@@ -112,7 +102,7 @@ export async function engageUsage(
 export async function lowUseEngageUsers(platform: EngagePlatform, onlyUserId?: string): Promise<{ id: string; email: string }[]> {
   const users = await db.user.findMany({
     where: { deletedAt: null, ...(onlyUserId ? { id: onlyUserId } : {}), extensionTokens: { some: tokenOf(platform) } },
-    select: { id: true, email: true, extensionTrialUsed: true, xTrialUsed: true },
+    select: { id: true, email: true, ...FREE_USED_SELECT },
   })
   if (users.length === 0) return []
   const usage = await engageUsage(platform, users)

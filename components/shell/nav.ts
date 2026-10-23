@@ -2,7 +2,7 @@
 // bar, each with its own pages as sub-tabs, plus the account menu. Labels are
 // the existing ones from the old sidebar, Toolkit, Settings and the
 // extension tabs. Routes are unchanged.
-import { ENGAGE_EXTENSIONS, extensionTabs, platformOfPath } from "@/components/extension/engageExtensions"
+import { ENGAGE_EXTENSIONS, ENGAGE_PLATFORMS, extensionTabs, platformOfPath } from "@/components/extension/engageExtensions"
 
 export type NavItem = { label: string; href: string }
 export type GroupId = "create" | "content" | "engage"
@@ -90,7 +90,7 @@ export function subNavItems(pathname: string): NavItem[] | null {
 
 /** Everything "Go to…" can open, grouped. */
 export function allDestinations({ isIntern, isAdmin }: { isIntern: boolean; isAdmin: boolean }) {
-  const engage = (["linkedin", "x"] as const).flatMap((platform) =>
+  const engage = ENGAGE_PLATFORMS.flatMap((platform) =>
     extensionTabs(platform).map((tab) => ({
       label: `${ENGAGE_EXTENSIONS[platform].name} · ${tab.label}`,
       href: tab.href,

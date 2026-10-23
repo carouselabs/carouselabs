@@ -6,6 +6,8 @@
 // it checks out through its own Lemon Squeezy variant — see
 // NEXT_PUBLIC_LEMONSQUEEZY_GROWTH_CHECKOUT_URL / LEMONSQUEEZY_GROWTH_VARIANT_ID.
 
+import type { EngagePlatform } from "@/lib/engage/features"
+
 export type PlanFeature = {
   label: string
   included?: boolean // defaults to true; set false for Free's "No X" rows
@@ -140,6 +142,16 @@ export const X_EXTENSION_CHECKOUT_PATH = "/checkout/extension?platform=x"
 export const X_EXTENSION_STORE_URL: string | null =
   "https://chromewebstore.google.com/detail/carouselabs-engage-for-x/ehijoiaapdlimkmkoejijammmiahcfbo"
 
+// Each extension's own checkout path and store listing, by extension.
+export const EXTENSION_CHECKOUT_PATHS: Record<EngagePlatform, string> = {
+  linkedin: EXTENSION_CHECKOUT_PATH,
+  x: X_EXTENSION_CHECKOUT_PATH,
+}
+export const EXTENSION_STORE_URLS: Record<EngagePlatform, string | null> = {
+  linkedin: EXTENSION_STORE_URL,
+  x: X_EXTENSION_STORE_URL,
+}
+
 export const X_EXTENSION_PLAN = {
   name: "CarouseLabs Engage for X",
   price: 15,
@@ -156,6 +168,8 @@ export const X_EXTENSION_PLAN = {
   ],
   note: "For the X extension only. CarouseLabs Engage for LinkedIn is sold separately.",
 } as const
+
+export const EXTENSION_PLANS = { linkedin: EXTENSION_PLAN, x: X_EXTENSION_PLAN } satisfies Record<EngagePlatform, unknown>
 
 export const CREDIT_COST_LINES = [
   "Caption Only = 5 credits · Image + Caption = 15 credits · Carousel = 40 credits",

@@ -9,6 +9,7 @@ import { useState } from "react"
 import { AdminButton, AdminInput, Modal, fmtDateTime } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
 import {
+  ENGAGE_PLATFORMS,
   FEATURE_LABELS,
   PLATFORM_FEATURES,
   PLATFORM_LABELS,
@@ -32,7 +33,7 @@ interface ControlsState {
   versions: VersionRow[]
 }
 
-const PLATFORMS: EngagePlatform[] = ["linkedin", "x"]
+const PLATFORMS: EngagePlatform[] = [...ENGAGE_PLATFORMS]
 const API = "/api/admin/engage/controls"
 
 type Dialog =

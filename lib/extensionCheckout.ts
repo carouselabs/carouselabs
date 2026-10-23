@@ -9,13 +9,13 @@
 //
 // Someone an admin gave a special price (lib/engage/price.ts) gets a checkout
 // made for them at that price instead of the shared link.
-import { db } from "@/lib/db"
 import { isExtensionSubscriptionActive } from "@/lib/extensionAccessRules"
 import { signBillingIdentity } from "@/lib/billingIdentity"
 import { extensionVariantIds } from "@/lib/extensionBilling"
 import { X_EXTENSION_CHECKOUT_URL } from "@/lib/plans"
 import { loadEngagePrice } from "@/lib/engage/price"
 import { discountCodeFor, variantPriceCents } from "@/lib/engage/priceDiscount"
+import { findEngageSubscription } from "@/lib/engage/subscriptions"
 import type { EngagePlatform } from "@/lib/engage/features"
 
 export type ExtensionCheckout =
@@ -24,22 +24,24 @@ export type ExtensionCheckout =
   | { kind: "subscribed"; manageUrl: string | null }
   | { kind: "unavailable" }
 
+const CHECKOUT_URLS: Record<EngagePlatform, () => string | undefined> = {
+  linkedin: () => process.env.LEMONSQUEEZY_EXTENSION_CHECKOUT_URL,
+  x: () => process.env.LEMONSQUEEZY_X_CHECKOUT_URL || X_EXTENSION_CHECKOUT_URL,
+}
+
+// The checkout's informational marker (custom_data.kind).
+const CHECKOUT_KINDS: Record<EngagePlatform, string> = { linkedin: "extension", x: "x_extension" }
+
 export async function extensionCheckoutFor(
   user: { id: string; email: string },
   platform: EngagePlatform = "linkedin",
 ): Promise<ExtensionCheckout> {
-  const sub =
-    platform === "x"
-      ? await db.xSubscription.findUnique({ where: { userId: user.id } })
-      : await db.extensionSubscription.findUnique({ where: { userId: user.id } })
+  const sub = await findEngageSubscription(user.id, platform)
   if (isExtensionSubscriptionActive(sub)) return { kind: "subscribed", manageUrl: sub?.customerPortalUrl ?? null }
 
   // Each extension is its own product: its own checkout link and variant.
   // X's are public and have built-in defaults (lib/plans.ts).
-  const base =
-    platform === "x"
-      ? process.env.LEMONSQUEEZY_X_CHECKOUT_URL || X_EXTENSION_CHECKOUT_URL
-      : process.env.LEMONSQUEEZY_EXTENSION_CHECKOUT_URL
+  const base = CHECKOUT_URLS[platform]()
   const variant = extensionVariantIds()[platform]
   if (!base || !variant || !process.env.LEMONSQUEEZY_WEBHOOK_SECRET) {
     console.error(`[extensionCheckout] ${platform} checkout configuration is incomplete`)
@@ -52,7 +54,7 @@ export async function extensionCheckoutFor(
     // accepts the user id only with this signature (lib/extensionBilling.ts).
     identity_signature: signBillingIdentity(user.id, String(variant)),
     // Informational only: the webhook decides the product by its variant.
-    kind: platform === "x" ? "x_extension" : "extension",
+    kind: CHECKOUT_KINDS[platform],
   }
 
   const price = await loadEngagePrice(user.id, platform)

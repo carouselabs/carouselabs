@@ -10,7 +10,17 @@ import { buttonVariants } from "@/components/ui/button"
 import { AdminLineChart } from "@/components/admin/charts"
 import { AdminButton, AdminInput, AdminSelect, Modal, fmtDate, fmtDateTime } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
-import { ENGAGE_FEATURES, LINKEDIN_FEATURES, X_FEATURES, FEATURE_LABELS, USAGE_KINDS, USAGE_KIND_LABELS, formatLimit } from "@/lib/engage/features"
+import {
+  ENGAGE_FEATURES,
+  ENGAGE_PLATFORMS,
+  LINKEDIN_FEATURES,
+  NEWER_FEATURES,
+  FEATURE_LABELS,
+  PLATFORM_LABELS,
+  USAGE_KINDS,
+  USAGE_KIND_LABELS,
+  formatLimit,
+} from "@/lib/engage/features"
 
 // What a history row was, in the admin's words.
 const GENERATION_LABELS: Record<string, string> = {
@@ -151,11 +161,15 @@ export function EngageUserDetail({ userId }: { userId: string }) {
     reload()
   }
 
-  // LinkedIn and X are sold separately: each has its own plan, expiry and
+  // The extensions are sold separately: each has its own plan, expiry and
   // free generations.
-  const plans = (["linkedin", "x"] as const).map((p) => {
+  const subscriptions = { linkedin: data.subscription, x: data.xSubscription } satisfies Record<
+    (typeof ENGAGE_PLATFORMS)[number],
+    unknown
+  >
+  const plans = ENGAGE_PLATFORMS.map((p) => {
     const paywall = access.platforms[p]
-    const sub = p === "x" ? data.xSubscription : data.subscription
+    const sub = subscriptions[p]
     const label =
       paywall.source === "subscription"
         ? "Paid"
@@ -176,7 +190,7 @@ export function EngageUserDetail({ userId }: { userId: string }) {
               ? `Renews ${fmtDate(sub.renewsAt)}`
               : "—"
           : null
-    return { platform: p, name: p === "x" ? "X" : "LinkedIn", paywall, sub, label, expires }
+    return { platform: p, name: PLATFORM_LABELS[p], paywall, sub, label, expires }
   })
   const monthUse = (f: (typeof ENGAGE_FEATURES)[number]) => data.usage.historyMonth[f] ?? 0
   const activeSessions = data.sessions.filter((s) => !s.revokedAt)
@@ -437,10 +451,10 @@ export function EngageUserDetail({ userId }: { userId: string }) {
               data={data.usage.series as Record<string, unknown>[]}
               xKey="date"
               height={220}
-              // X's lines only for someone who used the X extension in these 30 days.
+              // The newer extensions' lines only for someone who used them in these 30 days.
               series={[
                 ...LINKEDIN_FEATURES,
-                ...X_FEATURES.filter((f) => data.usage.series.some((p) => Number((p as Record<string, unknown>)[f] ?? 0) > 0)),
+                ...NEWER_FEATURES.filter((f) => data.usage.series.some((p) => Number((p as Record<string, unknown>)[f] ?? 0) > 0)),
               ].map((f) => ({ key: f, label: FEATURE_LABELS[f], color: FEATURE_COLORS[f] }))}
             />
           </section>

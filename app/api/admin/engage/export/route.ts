@@ -15,11 +15,12 @@ import {
   USER_ACTIVITY_FILTERS,
   USER_PLATFORM_FILTERS,
   USER_SORTS,
-  type OverviewPlatform,
+  parseOverviewPlatform,
   type UserListRow,
 } from "@/lib/engage/adminQueries"
 import { aiCostByUser } from "@/lib/engage/aiQueries"
-import { ENGAGE_FEATURES, FEATURE_LABELS, X_FEATURES } from "@/lib/engage/features"
+import { ENGAGE_FEATURES, FEATURE_LABELS } from "@/lib/engage/features"
+import { featureWhere } from "@/lib/engage/platformQueries"
 import { resolveRange } from "@/lib/engage/ranges"
 import { loadGlobalSettings } from "@/lib/engage/settings"
 import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
@@ -128,9 +129,8 @@ export async function GET(req: Request) {
   } else if (type === "ai-users" || type === "errors") {
     const range = resolveRange(params.range ?? null, params.from ?? null, params.to ?? null)
     if (!range) return NextResponse.json({ error: "Invalid date range" }, { status: 400 })
-    const p = params.platform ?? "all"
-    if (p !== "all" && p !== "linkedin" && p !== "x") return NextResponse.json({ error: "Invalid platform" }, { status: 400 })
-    const platform: OverviewPlatform = p
+    const platform = parseOverviewPlatform(params.platform)
+    if (!platform) return NextResponse.json({ error: "Invalid platform" }, { status: 400 })
     if (type === "ai-users") {
       const prices = (await loadGlobalSettings()).aiPrices
       const users = await aiCostByUser(range.from, range.to, platform, prices, EXPORT_MAX)
@@ -144,8 +144,7 @@ export async function GET(req: Request) {
       filename = `engage-ai-cost-${range.key}-${today()}.csv`
       what = "AI cost per user"
     } else {
-      const featureFilter =
-        platform === "x" ? { feature: { in: X_FEATURES } } : platform === "linkedin" ? { feature: { notIn: X_FEATURES } } : {}
+      const featureFilter = platform === "all" ? {} : featureWhere(platform)
       const errors = await db.engageClientError
         .findMany({
           where: { createdAt: { gte: range.from, lt: range.to }, ...featureFilter },

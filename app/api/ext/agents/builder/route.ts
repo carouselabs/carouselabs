@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server"
 import { extensionCallerPlatform, getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import { engagePreflight } from "@/lib/engage/gate"
+import { PLATFORM_KINDS } from "@/lib/engage/features"
 import {
   assertBuilderAllowance,
   BuilderError,
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
 
   // Suspended accounts, switched-off messages, an outdated extension: same
   // checks as a reply. Nothing is reserved: building is free.
-  const preflight = await engagePreflight(user.id, platform === "x" ? "x_messages" : "messages", req)
+  const preflight = await engagePreflight(user.id, PLATFORM_KINDS[platform].messages, req)
   if (preflight.response) return preflight.response
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null

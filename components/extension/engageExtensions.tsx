@@ -2,8 +2,8 @@
 // website's Extension section covers. They're separate products, installed
 // and paid for separately, each with its own pages: LinkedIn's at
 // /extension/*, X's at /extension/x/*, with the same tabs.
-import { EXTENSION_STORE_URL, X_EXTENSION_STORE_URL } from "@/lib/plans"
-import type { EngagePlatform } from "@/lib/engage/features"
+import { EXTENSION_CHECKOUT_PATHS, EXTENSION_STORE_URLS } from "@/lib/plans"
+import { ENGAGE_PLATFORMS as PLATFORMS, type EngagePlatform } from "@/lib/engage/features"
 
 export const ENGAGE_EXTENSIONS: Record<
   EngagePlatform,
@@ -16,7 +16,17 @@ export const ENGAGE_EXTENSIONS: Record<
     siteUrl: string
     base: string
     storeUrl: string | null
+    checkoutPath: string
     profilesLabel: string
+    // Its toolbar icon (see EngageIcon).
+    icon: string
+    // What to click on the site once it's installed (install steps).
+    startWriting: string
+    // Its colour on the website: LinkedIn's in the brand violet, X's in black
+    // and white. `button` is a buttonVariants variant; `card` a solid card
+    // with white text; `text` its colour on white; `storeButton` the Chrome
+    // Web Store button.
+    theme: { button: "brand" | "primary"; card: string; text: string; storeButton: string }
   }
 > = {
   linkedin: {
@@ -26,8 +36,13 @@ export const ENGAGE_EXTENSIONS: Record<
     site: "LinkedIn",
     siteUrl: "https://www.linkedin.com/feed/",
     base: "/extension",
-    storeUrl: EXTENSION_STORE_URL,
+    storeUrl: EXTENSION_STORE_URLS.linkedin,
+    checkoutPath: EXTENSION_CHECKOUT_PATHS.linkedin,
     profilesLabel: "Custom tones",
+    icon: "/images/extensions/engage-linkedin.png",
+    startWriting:
+      "Click Comment, Reply or Connect on LinkedIn, or open a conversation, and the panel writes it in your voice. You review it and post it yourself.",
+    theme: { button: "brand", card: "bg-brand", text: "text-brand", storeButton: "bg-brand hover:bg-brand-hover" },
   },
   x: {
     name: "CarouseLabs Engage for X",
@@ -36,12 +51,27 @@ export const ENGAGE_EXTENSIONS: Record<
     site: "X",
     siteUrl: "https://x.com/home",
     base: "/extension/x",
-    storeUrl: X_EXTENSION_STORE_URL,
+    storeUrl: EXTENSION_STORE_URLS.x,
+    checkoutPath: EXTENSION_CHECKOUT_PATHS.x,
     profilesLabel: "Reply profiles",
+    icon: "/images/extensions/engage-x.png",
+    startWriting:
+      "Click Reply under a post, or open a chat in Messages, and the panel writes it in your voice. You review it and post it yourself.",
+    theme: {
+      button: "primary",
+      card: "border border-black/10 bg-primary",
+      text: "text-black",
+      storeButton: "bg-primary-hover hover:bg-primary-hover",
+    },
   },
 }
 
-export const ENGAGE_PLATFORMS: EngagePlatform[] = ["linkedin", "x"]
+export const ENGAGE_PLATFORMS: EngagePlatform[] = [...PLATFORMS]
+
+// The other extensions, each sold separately (the overview's "Also on" cards).
+export function otherPlatforms(platform: EngagePlatform): EngagePlatform[] {
+  return ENGAGE_PLATFORMS.filter((p) => p !== platform)
+}
 
 // The same tabs for both, by their path under the extension's base.
 const TAB_PATHS = ["", "/profiles", "/agents", "/history", "/settings", "/billing"] as const
@@ -60,8 +90,15 @@ export function extensionTabs(platform: EngagePlatform): { path: ExtensionTabPat
   return TAB_PATHS.map((path) => ({ path, href: `${ext.base}${path}`, label: labels[path] }))
 }
 
+// LinkedIn's pages are /extension/*; every other extension's are below its
+// own base (/extension/x/*).
 export function platformOfPath(pathname: string): EngagePlatform {
-  return pathname === "/extension/x" || pathname.startsWith("/extension/x/") ? "x" : "linkedin"
+  return (
+    ENGAGE_PLATFORMS.find((p) => {
+      const base = ENGAGE_EXTENSIONS[p].base
+      return p !== "linkedin" && (pathname === base || pathname.startsWith(`${base}/`))
+    }) ?? "linkedin"
+  )
 }
 
 // Which tab a path is, so switching extensions keeps it ("" for anything else).
@@ -77,7 +114,7 @@ export function EngageIcon({ platform, size = 32 }: { platform: EngagePlatform; 
   return (
     // eslint-disable-next-line @next/next/no-img-element -- a 128px icon; nothing to optimise
     <img
-      src={platform === "x" ? "/images/extensions/engage-x.png" : "/images/extensions/engage-linkedin.png"}
+      src={ENGAGE_EXTENSIONS[platform].icon}
       alt=""
       width={size}
       height={size}

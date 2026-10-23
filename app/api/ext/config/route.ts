@@ -26,17 +26,16 @@
 // this — production (carouselabs.com) isn't a private address so PNA never
 // triggers there, but the plain CORS headers are still required in both.
 import { NextResponse } from "next/server"
-import { CONTENT_SCRIPT_ORIGINS } from "@/lib/contentScriptOrigins"
+import { CONTENT_SCRIPT_ORIGINS, platformOfOrigin } from "@/lib/contentScriptOrigins"
 import { loadGlobalSettings } from "@/lib/engage/settings"
-import type { EngagePlatform } from "@/lib/engage/features"
+import { parseEngagePlatform, type EngagePlatform } from "@/lib/engage/features"
 
 // Which extension is asking, for its own Insert switch: the page a content
 // script runs on (x.com is the X extension's), or ?platform=x from the X
 // extension's panel. Anything else, including every LinkedIn extension
 // version, is LinkedIn's.
 function askingPlatform(req: Request): EngagePlatform {
-  if (req.headers.get("origin") === "https://x.com") return "x"
-  return new URL(req.url).searchParams.get("platform") === "x" ? "x" : "linkedin"
+  return platformOfOrigin(req.headers.get("origin")) ?? parseEngagePlatform(new URL(req.url).searchParams.get("platform"))
 }
 
 // The pages the content scripts run on (lib/contentScriptOrigins.ts): X's

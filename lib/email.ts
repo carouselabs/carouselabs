@@ -34,7 +34,7 @@ import {
   engageAccessGrantedSubject,
   type GrantedExtensions,
 } from "@/emails/EngageAccessGrantedEmail"
-import { EXTENSION_STORE_URL, X_EXTENSION_STORE_URL } from "@/lib/plans"
+import { EXTENSION_STORE_URLS } from "@/lib/plans"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -57,7 +57,7 @@ export async function sendEngageAccessGrantedEmail(email: string, until: string 
     to: email,
     subject: engageAccessGrantedSubject(platform),
     html: await render(
-      EngageAccessGrantedEmail({ until, platform, email, storeUrls: { linkedin: EXTENSION_STORE_URL, x: X_EXTENSION_STORE_URL } }),
+      EngageAccessGrantedEmail({ until, platform, email, storeUrls: EXTENSION_STORE_URLS }),
     ),
   })
   if (error) throw new Error(`Resend: ${error.message}`)

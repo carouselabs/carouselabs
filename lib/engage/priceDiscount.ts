@@ -60,12 +60,14 @@ async function redeemed(discountId: string): Promise<boolean> {
   }
 }
 
+const CODE_LETTERS: Record<EngagePlatform, string> = { linkedin: "L", x: "X" }
+
 // "CLL" / "CLX" and 10 random letters and digits: uppercase letters and
 // numbers are all Lemon Squeezy allows, and nothing in it names the person.
 export function newDiscountCode(platform: EngagePlatform): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
   const bytes = crypto.randomBytes(10)
-  return `CL${platform === "x" ? "X" : "L"}${Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("")}`
+  return `CL${CODE_LETTERS[platform]}${Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("")}`
 }
 
 async function createDiscount(

@@ -25,7 +25,7 @@ import {
   type BuilderAnswer,
 } from "@/lib/ai/prompts/agentBuilderPrompt"
 import { AGENT_LIMITS, normalizeAgentConfig, parseAgentInput, type AgentConfig, type AgentInput } from "@/lib/engageAgents"
-import type { EngagePlatform } from "@/lib/engage/features"
+import { PLATFORM_KINDS, PLATFORM_SITE_NAMES, type EngagePlatform } from "@/lib/engage/features"
 
 export const BUILDER_ROUTE = "ext/agents/builder"
 // Model calls a day (a backup model's turn counts too): an interview of up to
@@ -102,7 +102,7 @@ async function ask(
       const { raw } = await callCommentModelWithInfo(system, user, `${BUILDER_ROUTE}:${action}`, {
         deadline,
         patient: true,
-        engage: { userId, kind: platform === "x" ? "x_messages" : "messages" },
+        engage: { userId, kind: PLATFORM_KINDS[platform].messages },
       })
       const parsed = parseJsonObject(raw)
       if (parsed) return parsed
@@ -115,7 +115,7 @@ async function ask(
   throw new BuilderError(502, "The AI couldn't do that just now. Try again in a moment.")
 }
 
-const platformName = (platform: EngagePlatform) => (platform === "x" ? "X (formerly Twitter)" : "LinkedIn")
+const platformName = (platform: EngagePlatform) => PLATFORM_SITE_NAMES[platform]
 
 // ── interview ───────────────────────────────────────────────────────────
 

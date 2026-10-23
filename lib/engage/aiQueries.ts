@@ -6,7 +6,8 @@
 import { Prisma } from "@prisma/client"
 import { db } from "@/lib/db"
 import { callCost, type ModelPrice } from "@/lib/ai/models"
-import { ENGAGE_FEATURES, X_FEATURES, type EngageFeature } from "@/lib/engage/features"
+import { ENGAGE_FEATURES, type EngageFeature } from "@/lib/engage/features"
+import { featureSql } from "@/lib/engage/platformQueries"
 import type { OverviewPlatform } from "@/lib/engage/adminQueries"
 import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
 
@@ -67,9 +68,7 @@ export interface AiUsage {
 }
 
 function featureFilter(platform: OverviewPlatform): Prisma.Sql {
-  if (platform === "all") return Prisma.empty
-  const x = Prisma.join(X_FEATURES)
-  return platform === "x" ? Prisma.sql`AND c.feature IN (${x})` : Prisma.sql`AND c.feature NOT IN (${x})`
+  return platform === "all" ? Prisma.empty : featureSql(platform, Prisma.sql`c.feature`)
 }
 
 // tokens × price per model, in SQL, for ordering users by what they cost.

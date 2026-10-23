@@ -19,6 +19,7 @@ import { COMMENT_CREDITS_ENFORCED } from "@/lib/commentCredits"
 import { EXT_FREE_GENERATIONS, isExtensionSubscriptionActive } from "@/lib/extensionAccessRules"
 import { isEngageSchemaMissing, loadEngageAccess } from "@/lib/engage/access"
 import { ENGAGE_FEATURES, type EngageFeature, type EngagePlatform } from "@/lib/engage/features"
+import { FREE_USED_COLUMNS, findEngageSubscription } from "@/lib/engage/subscriptions"
 import { loadEngagePrice } from "@/lib/engage/price"
 import { STANDARD_PRICE_CENTS, monthlyLabel, shortPriceLabel, type EngagePriceInfo } from "@/lib/engage/priceRules"
 
@@ -48,19 +49,13 @@ export interface ExtAccessSummary {
 
 const ALL_ON = Object.fromEntries(ENGAGE_FEATURES.map((f) => [f, true])) as Record<EngageFeature, boolean>
 
-// The stored subscription for one extension.
-function findSubscription(userId: string, platform: EngagePlatform) {
-  return platform === "x"
-    ? db.xSubscription.findUnique({ where: { userId } })
-    : db.extensionSubscription.findUnique({ where: { userId } })
-}
-
 // One extension's plan, for the panel (/api/ext/me) and the website.
 export async function extAccessSummary(userId: string, platform: EngagePlatform = "linkedin"): Promise<ExtAccessSummary> {
   const [sub, price] = await Promise.all([
-    findSubscription(userId, platform).catch((err) => {
-      // The X table not there yet (scripts/x-billing.sql not run): no X subscription.
-      if (platform === "x" && isEngageSchemaMissing(err)) return null
+    findEngageSubscription(userId, platform).catch((err) => {
+      // A newer extension's table not there yet (its billing SQL not run):
+      // no subscription to it.
+      if (platform !== "linkedin" && isEngageSchemaMissing(err)) return null
       throw err
     }),
     loadEngagePrice(userId, platform),
@@ -110,13 +105,18 @@ export async function extAccessSummary(userId: string, platform: EngagePlatform 
   }
 }
 
+// One extension's free generations used so far ("User".extensionTrialUsed,
+// xTrialUsed, …). A newer extension's column may not exist yet (its SQL not
+// run): none used.
 async function freeUsedOf(userId: string, platform: EngagePlatform): Promise<number> {
-  if (platform === "x") {
-    const user = await db.user.findUnique({ where: { id: userId }, select: { xTrialUsed: true } }).catch(() => null)
-    return user?.xTrialUsed ?? 0
-  }
-  const user = await db.user.findUnique({ where: { id: userId }, select: { extensionTrialUsed: true } })
-  return user?.extensionTrialUsed ?? 0
+  const column = FREE_USED_COLUMNS[platform]
+  const user = await db.user
+    .findUnique({ where: { id: userId }, select: { [column]: true } })
+    .catch((err) => {
+      if (platform === "linkedin") throw err
+      return null
+    })
+  return (user as Record<string, number> | null)?.[column] ?? 0
 }
 
 export type ExtGenerationGate =
@@ -170,38 +170,21 @@ export async function reserveFreeGeneration(
   freeLimit: number,
   platform: EngagePlatform = "linkedin",
 ): Promise<ExtGenerationGate> {
-  if (platform === "x") {
-    const { count } = await db.user.updateMany({
-      where: { id: userId, xTrialUsed: { lt: freeLimit } },
-      data: { xTrialUsed: { increment: 1 } },
-    })
-    if (count === 0) return { ok: false, response: await paywallResponse(userId, freeLimit, platform) }
-    const after = await db.user.findUnique({ where: { id: userId }, select: { xTrialUsed: true } })
-    return {
-      ok: true,
-      freeRemaining: Math.max(0, freeLimit - (after?.xTrialUsed ?? freeLimit)),
-      release: onlyOnce(async () => {
-        await db.user
-          .updateMany({ where: { id: userId, xTrialUsed: { gt: 0 } }, data: { xTrialUsed: { decrement: 1 } } })
-          .catch((err) => console.error("[extAccess] failed to give back a free X generation:", err))
-      }),
-    }
-  }
-
+  const column = FREE_USED_COLUMNS[platform]
   const { count } = await db.user.updateMany({
-    where: { id: userId, extensionTrialUsed: { lt: freeLimit } },
-    data: { extensionTrialUsed: { increment: 1 } },
+    where: { id: userId, [column]: { lt: freeLimit } },
+    data: { [column]: { increment: 1 } },
   })
   if (count === 0) return { ok: false, response: await paywallResponse(userId, freeLimit, platform) }
 
-  const after = await db.user.findUnique({ where: { id: userId }, select: { extensionTrialUsed: true } })
+  const after = (await db.user.findUnique({ where: { id: userId }, select: { [column]: true } })) as Record<string, number> | null
   return {
     ok: true,
-    freeRemaining: Math.max(0, freeLimit - (after?.extensionTrialUsed ?? freeLimit)),
+    freeRemaining: Math.max(0, freeLimit - (after?.[column] ?? freeLimit)),
     release: onlyOnce(async () => {
       await db.user
-        .updateMany({ where: { id: userId, extensionTrialUsed: { gt: 0 } }, data: { extensionTrialUsed: { decrement: 1 } } })
-        .catch((err) => console.error("[extAccess] failed to give back a free generation:", err))
+        .updateMany({ where: { id: userId, [column]: { gt: 0 } }, data: { [column]: { decrement: 1 } } })
+        .catch((err) => console.error(`[extAccess] failed to give back a free ${platform} generation:`, err))
     }),
   }
 }
@@ -212,7 +195,7 @@ export async function reserveFreeGeneration(
 export async function reserveExtGeneration(userId: string, platform: EngagePlatform = "linkedin"): Promise<ExtGenerationGate> {
   if (!COMMENT_CREDITS_ENFORCED) return { ok: true, freeRemaining: null, release: noop }
 
-  const sub = await findSubscription(userId, platform)
+  const sub = await findEngageSubscription(userId, platform)
   if (isExtensionSubscriptionActive(sub)) return { ok: true, freeRemaining: null, release: noop }
 
   return reserveFreeGeneration(userId, EXT_FREE_GENERATIONS, platform)

@@ -24,19 +24,36 @@ import {
 import { callCommentModel, generationDeadline, GenerationTimeout, parseComment, sanitizeComment } from "@/lib/ai/commentModel"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
 import { xLength, X_MAX_LENGTH } from "@/lib/xText"
+import { PLATFORM_KINDS, type EngagePlatform } from "@/lib/engage/features"
 
 const MAX_COMMENT_CHARS = 4000
 
-export type RewritePlatform = "linkedin" | "x"
+export type RewritePlatform = EngagePlatform
 
-// Shorter / Longer for both extensions. X's (app/api/ext/x/rewrite) differs
-// in what is counted ("x_rewrites"), how length is measured (X's own count),
-// and a ceiling: a Longer X reply must still fit the account's limit.
+// What differs per extension: the log label, how length is measured (X's own
+// count), and a ceiling: a Longer X reply must still fit the account's limit
+// (null: none).
+const REWRITE_SITES: Record<
+  EngagePlatform,
+  { label: string; measure: (text: string) => number; maxLength: ((userId: string) => Promise<number>) | null }
+> = {
+  linkedin: { label: "ext/rewrite", measure: (text) => text.length, maxLength: null },
+  x: {
+    label: "ext/x/rewrite",
+    measure: xLength,
+    // The account's reply limit (280, more with X Premium).
+    maxLength: async (userId) =>
+      (await db.xUserSettings.findUnique({ where: { userId }, select: { maxReplyLength: true } }))?.maxReplyLength ??
+      X_MAX_LENGTH,
+  },
+}
+
+// Shorter / Longer for every extension, each counted as its own kind
+// ("rewrites", "x_rewrites", …).
 export async function handleRewriteRequest(req: Request, platform: RewritePlatform): Promise<Response> {
-  const isX = platform === "x"
-  const label = isX ? "ext/x/rewrite" : "ext/rewrite"
-  const usage = isX ? "x_rewrites" : "rewrites"
-  const measure = isX ? xLength : (text: string) => text.length
+  const site = REWRITE_SITES[platform]
+  const { label, measure } = site
+  const usage = PLATFORM_KINDS[platform].rewrites
 
   const user = await getUserFromCommentExtensionToken(req)
   if (!user) {
@@ -73,17 +90,13 @@ export async function handleRewriteRequest(req: Request, platform: RewritePlatfo
     )
   }
 
-  // X: the account's reply limit (280, more with X Premium).
-  const maxLength = isX
-    ? ((await db.xUserSettings.findUnique({ where: { userId: user.id }, select: { maxReplyLength: true } }))?.maxReplyLength ??
-      X_MAX_LENGTH)
-    : Infinity
+  const maxLength = site.maxLength ? await site.maxLength(user.id) : Infinity
   const currentLength = measure(currentComment)
   const systemMessage = buildRewriteSystemMessage(
     direction,
     currentLength,
     countSentences(currentComment),
-    isX ? { maxLength } : undefined,
+    site.maxLength ? { maxLength } : undefined,
   )
   const userMessage = buildRewriteUserMessage(currentComment)
   const { limit } = rewriteBounds(currentLength, direction)

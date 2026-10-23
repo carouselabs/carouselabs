@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PLATFORM } from "@/lib/platform";
+import { forPlatform } from "@/lib/platform";
 import { ScreenHeader } from "../ScreenHeader";
 
 // History holds every kind of generation. Rows from before that carry no
@@ -37,21 +37,21 @@ const LINK_LABELS: Record<HistoryKind, string> = {
 
 // The LinkedIn extension's History and the X extension's each show their own
 // rows; the server keeps them apart (app/api/ext/history ?platform=x).
-const HISTORY_SITE =
-  PLATFORM === "x"
-    ? {
-        query: "?platform=x",
-        origin: "https://x.com/",
-        defaultKind: "x_reply" as HistoryKind,
-        empty: "Replies and messages you write for X show up here, and on carouselabs.com under Extension.",
-      }
-    : {
-        query: "",
-        origin: "https://www.linkedin.com/",
-        defaultKind: "comment" as HistoryKind,
-        empty:
-          "Comments, replies, connection notes and messages you generate show up here, and on carouselabs.com under Extension.",
-      };
+const HISTORY_SITE = forPlatform({
+  x: {
+    query: "?platform=x",
+    origin: "https://x.com/",
+    defaultKind: "x_reply" as HistoryKind,
+    empty: "Replies and messages you write for X show up here, and on carouselabs.com under Extension.",
+  },
+  linkedin: {
+    query: "",
+    origin: "https://www.linkedin.com/",
+    defaultKind: "comment" as HistoryKind,
+    empty:
+      "Comments, replies, connection notes and messages you generate show up here, and on carouselabs.com under Extension.",
+  },
+});
 
 // The next page's URL, keeping the platform filter.
 function historyUrl(cursor?: string): string {

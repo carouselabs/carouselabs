@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react"
 import { AlertTriangle, Download, Loader2, RotateCw } from "lucide-react"
 import { AdminButton, fmtDate } from "@/components/admin/ui"
-import type { EngageFeature } from "@/lib/engage/features"
+import { PLATFORM_LABELS, type EngageFeature, type EngagePlatform } from "@/lib/engage/features"
 
 // Series colours for the four LinkedIn features, validated as a set (all
 // pairs: lightness, chroma, colour-blind separation, contrast) on the dark
@@ -150,13 +150,13 @@ export function AccessPill({
   grantLifetime?: boolean
   freeUsed?: number
   freeLimit?: number
-  // Which extensions they pay for (LinkedIn and X are sold separately).
-  paidFor?: ("linkedin" | "x")[]
+  // Which extensions they pay for (each is sold separately).
+  paidFor?: EngagePlatform[]
 }) {
   if (status === "account_suspended") return <Pill tone="red">Account suspended</Pill>
   if (status === "suspended") return <Pill tone="red">Engage paused</Pill>
   if (access === "paid") {
-    const which = paidFor?.map((p) => (p === "x" ? "X" : "LinkedIn")).join(" + ")
+    const which = paidFor?.map((p) => PLATFORM_LABELS[p]).join(" + ")
     return <Pill tone="green">{which ? `Paid · ${which}` : "Paid"}</Pill>
   }
   if (access === "granted") {

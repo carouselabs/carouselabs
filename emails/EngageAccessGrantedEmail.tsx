@@ -2,8 +2,15 @@ import * as React from "react"
 import { Heading, Section, Text } from "@react-email/components"
 import { APP_URL, EmailButton, EmailCard, EmailFeatures, EmailLayout, EmailPanel, EmailSteps, emailStyles } from "./EmailLayout"
 import type { EmailSticker } from "./art"
+import { GRANT_COVERS, type GrantPlatform } from "@/lib/engage/grants"
+import type { EngagePlatform } from "@/lib/engage/features"
 
-export type GrantedExtensions = "linkedin" | "x" | "both"
+export type GrantedExtensions = GrantPlatform
+
+// Each extension's button, and its page on the website when it has no store
+// listing yet.
+const GET_LABELS: Record<EngagePlatform, string> = { linkedin: "Get Engage for LinkedIn", x: "Get Engage for X" }
+const WEBSITE_PAGES: Record<EngagePlatform, string> = { linkedin: "/extension", x: "/extension/x" }
 
 const NAMES = {
   linkedin: "CarouseLabs Engage",
@@ -117,26 +124,25 @@ export function EngageAccessGrantedEmail({
   // the date; it only says "for life" when there isn't one.
   until: string | null
   platform?: GrantedExtensions
-  storeUrls: { linkedin: string | null; x: string | null }
+  storeUrls: Record<EngagePlatform, string | null>
   // The address the access is on; it's what they sign in with.
   email?: string
 }) {
-  const linkedin = storeUrls.linkedin ?? `${APP_URL}/extension`
-  const x = storeUrls.x ?? `${APP_URL}/extension/x`
+  const storeOf = (p: EngagePlatform) => storeUrls[p] ?? `${APP_URL}${WEBSITE_PAGES[p]}`
+  const covers = GRANT_COVERS[platform]
   const copy = COPY[platform]
   const signInAs = email ? <strong style={emailStyles.strong}>{email}</strong> : "this email address"
   const install = (align: "center" | "left", single: string) =>
-    platform === "both" ? (
+    covers.length > 1 ? (
       <>
-        <EmailButton href={linkedin} align={align}>
-          Get Engage for LinkedIn
-        </EmailButton>
-        <EmailButton href={x} align={align}>
-          Get Engage for X
-        </EmailButton>
+        {covers.map((p) => (
+          <EmailButton key={p} href={storeOf(p)} align={align}>
+            {GET_LABELS[p]}
+          </EmailButton>
+        ))}
       </>
     ) : (
-      <EmailButton href={platform === "x" ? x : linkedin} align={align}>
+      <EmailButton href={storeOf(covers[0])} align={align}>
         {single}
       </EmailButton>
     )

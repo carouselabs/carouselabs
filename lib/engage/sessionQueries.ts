@@ -4,11 +4,12 @@
 // out. (One user's own browsers are on their admin page.)
 import type { Prisma } from "@prisma/client"
 import { db } from "@/lib/db"
-import { X_DEVICE_PREFIX, tokenPlatform, type EngagePlatform } from "@/lib/engage/features"
+import { ENGAGE_PLATFORMS, isEngagePlatform, tokenPlatform, type EngagePlatform } from "@/lib/engage/features"
+import { tokenWhere } from "@/lib/engage/platformQueries"
 import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
 
 export const SESSION_STATUSES = ["active", "signed_out", "all"] as const
-export const SESSION_PLATFORMS = ["any", "linkedin", "x"] as const
+export const SESSION_PLATFORMS = ["any", ...ENGAGE_PLATFORMS] as const
 
 export interface SessionRow {
   id: string
@@ -32,10 +33,7 @@ export async function listSessions(params: {
   const and: Prisma.ExtensionTokenWhereInput[] = []
   if (params.status === "active") and.push({ revokedAt: null })
   if (params.status === "signed_out") and.push({ revokedAt: { not: null } })
-  if (params.platform === "x") and.push({ device: { startsWith: X_DEVICE_PREFIX } })
-  if (params.platform === "linkedin") {
-    and.push({ OR: [{ device: null }, { NOT: { device: { startsWith: X_DEVICE_PREFIX } } }] })
-  }
+  if (isEngagePlatform(params.platform)) and.push(tokenWhere(params.platform))
   const q = params.q?.trim()
   if (q) and.push({ user: { email: { contains: q, mode: "insensitive" } } })
   const where: Prisma.ExtensionTokenWhereInput = and.length > 0 ? { AND: and } : {}

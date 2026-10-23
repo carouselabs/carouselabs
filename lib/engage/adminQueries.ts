@@ -8,15 +8,18 @@ import { Prisma } from "@prisma/client"
 import { db } from "@/lib/db"
 import {
   ENGAGE_FEATURES,
+  ENGAGE_PLATFORMS,
   HISTORY_KIND_TO_FEATURE,
   PLAN_FREE_GENERATIONS,
-  X_DEVICE_PREFIX,
-  X_FEATURES,
+  isEngagePlatform,
+  platformOfFeature,
   tokenPlatform,
   type EngageFeature,
   type EngagePlatform,
 } from "@/lib/engage/features"
-import { grantState } from "@/lib/engage/grants"
+import { grantPlatformsFor, grantState } from "@/lib/engage/grants"
+import { featureWhere, tokenSql } from "@/lib/engage/platformQueries"
+import { SUBSCRIPTION_TABLES } from "@/lib/engage/subscriptions"
 import { kindsFor } from "@/lib/extensionHistory"
 
 // ── Shared SQL fragments ────────────────────────────────────────────────
@@ -25,32 +28,35 @@ import { kindsFor } from "@/lib/extensionHistory"
 const ENGAGE_USER = Prisma.sql`(
   EXISTS (SELECT 1 FROM "ExtensionToken" t WHERE t."userId" = u.id)
   OR EXISTS (SELECT 1 FROM "CommentHistory" h WHERE h."userId" = u.id)
-  OR EXISTS (SELECT 1 FROM "ExtensionSubscription" s WHERE s."userId" = u.id)
-  OR EXISTS (SELECT 1 FROM "XSubscription" s WHERE s."userId" = u.id)
+  ${Prisma.join(
+    ENGAGE_PLATFORMS.map((p) => Prisma.sql`OR EXISTS (SELECT 1 FROM ${Prisma.raw(`"${SUBSCRIPTION_TABLES[p]}"`)} s WHERE s."userId" = u.id)`),
+    " ",
+  )}
   OR EXISTS (SELECT 1 FROM "EngageAccessGrant" g WHERE g."userId" = u.id OR (g."userId" IS NULL AND g.email = lower(u.email)))
   OR EXISTS (SELECT 1 FROM "EngageUserControl" c WHERE c."userId" = u.id)
 )`
 
-// LinkedIn and X are sold separately. "any": paying for (or granted) either.
+// The extensions are sold separately. "any": paying for (or granted) any.
 type PlanScope = EngagePlatform | "any"
 
-const paidIn = (table: "ExtensionSubscription" | "XSubscription", now: Date) => Prisma.sql`EXISTS (
-  SELECT 1 FROM ${Prisma.raw(`"${table}"`)} s WHERE s."userId" = u.id
+const paidIn = (platform: EngagePlatform, now: Date) => Prisma.sql`EXISTS (
+  SELECT 1 FROM ${Prisma.raw(`"${SUBSCRIPTION_TABLES[platform]}"`)} s WHERE s."userId" = u.id
   AND (s.status IN ('active', 'on_trial', 'past_due') OR (s.status = 'cancelled' AND s."endsAt" > ${now}))
 )`
 
 const paidAt = (now: Date, scope: PlanScope = "any") =>
-  scope === "linkedin"
-    ? paidIn("ExtensionSubscription", now)
-    : scope === "x"
-      ? paidIn("XSubscription", now)
-      : Prisma.sql`(${paidIn("ExtensionSubscription", now)} OR ${paidIn("XSubscription", now)})`
+  scope === "any"
+    ? Prisma.sql`(${Prisma.join(
+        ENGAGE_PLATFORMS.map((p) => paidIn(p, now)),
+        " OR ",
+      )})`
+    : paidIn(scope, now)
 
 const grantedAt = (now: Date, scope: PlanScope = "any") => Prisma.sql`EXISTS (
   SELECT 1 FROM "EngageAccessGrant" g
   WHERE (g."userId" = u.id OR (g."userId" IS NULL AND g.email = lower(u.email)))
   AND g."revokedAt" IS NULL AND g."startsAt" <= ${now} AND (g."endsAt" IS NULL OR g."endsAt" > ${now})
-  ${scope === "any" ? Prisma.empty : Prisma.sql`AND g.platform IN ('both', ${scope})`}
+  ${scope === "any" ? Prisma.empty : Prisma.sql`AND g.platform IN (${Prisma.join(grantPlatformsFor(scope))})`}
 )`
 
 const SUSPENDED = Prisma.sql`(u."suspendedAt" IS NOT NULL OR EXISTS (
@@ -64,15 +70,9 @@ const HAS_OVERRIDES = Prisma.sql`EXISTS (
 
 const LAST_ACTIVE = Prisma.sql`(SELECT max(t."lastUsedAt") FROM "ExtensionToken" t WHERE t."userId" = u.id)`
 
-// Which extension a sign-in (t) belongs to: the X extension labels its
-// tokens (X_DEVICE_PREFIX); everything else is the LinkedIn extension.
-const X_TOKEN = Prisma.sql`t.device LIKE ${`${X_DEVICE_PREFIX}%`}`
-const tokenOf = (platform: EngagePlatform) =>
-  platform === "x" ? X_TOKEN : Prisma.sql`(t.device IS NULL OR NOT (${X_TOKEN}))`
-
 // Someone who uses that extension: signed in to it, or generated with it.
 const USES = (platform: EngagePlatform) => Prisma.sql`(
-  EXISTS (SELECT 1 FROM "ExtensionToken" t WHERE t."userId" = u.id AND ${tokenOf(platform)})
+  EXISTS (SELECT 1 FROM "ExtensionToken" t WHERE t."userId" = u.id AND ${tokenSql(platform)})
   OR EXISTS (SELECT 1 FROM "CommentHistory" h WHERE h."userId" = u.id AND h.kind IN (${Prisma.join([...kindsFor(platform)])}))
 )`
 
@@ -83,7 +83,7 @@ const monthStartUtc = (now: Date) => new Date(Date.UTC(now.getUTCFullYear(), now
 export const USER_ACCESS_FILTERS = ["all", "paid", "granted", "free", "suspended", "overrides"] as const
 export const USER_ACTIVITY_FILTERS = ["any", "today", "7d", "30d", "inactive30", "never"] as const
 export const USER_SORTS = ["last_active", "newest", "oldest", "email", "usage_month"] as const
-export const USER_PLATFORM_FILTERS = ["any", "linkedin", "x"] as const
+export const USER_PLATFORM_FILTERS = ["any", ...ENGAGE_PLATFORMS] as const
 
 export interface UserListParams {
   q?: string
@@ -132,13 +132,13 @@ export async function listEngageUsers(params: UserListParams, now: Date = new Da
       OR EXISTS (SELECT 1 FROM "Profile" p WHERE p."userId" = u.id AND p.name ILIKE ${like}))`)
   }
   // With an extension picked, the plan filters are about that extension.
-  const scope: PlanScope = params.platform === "linkedin" || params.platform === "x" ? params.platform : "any"
+  const scope: PlanScope = isEngagePlatform(params.platform) ? params.platform : "any"
   if (params.access === "paid") where.push(paidAt(now, scope))
   if (params.access === "granted") where.push(Prisma.sql`(${grantedAt(now, scope)} AND NOT ${paidAt(now, scope)})`)
   if (params.access === "free") where.push(Prisma.sql`(NOT ${paidAt(now, scope)} AND NOT ${grantedAt(now, scope)})`)
   if (params.access === "suspended") where.push(SUSPENDED)
   if (params.access === "overrides") where.push(HAS_OVERRIDES)
-  if (params.platform === "linkedin" || params.platform === "x") where.push(USES(params.platform))
+  if (isEngagePlatform(params.platform)) where.push(USES(params.platform))
 
   const day = 86_400_000
   const since = {
@@ -246,7 +246,7 @@ async function loadUserRows(ids: string[], now: Date): Promise<UserListRow[]> {
   }
   for (const h of history) {
     const feature = HISTORY_KIND_TO_FEATURE[h.kind]
-    if (feature) markUse(h.userId, X_FEATURES.includes(feature) ? "x" : "linkedin")
+    if (feature) markUse(h.userId, platformOfFeature(feature))
   }
   // Newest first, so the first seen per user and extension is the current one.
   // A version reported by a token since signed out counts as LinkedIn's.
@@ -264,10 +264,11 @@ async function loadUserRows(ids: string[], now: Date): Promise<UserListRow[]> {
     const isPaid = (s: { status: string; endsAt: Date | null } | null) =>
       !!s && (["active", "on_trial", "past_due"].includes(s.status) || (s.status === "cancelled" && !!s.endsAt && s.endsAt > now))
     // Which extensions they pay for (sold separately).
-    const paidFor: EngagePlatform[] = [
-      ...(isPaid(sub) ? (["linkedin"] as const) : []),
-      ...(isPaid(u.xSubscription) ? (["x"] as const) : []),
-    ]
+    const subscriptions: Record<EngagePlatform, { status: string; endsAt: Date | null } | null> = {
+      linkedin: sub,
+      x: u.xSubscription,
+    }
+    const paidFor = ENGAGE_PLATFORMS.filter((p) => isPaid(subscriptions[p]))
     const paid = paidFor.length > 0
     const activeGrants = u.engageGrants.filter((g) => grantState(g, now) === "active")
     const lifetime = activeGrants.some((g) => g.endsAt === null)
@@ -311,7 +312,7 @@ async function loadUserRows(ids: string[], now: Date): Promise<UserListRow[]> {
         monthTotal,
         extensionVersion: version.get(`${id}:linkedin`) ?? null,
         xExtensionVersion: version.get(`${id}:x`) ?? null,
-        extensions: (["linkedin", "x"] as const).filter((p) => uses.get(id)?.has(p)),
+        extensions: ENGAGE_PLATFORMS.filter((p) => uses.get(id)?.has(p)),
         tags: u.adminTags.map((t) => t.tag),
       } satisfies UserListRow,
     ]
@@ -337,6 +338,13 @@ export interface OverviewSeriesPoint {
 // suspended) are the account's either way, since one plan covers both.
 export type OverviewPlatform = EngagePlatform | "all"
 
+// ?platform= on the admin's figures: "all" (the default) or one extension;
+// null for anything else.
+export function parseOverviewPlatform(value: string | null | undefined): OverviewPlatform | null {
+  const p = value ?? "all"
+  return p === "all" || isEngagePlatform(p) ? p : null
+}
+
 export async function engageOverview(
   from: Date,
   to: Date,
@@ -346,11 +354,10 @@ export async function engageOverview(
   const kinds = platform === "all" ? null : [...kindsFor(platform)]
   const historyKinds = kinds ? { kind: { in: kinds } } : {}
   const kindSql = kinds ? Prisma.sql`AND kind IN (${Prisma.join(kinds)})` : Prisma.empty
-  const tokenSql = platform === "all" ? Prisma.empty : Prisma.sql`WHERE ${tokenOf(platform)}`
+  const tokenFilter = platform === "all" ? Prisma.empty : Prisma.sql`WHERE ${tokenSql(platform)}`
   // An error's feature says which extension it came from; generic ones
   // (insert, read, auth, other) are the LinkedIn extension's.
-  const errorFeatures =
-    platform === "x" ? { feature: { in: X_FEATURES } } : platform === "linkedin" ? { feature: { notIn: X_FEATURES } } : {}
+  const errorFeatures = platform === "all" ? {} : featureWhere(platform)
 
   const [population] = await db.$queryRaw<
     { total: bigint; paid: bigint; granted: bigint; suspended: bigint }[]
@@ -376,7 +383,7 @@ export async function engageOverview(
     `),
     db.$queryRaw<{ count: bigint }[]>(Prisma.sql`
       SELECT count(*) AS count FROM (
-        SELECT "userId", min("createdAt") AS first FROM "ExtensionToken" t ${tokenSql} GROUP BY "userId"
+        SELECT "userId", min("createdAt") AS first FROM "ExtensionToken" t ${tokenFilter} GROUP BY "userId"
       ) f WHERE f.first >= ${from} AND f.first < ${to}
     `),
     db.engageClientError.count({ where: { createdAt: { gte: from, lt: to }, ...errorFeatures } }).catch(() => null),
@@ -393,7 +400,7 @@ export async function engageOverview(
 
   const newPerDay = await db.$queryRaw<{ day: string; count: bigint }[]>(Prisma.sql`
     SELECT to_char(date_trunc('day', f.first), 'YYYY-MM-DD') AS day, count(*) AS count FROM (
-      SELECT "userId", min("createdAt") AS first FROM "ExtensionToken" t ${tokenSql} GROUP BY "userId"
+      SELECT "userId", min("createdAt") AS first FROM "ExtensionToken" t ${tokenFilter} GROUP BY "userId"
     ) f WHERE f.first >= ${from} AND f.first < ${to} GROUP BY 1
   `)
   const activePerDay = await db.$queryRaw<{ day: string; count: bigint }[]>(Prisma.sql`

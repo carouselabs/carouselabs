@@ -14,7 +14,8 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getExtensionUser } from "@/lib/extensionCommentAuth"
-import { kindsFor, type HistoryPlatform } from "@/lib/extensionHistory"
+import { kindsFor } from "@/lib/extensionHistory"
+import { parseEngagePlatform } from "@/lib/engage/features"
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 100
@@ -31,8 +32,7 @@ export async function GET(req: Request) {
     Math.max(1, Number.parseInt(params.get("limit") ?? "", 10) || DEFAULT_LIMIT),
   )
   const cursor = params.get("cursor")
-  const platform: HistoryPlatform = params.get("platform") === "x" ? "x" : "linkedin"
-  const kinds = kindsFor(platform)
+  const kinds = kindsFor(parseEngagePlatform(params.get("platform")))
   const kind = params.get("kind")
   if (kind !== null && !kinds.includes(kind)) {
     return NextResponse.json({ error: "Unknown history kind" }, { status: 400 })

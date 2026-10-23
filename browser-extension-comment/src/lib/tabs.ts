@@ -11,7 +11,7 @@
 // ensureContentScript). A fresh copy replaces any older one in the tab (see
 // the takeover at the bottom of src/content-script.ts).
 
-import { PLATFORM, SITE_NAME, SITE_ORIGIN } from "@/lib/platform";
+import { forPlatform, SITE_NAME, SITE_ORIGIN } from "@/lib/platform";
 import { browserName, extensionsIconLooks } from "@/lib/browserName";
 
 // Must match the ping handler in src/content-script.ts (and src/x/content-script.ts).
@@ -34,7 +34,10 @@ export function isSiteTab(tab: chrome.tabs.Tab | undefined): boolean {
 // reading anything until the person asks.
 // In the X extension, an X chat: "/i/chat/<id>" (src/x/content/xChat.ts).
 export function conversationPath(url: string | undefined | null): string | null {
-  if (PLATFORM === "x") return xChatPath(url);
+  return forPlatform({ linkedin: linkedInThreadPath, x: xChatPath })(url);
+}
+
+function linkedInThreadPath(url: string | undefined | null): string | null {
   if (!url?.startsWith(LINKEDIN_ORIGIN)) return null;
   let pathname: string;
   try {

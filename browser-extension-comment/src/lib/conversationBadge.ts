@@ -7,12 +7,11 @@
 // at all, so leaving the site arrives as a load with no address, and that
 // clears the badge. Used by both service workers.
 import { conversationPath } from "@/lib/tabs";
-import { PLATFORM } from "@/lib/platform";
+// The badge in each extension's colour: CarouseLabs purple, X's black.
+import { BADGE_COLOR } from "@/lib/platform";
 
 const CONVERSATION_BADGE = "AI";
 const CONVERSATION_TITLE = "Get AI help replying to this conversation";
-// The badge in each extension's colour: CarouseLabs purple, X's black.
-const BADGE_COLOR = PLATFORM === "x" ? "#000000" : "#7C3AED";
 
 function markConversationTab(tabId: number, url: string | undefined, defaultTitle: string) {
   const open = conversationPath(url) !== null;

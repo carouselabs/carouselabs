@@ -13,6 +13,7 @@ import { useToast } from "@/components/admin/Toast"
 import { Ledger } from "@/components/admin/Ledger"
 import { AI_MODEL_KEYS, AI_MODELS, modelLabel, type AiModelKey, type ModelPrice } from "@/lib/ai/models"
 import {
+  ENGAGE_PLATFORMS,
   FEATURE_LABELS,
   PLATFORM_FEATURES,
   PLATFORM_LABELS,
@@ -292,7 +293,7 @@ export function EngageAi() {
                 The model each feature tries first. If it fails or refuses, the other one writes instead.
               </p>
             </header>
-            {(["linkedin", "x"] as const).map((p) => (
+            {ENGAGE_PLATFORMS.map((p) => (
               <div key={p}>
                 <p className="border-t border-border bg-background px-4 py-1.5 text-caption font-semibold text-muted-foreground first:border-t-0">
                   {PLATFORM_LABELS[p]} extension

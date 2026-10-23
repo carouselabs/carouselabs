@@ -8,14 +8,13 @@ import { ArrowRight, MessageSquare, MessagesSquare, Reply, UserPlus, type Lucide
 import { db } from "@/lib/db"
 import { extAccessSummary, type ExtAccessSummary } from "@/lib/extAccess"
 import { tokenPlatform, type EngagePlatform } from "@/lib/engage/features"
-import { EXTENSION_CHECKOUT_PATH, X_EXTENSION_CHECKOUT_PATH } from "@/lib/plans"
 import { BillingRefresher } from "@/components/billing/BillingRefresher"
 import { buttonVariants } from "@/components/ui/button"
 import { extensionStatusLine } from "./ExtensionPlanSection"
 import { ExtensionPrice } from "./ExtensionPrice"
 import { DevicesList } from "./DevicesList"
 import { InstallSteps } from "./InstallSteps"
-import { ENGAGE_EXTENSIONS, EngageIcon } from "./engageExtensions"
+import { ENGAGE_EXTENSIONS, EngageIcon, otherPlatforms } from "./engageExtensions"
 
 const ACTIVITY: Record<EngagePlatform, { kind: string; label: string; icon: LucideIcon }[]> = {
   linkedin: [
@@ -30,11 +29,6 @@ const ACTIVITY: Record<EngagePlatform, { kind: string; label: string; icon: Luci
   ],
 }
 
-const CHECKOUT = {
-  linkedin: { path: EXTENSION_CHECKOUT_PATH },
-  x: { path: X_EXTENSION_CHECKOUT_PATH },
-}
-
 const card = "rounded-card border border-border bg-surface-raised p-5 flex flex-col gap-4"
 const accessLabel = (ext: ExtAccessSummary) =>
   ext.access === "unlimited" ? "Unlimited" : ext.access === "testing" ? "Testing" : "Free"
@@ -42,14 +36,8 @@ const accessLabel = (ext: ExtAccessSummary) =>
 // The other extension, sold separately: its status and a way there.
 function OtherExtension({ platform, ext }: { platform: EngagePlatform; ext: ExtAccessSummary }) {
   const info = ENGAGE_EXTENSIONS[platform]
-  const isX = platform === "x"
   return (
-    <div
-      className={[
-        "flex flex-col gap-4 rounded-card p-5 text-white",
-        isX ? "border border-black/10 bg-primary" : "bg-brand",
-      ].join(" ")}
-    >
+    <div className={["flex flex-col gap-4 rounded-card p-5 text-white", info.theme.card].join(" ")}>
       <div className="flex items-center gap-3">
         {/* The icon is the card's own colour: a ring keeps its edge. */}
         <span className="flex flex-shrink-0 rounded-[9px] ring-1 ring-white/35">
@@ -68,10 +56,10 @@ function OtherExtension({ platform, ext }: { platform: EngagePlatform; ext: ExtA
       <div className="flex flex-wrap gap-2">
         {ext.access === "free" && (
           <a
-            href={CHECKOUT[platform].path}
+            href={info.checkoutPath}
             className={[
               "inline-flex h-10 items-center gap-2 rounded-control-sm bg-white px-4 text-label font-semibold transition-colors hover:bg-white/90",
-              isX ? "text-black" : "text-brand",
+              info.theme.text,
             ].join(" ")}
           >
             Get unlimited — <ExtensionPrice price={ext.price} />
@@ -97,15 +85,14 @@ export async function ExtensionOverview({
   platform: EngagePlatform
   user: { id: string; email: string }
 }) {
-  const other: EngagePlatform = platform === "x" ? "linkedin" : "x"
   const activity = ACTIVITY[platform]
   // Calendar month, the same window /api/ext/me counts in.
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
-  const [ext, otherExt, byKind, tokens] = await Promise.all([
+  const [ext, others, byKind, tokens] = await Promise.all([
     extAccessSummary(user.id, platform),
-    extAccessSummary(user.id, other),
+    Promise.all(otherPlatforms(platform).map(async (p) => ({ platform: p, ext: await extAccessSummary(user.id, p) }))),
     db.commentHistory.groupBy({
       by: ["kind"],
       where: { userId: user.id, createdAt: { gte: monthStart }, kind: { in: activity.map((a) => a.kind) } },
@@ -122,7 +109,7 @@ export async function ExtensionOverview({
       platform={platform}
       email={user.email}
       ext={ext}
-      otherExt={otherExt}
+      others={others}
       counts={counts}
       signedInBrowsers={signedInBrowsers}
     />
@@ -138,19 +125,19 @@ export function ExtensionOverviewView({
   platform,
   email,
   ext,
-  otherExt,
+  others,
   counts,
   signedInBrowsers,
 }: {
   platform: EngagePlatform
   email: string
   ext: ExtAccessSummary
-  otherExt: ExtAccessSummary
+  /** The other extensions (sold separately) and this account's plan on each. */
+  others: { platform: EngagePlatform; ext: ExtAccessSummary }[]
   /** This calendar month's generations by kind. */
   counts: Record<string, number>
   signedInBrowsers: number
 }) {
-  const other: EngagePlatform = platform === "x" ? "linkedin" : "x"
   const activity = ACTIVITY[platform]
   const countFor = (kind: string) => counts[kind] ?? 0
   const base = ENGAGE_EXTENSIONS[platform].base
@@ -171,7 +158,7 @@ export function ExtensionOverviewView({
               <p className="text-label text-muted-foreground">{extensionStatusLine(ext)}</p>
             </div>
             {ext.access === "free" ? (
-              <a href={CHECKOUT[platform].path} className={buttonVariants({ variant: "brand" })}>
+              <a href={ENGAGE_EXTENSIONS[platform].checkoutPath} className={buttonVariants({ variant: "brand" })}>
                 Get unlimited — <ExtensionPrice price={ext.price} />
                 <ArrowRight aria-hidden />
               </a>
@@ -207,7 +194,9 @@ export function ExtensionOverviewView({
       </div>
 
       <aside aria-label="More" className="flex min-w-0 flex-col gap-6">
-        <OtherExtension platform={other} ext={otherExt} />
+        {others.map((o) => (
+          <OtherExtension key={o.platform} platform={o.platform} ext={o.ext} />
+        ))}
 
         {/* Browsers */}
         <div className={card}>

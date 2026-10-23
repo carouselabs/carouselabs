@@ -16,7 +16,7 @@ import { ENGAGE_FEATURES, FEATURE_LABELS } from "@/lib/engage/features"
 import { resolveRange } from "@/lib/engage/ranges"
 import { readGlobalSettingsFresh, saveGlobalSetting } from "@/lib/engage/settings"
 import { AI_MODEL_KEYS, AI_MODELS, modelLabel } from "@/lib/ai/models"
-import type { OverviewPlatform } from "@/lib/engage/adminQueries"
+import { parseOverviewPlatform } from "@/lib/engage/adminQueries"
 import { getRequestIp, logAdminAction } from "@/lib/auditLog"
 
 export async function GET(req: Request) {
@@ -26,9 +26,8 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const range = resolveRange(url.searchParams.get("range"), url.searchParams.get("from"), url.searchParams.get("to"))
   if (!range) return NextResponse.json({ error: "Invalid date range" }, { status: 400 })
-  const p = url.searchParams.get("platform") ?? "all"
-  if (p !== "all" && p !== "linkedin" && p !== "x") return NextResponse.json({ error: "Invalid platform" }, { status: 400 })
-  const platform: OverviewPlatform = p
+  const platform = parseOverviewPlatform(url.searchParams.get("platform"))
+  if (!platform) return NextResponse.json({ error: "Invalid platform" }, { status: 400 })
 
   const { ready, settings } = await readGlobalSettingsFresh()
   const usage = await aiUsage(range.from, range.to, platform, settings.aiPrices)

@@ -21,6 +21,7 @@ import type { Prisma } from "@prisma/client"
 import { verifyBillingIdentity } from "@/lib/billingIdentity"
 import { createCommissionForPayment } from "@/lib/referral"
 import { X_EXTENSION_VARIANT_ID } from "@/lib/plans"
+import { ENGAGE_PLATFORMS } from "@/lib/engage/features"
 import { markIntroUsed } from "@/lib/engage/priceIntro"
 import {
   extensionPlatformOfPayload,
@@ -47,26 +48,31 @@ type SubscriptionFields = {
   customerPortalUrl: string | null
 }
 
+interface SubscriptionTable {
+  bySubscription: (lsSubscriptionId: string) => Promise<{ userId: string } | null>
+  currentFor: (userId: string) => Promise<{ lsSubscriptionId: string } | null>
+  save: (userId: string, fields: SubscriptionFields) => Promise<unknown>
+}
+
 // The table each extension's subscription lives in, through the caller's
 // client (the webhook's transaction).
-function subscriptions(platform: BillingPlatform, client: Prisma.TransactionClient) {
-  if (platform === "x") {
-    return {
-      bySubscription: (lsSubscriptionId: string) =>
-        client.xSubscription.findUnique({ where: { lsSubscriptionId }, select: { userId: true } }),
-      currentFor: (userId: string) => client.xSubscription.findUnique({ where: { userId }, select: { lsSubscriptionId: true } }),
-      save: (userId: string, fields: SubscriptionFields) =>
-        client.xSubscription.upsert({ where: { userId }, create: { userId, ...fields }, update: fields }),
-    }
-  }
-  return {
-    bySubscription: (lsSubscriptionId: string) =>
+const SUBSCRIPTION_TABLES: Record<BillingPlatform, (client: Prisma.TransactionClient) => SubscriptionTable> = {
+  linkedin: (client) => ({
+    bySubscription: (lsSubscriptionId) =>
       client.extensionSubscription.findUnique({ where: { lsSubscriptionId }, select: { userId: true } }),
-    currentFor: (userId: string) =>
-      client.extensionSubscription.findUnique({ where: { userId }, select: { lsSubscriptionId: true } }),
-    save: (userId: string, fields: SubscriptionFields) =>
+    currentFor: (userId) => client.extensionSubscription.findUnique({ where: { userId }, select: { lsSubscriptionId: true } }),
+    save: (userId, fields) =>
       client.extensionSubscription.upsert({ where: { userId }, create: { userId, ...fields }, update: fields }),
-  }
+  }),
+  x: (client) => ({
+    bySubscription: (lsSubscriptionId) => client.xSubscription.findUnique({ where: { lsSubscriptionId }, select: { userId: true } }),
+    currentFor: (userId) => client.xSubscription.findUnique({ where: { userId }, select: { lsSubscriptionId: true } }),
+    save: (userId, fields) => client.xSubscription.upsert({ where: { userId }, create: { userId, ...fields }, update: fields }),
+  }),
+}
+
+function subscriptions(platform: BillingPlatform, client: Prisma.TransactionClient): SubscriptionTable {
+  return SUBSCRIPTION_TABLES[platform](client)
 }
 
 // Which extension this event is about: the product's variant, else the table
@@ -80,8 +86,9 @@ export async function extensionWebhookPlatform(
   if (fromVariant) return fromVariant
   const subId = subscriptionIdOf(payload)
   if (!subId) return null
-  if (await subscriptions("linkedin", client).bySubscription(subId)) return "linkedin"
-  if (await subscriptions("x", client).bySubscription(subId)) return "x"
+  for (const platform of ENGAGE_PLATFORMS) {
+    if (await subscriptions(platform, client).bySubscription(subId)) return platform
+  }
   return null
 }
 

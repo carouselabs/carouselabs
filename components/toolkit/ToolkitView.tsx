@@ -5,12 +5,13 @@ import { buttonVariants } from "@/components/ui/button"
 import { PageHeader } from "@/components/patterns/PageHeader"
 import { ExtensionPrice } from "@/components/extension/ExtensionPrice"
 import { standardPrice, type EngagePriceInfo } from "@/lib/engage/priceRules"
-import {
-  EXTENSION_CHECKOUT_PATH,
-  EXTENSION_STORE_URL,
-  X_EXTENSION_CHECKOUT_PATH,
-  X_EXTENSION_STORE_URL,
-} from "@/lib/plans"
+import { EXTENSION_STORE_URL, X_EXTENSION_STORE_URL } from "@/lib/plans"
+import { ENGAGE_PLATFORMS, type EngagePlatform } from "@/lib/engage/features"
+import { ENGAGE_EXTENSIONS } from "@/components/extension/engageExtensions"
+
+// The usual price of every extension.
+export const standardPrices = () =>
+  Object.fromEntries(ENGAGE_PLATFORMS.map((p) => [p, standardPrice(p)])) as Record<EngagePlatform, EngagePriceInfo>
 
 // The Engage extensions' Chrome Web Store listings live in lib/plans.ts with
 // the rest of their product data, since the billing pages link to them too.
@@ -30,7 +31,7 @@ type ToolCard =
       storeUrl: string | null
       // Paid extensions: each its own $15/month plan, bought separately
       // (lib/plans.ts). LinkedIn and X are separate products.
-      paid?: "linkedin" | "x"
+      paid?: EngagePlatform
     }
 
 const TOOLS: ToolCard[] = [
@@ -78,16 +79,16 @@ const secondaryClass = buttonVariants({
 // The paid extension's second button: buy it, or show it's already unlocked.
 // Installing and trying it is free (10 generations), so Install stays the
 // primary action once the listing is live.
-function PlanCta({ unlimited, platform, price }: { unlimited: boolean; platform: "linkedin" | "x"; price: EngagePriceInfo }) {
+function PlanCta({ unlimited, platform, price }: { unlimited: boolean; platform: EngagePlatform; price: EngagePriceInfo }) {
   if (unlimited) {
     return (
-      <Link href={platform === "x" ? "/extension/x" : "/extension"} className={secondaryClass}>
+      <Link href={ENGAGE_EXTENSIONS[platform].base} className={secondaryClass}>
         Unlimited — open
       </Link>
     )
   }
   return (
-    <a href={platform === "x" ? X_EXTENSION_CHECKOUT_PATH : EXTENSION_CHECKOUT_PATH} className={secondaryClass}>
+    <a href={ENGAGE_EXTENSIONS[platform].checkoutPath} className={secondaryClass}>
       Get unlimited — <ExtensionPrice price={price} />
     </a>
   )
@@ -128,10 +129,10 @@ function Cta({ tool }: { tool: ToolCard }) {
  * what it pays for each (a special price an admin set, or the usual one). */
 export function ToolkitView({
   unlimited,
-  prices = { linkedin: standardPrice("linkedin"), x: standardPrice("x") },
+  prices = standardPrices(),
 }: {
-  unlimited: { linkedin: boolean; x: boolean }
-  prices?: { linkedin: EngagePriceInfo; x: EngagePriceInfo }
+  unlimited: Record<EngagePlatform, boolean>
+  prices?: Record<EngagePlatform, EngagePriceInfo>
 }) {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">

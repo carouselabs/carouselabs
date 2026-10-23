@@ -2,14 +2,11 @@
 
 // The browsers one extension is signed in on, with a remote Sign out — for
 // a lost laptop, or a shared computer left signed in. The route lists both
-// extensions' sign-ins; the X extension's are labelled X_DEVICE_PREFIX.
+// extensions' sign-ins; the newer extensions' are labelled (DEVICE_PREFIXES).
 import { useEffect, useState } from "react"
 import { Loader2, Monitor } from "lucide-react"
-import { tokenPlatform, X_DEVICE_PREFIX, type EngagePlatform } from "@/lib/engage/features"
+import { deviceName, tokenPlatform, PLATFORM_LABELS, type EngagePlatform } from "@/lib/engage/features"
 import { dateTime, errorMessage, extApi, type ExtDevice } from "./api"
-
-const deviceName = (device: string | null) =>
-  device?.startsWith(`${X_DEVICE_PREFIX} · `) ? device.slice(X_DEVICE_PREFIX.length + 3) : device
 
 export function DevicesList({ platform = "linkedin" }: { platform?: EngagePlatform } = {}) {
   const [devices, setDevices] = useState<ExtDevice[] | null>(null)
@@ -44,7 +41,7 @@ export function DevicesList({ platform = "linkedin" }: { platform?: EngagePlatfo
       {error && <p className="text-caption text-danger">{error}</p>}
       {devices?.length === 0 && (
         <p className="text-caption text-muted-foreground">
-          Not signed in on any browser yet. Open the extension&apos;s panel on {platform === "x" ? "X" : "LinkedIn"}{" "}
+          Not signed in on any browser yet. Open the extension&apos;s panel on {PLATFORM_LABELS[platform]}{" "}
           and click Sign in.
         </p>
       )}

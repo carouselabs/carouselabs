@@ -12,6 +12,7 @@
 import { NextResponse } from "next/server"
 import { extensionCallerPlatform, getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import { engagePreflight, reserveEngageGeneration } from "@/lib/engage/gate"
+import { PLATFORM_KINDS } from "@/lib/engage/features"
 import { agentActionGuidance, agentActionOf, agentNumberSources, parseAgentInput } from "@/lib/engageAgents"
 import { buildMessageSystemMessage, buildMessageUserMessage, type MessageThreadEntryInput } from "@/lib/ai/prompts/messagePrompt"
 import { writeMessage } from "@/lib/engage/messageWriter"
@@ -28,7 +29,7 @@ export async function POST(req: Request) {
   const user = await getUserFromCommentExtensionToken(req)
   if (!user) return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   const platform = extensionCallerPlatform(req)
-  const kind = platform === "x" ? "x_tests" : "tests"
+  const kind = PLATFORM_KINDS[platform].tests
 
   const preflight = await engagePreflight(user.id, kind, req)
   if (preflight.response) return preflight.response

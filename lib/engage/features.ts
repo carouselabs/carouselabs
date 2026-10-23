@@ -13,18 +13,53 @@ export type EngageFeature = (typeof ENGAGE_FEATURES)[number]
 export const LINKEDIN_FEATURES: EngageFeature[] = ["comments", "replies", "connection_notes", "messages"]
 export const X_FEATURES: EngageFeature[] = ["x_replies", "x_messages"]
 
-// The two extensions on one account and one plan, for the admin's split.
+// The extensions on one account, each sold separately. LinkedIn is the
+// original: whatever isn't marked as another extension's (a sign-in, a
+// feature, a request) is LinkedIn's, as it was before there were others.
+// Per-extension facts are Records keyed by platform, never "X, otherwise
+// LinkedIn", so adding an extension here makes every place that needs its own
+// answer fail to compile until it has one.
 export const ENGAGE_PLATFORMS = ["linkedin", "x"] as const
 export type EngagePlatform = (typeof ENGAGE_PLATFORMS)[number]
+// Every extension that came after LinkedIn, the ones that mark their own.
+export type NewerPlatform = Exclude<EngagePlatform, "linkedin">
+export const NEWER_PLATFORMS: NewerPlatform[] = ENGAGE_PLATFORMS.filter((p): p is NewerPlatform => p !== "linkedin")
 export const PLATFORM_LABELS: Record<EngagePlatform, string> = { linkedin: "LinkedIn", x: "X" }
+// The site's name where the AI reads it (prompts).
+export const PLATFORM_SITE_NAMES: Record<EngagePlatform, string> = { linkedin: "LinkedIn", x: "X (formerly Twitter)" }
 export const PLATFORM_FEATURES: Record<EngagePlatform, EngageFeature[]> = { linkedin: LINKEDIN_FEATURES, x: X_FEATURES }
 
-// How the X extension's sign-ins are labelled (ExtensionToken.device, set by
-// app/api/ext/auth/exchange): the only record of which extension a token
+// The newer extensions' features. LinkedIn's figures are everything else, so
+// errors and AI calls that name no extension (insert, read, auth) stay
+// LinkedIn's.
+export const NEWER_FEATURES: EngageFeature[] = NEWER_PLATFORMS.flatMap((p) => PLATFORM_FEATURES[p])
+
+export function isEngagePlatform(value: unknown): value is EngagePlatform {
+  return typeof value === "string" && (ENGAGE_PLATFORMS as readonly string[]).includes(value)
+}
+
+// An extension named in a query string or request body (?platform=x); nothing,
+// or anything unknown, is LinkedIn.
+export function parseEngagePlatform(value: unknown): EngagePlatform {
+  return isEngagePlatform(value) ? value : "linkedin"
+}
+
+// How the newer extensions' sign-ins are labelled (ExtensionToken.device, set
+// by app/api/ext/auth/exchange): the only record of which extension a token
 // belongs to. Anything else, including no label, is the LinkedIn extension.
-export const X_DEVICE_PREFIX = "X extension"
+export const DEVICE_PREFIXES: Record<NewerPlatform, string> = { x: "X extension" }
+export const X_DEVICE_PREFIX = DEVICE_PREFIXES.x
 export function tokenPlatform(device: string | null | undefined): EngagePlatform {
-  return device?.startsWith(X_DEVICE_PREFIX) ? "x" : "linkedin"
+  return NEWER_PLATFORMS.find((p) => device?.startsWith(DEVICE_PREFIXES[p])) ?? "linkedin"
+}
+
+// A sign-in's device label without its extension's prefix ("X extension ·
+// Chrome on Mac" → "Chrome on Mac").
+export function deviceName(device: string | null): string | null {
+  const platform = tokenPlatform(device)
+  if (platform === "linkedin" || !device) return device
+  const prefix = `${DEVICE_PREFIXES[platform]} · `
+  return device.startsWith(prefix) ? device.slice(prefix.length) : device
 }
 
 export const FEATURE_LABELS: Record<EngageFeature, string> = {
@@ -42,7 +77,33 @@ export const FEATURE_LABELS: Record<EngageFeature, string> = {
 // counted separately so usage figures stay honest.
 // x_rewrites / x_tests are the same tools in CarouseLabs Engage for X, which
 // follow its X replies switch.
-export type EngageUsageKind = EngageFeature | "rewrites" | "tests" | "x_rewrites" | "x_tests"
+export const TOOL_KINDS = ["rewrites", "tests", "x_rewrites", "x_tests"] as const
+export type EngageToolKind = (typeof TOOL_KINDS)[number]
+export type EngageUsageKind = EngageFeature | EngageToolKind
+
+// The feature each tool belongs to, for per-feature settings (the AI model)
+// and figures: Shorter/Longer and profile tests are comment tools on LinkedIn
+// and reply tools on X.
+export const TOOL_FEATURES: Record<EngageToolKind, EngageFeature> = {
+  rewrites: "comments",
+  tests: "comments",
+  x_rewrites: "x_replies",
+  x_tests: "x_replies",
+}
+
+export function isToolKind(kind: EngageUsageKind): kind is EngageToolKind {
+  return (TOOL_KINDS as readonly string[]).includes(kind)
+}
+
+// What each extension's shared screens count as: its Shorter/Longer, its
+// profile and agent Tests, and its Messages screen.
+export const PLATFORM_KINDS: Record<
+  EngagePlatform,
+  { rewrites: EngageToolKind; tests: EngageToolKind; messages: EngageFeature }
+> = {
+  linkedin: { rewrites: "rewrites", tests: "tests", messages: "messages" },
+  x: { rewrites: "x_rewrites", tests: "x_tests", messages: "x_messages" },
+}
 
 export const USAGE_KIND_LABELS: Record<EngageUsageKind, string> = {
   ...FEATURE_LABELS,
@@ -52,21 +113,20 @@ export const USAGE_KIND_LABELS: Record<EngageUsageKind, string> = {
   x_tests: "X profile tests",
 }
 
-export const USAGE_KINDS: EngageUsageKind[] = [...ENGAGE_FEATURES, "rewrites", "tests", "x_rewrites", "x_tests"]
+export const USAGE_KINDS: EngageUsageKind[] = [...ENGAGE_FEATURES, ...TOOL_KINDS]
 
-// The feature a usage kind belongs to, for per-feature settings (the AI model)
-// and figures: Shorter/Longer and profile tests are comment tools on LinkedIn
-// and reply tools on X.
 // Which extension a usage kind belongs to: each is sold, and has its free
 // generations, separately.
 export function platformOfUsageKind(kind: EngageUsageKind): EngagePlatform {
-  return X_FEATURES.includes(featureOfUsageKind(kind)) ? "x" : "linkedin"
+  return platformOfFeature(featureOfUsageKind(kind))
+}
+
+export function platformOfFeature(feature: EngageFeature): EngagePlatform {
+  return NEWER_PLATFORMS.find((p) => PLATFORM_FEATURES[p].includes(feature)) ?? "linkedin"
 }
 
 export function featureOfUsageKind(kind: EngageUsageKind): EngageFeature {
-  if (kind === "rewrites" || kind === "tests") return "comments"
-  if (kind === "x_rewrites" || kind === "x_tests") return "x_replies"
-  return kind
+  return isToolKind(kind) ? TOOL_FEATURES[kind] : kind
 }
 
 // The same, as a plural noun inside a sentence ("your limit of 30 comments").

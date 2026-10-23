@@ -7,6 +7,7 @@ import type { ExtAccessSummary } from "@/lib/extAccess"
 import type { EngagePlatform } from "@/lib/engage/features"
 import { ExtensionPlanSection } from "./ExtensionPlanSection"
 import { PaymentsList } from "./PaymentsList"
+import { ENGAGE_EXTENSIONS } from "./engageExtensions"
 
 const link = "font-medium text-brand hover:underline"
 
@@ -20,9 +21,9 @@ export function ExtensionBillingView({ ext, platform = "linkedin" }: { ext: ExtA
         <div className="flex flex-col gap-1">
           <h2 className="text-label font-semibold text-foreground">Payment history</h2>
           <p className="text-caption text-muted-foreground">
-            {platform === "x" ? (
+            {platform !== "linkedin" ? (
               <>
-                Payments for CarouseLabs Engage for X only. LinkedIn&apos;s are under{" "}
+                Payments for {ENGAGE_EXTENSIONS[platform].name} only. LinkedIn&apos;s are under{" "}
                 <a href="/extension/billing" className={link}>
                   Engage for LinkedIn → Plan &amp; payments
                 </a>

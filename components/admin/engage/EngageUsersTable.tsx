@@ -10,7 +10,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { ChevronLeft, ChevronRight, Columns3, Plus, Search, X } from "lucide-react"
 import { AdminButton, AdminInput, AdminSelect, fmtDate } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
-import { ENGAGE_FEATURES, FEATURE_LABELS } from "@/lib/engage/features"
+import { ENGAGE_FEATURES, FEATURE_LABELS, type EngagePlatform } from "@/lib/engage/features"
 import type { UserListRow } from "@/lib/engage/adminQueries"
 import { GrantAccessModal } from "./GrantAccessForm"
 import { BulkActionModal, type BulkAction } from "./BulkActionModal"
@@ -84,10 +84,12 @@ interface SavedView {
 }
 
 // "1.3.0 · X 1.0.0": each extension they use, with its version when known.
+const VERSION_CELL: Record<EngagePlatform, (u: UserListRow) => string> = {
+  linkedin: (u) => u.extensionVersion ?? "LinkedIn",
+  x: (u) => `X ${u.xExtensionVersion ?? ""}`.trim(),
+}
 function extensionCell(u: UserListRow): string {
-  const parts = u.extensions.map((p) =>
-    p === "x" ? `X ${u.xExtensionVersion ?? ""}`.trim() : (u.extensionVersion ?? "LinkedIn"),
-  )
+  const parts = u.extensions.map((p) => VERSION_CELL[p](u))
   return parts.length > 0 ? parts.join(" · ") : "—"
 }
 

@@ -11,21 +11,22 @@
 // message; it relays it into the extension via chrome.runtime.sendMessage.
 import { useEffect, useState } from "react"
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
+import { parseEngagePlatform, type EngagePlatform } from "@/lib/engage/features"
 
 // Must match TOKEN_MESSAGE_TYPE in browser-extension-comment/src/lib/platform.ts
 // for each extension. The X extension opens this page with ?for=x and listens
 // only for its own name, so with both installed neither picks up the other's
 // token. The LinkedIn name is what every installed copy already listens for.
-const MESSAGE_TYPES = {
+const MESSAGE_TYPES: Record<EngagePlatform, string> = {
   linkedin: "carouselabs:extension-token",
   x: "carouselabs:x-extension-token",
-} as const
-const PRODUCT_NAMES = { linkedin: "CarouseLabs Engage", x: "CarouseLabs Engage for X" } as const
+}
+const PRODUCT_NAMES: Record<EngagePlatform, string> = { linkedin: "CarouseLabs Engage", x: "CarouseLabs Engage for X" }
 
-type Client = keyof typeof MESSAGE_TYPES
+type Client = EngagePlatform
 
 function clientFromUrl(): Client {
-  return new URLSearchParams(window.location.search).get("for") === "x" ? "x" : "linkedin"
+  return parseEngagePlatform(new URLSearchParams(window.location.search).get("for"))
 }
 
 type Status = "connecting" | "connected" | "error"

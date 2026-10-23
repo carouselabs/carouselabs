@@ -9,7 +9,6 @@
 // have keeps what it costs (Lemon Squeezy can't reprice it).
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { db } from "@/lib/db"
 import { requireEngagePermission } from "@/lib/engage/adminAccess"
 import { findTargetUser, notFound, parseBody } from "@/lib/engage/adminApi"
 import { adminEngagePrices, removeEngagePrice, setEngagePrice } from "@/lib/engage/price"
@@ -17,10 +16,12 @@ import { MAX_INTRO_MONTHS, MAX_PRICE_CENTS, MIN_PRICE_CENTS, STANDARD_PRICE_CENT
 import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
 import { isExtensionSubscriptionActive } from "@/lib/extensionAccessRules"
 import { getRequestIp } from "@/lib/auditLog"
+import { ENGAGE_PLATFORMS } from "@/lib/engage/features"
+import { findEngageSubscription } from "@/lib/engage/subscriptions"
 
 type Params = { params: Promise<{ userId: string }> }
 
-const platform = z.enum(["linkedin", "x"])
+const platform = z.enum(ENGAGE_PLATFORMS)
 const reason = z.string().trim().min(3, "Say why").max(500)
 
 const setBody = z.object({
@@ -46,15 +47,22 @@ export async function GET(req: Request, { params }: Params) {
   const user = await findTargetUser(userId)
   if (!user) return notFound()
 
-  const [prices, linkedin, x] = await Promise.all([
+  const [prices, subscriptions] = await Promise.all([
     adminEngagePrices(user.id),
-    db.extensionSubscription.findUnique({ where: { userId: user.id } }),
-    db.xSubscription.findUnique({ where: { userId: user.id } }).catch(() => null),
+    Promise.all(
+      ENGAGE_PLATFORMS.map((p) =>
+        findEngageSubscription(user.id, p).catch((err) => {
+          // A newer extension's table may not exist yet: not subscribed.
+          if (p === "linkedin") throw err
+          return null
+        }),
+      ),
+    ),
   ])
   return NextResponse.json({
     prices,
     // Already paying: a new price won't change what they pay now.
-    subscribed: { linkedin: isExtensionSubscriptionActive(linkedin), x: isExtensionSubscriptionActive(x) },
+    subscribed: Object.fromEntries(ENGAGE_PLATFORMS.map((p, i) => [p, isExtensionSubscriptionActive(subscriptions[i])])),
   })
 }
 

@@ -26,7 +26,8 @@ import {
 } from "@/lib/ai/prompts/messagePrompt"
 import { PRIMARY_MODEL } from "@/lib/ai/commentModel"
 import { writeMessage } from "@/lib/engage/messageWriter"
-import { HISTORY_SNIPPET_CHARS, linkedInUrl } from "@/lib/extensionHistory"
+import { HISTORY_SNIPPET_CHARS, MESSAGE_HISTORY_KINDS, linkedInUrl } from "@/lib/extensionHistory"
+import { PLATFORM_KINDS } from "@/lib/engage/features"
 import {
   agentActionGuidance,
   agentActionOf,
@@ -74,19 +75,35 @@ function parseThread(raw: unknown): MessageThreadEntryInput[] {
   return entries.slice(-MAX_THREAD_ENTRIES)
 }
 
-// One handler for both extensions' DMs. LinkedIn's (app/api/ext/message) and
+// What differs per extension: the log label, how the contact is read, and the
+// chat's link (for History only; never sent to the model).
+const MESSAGE_SITES: Record<
+  MessagePlatform,
+  { label: string; contact: (raw: unknown) => MessageContactInput; threadUrl: (path: unknown) => string }
+> = {
+  linkedin: {
+    label: "ext/message",
+    contact: parseContact,
+    threadUrl: (path) =>
+      typeof path === "string" && path.startsWith("/messaging/thread/") ? linkedInUrl(`https://www.linkedin.com${path}`) : "",
+  },
+  x: { label: "ext/x/message", contact: parseXContact, threadUrl: xChatUrl },
+}
+
+// One handler for every extension's DMs. LinkedIn's (app/api/ext/message) and
 // X's (app/api/ext/x/message) differ only in what is checked, counted and
 // saved below; the reasons (MessageProfile), prompts and guardrails are shared.
 export async function handleMessageRequest(req: Request, platform: MessagePlatform): Promise<Response> {
-  const isX = platform === "x"
-  const label = isX ? "ext/x/message" : "ext/message"
+  const site = MESSAGE_SITES[platform]
+  const { label } = site
+  const feature = PLATFORM_KINDS[platform].messages
 
   const user = await getUserFromCommentExtensionToken(req)
   if (!user) {
     return NextResponse.json({ error: "Invalid or missing extension token" }, { status: 401 })
   }
 
-  const preflight = await engagePreflight(user.id, isX ? "x_messages" : "messages", req)
+  const preflight = await engagePreflight(user.id, feature, req)
   if (preflight.response) return preflight.response
 
   // Used only when the caller asked for "flow" mode (no saved profile, no
@@ -120,12 +137,8 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
 
   try {
     const body = await req.json()
-    contact = isX ? parseXContact(body.contact) : parseContact(body.contact)
-    threadUrl = isX
-      ? xChatUrl(body.threadPath)
-      : typeof body.threadPath === "string" && body.threadPath.startsWith("/messaging/thread/")
-        ? linkedInUrl(`https://www.linkedin.com${body.threadPath}`)
-        : ""
+    contact = site.contact(body.contact)
+    threadUrl = site.threadUrl(body.threadPath)
     thread = parseThread(body.thread)
     profileId = typeof body.profileId === "string" && body.profileId ? body.profileId : undefined
     agentId = typeof body.agentId === "string" && body.agentId ? body.agentId.slice(0, 40) : undefined
@@ -181,7 +194,7 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
     : { goal: goal ?? FLOW_DEFAULT_GOAL, tone: tone || "Natural" }
 
   // Last check before the model call, so a blocked account never burns one.
-  const gate = await reserveEngageGeneration(user.id, isX ? "x_messages" : "messages", preflight)
+  const gate = await reserveEngageGeneration(user.id, feature, preflight)
   if (!gate.ok) return gate.response
 
   const isOpener = thread.length === 0
@@ -204,7 +217,7 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
     user: userMessage,
     numberSources,
     label,
-    engage: { userId: user.id, kind: isX ? "x_messages" : "messages" },
+    engage: { userId: user.id, kind: feature },
     output: alternatives ? "alternatives" : "single",
   })
   const message = written?.message ?? ""
@@ -225,7 +238,7 @@ export async function handleMessageRequest(req: Request, platform: MessagePlatfo
     const history = await db.commentHistory.create({
       data: {
         userId: user.id,
-        kind: isX ? "x_message" : "message",
+        kind: MESSAGE_HISTORY_KINDS[platform],
         profileId: agent ? null : (profile?.id ?? null),
         profileName: agent ? `Agent: ${agent.name}` : (profile?.name ?? (flow && !goal ? "Just continue" : "Custom reason")),
         postAuthor: contact.name,

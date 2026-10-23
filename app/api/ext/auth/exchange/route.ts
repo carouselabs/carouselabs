@@ -10,7 +10,7 @@ import { auth } from "@clerk/nextjs/server"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { generateCommentExtensionToken, hashCommentExtensionToken } from "@/lib/extensionCommentAuth"
-import { X_DEVICE_PREFIX } from "@/lib/engage/features"
+import { DEVICE_PREFIXES, parseEngagePlatform } from "@/lib/engage/features"
 import { cookieNamesFromHeader } from "@/lib/clerkSessionCookie"
 
 // POST /api/ext/auth/exchange — body: { device?: string }. Requires an
@@ -38,9 +38,10 @@ export async function POST(req: Request) {
     if (typeof body?.device === "string" && body.device.trim()) {
       device = body.device.trim().slice(0, 200)
     }
-    // The X extension (CarouseLabs Engage for X) says so, and its browsers
-    // are labelled that way in "Signed-in browsers".
-    if (body?.client === "x") device = `${X_DEVICE_PREFIX} · ${device ?? "Chrome"}`.slice(0, 200)
+    // A newer extension (CarouseLabs Engage for X, …) says which it is, and
+    // its browsers are labelled that way in "Signed-in browsers".
+    const client = parseEngagePlatform(body?.client)
+    if (client !== "linkedin") device = `${DEVICE_PREFIXES[client]} · ${device ?? "Chrome"}`.slice(0, 200)
   } catch {
     // no/empty body is fine — device is optional
   }

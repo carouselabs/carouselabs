@@ -18,18 +18,20 @@ import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import { getCurrentUser } from "@/lib/auth"
 import { extensionCheckoutFor } from "@/lib/extensionCheckout"
-import { EXTENSION_CHECKOUT_PATH, X_EXTENSION_CHECKOUT_PATH } from "@/lib/plans"
+import { EXTENSION_CHECKOUT_PATHS } from "@/lib/plans"
+import { parseEngagePlatform } from "@/lib/engage/features"
+import { ENGAGE_EXTENSIONS } from "@/components/extension/engageExtensions"
 
 export const dynamic = "force-dynamic"
 
 export async function GET(req: Request) {
-  const platform = new URL(req.url).searchParams.get("platform") === "x" ? "x" : "linkedin"
+  const platform = parseEngagePlatform(new URL(req.url).searchParams.get("platform"))
   const { userId } = await auth()
   if (!userId) {
     const signUp = new URL("/sign-up", req.url)
     signUp.searchParams.set(
       "redirect_url",
-      new URL(platform === "x" ? X_EXTENSION_CHECKOUT_PATH : EXTENSION_CHECKOUT_PATH, req.url).toString(),
+      new URL(EXTENSION_CHECKOUT_PATHS[platform], req.url).toString(),
     )
     return NextResponse.redirect(signUp)
   }
@@ -44,5 +46,5 @@ export async function GET(req: Request) {
   if (checkout.kind === "subscribed" && checkout.manageUrl) return NextResponse.redirect(checkout.manageUrl, 303)
   // Already subscribed without a portal link, or checkout not configured:
   // the extension's plan page explains either case.
-  return NextResponse.redirect(new URL(platform === "x" ? "/extension/x/billing" : "/extension/billing", req.url), 303)
+  return NextResponse.redirect(new URL(`${ENGAGE_EXTENSIONS[platform].base}/billing`, req.url), 303)
 }

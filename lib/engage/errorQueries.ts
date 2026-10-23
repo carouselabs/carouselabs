@@ -6,7 +6,7 @@
 import { Prisma } from "@prisma/client"
 import { db } from "@/lib/db"
 import { modelLabel } from "@/lib/ai/models"
-import { X_FEATURES } from "@/lib/engage/features"
+import { featureSql } from "@/lib/engage/platformQueries"
 import { compareVersions } from "@/lib/engage/settingsRules"
 import type { OverviewPlatform } from "@/lib/engage/adminQueries"
 import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
@@ -51,9 +51,7 @@ export interface EngageErrors {
 // An error's feature says which extension it came from; generic ones
 // (insert, read, auth, other) are the LinkedIn extension's.
 function platformSql(platform: OverviewPlatform, column: Prisma.Sql): Prisma.Sql {
-  if (platform === "all") return Prisma.empty
-  const x = Prisma.join(X_FEATURES)
-  return platform === "x" ? Prisma.sql`AND ${column} IN (${x})` : Prisma.sql`AND ${column} NOT IN (${x})`
+  return platform === "all" ? Prisma.empty : featureSql(platform, column)
 }
 
 const missingTable = (err: unknown, table: string) =>

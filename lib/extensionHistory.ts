@@ -7,20 +7,34 @@
 // its own kinds into the same table. Each extension sees only its own: the
 // LinkedIn kinds are what every caller gets unless it asks for X, so LinkedIn
 // copies already installed never see X rows.
+import type { EngagePlatform } from "@/lib/engage/features"
+
 export const HISTORY_KINDS = ["comment", "reply", "connection_note", "message"] as const
 export type HistoryKind = (typeof HISTORY_KINDS)[number]
 
 export const X_HISTORY_KINDS = ["x_reply", "x_message"] as const
 export type XHistoryKind = (typeof X_HISTORY_KINDS)[number]
 
-export type HistoryPlatform = "linkedin" | "x"
+export type HistoryPlatform = EngagePlatform
+
+// Each extension's own kinds.
+export const PLATFORM_HISTORY_KINDS: Record<EngagePlatform, readonly string[]> = {
+  linkedin: HISTORY_KINDS,
+  x: X_HISTORY_KINDS,
+}
+
+// The kind a Messages-screen reply is saved as, per extension.
+export const MESSAGE_HISTORY_KINDS: Record<EngagePlatform, string> = {
+  linkedin: "message",
+  x: "x_message",
+}
 
 export function isHistoryKind(value: unknown): value is HistoryKind {
   return typeof value === "string" && (HISTORY_KINDS as readonly string[]).includes(value)
 }
 
-export function kindsFor(platform: HistoryPlatform): readonly string[] {
-  return platform === "x" ? X_HISTORY_KINDS : HISTORY_KINDS
+export function kindsFor(platform: EngagePlatform): readonly string[] {
+  return PLATFORM_HISTORY_KINDS[platform]
 }
 
 // What LinkedIn sees as comment activity: the kinds the panel's pacing nudge

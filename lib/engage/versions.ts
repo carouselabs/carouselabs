@@ -5,7 +5,8 @@
 // before 1.3.0 send no version; they show as version null.
 import { Prisma } from "@prisma/client"
 import { db } from "@/lib/db"
-import { X_DEVICE_PREFIX, type EngagePlatform } from "@/lib/engage/features"
+import type { EngagePlatform } from "@/lib/engage/features"
+import { TOKEN_PLATFORM_SQL as PLATFORM_OF_TOKEN } from "@/lib/engage/platformQueries"
 import { compareVersions } from "@/lib/engage/settingsRules"
 
 export const VERSIONS_WINDOW_DAYS = 30
@@ -18,8 +19,6 @@ export interface VersionRow {
   people: number
   lastSeenAt: string
 }
-
-const PLATFORM_OF_TOKEN = Prisma.sql`CASE WHEN t.device LIKE ${`${X_DEVICE_PREFIX}%`} THEN 'x' ELSE 'linkedin' END`
 
 // Signed-in browsers (not signed out) used in the last VERSIONS_WINDOW_DAYS,
 // newest version first, the no-version row last.

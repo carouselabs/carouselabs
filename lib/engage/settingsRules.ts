@@ -17,6 +17,7 @@ import {
   ENGAGE_FEATURES,
   ENGAGE_PLATFORMS,
   FEATURE_LABELS,
+  NEWER_PLATFORMS,
   type EngageFeature,
   type EngagePlatform,
 } from "@/lib/engage/features"
@@ -121,10 +122,10 @@ export function isOutdated(version: string | null | undefined, min: string | nul
   return compareVersions(v, min) < 0
 }
 
-// The extension a request comes from: the X extension's routes are all under
-// /api/ext/x/.
+// The extension a request comes from: each newer extension's routes are all
+// under /api/ext/<platform>/ (/api/ext/x/…).
 export function requestPlatform(pathname: string): EngagePlatform {
-  return pathname.startsWith("/api/ext/x/") ? "x" : "linkedin"
+  return NEWER_PLATFORMS.find((p) => pathname.startsWith(`/api/ext/${p}/`)) ?? "linkedin"
 }
 
 const PRODUCT_NAMES: Record<EngagePlatform, string> = {

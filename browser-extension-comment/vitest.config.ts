@@ -1,10 +1,21 @@
 import { defineConfig, type Plugin } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
+import { readFileSync } from "node:fs";
 
 const extensionRoot = path.resolve(__dirname);
 const extensionSrc = path.resolve(__dirname, "src");
 const backendRoot = path.resolve(__dirname, "..");
+
+// Whether a backend file imports cache from "react" (a server-only API the
+// extension's React 18 doesn't have).
+function usesReactCache(file: string): boolean {
+  try {
+    return /import\s*{[^}]*\bcache\b[^}]*}\s*from\s*["']react["']/.test(readFileSync(file.split("?")[0], "utf8"));
+  } catch {
+    return false;
+  }
+}
 
 // Some tests exercise the backend (the Next.js project one level up), whose
 // files also import "@/…" — but meaning the backend root, not this src. This
@@ -20,8 +31,12 @@ function backendImports(): Plugin {
       // with the backend's own (newer) React, and elements from one React
       // can't render in another — including the ones their icon library
       // creates. They use only basic hooks and common icons, so the
-      // extension's copies run them the same.
+      // extension's copies run them the same. The exception is server code
+      // using React 19's cache() (lib/auth.ts), which renders nothing: it
+      // keeps the backend's own React, by its path (the React plugin dedupes a
+      // bare "react" to this folder's copy).
       if (/^(react|react-dom|lucide-react)(\/.*)?$/.test(source)) {
+        if (source === "react" && usesReactCache(importer)) return path.join(backendRoot, "node_modules/react/index.js");
         return this.resolve(source, path.join(extensionRoot, "vitest.config.ts"), { ...options, skipSelf: true });
       }
       let rest: string | null = null;

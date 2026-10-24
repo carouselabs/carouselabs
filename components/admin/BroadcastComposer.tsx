@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Send, Eye, Mail, CalendarClock, Braces, UserSearch, ListChecks, Repeat, Sparkles, Contact } from "lucide-react"
+import { Send, Eye, Mail, CalendarClock, Braces, UserSearch, ListChecks, Repeat, Sparkles, Contact, BarChart3 } from "lucide-react"
 import {
   AdminButton,
   AdminCard,
@@ -25,6 +25,7 @@ import { CAMPAIGN_DAILY_LIMIT } from "@/lib/campaignRules"
 import { isLeadAudience, type LeadAudience } from "@/lib/leadRules"
 import { LeadAudienceOptions, useLeadLists } from "@/components/admin/AudiencePicker"
 import { SendingPicker } from "@/components/admin/SendingPicker"
+import { EmailReportStrip } from "@/components/admin/EmailReportStrip"
 import { DEFAULT_SENDING_CHOICE, type SendingChoice } from "@/lib/sendingRules"
 
 // Leads (lib/leads.ts) are offered for campaigns only, so they always go out
@@ -291,6 +292,9 @@ export function BroadcastComposer() {
   return (
     // Compose on the left; what was sent beside it on wide screens.
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start">
+      <div className="xl:col-span-2">
+        <EmailReportStrip />
+      </div>
       <div className="flex flex-wrap items-center justify-end gap-4 xl:col-span-2">
         <Link
           href="/admin/broadcasts/writer"
@@ -319,6 +323,13 @@ export function BroadcastComposer() {
         >
           <Contact className="h-3.5 w-3.5" />
           Leads
+        </Link>
+        <Link
+          href="/admin/broadcasts/report"
+          className="inline-flex items-center gap-1.5 text-caption font-medium text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <BarChart3 className="h-3.5 w-3.5" />
+          Email report
         </Link>
         <Link
           href="/admin/scheduled-emails"

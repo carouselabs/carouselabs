@@ -53,6 +53,8 @@ import { recordEmailEvent } from "@/lib/emailTracking"
 
 const CHROME = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
+// Gmail (the app and the website) loading the image when the person opens the email.
+const GMAIL = "Mozilla/5.0 (Windows NT 5.1; rv:11.0) Gecko Firefox/11.0 (via ggpht.com GoogleImageProxy)"
 const SENT = new Date("2026-10-24T10:54:00.000Z")
 const at = (seconds: number) => new Date(SENT.getTime() + seconds * 1000)
 
@@ -140,6 +142,17 @@ describe("the rules", () => {
     expect(sweep(four.slice(0, 2))).toEqual([])
   })
 
+  it("only proof of a robot marks its source: the first minute alone doesn't, nor Gmail's shared image servers", () => {
+    expect(judge(visit({ at: at(18), userAgent: GMAIL }), ctx()).verdict).toBe("person")
+    expect(judge(visit({ at: at(18) }), ctx()).reason).toBe(REASONS.firstMinute)
+    const firstMinute = { type: "open", at: at(30), source: "A", userAgent: CHROME, verdict: "scanner", reason: REASONS.firstMinute }
+    expect(judge(visit({ at: at(300) }), ctx([firstMinute])).verdict).toBe("person")
+    const trap = { type: "trap", at: at(3000), source: "G", userAgent: CHROME, verdict: "scanner", reason: REASONS.trap }
+    expect(judge(visit({ source: "G", userAgent: GMAIL }), ctx([trap])).verdict).toBe("person")
+    expect(sweep([ev("t", "trap", 3000, { source: "G", verdict: "scanner", reason: REASONS.trap }), ev("g", "open", 3010, { source: "G", userAgent: GMAIL })])).toEqual([])
+    expect(sweep([ev("f", "open", 30, { verdict: "scanner", reason: REASONS.firstMinute }), ev("p", "open", 300)])).toEqual([])
+  })
+
   it("everything from a scanner's source around then was the scanner too, before or after", () => {
     const events = [
       ev("open", "open", 3590),
@@ -213,6 +226,20 @@ describe("what a campaign shows after real sequences of visits", () => {
       clickCount: 1,
       scannedAt: at(4),
     })
+  })
+
+  it("the Gmail app opened straight away: seen (Gmail's servers only load it when the person opens it); a click counts too", async () => {
+    await visit(18, "open", "66.249.84.1", null, GMAIL)
+    // Gmail keeps the image, so opening it again sends nothing; a click still comes through.
+    await visit(320, "click", "100.64.2.9", LINKS[2], IPHONE)
+    await visit(321, "human", "100.64.2.9", LINKS[2], IPHONE)
+    expect(m.row).toMatchObject({ openedAt: at(18), openCount: 1, clickedAt: at(321), clickCount: 1, scannedAt: null })
+  })
+
+  it("but a browser (not Gmail's servers) in the first minute is still the scanner, and Gmail opening it later still counts", async () => {
+    await visit(10, "open", "40.94.1.1")
+    await visit(300, "open", "66.249.84.1", null, GMAIL)
+    expect(m.row).toMatchObject({ openedAt: at(300), openCount: 1, scannedAt: at(10) })
   })
 
   it("Apple Mail opening it by itself is a maybe, never seen", async () => {

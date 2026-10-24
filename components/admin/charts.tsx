@@ -60,6 +60,7 @@ export function AdminLineChart({
   series,
   height = 240,
   decimals = false,
+  formatX = shortDate,
 }: {
   data: Record<string, unknown>[]
   xKey: string
@@ -67,14 +68,16 @@ export function AdminLineChart({
   height?: number
   // Values below 1 (dollars of AI cost): ticks with decimals.
   decimals?: boolean
+  // How the x values read (dates by default; e.g. "12h" for hours).
+  formatX?: (value: unknown) => string
 }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
         <CartesianGrid stroke={GRID} vertical={false} />
-        <XAxis dataKey={xKey} tick={AXIS} tickFormatter={shortDate} tickLine={false} axisLine={{ stroke: GRID }} minTickGap={28} />
+        <XAxis dataKey={xKey} tick={AXIS} tickFormatter={formatX} tickLine={false} axisLine={{ stroke: GRID }} minTickGap={28} />
         <YAxis tick={AXIS} tickLine={false} axisLine={false} allowDecimals={decimals} />
-        <Tooltip contentStyle={tooltipStyle} labelFormatter={shortDate} cursor={{ stroke: GRID }} />
+        <Tooltip contentStyle={tooltipStyle} labelFormatter={formatX} cursor={{ stroke: GRID }} />
         {series.length > 1 && <Legend wrapperStyle={{ fontSize: 12, color: "#B5AFA4" }} />}
         {series.map((s) => (
           <Line

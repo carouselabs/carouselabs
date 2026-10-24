@@ -27,6 +27,7 @@ import { AddPeopleDialog } from "./AddPeopleDialog"
 import { ProgressBar } from "./CampaignsList"
 import { RECIPIENT_STATUS, audienceLabel } from "./campaignLabels"
 import { CampaignSending } from "./CampaignSending"
+import { CampaignActivity } from "./CampaignActivity"
 import { DEFAULT_SENDING, type Sending } from "@/lib/sendingRules"
 import { isLeadAudience } from "@/lib/leadRules"
 
@@ -347,6 +348,9 @@ export function CampaignView({ id }: { id: string }) {
           </div>
         </div>
       </AdminCard>
+
+      {/* The first 48 hours, the links clicked, where they read it (once there's activity) */}
+      <CampaignActivity campaignId={campaign.id} refreshKey={engagement.seen + engagement.clicked} />
 
       {/* Picking and sending a batch */}
       {!archived && !progress.complete && (

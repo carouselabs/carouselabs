@@ -51,6 +51,17 @@ export function looksLikeRobot(userAgent: string | null | undefined): boolean {
   return !userAgent?.trim() || ROBOT_SIGNATURE.test(userAgent)
 }
 
+// Gmail and Yahoo load images through their own servers when the person
+// opens the email (a real open), from addresses shared by millions of
+// people: never "the same source" as anyone.
+const SHARED_IMAGE_PROXY = /(GoogleImageProxy|YahooMailProxy)/i
+export const viaSharedProxy = (userAgent: string | null | undefined) => !!userAgent && SHARED_IMAGE_PROXY.test(userAgent)
+
+// Only proof of a robot marks its source; the first minute alone is timing,
+// not proof (a person can open it straight away).
+const PROOF: ReadonlySet<string> = new Set<string>([REASONS.trap, REASONS.signature, REASONS.peek, REASONS.burst])
+const provesRobot = (e: JudgedEvent) => e.verdict === "scanner" && !!e.reason && PROOF.has(e.reason) && !viaSharedProxy(e.userAgent)
+
 // Apple Mail Privacy Protection loads every email's images through Apple's
 // servers (Apple's own 17.0.0.0/8 addresses, or a bare "Mozilla/5.0").
 export function looksLikeApple(userAgent: string | null | undefined, ip: string | null | undefined): boolean {
@@ -70,9 +81,12 @@ export function judge(
   if (event.type === "trap") return scanner(REASONS.trap)
   if (event.method === "HEAD") return scanner(REASONS.peek)
   if (looksLikeRobot(event.userAgent)) return scanner(REASONS.signature)
-  if (ctx.sentAt && t - ctx.sentAt.getTime() < FIRST_MINUTE_MS) return scanner(REASONS.firstMinute)
+  // Gmail and Yahoo load the image through their own servers when the person
+  // opens it (no scanner comes that way), and only the first open ever
+  // reaches us: that one counts even straight after sending.
+  if (ctx.sentAt && t - ctx.sentAt.getTime() < FIRST_MINUTE_MS && !viaSharedProxy(event.userAgent)) return scanner(REASONS.firstMinute)
   const sameSource = (e: JudgedEvent) => !!event.source && e.source === event.source && Math.abs(t - e.at.getTime()) <= SAME_SOURCE_MS
-  if (ctx.prior.some((e) => e.verdict === "scanner" && sameSource(e))) return scanner(REASONS.sameSource)
+  if (!viaSharedProxy(event.userAgent) && ctx.prior.some((e) => provesRobot(e) && sameSource(e))) return scanner(REASONS.sameSource)
   if (event.type === "click") return { verdict: "unconfirmed", reason: REASONS.waiting }
   if (event.type === "open" && looksLikeApple(event.userAgent, event.ip)) return { verdict: "apple", reason: REASONS.apple }
   return { verdict: "person", reason: "" }
@@ -93,10 +107,10 @@ export function sweep(events: JudgedEvent[]): [string, string[]][] {
     if (c.id && (others(TWO_CLICKS_MS) >= 1 || others(MANY_CLICKS_MS) >= MANY_LINKS)) relabel.set(c.id, REASONS.burst)
   }
   const isScanner = (e: JudgedEvent) => e.verdict === "scanner" || (!!e.id && relabel.has(e.id))
-  const scanners = events.filter(isScanner)
+  const proof = events.filter((e) => provesRobot(e) || (!!e.id && relabel.has(e.id)))
   for (const e of events) {
-    if (!e.id || !e.source || isScanner(e)) continue
-    if (scanners.some((s) => s.source === e.source && Math.abs(s.at.getTime() - e.at.getTime()) <= SAME_SOURCE_MS)) relabel.set(e.id, REASONS.sameSource)
+    if (!e.id || !e.source || isScanner(e) || viaSharedProxy(e.userAgent)) continue
+    if (proof.some((s) => s.source === e.source && Math.abs(s.at.getTime() - e.at.getTime()) <= SAME_SOURCE_MS)) relabel.set(e.id, REASONS.sameSource)
   }
   const byReason = new Map<string, string[]>()
   for (const e of events) {

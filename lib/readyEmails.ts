@@ -125,15 +125,15 @@ export function readyEmailHtml(email: ReadyEmail): string {
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light">
 <title>${esc(email.subject)}</title>
-<style>@media (max-width:480px){ .letter{padding-left:16px !important;padding-right:16px !important} .tile{height:52px !important;padding:4px !important} }</style>
+<style>@media (max-width:480px){ .frame{padding:4px !important} .photo{padding-left:12px !important} .head{padding-right:12px !important} .letter{padding-left:14px !important;padding-right:14px !important} .tile{height:52px !important;padding:4px !important} }</style>
 </head>
-<body style="margin:0;padding:24px 8px;background-color:#FFFFFF">
+<body style="margin:0;padding:16px 0;background-color:#FFFFFF">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(email.preview)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;margin:0 auto;background-color:${C.frame};border-radius:18px;font-family:${SANS}">
-<tr><td style="padding:8px">
+<tr><td class="frame" style="padding:8px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${C.yellow};border-radius:14px"><tr>
-<td width="78" style="padding:12px 0 12px 16px;vertical-align:middle"><img src="${d.images}/photo.gif" width="56" height="56" alt="${d.name}" style="display:block;width:56px;height:56px;border:2px solid #FFFFFF;border-radius:999px"></td>
-<td style="padding:12px 16px 12px 4px;vertical-align:middle">
+<td width="78" class="photo" style="padding:12px 0 12px 16px;vertical-align:middle"><img src="${d.images}/photo.gif" width="56" height="56" alt="${d.name}" style="display:block;width:56px;height:56px;border:2px solid #FFFFFF;border-radius:999px"></td>
+<td class="head" style="padding:12px 16px 12px 4px;vertical-align:middle">
 <p style="margin:0;font-size:17px;line-height:1.3;font-weight:600;color:${C.ink}">${d.name}</p>
 <p style="margin:3px 0 0;font-size:13px;line-height:1.35;color:${C.sub}">${d.title}</p>
 <p style="margin:3px 0 0;font-size:11.5px;line-height:1.35;color:${C.sub}">${d.detail}</p>

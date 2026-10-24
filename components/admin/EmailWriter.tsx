@@ -14,23 +14,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Brush, ListChecks, Mail, RotateCcw, Send, Sparkles } from "lucide-react"
-import { AdminButton, AdminCard, AdminInput, AdminSelect, ConfirmModal, fmtDateTime } from "@/components/admin/ui"
+import { AdminButton, AdminCard, AdminInput, ConfirmModal, fmtDateTime } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
-import { SEGMENT_TYPES } from "@/lib/segments"
 import { carryArt, designStickers, isFullyPainted, unpaintedArt, type EmailDesign } from "@/lib/emailDesign"
 import { artActionLabel, paintingsNeeded } from "@/lib/emailArtReuse"
 import { EmailArtPicker, type SavedArtItem } from "@/components/admin/EmailArtPicker"
 import { SeenStatus, type SeenInfo } from "@/components/admin/SeenStatus"
 import { UseAgainDialog } from "@/components/admin/UseAgainDialog"
+import { AudiencePicker, EMPTY_AUDIENCE, audienceRequest, type Audience } from "@/components/admin/AudiencePicker"
 import type { WriterTurn } from "@/lib/ai/emailWriter"
-
-type Audience = (typeof SEGMENT_TYPES)[number]["value"] | "custom"
 
 const STORAGE_KEY = "email-writer-draft-v1"
 const STARTERS = [
   "People who installed Engage for LinkedIn but have barely used it. Show them the three quickest wins and get them to try it today.",
   "Tell Free users what Pro adds, without being pushy.",
   "Welcome back people who haven't opened CarouseLabs in a month.",
+  "For my leads, people who've never used CarouseLabs: introduce Engage for LinkedIn in a few lines and invite them to try it free.",
 ]
 const personStarters = (first: string) => [
   `${first} installed Engage but has barely used it. Write a friendly note showing the one thing worth trying first.`,
@@ -68,9 +67,7 @@ export function EmailWriter({ recipient, reuse }: { recipient?: EmailRecipient; 
   const [painting, setPainting] = useState<Set<string>>(new Set())
   const [previewHtml, setPreviewHtml] = useState("")
   const [device, setDevice] = useState<"desktop" | "phone">("desktop")
-  const [audience, setAudience] = useState<Audience>("engage_linkedin" as Audience)
-  const [segmentValue, setSegmentValue] = useState("")
-  const [customList, setCustomList] = useState("")
+  const [audience, setAudience] = useState<Audience>(EMPTY_AUDIENCE)
   const [testing, setTesting] = useState(false)
   const [confirmCount, setConfirmCount] = useState<number | null>(null)
   const [creating, setCreating] = useState(false)
@@ -152,14 +149,7 @@ export function EmailWriter({ recipient, reuse }: { recipient?: EmailRecipient; 
     return () => clearTimeout(timer)
   }, [design])
 
-  const selectedSegment = SEGMENT_TYPES.find((s) => s.value === audience)
-  const recipients =
-    audience === "custom"
-      ? customList
-          .split(/[\s,]+/)
-          .map((e) => e.trim())
-          .filter(Boolean)
-      : audience
+  const recipients = audienceRequest(audience)
 
   async function ask(request: string) {
     const text = request.trim()
@@ -291,11 +281,7 @@ export function EmailWriter({ recipient, reuse }: { recipient?: EmailRecipient; 
     }
   }
 
-  const campaignBody = () => ({
-    design,
-    recipients,
-    recipientValue: selectedSegment?.needsValue ? segmentValue.trim() || undefined : undefined,
-  })
+  const campaignBody = () => ({ design, ...recipients })
 
   async function startCampaign() {
     try {
@@ -673,49 +659,14 @@ export function EmailWriter({ recipient, reuse }: { recipient?: EmailRecipient; 
           {!recipient && design && (
             <AdminCard title="Send it">
               <div className="flex flex-col gap-4">
-                <div className="space-y-1.5">
-                  <label htmlFor="writer-audience" className="text-caption font-semibold text-muted-foreground">
-                    Who it&apos;s for
-                  </label>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <AdminSelect id="writer-audience" value={audience} onChange={(e) => setAudience(e.target.value as Audience)} className="min-w-[180px] flex-1">
-                      {SEGMENT_TYPES.map((s) => (
-                        <option key={s.value} value={s.value}>
-                          {s.label}
-                        </option>
-                      ))}
-                      <option value="custom">Custom list</option>
-                    </AdminSelect>
-                    {selectedSegment?.needsValue && (
-                      <AdminInput
-                        type="number"
-                        min={1}
-                        value={segmentValue}
-                        onChange={(e) => setSegmentValue(e.target.value)}
-                        placeholder={selectedSegment.valuePlaceholder}
-                        aria-label={selectedSegment.valueLabel}
-                        className="w-28"
-                      />
-                    )}
-                  </div>
-                  {audience === "custom" && (
-                    <textarea
-                      value={customList}
-                      onChange={(e) => setCustomList(e.target.value)}
-                      rows={2}
-                      placeholder="person@example.com, another@example.com"
-                      aria-label="Email addresses"
-                      className="w-full rounded-control-sm border border-border bg-background p-2.5 text-label text-foreground outline-none placeholder:text-muted-foreground/80 focus:border-brand"
-                    />
-                  )}
-                </div>
+                <AudiencePicker id="writer-audience" value={audience} onChange={setAudience} />
                 {!painted && <p className="text-caption text-warning">Paint the picture and stickers before testing or sending.</p>}
                 <div className="flex flex-wrap gap-2">
                   <AdminButton variant="secondary" onClick={() => void sendTest()} loading={testing} disabled={!painted}>
                     <Mail aria-hidden />
                     Send test to me
                   </AdminButton>
-                  <AdminButton onClick={() => void startCampaign()} disabled={!painted || (audience === "custom" && recipients.length === 0)} className="ml-auto">
+                  <AdminButton onClick={() => void startCampaign()} disabled={!painted || !recipients} className="ml-auto">
                     <ListChecks aria-hidden />
                     Create campaign
                   </AdminButton>

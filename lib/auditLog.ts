@@ -29,6 +29,9 @@ export type AdminAuditAction =
   | "ADD_CAMPAIGN_RECIPIENTS"
   | "SAVE_EMAIL_TEMPLATE"
   | "RENAME_EMAIL_TEMPLATE"
+  // Leads (lib/leads.ts): a CSV uploaded, a list deleted.
+  | "IMPORT_LEADS"
+  | "DELETE_LEAD_LIST"
   | "CREATE_INTERN"
   | "UPDATE_INTERN"
   | "DELETE_INTERN"

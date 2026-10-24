@@ -8,6 +8,7 @@
 import { z } from "zod"
 import { AVAILABLE_VARIABLES } from "@/lib/broadcastRender"
 import { EXTENSION_STORE_URL, X_EXTENSION_STORE_URL } from "@/lib/plans"
+import { FIELD_KEY_RE } from "@/lib/leadRules"
 
 // Where a button or link may point: the site, the two Chrome Web Store
 // listings, and LinkedIn / X themselves.
@@ -33,9 +34,19 @@ export function isAllowedLink(href: string): boolean {
 
 const VARIABLE_KEYS = new Set<string>(AVAILABLE_VARIABLES.map((v) => v.key))
 
-/** Merge fields a piece of text uses that don't exist (e.g. {{company}}). */
+/** Merge fields a piece of text uses that aren't the standard ones (e.g. {{company}}, a lead's column). */
 export function unknownVariables(text: string): string[] {
   return [...text.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]).filter((key) => !VARIABLE_KEYS.has(key))
+}
+
+/**
+ * Merge fields that can't be anything: neither a standard one nor shaped
+ * like a lead's column ({{companyName}}, lib/leadRules.ts). Whether the
+ * people an email goes to have a lead column is checked when it's sent
+ * (lib/campaigns.ts checkMergeFields).
+ */
+export function invalidVariables(text: string): string[] {
+  return unknownVariables(text).filter((key) => !FIELD_KEY_RE.test(key))
 }
 
 const text = (max: number) =>
@@ -44,7 +55,7 @@ const text = (max: number) =>
     .trim()
     .min(1)
     .max(max)
-    .refine((t) => unknownVariables(t).length === 0, { message: "Uses a merge field that doesn't exist" })
+    .refine((t) => invalidVariables(t).length === 0, { message: "Uses a merge field that doesn't exist" })
 
 const link = z.string().trim().max(500).refine(isAllowedLink, { message: "Links can only go to carouselabs.com, the Chrome Web Store listings, LinkedIn or X" })
 

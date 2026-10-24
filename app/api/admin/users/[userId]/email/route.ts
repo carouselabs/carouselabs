@@ -17,6 +17,7 @@ import { personalizeDesignedEmail, renderDesignedEmail } from "@/lib/emailDesign
 import { resolveVariables } from "@/lib/broadcastVariables"
 import { trackingToken, withTracking } from "@/lib/emailTracking"
 import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
+import { mergeFieldProblem } from "@/lib/leadRules"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 const FROM = "CarouseLabs <support@carouselabs.com>"
@@ -71,7 +72,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
   const parsed = body.safeParse(await req.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: "Invalid email" }, { status: 400 })
   const design = parsed.data.design
-  const problem = artProblem(design, { painted: true })
+  // A lead's column ({{company}}) means nothing for a user.
+  const problem = artProblem(design, { painted: true }) ?? mergeFieldProblem(JSON.stringify(design), false)
   if (problem) return NextResponse.json({ error: problem }, { status: 400 })
 
   const user = await db.user.findUnique({ where: { id: userId }, select: { id: true, email: true, deletedAt: true } })

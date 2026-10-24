@@ -1,6 +1,6 @@
 // POST /api/admin/campaigns/[id]/recipients — adds more people to a campaign
 // (lib/campaigns.ts addCampaignRecipients); anyone already on it is skipped.
-//   body: { recipients: <segment>|string[], recipientValue?, dryRun? }
+//   body: { recipients: <segment>|<lead audience>|string[], recipientValue?, dryRun? }
 //   → { added, already }   (dryRun: how many would be added; nothing changes)
 import { NextResponse } from "next/server"
 import { z } from "zod"
@@ -8,11 +8,18 @@ import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { CampaignError, addCampaignRecipients } from "@/lib/campaigns"
 import type { BroadcastRecipients } from "@/lib/broadcast"
 import { SEGMENT_TYPES } from "@/lib/segments"
+import { LEAD_AUDIENCE_RE } from "@/lib/leadRules"
+import { leadsProblem } from "@/lib/leads"
 
 const segmentValues = SEGMENT_TYPES.map((s) => s.value) as [string, ...string[]]
 
 const body = z.object({
-  recipients: z.union([z.enum(segmentValues), z.array(z.string().max(320)).min(1, "Add at least one email").max(10_000)]),
+  // A segment, a lead audience (lib/leadRules.ts) or a list of addresses.
+  recipients: z.union([
+    z.enum(segmentValues),
+    z.string().regex(LEAD_AUDIENCE_RE),
+    z.array(z.string().max(320)).min(1, "Add at least one email").max(10_000),
+  ]),
   recipientValue: z.string().trim().max(20).nullish(),
   dryRun: z.boolean().optional(),
 })
@@ -34,7 +41,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     })
     return NextResponse.json({ ok: true, ...result })
   } catch (err) {
-    if (err instanceof CampaignError) return NextResponse.json({ error: err.message }, { status: err.status })
+    const problem = err instanceof CampaignError ? err : leadsProblem(err)
+    if (problem) return NextResponse.json({ error: problem.message }, { status: problem.status })
     throw err
   }
 }

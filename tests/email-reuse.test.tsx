@@ -384,7 +384,8 @@ describe("Add people", () => {
     expect(dialog.getByText(/2 already on it/)).toBeTruthy()
     fireEvent.click(dialog.getByRole("button", { name: "Add 3" }))
     await waitFor(() => expect(onAdded).toHaveBeenCalled())
-    expect(calls.map((c) => (c.body as { dryRun: boolean }).dryRun)).toEqual([true, false])
+    // (The picker also loads the leads lists, a GET.)
+    expect(calls.filter((c) => c.method === "POST").map((c) => (c.body as { dryRun: boolean }).dryRun)).toEqual([true, false])
   })
 })
 

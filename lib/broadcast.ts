@@ -11,11 +11,15 @@ import { applyVariables, renderBroadcastEmailHtml } from "@/lib/broadcastRender"
 import { resolveVariablesMany } from "@/lib/broadcastVariables"
 import { sendInBatches, type BatchSendResult } from "@/lib/emailBatchSend"
 import { withTracking } from "@/lib/emailTracking"
+import { isLeadAudience, type LeadAudience } from "@/lib/leadRules"
+import { resolveLeadAudience } from "@/lib/leads"
+import { finishCopy } from "@/lib/leadUnsubscribe"
 
 // segmentValue is only meaningful for "inactive" (days) and "low_credits"
 // (credit threshold) — see lib/segments.ts for the shared catalog the UI
 // dropdowns render from. A plain string[] is still a custom email list.
-export type BroadcastRecipients = SegmentType | string[]
+// A lead audience (lib/leadRules.ts) is only offered for campaigns.
+export type BroadcastRecipients = SegmentType | LeadAudience | string[]
 
 // userId is null only for a custom-list email with no matching User row
 // (e.g. an external address entered by hand) — resolveVariables has nothing
@@ -28,6 +32,13 @@ export interface BroadcastRecipient {
   // Their copy carries this token's invisible image and tracked links
   // (lib/emailTracking.ts): campaigns set it, plain broadcasts don't.
   trackingToken?: string | null
+  // A lead's name, from their file (a user's comes from their profile).
+  name?: string | null
+  // A lead (lib/leads.ts): their merge-field values (any {{field}} they
+  // don't have is left blank, never shown as braces) and the Unsubscribe
+  // link their copy carries.
+  values?: Record<string, string>
+  unsubscribeUrl?: string | null
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -38,6 +49,8 @@ export async function resolveRecipients(
   recipients: BroadcastRecipients,
   segmentValue?: string | null,
 ): Promise<BroadcastRecipient[]> {
+  if (isLeadAudience(recipients)) return resolveLeadAudience(recipients)
+
   if (Array.isArray(recipients)) {
     const cleaned = [
       ...new Set(recipients.map((e) => e.trim().toLowerCase()).filter((e) => EMAIL_RE.test(e))),
@@ -156,11 +169,11 @@ export async function sendUserBroadcast(
     async (batch) => {
       const variables = await resolveVariablesMany(batch.flatMap((r) => (r.userId ? [r.userId] : [])))
       return batch.map((r) => {
-        const values = r.userId ? variables.get(r.userId) : undefined
-        const finalSubject = values ? applyVariables(subject, values) : subject
-        const finalBody = values ? applyVariables(body, values) : body
-        const html = renderBroadcastEmailHtml(finalSubject, finalBody)
-        return { to: r.email, subject: finalSubject, html: r.trackingToken ? withTracking(html, r.trackingToken) : html }
+        const values = r.userId ? variables.get(r.userId) : r.values
+        const fill = (text: string) => (values ? applyVariables(text, values, { blankMissing: !r.userId }) : text)
+        const finalSubject = fill(subject)
+        const html = renderBroadcastEmailHtml(finalSubject, fill(body))
+        return finishCopy(r, finalSubject, r.trackingToken ? withTracking(html, r.trackingToken) : html)
       })
     },
     { idempotencyPrefix },

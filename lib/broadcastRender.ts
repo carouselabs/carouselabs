@@ -32,9 +32,15 @@ export type VariableValues = Record<VariableKey, string>
 // with no matching User row) are left as literal {{key}} text rather than
 // silently blanked — an admin who sees a stray {{firstName}} in a sent email
 // knows exactly what happened, instead of a confusing empty gap.
-export function applyVariables(template: string, values: Partial<VariableValues>): string {
+export function applyVariables(
+  template: string,
+  values: Partial<VariableValues> | Record<string, string>,
+  // A lead (lib/leads.ts): a field they don't have becomes nothing, so a
+  // stranger never sees braces. Everyone else's stays as written.
+  { blankMissing = false } = {},
+): string {
   return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key: string) =>
-    key in values ? (values[key as VariableKey] as string) : match,
+    key in values ? (values as Record<string, string>)[key] : blankMissing ? "" : match,
   )
 }
 

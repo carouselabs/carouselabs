@@ -15,6 +15,8 @@ import { AVAILABLE_VARIABLES } from "@/lib/broadcastRender"
 import { carryArt, designStickers, emailDesignSchema, type EmailDesign } from "@/lib/emailDesign"
 import { parseJsonObject } from "@/lib/ai/jsonAnswer"
 import { applySavedArt, savedPicks, type SavedArtRef } from "@/lib/emailArtReuse"
+import { leadsSection, writerFieldProblem } from "@/lib/ai/emailWriterLeads"
+import type { LeadColumn } from "@/lib/leadRules"
 import {
   CREDIT_COST_LINES,
   EXTENSION_PLAN,
@@ -107,7 +109,7 @@ ${list(library.stickers)}
 Reuse whenever one fits well: when a saved picture is a good visual metaphor for this email, set hero.saved to its id and hero.scene to its description exactly; for a feature that a saved sticker suits, give the sticker { "idea": its description exactly, "saved": its id }. Only ids from these lists. Paint new (no "saved") only for what nothing here fits. A sticker idea must still be different from the others in the email.`
 }
 
-function systemPrompt(about?: { facts: string }, library?: ArtLibrary): string {
+function systemPrompt(about?: { facts: string }, library?: ArtLibrary, leads?: LeadColumn[] | null): string {
   return `You write emails for CarouseLabs with the admin who runs it. You're the writer at a premium product company: warm, clear, specific and confident. Every email you write is something a person chose to read; respect that.
 
 THE PRODUCT (the only facts you may use):
@@ -124,7 +126,7 @@ RULES
 - hero.lead and hero.accent: the headline painted into the email's picture, read as one line: lead plain, accent in italics. Each 1–4 words; the accent ends with a full stop. Like "You made the cut." / "Engage is on us.", or "Running low" / "on credits.". No merge fields.
 - hero.scene: one tangible object or a tiny still life that is a visual metaphor for the email, in one sentence ("an open tin of brand-new coloured pencils", "a paper airplane snagged on a thin branch"). No people, faces, hands, screens, phones, logos, text, letters or numbers. It's painted in a fixed hand-painted gouache style; don't describe style or colours.
 - Stickers only appear in a "features" block (2–4 rows): each sticker idea is one simple object ("a light bulb", "a fountain pen"), all different. Use features only when the email really lists features or benefits.
-- When the admin asks for a change, change only that. Keep everything else exactly as it was, including hero.scene and every sticker idea, so the pictures already painted can be kept. Change the scene or a sticker only when asked or when the email's topic changed.${librarySection(library)}${personSection(about)}
+- When the admin asks for a change, change only that. Keep everything else exactly as it was, including hero.scene and every sticker idea, so the pictures already painted can be kept. Change the scene or a sticker only when asked or when the email's topic changed.${librarySection(library)}${personSection(about)}${leadsSection(leads)}
 
 ANSWER
 Reply with one JSON object and nothing else:
@@ -149,6 +151,9 @@ export async function writeEmail(input: {
   about?: { facts: string }
   // The saved art it may reuse (lib/emailArtLibrary.ts).
   library?: ArtLibrary
+  // The merge fields saved leads have (lib/leads.ts writerLeadFields), or
+  // none when there are no leads; never for a personal email.
+  leads?: LeadColumn[] | null
 }): Promise<{
   reply: string
   design: EmailDesign
@@ -169,7 +174,7 @@ export async function writeEmail(input: {
     const response = await anthropic.messages.create({
       model: EMAIL_WRITER_MODEL,
       max_tokens: 6000,
-      system: systemPrompt(input.about, input.library),
+      system: systemPrompt(input.about, input.library, input.leads),
       messages,
     })
     const raw = response.content
@@ -181,7 +186,9 @@ export async function writeEmail(input: {
     const design = emailDesignSchema.safeParse(
       parsed?.design && typeof parsed.design === "object" ? { ...(parsed.design as object), version: 1 } : null,
     )
-    if (reply && design.success) {
+    // A merge field nobody has (an invented {{company}}) is sent back to fix.
+    const fieldProblem = design.success ? writerFieldProblem(design.data, input.leads) : null
+    if (reply && design.success && !fieldProblem) {
       // Painted art carries over where the idea stayed; saved art it chose is put in.
       const carried = carryArt(input.current, design.data)
       const withSaved = input.library ? applySavedArt(carried, savedPicks(parsed?.design), input.library) : carried
@@ -193,6 +200,7 @@ export async function writeEmail(input: {
         : `That answer didn't follow the format: ${
             design.success ? "the reply was missing" : design.error.issues.slice(0, 6).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")
           }. Answer again with the complete JSON only.`
+    if (fieldProblem) lastProblem = fieldProblem
     messages.push({ role: "assistant", content: raw || "(no answer)" }, { role: "user", content: lastProblem })
   }
   throw new EmailWriterError("The writer couldn't produce a usable email this time. Try again, or say it differently.")

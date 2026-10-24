@@ -12,6 +12,8 @@ import { resolveVariablesMany } from "@/lib/broadcastVariables"
 import { sendInBatches, type BatchSendResult } from "@/lib/emailBatchSend"
 import type { EmailDesign } from "@/lib/emailDesign"
 import { withTracking } from "@/lib/emailTracking"
+import { finishCopy } from "@/lib/leadUnsubscribe"
+import type { BroadcastRecipient } from "@/lib/broadcast"
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#x27;")
@@ -50,24 +52,27 @@ export async function renderDesignedEmail(design: EmailDesign, { preview = false
 /**
  * One person's copy: their {{variables}} filled into the subject (as text)
  * and the HTML (escaped). Someone with no account (a typed-in address) is
- * greeted as "there"; any other field is left as written.
+ * greeted as "there"; any other field is left as written. blankMissing (a
+ * lead): a field they don't have is left out instead.
  */
 export function personalizeDesignedEmail(
   html: string,
   subject: string,
-  values: Partial<VariableValues> | undefined,
+  values: Partial<VariableValues> | Record<string, string> | undefined,
+  { blankMissing = false } = {},
 ): { subject: string; html: string } {
-  const all: Partial<VariableValues> = values ?? { firstName: "there" }
-  const escaped = Object.fromEntries(Object.entries(all).map(([k, v]) => [k, escapeHtml(String(v))])) as Partial<VariableValues>
-  return { subject: applyVariables(subject, all), html: applyVariables(html, escaped) }
+  const all = values ?? { firstName: "there" }
+  const escaped = Object.fromEntries(Object.entries(all).map(([k, v]) => [k, escapeHtml(String(v))]))
+  return { subject: applyVariables(subject, all, { blankMissing }), html: applyVariables(html, escaped, { blankMissing }) }
 }
 
 /** Sends the designed email to each person, personalized (and tracked when
- * they carry a trackingToken, lib/emailTracking.ts), in batches of 100. */
+ * they carry a trackingToken, lib/emailTracking.ts; a lead's with its
+ * Unsubscribe link), in batches of 100. */
 export async function sendDesignedEmails(
   resend: Resend,
   from: string,
-  recipients: { userId: string | null; email: string; trackingToken?: string | null }[],
+  recipients: BroadcastRecipient[],
   design: EmailDesign,
   idempotencyPrefix: string,
 ): Promise<BatchSendResult> {
@@ -79,8 +84,9 @@ export async function sendDesignedEmails(
     async (batch) => {
       const variables = await resolveVariablesMany(batch.flatMap((r) => (r.userId ? [r.userId] : [])))
       return batch.map((r) => {
-        const copy = personalizeDesignedEmail(html, design.subject, r.userId ? variables.get(r.userId) : undefined)
-        return { to: r.email, subject: copy.subject, html: r.trackingToken ? withTracking(copy.html, r.trackingToken) : copy.html }
+        const values = r.userId ? variables.get(r.userId) : r.values
+        const copy = personalizeDesignedEmail(html, design.subject, values, { blankMissing: !r.userId && !!r.values })
+        return finishCopy(r, copy.subject, r.trackingToken ? withTracking(copy.html, r.trackingToken) : copy.html)
       })
     },
     { idempotencyPrefix },

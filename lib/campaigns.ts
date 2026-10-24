@@ -24,6 +24,12 @@ import {
   type CampaignRecipientStatus,
 } from "@/lib/campaignRules"
 import { trackingToken } from "@/lib/emailTracking"
+import { isLeadAudience, mergeFieldProblem, parseLeadAudience } from "@/lib/leadRules"
+import { leadFieldKeys, leadListName, leadSendInfo, markLeadsEmailed } from "@/lib/leads"
+import { unsubscribeToken, unsubscribeUrl } from "@/lib/leadUnsubscribe"
+
+// Beside a lead who clicked Unsubscribe: they're never sent to again.
+export const UNSUBSCRIBED_NOTE = "Unsubscribed, so not sent"
 
 export class CampaignError extends Error {
   constructor(
@@ -39,6 +45,31 @@ export async function countCampaignAudience(recipients: BroadcastRecipients, aud
   return (await resolveRecipients(recipients, audienceValue)).length
 }
 
+// The email's text with every merge field it uses: an AI-written one's whole
+// design (its button links too), or the subject and body written by hand.
+const emailText = (email: { subject: string; body: string; design?: unknown }) =>
+  email.design ? JSON.stringify(email.design) : `${email.subject}\n${email.body}`
+
+/**
+ * Refuses an email whose merge fields these people don't have: a lead's
+ * column (say {{company}}) for users, or an account field like {{plan}} for
+ * leads, who'd otherwise get a gap where it was.
+ */
+export async function checkMergeFields(text: string, recipients: BroadcastRecipients) {
+  const forLeads = isLeadAudience(recipients)
+  const audience = forLeads ? parseLeadAudience(recipients) : null
+  const keys = forLeads ? (await leadFieldKeys(audience?.kind === "list" ? audience.listId : null)).map((c) => c.key) : []
+  const problem = mergeFieldProblem(text, forLeads, keys)
+  if (problem) throw new CampaignError(problem)
+}
+
+// What the campaign keeps to show who it went to: a segment's value, or a
+// leads list's name.
+async function audienceShown(recipients: BroadcastRecipients, audienceValue: string | null) {
+  const audience = isLeadAudience(recipients) ? parseLeadAudience(recipients) : null
+  return audience?.kind === "list" ? await leadListName(audience.listId) : audienceValue
+}
+
 export async function createCampaign(input: {
   adminEmail: string
   subject: string
@@ -48,6 +79,7 @@ export async function createCampaign(input: {
   // An AI-written email (subject and body are then its subject and plain text).
   design?: EmailDesign
 }) {
+  await checkMergeFields(emailText(input), input.recipients)
   const rows = await audienceRows(input.recipients, input.audienceValue)
   if (rows.length === 0) throw new CampaignError("No one matches that selection")
   if (rows.length > CAMPAIGN_MAX_RECIPIENTS) {
@@ -59,7 +91,7 @@ export async function createCampaign(input: {
       subject: input.subject,
       body: input.body,
       audience: Array.isArray(input.recipients) ? "custom" : input.recipients,
-      audienceValue: input.audienceValue,
+      audienceValue: await audienceShown(input.recipients, input.audienceValue),
       design: input.design ?? undefined,
       createdBy: input.adminEmail,
       recipients: { createMany: { data: rows } },
@@ -76,7 +108,8 @@ export async function createCampaign(input: {
 }
 
 // The people an audience means, one row each by email, with names to make
-// the list readable (the email stays the key).
+// the list readable (the email stays the key): a user's from their profile,
+// a lead's from their file.
 async function audienceRows(recipients: BroadcastRecipients, audienceValue: string | null) {
   const people = await resolveRecipients(recipients, audienceValue)
   const userIds = people.flatMap((p) => (p.userId ? [p.userId] : []))
@@ -90,7 +123,7 @@ async function audienceRows(recipients: BroadcastRecipients, audienceValue: stri
     const email = p.email.trim().toLowerCase()
     if (seen.has(email)) return []
     seen.add(email)
-    return [{ userId: p.userId, email, name: p.userId ? (nameById.get(p.userId) ?? null) : null }]
+    return [{ userId: p.userId, email, name: p.userId ? (nameById.get(p.userId) ?? null) : (p.name ?? null) }]
   })
 }
 
@@ -105,9 +138,13 @@ export async function addCampaignRecipients(input: {
   audienceValue: string | null
   dryRun?: boolean
 }): Promise<{ added: number; already: number }> {
-  const campaign = await db.emailCampaign.findUnique({ where: { id: input.campaignId }, select: { subject: true, status: true } })
+  const campaign = await db.emailCampaign.findUnique({
+    where: { id: input.campaignId },
+    select: { subject: true, body: true, design: true, status: true },
+  })
   if (!campaign) throw new CampaignError("Campaign not found", 404)
   if (campaign.status === "archived") throw new CampaignError("This campaign is archived. Restore it to add people.")
+  await checkMergeFields(emailText(campaign), input.recipients)
 
   const rows = await audienceRows(input.recipients, input.audienceValue)
   if (rows.length === 0) throw new CampaignError("No one matches that selection")
@@ -280,16 +317,46 @@ export async function sendCampaignBatch(input: {
     return { sent: 0, failed: 0, skipped, error: undefined, left }
   }
 
+  // Leads (lib/leads.ts) get their own merge fields and an Unsubscribe link;
+  // one who unsubscribed isn't sent to, and neither is one whose link
+  // couldn't be made.
+  const leads = await leadSendInfo(claimed.flatMap((r) => (r.userId ? [] : [r.email])))
+  const leadOf = (r: { userId: string | null; email: string }) => (r.userId ? undefined : leads.get(r.email.toLowerCase()))
+  const blocked = new Map<string, string>()
+  for (const r of claimed) {
+    const lead = leadOf(r)
+    if (lead?.unsubscribed) blocked.set(r.id, UNSUBSCRIBED_NOTE)
+    else if (lead && !unsubscribeToken(lead.id)) blocked.set(r.id, "Not sent: the Unsubscribe link couldn't be made (the server's secret is missing)")
+  }
+  for (const error of new Set(blocked.values())) {
+    await db.emailCampaignRecipient.updateMany({
+      where: { id: { in: [...blocked].flatMap(([id, e]) => (e === error ? [id] : [])) }, batchId },
+      data: { status: "failed", error },
+    })
+  }
+  const sending = claimed.filter((r) => !blocked.has(r.id))
+
   // Each copy is tracked: seen and clicked land on this recipient's row.
-  const people = claimed.map((r) => ({ userId: r.userId, email: r.email, trackingToken: trackingToken({ kind: "campaign", id: r.id }) }))
+  const people = sending.map((r) => {
+    const lead = leadOf(r)
+    return {
+      userId: r.userId,
+      email: r.email,
+      trackingToken: trackingToken({ kind: "campaign", id: r.id }),
+      ...(lead ? { values: lead.values, unsubscribeUrl: unsubscribeUrl(unsubscribeToken(lead.id)!) } : {}),
+    }
+  })
   const idempotencyPrefix = `campaign-${campaign.id}-${batchId}`
-  const result = design
-    ? await sendDesignedEmails(input.resend, input.from, people, design, idempotencyPrefix)
-    : await sendUserBroadcast(input.resend, input.from, people, campaign.subject, campaign.body, idempotencyPrefix)
+  const result =
+    people.length === 0
+      ? { sent: 0, failed: 0, failedTo: [], error: undefined }
+      : design
+        ? await sendDesignedEmails(input.resend, input.from, people, design, idempotencyPrefix)
+        : await sendUserBroadcast(input.resend, input.from, people, campaign.subject, campaign.body, idempotencyPrefix)
 
   const failedTo = new Set(result.failedTo.map((e) => e.toLowerCase()))
-  const failedIds = claimed.filter((r) => failedTo.has(r.email.toLowerCase())).map((r) => r.id)
-  const sentIds = claimed.filter((r) => !failedTo.has(r.email.toLowerCase())).map((r) => r.id)
+  const failedIds = sending.filter((r) => failedTo.has(r.email.toLowerCase())).map((r) => r.id)
+  const sentIds = sending.filter((r) => !failedTo.has(r.email.toLowerCase())).map((r) => r.id)
   const sentAt = new Date()
   await Promise.all([
     sentIds.length
@@ -303,12 +370,22 @@ export async function sendCampaignBatch(input: {
       : null,
   ])
 
+  // Shown on the Leads page; a failure here mustn't undo what was sent.
+  const sentIdSet = new Set(sentIds)
+  const sentLeads = sending.flatMap((r) => (sentIdSet.has(r.id) ? (leadOf(r)?.id ?? []) : []))
+  await markLeadsEmailed(sentLeads, sentAt).catch((err) => console.error("[campaigns] marking leads emailed failed:", err))
+
+  const unsubscribed = [...blocked.values()].filter((e) => e === UNSUBSCRIBED_NOTE).length
+  const error =
+    result.error ??
+    (blocked.size === 0 ? undefined : unsubscribed === blocked.size ? `${unsubscribed} unsubscribed, so not sent` : [...blocked.values()].find((e) => e !== UNSUBSCRIBED_NOTE))
+  const failed = failedIds.length + blocked.size
   await logAdminAction({
     adminEmail: input.adminEmail,
     action: "SEND_CAMPAIGN_BATCH",
-    details: `"${campaign.subject}" → ${claimed.length} people (${sentIds.length} sent, ${failedIds.length} failed)${result.error ? ` — ${result.error}` : ""}`,
+    details: `"${campaign.subject}" → ${claimed.length} people (${sentIds.length} sent, ${failed} failed)${error ? ` — ${error}` : ""}`,
     ipAddress: input.ipAddress ?? undefined,
   })
 
-  return { sent: sentIds.length, failed: failedIds.length, skipped, error: result.error, left: Math.max(0, left - sentIds.length) }
+  return { sent: sentIds.length, failed, skipped, error, left: Math.max(0, left - sentIds.length) }
 }

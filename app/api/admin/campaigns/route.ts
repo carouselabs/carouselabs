@@ -1,6 +1,6 @@
 // /api/admin/campaigns — email campaigns sent in batches the admin picks.
 //   GET                → every campaign with its progress (newest first)
-//   POST { subject, body, recipients: <segment>|string[], recipientValue?, dryRun? }
+//   POST { subject, body, recipients: <segment>|<lead audience>|string[], recipientValue?, dryRun? }
 //        or { design, recipients, … } for an AI-written email (its art must be painted)
 //        dryRun: true  → how many people it would have, nothing is created
 //        otherwise     → creates the campaign and its list; nothing is sent
@@ -12,6 +12,8 @@ import type { BroadcastRecipients } from "@/lib/broadcast"
 import { designPlainText, emailDesignSchema } from "@/lib/emailDesign"
 import { artProblem } from "@/lib/emailArtCheck"
 import { SEGMENT_TYPES } from "@/lib/segments"
+import { LEAD_AUDIENCE_RE } from "@/lib/leadRules"
+import { leadsProblem } from "@/lib/leads"
 
 const segmentValues = SEGMENT_TYPES.map((s) => s.value) as [string, ...string[]]
 
@@ -19,7 +21,12 @@ const createBody = z.object({
   subject: z.string().trim().min(1, "Write a subject").max(300).optional(),
   body: z.string().trim().min(1, "Write the email").max(50_000).optional(),
   design: emailDesignSchema.optional(),
-  recipients: z.union([z.enum(segmentValues), z.array(z.string().max(320)).min(1, "Add at least one email").max(10_000)]),
+  // A segment, a lead audience (lib/leadRules.ts) or a list of addresses.
+  recipients: z.union([
+    z.enum(segmentValues),
+    z.string().regex(LEAD_AUDIENCE_RE),
+    z.array(z.string().max(320)).min(1, "Add at least one email").max(10_000),
+  ]),
   recipientValue: z.string().trim().max(20).nullish(),
   dryRun: z.boolean().optional(),
 })
@@ -47,7 +54,7 @@ export async function POST(req: Request) {
   }
   const subject = design ? design.subject : parsed.data.subject!
   const body = design ? designPlainText(design) : parsed.data.body!
-  // Checked above against lib/segments.ts, or a list of addresses.
+  // Checked above against lib/segments.ts and lib/leadRules.ts, or a list of addresses.
   const recipients = parsed.data.recipients as BroadcastRecipients
   const audienceValue = parsed.data.recipientValue || null
 
@@ -58,7 +65,8 @@ export async function POST(req: Request) {
     const campaign = await createCampaign({ adminEmail: admin.email, subject, body, recipients, audienceValue, design })
     return NextResponse.json({ ok: true, ...campaign }, { status: 201 })
   } catch (err) {
-    if (err instanceof CampaignError) return NextResponse.json({ error: err.message }, { status: err.status })
+    const problem = err instanceof CampaignError ? err : leadsProblem(err)
+    if (problem) return NextResponse.json({ error: problem.message }, { status: problem.status })
     throw err
   }
 }

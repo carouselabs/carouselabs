@@ -1,9 +1,12 @@
 // Display helpers shared by the campaign list and the campaign page.
 import { SEGMENT_TYPES } from "@/lib/segments"
+import { isLeadAudience, leadAudienceLabel } from "@/lib/leadRules"
 
-/** "Inactive for 30+ days", "Engage for LinkedIn users", "Custom list"… */
+/** "Inactive for 30+ days", "Engage for LinkedIn users", "Custom list", "Leads: Delhi founders"… */
 export function audienceLabel(audience: string, audienceValue: string | null): string {
   if (audience === "custom") return "Custom list"
+  // A leads list's campaign keeps the list's name as its value.
+  if (isLeadAudience(audience)) return leadAudienceLabel(audience, audienceValue)
   const segment = SEGMENT_TYPES.find((s) => s.value === audience)
   if (!segment) return audience
   if (!segment.needsValue) return segment.label

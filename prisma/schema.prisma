@@ -1519,6 +1519,55 @@ model EmailArt {
   @@index([kind, createdAt])
 }
 
+// ── Leads (scripts/leads.sql, lib/leads.ts) ───────────────────────
+// People who don't use CarouseLabs yet, uploaded by the admin from a CSV
+// (Admin → Broadcasts → Leads) to send campaigns to. One row per address
+// (lowercase), whichever lists it came in on. fields: the file's other
+// columns, by merge-field key ({ "company": "Acme" } → {{company}}).
+// unsubscribedAt: they clicked Unsubscribe and are never emailed again, even
+// if a later file has them. lastEmailedAt: a campaign last reached them.
+model Lead {
+  id             String           @id @default(cuid())
+  email          String           @unique
+  firstName      String?
+  lastName       String?
+  name           String?
+  fields         Json             @default("{}")
+  unsubscribedAt DateTime?
+  lastEmailedAt  DateTime?
+  emailCount     Int              @default(0)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  lists          LeadListMember[]
+
+  @@index([createdAt])
+}
+
+// One upload, named by the admin. columns: the merge fields its file gave
+// ([{ key, label }]), so the writer and campaigns know what {{…}} exists.
+model LeadList {
+  id        String           @id @default(cuid())
+  name      String
+  fileName  String?
+  columns   Json             @default("[]")
+  createdBy String
+  createdAt DateTime         @default(now())
+  members   LeadListMember[]
+
+  @@index([createdAt])
+}
+
+model LeadListMember {
+  listId    String
+  list      LeadList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([listId, leadId])
+  @@index([leadId])
+}
+
 // ── Referral program ──────────────────────────────────────────────
 // One row per successfully-attributed signup — created once in the Clerk
 // user.created webhook (see lib/referral.ts + app/api/webhooks/clerk) after

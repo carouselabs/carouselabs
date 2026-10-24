@@ -20,6 +20,8 @@ export interface OutgoingEmail {
   to: string
   subject: string
   html: string
+  // e.g. a lead's List-Unsubscribe (lib/leadUnsubscribe.ts).
+  headers?: Record<string, string>
 }
 
 export interface BatchSendResult {
@@ -90,7 +92,7 @@ export async function sendInBatches<T>(
       lastRequestAt = Date.now()
 
       const { data, error } = await resend.batch.send(
-        emails.map((e) => ({ from, to: e.to, subject: e.subject, html: e.html })),
+        emails.map((e) => ({ from, to: e.to, subject: e.subject, html: e.html, ...(e.headers ? { headers: e.headers } : {}) })),
         {
           // One bad address must not hold back the other 99.
           batchValidation: "permissive",

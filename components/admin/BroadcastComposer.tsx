@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Send, Eye, Mail, CalendarClock, Braces, UserSearch, ListChecks, Repeat, Sparkles } from "lucide-react"
+import { Send, Eye, Mail, CalendarClock, Braces, UserSearch, ListChecks, Repeat, Sparkles, Contact } from "lucide-react"
 import {
   AdminButton,
   AdminCard,
@@ -22,8 +22,12 @@ import { useToast } from "@/components/admin/Toast"
 import { TemplatePicker } from "@/components/admin/TemplatePicker"
 import { SEGMENT_TYPES } from "@/lib/segments"
 import { CAMPAIGN_DAILY_LIMIT } from "@/lib/campaignRules"
+import { isLeadAudience, type LeadAudience } from "@/lib/leadRules"
+import { LeadAudienceOptions, useLeadLists } from "@/components/admin/AudiencePicker"
 
-type Audience = (typeof SEGMENT_TYPES)[number]["value"] | "custom"
+// Leads (lib/leads.ts) are offered for campaigns only, so they always go out
+// in batches under the daily limit, with their Unsubscribe link.
+type Audience = (typeof SEGMENT_TYPES)[number]["value"] | "custom" | LeadAudience
 // "campaign": made into a campaign and sent from its own page in batches you pick.
 type SendMode = "now" | "schedule" | "campaign"
 
@@ -64,6 +68,7 @@ export function BroadcastComposer() {
   const [sending, setSending] = useState(false)
   const [resolvingRecipients, setResolvingRecipients] = useState(false)
   const [confirmCount, setConfirmCount] = useState<number | null>(null)
+  const leads = useLeadLists()
 
   const [history, setHistory] = useState<AuditLogRow[] | null>(null)
 
@@ -304,6 +309,13 @@ export function BroadcastComposer() {
           Sent emails
         </Link>
         <Link
+          href="/admin/broadcasts/leads"
+          className="inline-flex items-center gap-1.5 text-caption font-medium text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Contact className="h-3.5 w-3.5" />
+          Leads
+        </Link>
+        <Link
           href="/admin/scheduled-emails"
           className="inline-flex items-center gap-1.5 text-caption font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
@@ -327,7 +339,10 @@ export function BroadcastComposer() {
                 <button
                   aria-pressed={sendMode === opt.key}
                   key={opt.key}
-                  onClick={() => setSendMode(opt.key)}
+                  onClick={() => {
+                    setSendMode(opt.key)
+                    if (opt.key !== "campaign" && isLeadAudience(audience)) setAudience("all")
+                  }}
                   className={`rounded-md px-3 py-1.5 text-caption font-semibold transition-colors ${
                     sendMode === opt.key ? "bg-surface-raised text-foreground shadow-card" : "text-muted-foreground hover:text-foreground"
                   }`}
@@ -367,6 +382,7 @@ export function BroadcastComposer() {
                   </option>
                 ))}
                 <option value="custom">Custom List</option>
+                {sendMode === "campaign" && <LeadAudienceOptions leads={leads} />}
               </AdminSelect>
               {selectedSegment?.needsValue && (
                 <AdminInput

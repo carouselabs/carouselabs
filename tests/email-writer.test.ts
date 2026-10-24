@@ -72,11 +72,14 @@ describe("the email format's safety rules", () => {
     expect(emailDesignSchema.safeParse(bad).success).toBe(false)
   })
 
-  it("allows only the merge fields that exist", () => {
+  it("allows the standard merge fields and ones shaped like a lead's column, nothing else", () => {
     expect(unknownVariables("Hi {{firstName}}, you have {{creditsRemaining}}")).toEqual([])
     expect(unknownVariables("Hi {{company}}")).toEqual(["company"])
-    const bad = design({ blocks: [{ type: "text", text: "Hi {{company}}" }] })
-    expect(emailDesignSchema.safeParse(bad).success).toBe(false)
+    // A lead's column: whether these people have it is checked when it's sent.
+    expect(emailDesignSchema.safeParse(design({ blocks: [{ type: "text", text: "Hi {{companyName}}" }] })).success).toBe(true)
+    for (const bad of ["Hi {{Company_Name}}", "Hi {{first_name}}", "Hi {{2nd}}"]) {
+      expect(emailDesignSchema.safeParse(design({ blocks: [{ type: "text", text: bad }] })).success).toBe(false)
+    }
     expect(emailDesignSchema.safeParse(design()).success).toBe(true)
   })
 

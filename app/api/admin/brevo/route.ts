@@ -13,7 +13,7 @@ const FROM = "CarouseLabs <support@carouselabs.com>"
 
 async function answer() {
   const from = parseFrom(FROM).email
-  const [status, today] = await Promise.all([brevoStatus(from), campaignAllowance("leads:all")])
+  const [status, today] = await Promise.all([brevoStatus(from), campaignAllowance({ via: "brevo" })])
   return NextResponse.json({ status, from, today })
 }
 

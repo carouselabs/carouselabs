@@ -159,6 +159,73 @@ describe("sending it to them", () => {
     expect(m.audit).not.toHaveBeenCalled()
   })
 
+  // Brevo, standing in: its senders, and what it was asked to send.
+  function brevoAnswers(senders: { email: string; name: string; active: boolean }[]) {
+    const sent: Record<string, unknown>[] = []
+    vi.stubEnv("BREVO_API_KEY", "test-brevo-key")
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        if (String(url).endsWith("/senders")) return Response.json({ senders })
+        if (String(url).endsWith("/smtp/email")) {
+          sent.push(JSON.parse(String(init.body)))
+          return Response.json({ messageIds: ["m1"] }, { status: 201 })
+        }
+        return Response.json({ message: "no route" }, { status: 404 })
+      }),
+    )
+    return sent
+  }
+  const ourSenders = [
+    { email: "support@carouselabs.com", name: "CarouseLabs", active: true },
+    { email: "anant@carouselabs.com", name: "Anant from CarouseLabs", active: true },
+  ]
+
+  it("can go through Brevo, from another of our senders, with replies going elsewhere", async () => {
+    const brevo = brevoAnswers(ourSenders)
+    const res = await post({ design: design(art("h.jpg")), sending: { via: "brevo", fromEmail: "anant@carouselabs.com", replyTo: "support@carouselabs.com" } })
+    expect(res.status).toBe(200)
+    expect(m.send).not.toHaveBeenCalled()
+    expect(brevo).toHaveLength(1)
+    expect(brevo[0]).toMatchObject({
+      sender: { name: "Anant from CarouseLabs", email: "anant@carouselabs.com" },
+      replyTo: { email: "support@carouselabs.com" },
+      messageVersions: [{ to: [{ email: "priya@example.com" }], subject: "A quick one for you, Priya" }],
+    })
+    expect(m.audit.mock.calls[0][0].details).toMatch(/through Brevo, from Anant from CarouseLabs <anant@carouselabs.com>, replies to support@carouselabs.com/)
+    vi.unstubAllGlobals()
+  })
+
+  it("Resend can send from another of our senders too", async () => {
+    brevoAnswers(ourSenders)
+    const res = await post({ design: design(art("h.jpg")), sending: { via: "auto", fromEmail: "anant@carouselabs.com", replyTo: null } })
+    expect(res.status).toBe(200)
+    expect(m.send.mock.calls[0][0]).toMatchObject({ from: "Anant from CarouseLabs <anant@carouselabs.com>", to: "priya@example.com" })
+    expect(m.send.mock.calls[0][0]).not.toHaveProperty("replyTo")
+    vi.unstubAllGlobals()
+  })
+
+  it("only from the list: anything else is refused, and so is a sender Brevo doesn't have when Brevo sends", async () => {
+    brevoAnswers([{ email: "support@carouselabs.com", name: "CarouseLabs", active: true }, { email: "old@carouselabs.com", name: "Old", active: false }])
+    const notOurs = await post({ design: design(art("h.jpg")), sending: { via: "auto", fromEmail: "ceo@carouselabs.com" } })
+    expect(notOurs.status).toBe(400)
+    expect((await notOurs.json()).error).toMatch(/ceo@carouselabs.com isn't one of your senders/)
+    // Turned off in Brevo: not on the list either.
+    expect((await post({ design: design(art("h.jpg")), sending: { via: "brevo", fromEmail: "old@carouselabs.com" } })).status).toBe(400)
+    const badReply = await post({ design: design(art("h.jpg")), sending: { via: "auto", fromEmail: "support@carouselabs.com", replyTo: "me@gmail.com" } })
+    expect((await badReply.json()).error).toMatch(/replies can't go there/)
+    expect(m.send).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
+  it("Brevo picked but not set up: says so and sends nothing", async () => {
+    vi.stubEnv("BREVO_API_KEY", "")
+    const res = await post({ design: design(art("h.jpg")), sending: { via: "brevo", fromEmail: "support@carouselabs.com" } })
+    expect(res.status).toBe(503)
+    expect((await res.json()).error).toMatch(/BREVO_API_KEY/)
+    expect(m.send).not.toHaveBeenCalled()
+  })
+
   it("lists the personal emails sent to them, newest first", async () => {
     m.auditRows = [{ id: "a1", createdAt: NOW, adminEmail: "admin@carouselabs.com", newValue: { subject: "Hi", picture: art("h.jpg") } }]
     const res = await GET(new Request("http://x"), { params: Promise.resolve({ userId: "u1" }) })

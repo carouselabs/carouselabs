@@ -65,6 +65,7 @@ export function brevoMailer(fetchFn: typeof fetch = fetch): BatchMailer | null {
           subject: emails[0].subject,
           htmlContent: emails[0].html,
           messageVersions: emails.map((e) => ({ to: [{ email: e.to }], subject: e.subject, htmlContent: e.html })),
+          ...(emails[0].replyTo ? { replyTo: { email: emails[0].replyTo } } : {}),
           ...(idempotencyKey ? { headers: { idempotencyKey } } : {}),
         }
         let res: Response
@@ -144,6 +145,18 @@ async function listWebhooks(key: string, fetchFn: typeof fetch): Promise<{ url?:
   } catch (err) {
     if (err instanceof Error && /does not exist/i.test(err.message)) return []
     throw err
+  }
+}
+
+/** The account's senders (Brevo → Senders), or null without a key or when Brevo didn't answer. */
+export async function brevoSenders(fetchFn: typeof fetch = fetch): Promise<{ email: string; name: string; active: boolean }[] | null> {
+  const key = brevoKey()
+  if (!key) return null
+  try {
+    const answer = await brevoGet<{ senders?: { email?: string; name?: string; active?: boolean }[] }>("/senders", key, fetchFn)
+    return (answer.senders ?? []).flatMap((s) => (s.email ? [{ email: s.email.toLowerCase(), name: s.name ?? "", active: !!s.active }] : []))
+  } catch {
+    return null
   }
 }
 

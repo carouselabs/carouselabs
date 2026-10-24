@@ -2,8 +2,10 @@
 // with the AI email writer from their admin profile.
 //   GET                → the personal emails sent to them (newest first), with
 //                        whether each was seen and clicked (lib/emailTracking.ts)
-//   POST { design }    → sends this AI-written email to them now, personalized
-//                        for them and tracked; its art must be painted and ours
+//   POST { design, sending? } → sends this AI-written email to them now,
+//                        personalized for them and tracked; its art must be
+//                        painted and ours. sending: { via, fromEmail, replyTo }
+//                        (lib/sendingRules.ts): Resend unless Brevo is picked
 import { randomUUID } from "node:crypto"
 import { NextResponse } from "next/server"
 import { Resend } from "resend"
@@ -18,9 +20,11 @@ import { resolveVariables } from "@/lib/broadcastVariables"
 import { trackingToken, withTracking } from "@/lib/emailTracking"
 import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
 import { mergeFieldProblem } from "@/lib/leadRules"
+import { BREVO_MISSING, brevoMailer } from "@/lib/brevo"
+import { resolveSending } from "@/lib/senders"
+import { DEFAULT_SENDING, sendingChoiceSchema } from "@/lib/sendingRules"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const FROM = "CarouseLabs <support@carouselabs.com>"
 
 export async function GET(_req: Request, { params }: { params: Promise<{ userId: string }> }) {
   const admin = await getAdminUser()
@@ -63,7 +67,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
   })
 }
 
-const body = z.object({ design: emailDesignSchema })
+const body = z.object({ design: emailDesignSchema, sending: sendingChoiceSchema.optional() })
 
 export async function POST(req: Request, { params }: { params: Promise<{ userId: string }> }) {
   const admin = await getAdminUser()
@@ -75,6 +79,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
   // A lead's column ({{company}}) means nothing for a user.
   const problem = artProblem(design, { painted: true }) ?? mergeFieldProblem(JSON.stringify(design), false)
   if (problem) return NextResponse.json({ error: problem }, { status: 400 })
+
+  // What sends it and who it's from: they're a user, so "automatic" is Resend.
+  let sending = DEFAULT_SENDING
+  if (parsed.data.sending) {
+    const checked = await resolveSending(parsed.data.sending, parsed.data.sending.via === "brevo")
+    if ("problem" in checked) return NextResponse.json({ error: checked.problem }, { status: 400 })
+    sending = checked.sending
+  }
+  const brevo = sending.via === "brevo" ? brevoMailer() : null
+  if (sending.via === "brevo" && !brevo) return NextResponse.json({ error: BREVO_MISSING }, { status: 503 })
 
   const user = await db.user.findUnique({ where: { id: userId }, select: { id: true, email: true, deletedAt: true } })
   if (!user || user.deletedAt) return NextResponse.json({ error: "That person's account wasn't found" }, { status: 404 })
@@ -91,15 +105,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
     // No tracking table yet (scripts/email-tracking.sql): send it untracked.
   }
   const token = tracked ? trackingToken({ kind: "personal", id: emailId }) : null
-  const { error } = await resend.emails.send({
-    from: FROM,
+  const email = {
+    from: sending.from,
     to: user.email,
     subject: copy.subject,
     html: token ? withTracking(copy.html, token) : copy.html,
-  })
+    ...(sending.replyTo ? { replyTo: sending.replyTo } : {}),
+  }
+  const { error } = brevo ? await brevo.batch.send([email]) : await resend.emails.send(email)
   if (error) {
     if (tracked) await db.personalEmailTrack.delete({ where: { emailId } }).catch(() => {})
-    return NextResponse.json({ error: `Resend: ${error.message}` }, { status: 502 })
+    return NextResponse.json({ error: `${brevo ? "Brevo" : "Resend"}: ${error.message}` }, { status: 502 })
   }
 
   await logAdminAction({
@@ -107,7 +123,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
     action: "SEND_PERSONAL_EMAIL",
     targetUserId: user.id,
     targetEmail: user.email,
-    details: `Personal email "${copy.subject}"`,
+    details: `Personal email "${copy.subject}"${sending === DEFAULT_SENDING ? "" : ` through ${brevo ? "Brevo" : "Resend"}, from ${sending.from}${sending.replyTo ? `, replies to ${sending.replyTo}` : ""}`}`,
     newValue: { subject: copy.subject, picture: design.hero.imageUrl ?? null, emailId: token ? emailId : null },
     ipAddress: getRequestIp(req) ?? undefined,
   })

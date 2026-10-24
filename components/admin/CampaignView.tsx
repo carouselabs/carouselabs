@@ -26,6 +26,9 @@ import { UseAgainDialog } from "./UseAgainDialog"
 import { AddPeopleDialog } from "./AddPeopleDialog"
 import { ProgressBar } from "./CampaignsList"
 import { RECIPIENT_STATUS, audienceLabel } from "./campaignLabels"
+import { CampaignSending } from "./CampaignSending"
+import { DEFAULT_SENDING, type Sending } from "@/lib/sendingRules"
+import { isLeadAudience } from "@/lib/leadRules"
 
 type Recipient = {
   id: string
@@ -54,7 +57,9 @@ type Campaign = {
   createdAt: string
   recipients: Recipient[]
   progress: CampaignProgress
-  // Resend's daily limit, or Brevo's for a leads campaign (lib/campaigns.ts).
+  // What sends it and who it's from (lib/sendingRules.ts).
+  sending?: Sending
+  // The daily limit of whichever sends it (lib/campaigns.ts).
   allowance: { via?: "resend" | "brevo"; limit: number; sentToday: number; left: number }
 }
 
@@ -301,7 +306,7 @@ export function CampaignView({ id }: { id: string }) {
               )}
               <span className="text-caption text-muted-foreground">
                 Today: <span className="font-medium text-foreground">{allowance.left}</span> of {allowance.limit}{" "}
-                {allowance.via === "brevo" ? "lead emails left (Brevo)" : "campaign emails left"}
+                {allowance.via === "brevo" ? "emails left through Brevo" : "campaign emails left"}
               </span>
             </div>
             <ProgressBar progress={progress} className="h-2" />
@@ -319,6 +324,13 @@ export function CampaignView({ id }: { id: string }) {
               Resend&apos;s free plan sends 100 emails a day for the whole account, so campaigns stop at {CAMPAIGN_DAILY_LIMIT} a day
               and leave the rest for automatic emails (welcome, credits, posts). The day resets at {DAY_RESETS_AT}.
             </p>
+            <CampaignSending
+              campaignId={campaign.id}
+              sending={campaign.sending ?? DEFAULT_SENDING}
+              forLeads={isLeadAudience(campaign.audience)}
+              disabled={archived}
+              onSaved={() => void load()}
+            />
           </div>
         </div>
       </AdminCard>

@@ -24,6 +24,8 @@ import { SEGMENT_TYPES } from "@/lib/segments"
 import { CAMPAIGN_DAILY_LIMIT } from "@/lib/campaignRules"
 import { isLeadAudience, type LeadAudience } from "@/lib/leadRules"
 import { LeadAudienceOptions, useLeadLists } from "@/components/admin/AudiencePicker"
+import { SendingPicker } from "@/components/admin/SendingPicker"
+import { DEFAULT_SENDING_CHOICE, type SendingChoice } from "@/lib/sendingRules"
 
 // Leads (lib/leads.ts) are offered for campaigns only, so they always go out
 // in batches under the daily limit, with their Unsubscribe link.
@@ -69,6 +71,8 @@ export function BroadcastComposer() {
   const [resolvingRecipients, setResolvingRecipients] = useState(false)
   const [confirmCount, setConfirmCount] = useState<number | null>(null)
   const leads = useLeadLists()
+  // A campaign's service and sender (lib/sendingRules.ts).
+  const [sendingChoice, setSendingChoice] = useState<SendingChoice>(DEFAULT_SENDING_CHOICE)
 
   const [history, setHistory] = useState<AuditLogRow[] | null>(null)
 
@@ -151,6 +155,7 @@ export function BroadcastComposer() {
         body,
         recipients,
         recipientValue: selectedSegment?.needsValue ? segmentValue.trim() || undefined : undefined,
+        sending: sendingChoice,
         ...extra,
       }),
     })
@@ -399,6 +404,10 @@ export function BroadcastComposer() {
               <p className="text-caption text-muted-foreground/80">Defaults to {selectedSegment.valuePlaceholder} if left blank.</p>
             )}
           </div>
+
+          {sendMode === "campaign" && (
+            <SendingPicker idPrefix="composer-sending" value={sendingChoice} onChange={setSendingChoice} forLeads={isLeadAudience(audience)} />
+          )}
 
           {audience === "custom" && (
             <div className="space-y-1.5">

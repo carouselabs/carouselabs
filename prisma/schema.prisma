@@ -1441,6 +1441,13 @@ model EmailCampaign {
   // Set by the AI email writer: its painted picture, stickers and layout.
   // Null for an email written by hand (rendered like a broadcast).
   design        Json?
+  // What sends it and who it's from (lib/sendingRules.ts, scripts/
+  // email-sending.sql): sendVia "auto" | "resend" | "brevo", sendFrom
+  // "Name <email>", replyTo an address. Null = the defaults (automatic,
+  // CarouseLabs <support@carouselabs.com>, replies to the sender).
+  sendVia       String?
+  sendFrom      String?
+  replyTo       String?
   status        String   @default("active") // "active" | "archived"
   createdBy     String // admin email
   createdAt     DateTime @default(now())

@@ -160,6 +160,7 @@ export async function sendUserBroadcast(
   subject: string,
   body: string,
   idempotencyPrefix: string,
+  { replyTo = null }: { replyTo?: string | null } = {},
 ): Promise<BatchSendResult> {
   return sendInBatches(
     resend,
@@ -175,7 +176,7 @@ export async function sendUserBroadcast(
         return finishCopy(r, finalSubject, r.trackingToken ? withTracking(html, r.trackingToken) : html)
       })
     },
-    { idempotencyPrefix },
+    { idempotencyPrefix, replyTo },
   )
 }
 

@@ -74,6 +74,7 @@ export async function sendDesignedEmails(
   recipients: BroadcastRecipient[],
   design: EmailDesign,
   idempotencyPrefix: string,
+  { replyTo = null }: { replyTo?: string | null } = {},
 ): Promise<BatchSendResult> {
   const html = await renderDesignedEmail(design)
   return sendInBatches(
@@ -88,6 +89,6 @@ export async function sendDesignedEmails(
         return finishCopy(r, copy.subject, r.trackingToken ? withTracking(copy.html, r.trackingToken) : copy.html)
       })
     },
-    { idempotencyPrefix },
+    { idempotencyPrefix, replyTo },
   )
 }

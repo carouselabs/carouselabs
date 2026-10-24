@@ -12,6 +12,9 @@ import { PenLine, Send, Users } from "lucide-react"
 import { AdminButton, AdminInput, Modal } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
 import { AudiencePicker, EMPTY_AUDIENCE, audienceRequest, type Audience } from "./AudiencePicker"
+import { SendingPicker } from "./SendingPicker"
+import { DEFAULT_SENDING_CHOICE, type SendingChoice } from "@/lib/sendingRules"
+import { isLeadAudience } from "@/lib/leadRules"
 
 type Content = { subject: string; body: string; design: unknown; mentionsName: string | null }
 type Person = { id: string; email: string; name: string | null }
@@ -30,6 +33,7 @@ export function UseAgainDialog({ source, subject, onClose }: { source: string; s
   const [error, setError] = useState<string | null>(null)
   const [choice, setChoice] = useState<Choice>("people")
   const [audience, setAudience] = useState<Audience>(EMPTY_AUDIENCE)
+  const [sendingChoice, setSendingChoice] = useState<SendingChoice>(DEFAULT_SENDING_CHOICE)
   const [count, setCount] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [anyway, setAnyway] = useState(false)
@@ -77,7 +81,7 @@ export function UseAgainDialog({ source, subject, onClose }: { source: string; s
         await fetch("/api/admin/campaigns", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...emailFields, ...request, dryRun: true }),
+          body: JSON.stringify({ ...emailFields, ...request, sending: sendingChoice, dryRun: true }),
         }),
       )
       setCount(data.count)
@@ -96,7 +100,7 @@ export function UseAgainDialog({ source, subject, onClose }: { source: string; s
         await fetch("/api/admin/campaigns", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...emailFields, ...request }),
+          body: JSON.stringify({ ...emailFields, ...request, sending: sendingChoice }),
         }),
       )
       toast("Campaign made. Nothing is sent yet: pick who gets it, a batch at a time.", "success")
@@ -161,6 +165,7 @@ export function UseAgainDialog({ source, subject, onClose }: { source: string; s
             {choice === "people" && (
               <div className="flex flex-col gap-3">
                 <AudiencePicker id="use-again-audience" value={audience} onChange={changeAudience} />
+                <SendingPicker idPrefix="use-again-sending" value={sendingChoice} onChange={setSendingChoice} forLeads={isLeadAudience(audience.audience)} />
                 <p className="text-caption text-muted-foreground">
                   It becomes a new campaign with {designed ? "the same picture and stickers (nothing painted again)" : "the same words"}.
                   Nothing is sent until you pick who gets it.

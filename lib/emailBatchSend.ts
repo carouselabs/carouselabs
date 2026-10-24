@@ -31,7 +31,7 @@ export interface BatchMailer {
   label?: string
   batch: {
     send(
-      emails: { from: string; to: string; subject: string; html: string; headers?: Record<string, string> }[],
+      emails: { from: string; to: string; subject: string; html: string; headers?: Record<string, string>; replyTo?: string }[],
       options?: { batchValidation?: "permissive" | "strict"; idempotencyKey?: string },
     ): Promise<{ data: { data?: unknown; errors?: { index: number; message: string }[] } | null; error: { name: string; message: string } | null }>
   }
@@ -70,7 +70,8 @@ export async function sendInBatches<T>(
   from: string,
   items: readonly T[],
   prepare: (batch: T[]) => Promise<OutgoingEmail[]>,
-  options: { idempotencyPrefix?: string; sleepFn?: (ms: number) => Promise<void> } = {},
+  // replyTo: where replies go when it isn't the sender (lib/sendingRules.ts).
+  options: { idempotencyPrefix?: string; replyTo?: string | null; sleepFn?: (ms: number) => Promise<void> } = {},
 ): Promise<BatchSendResult> {
   const wait = options.sleepFn ?? sleep
   const result: BatchSendResult = { sent: 0, failed: 0, failedTo: [] }
@@ -105,7 +106,14 @@ export async function sendInBatches<T>(
       lastRequestAt = Date.now()
 
       const { data, error } = await resend.batch.send(
-        emails.map((e) => ({ from, to: e.to, subject: e.subject, html: e.html, ...(e.headers ? { headers: e.headers } : {}) })),
+        emails.map((e) => ({
+          from,
+          to: e.to,
+          subject: e.subject,
+          html: e.html,
+          ...(e.headers ? { headers: e.headers } : {}),
+          ...(options.replyTo ? { replyTo: options.replyTo } : {}),
+        })),
         {
           // One bad address must not hold back the other 99.
           batchValidation: "permissive",

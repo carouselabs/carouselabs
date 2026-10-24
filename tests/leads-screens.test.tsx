@@ -192,7 +192,7 @@ describe("the Brevo card", () => {
     server({ "/api/admin/brevo": () => ({ status: { key: false }, from: "support@carouselabs.com", today }) })
     render(<BrevoSetup />)
     expect(await screen.findByText(/Add BREVO_API_KEY in Vercel/)).toBeTruthy()
-    expect(screen.getByText("Today: 250 of 280 lead emails left")).toBeTruthy()
+    expect(screen.getByText("Today: 250 of 280 emails left through Brevo")).toBeTruthy()
   })
 
   it("shows what's done and what isn't, and turns on the webhook", async () => {

@@ -44,7 +44,18 @@ const store = vi.hoisted(() => ({
   leads: [] as LeadRow[],
   lists: [] as ListRow[],
   members: [] as { listId: string; leadId: string }[],
-  campaigns: [] as { id: string; subject: string; body: string; status: string; design: unknown; audience?: string; audienceValue?: string | null }[],
+  campaigns: [] as {
+    id: string
+    subject: string
+    body: string
+    status: string
+    design: unknown
+    audience?: string
+    audienceValue?: string | null
+    sendVia?: string | null
+    sendFrom?: string | null
+    replyTo?: string | null
+  }[],
   recipients: [] as RecipientRow[],
   audit: [] as { action: string; details: string }[],
   // As before scripts/leads.sql's Brevo part is run: no Lead.stopReason or EmailCampaignRecipient.provider.
@@ -178,15 +189,28 @@ vi.mock("@/lib/db", () => ({
     },
     $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
     emailCampaign: {
-      findUnique: vi.fn(async ({ where }: { where: { id: string } }) => store.campaigns.find((c) => c.id === where.id) ?? null),
+      findUnique: vi.fn(async ({ where, select }: { where: { id: string }; select?: Record<string, unknown> }) => {
+        if (store.columnsMissing && select && "sendVia" in select) throw missingColumn()
+        return store.campaigns.find((c) => c.id === where.id) ?? null
+      }),
       create: vi.fn(
-        async ({ data }: { data: { subject: string; body: string; audience: string; audienceValue: string | null; design?: unknown; recipients: { createMany: { data: Partial<RecipientRow>[] } } } }) => {
+        async ({
+          data,
+        }: {
+          data: { subject: string; body: string; audience: string; audienceValue: string | null; design?: unknown; sendVia?: string | null; sendFrom?: string | null; replyTo?: string | null; recipients: { createMany: { data: Partial<RecipientRow>[] } } }
+        }) => {
+          if (store.columnsMissing && "sendVia" in data) throw missingColumn()
           const id = `camp${store.nextId++}`
-          store.campaigns.push({ id, subject: data.subject, body: data.body, status: "active", design: data.design ?? null, audience: data.audience, audienceValue: data.audienceValue })
-          for (const r of data.recipients.createMany.data) store.recipients.push(recipient({ ...r, campaignId: id }))
+          const { recipients, ...fields } = data
+          store.campaigns.push({ id, status: "active", ...fields, design: data.design ?? null })
+          for (const r of recipients.createMany.data) store.recipients.push(recipient({ ...r, campaignId: id }))
           return { id }
         },
       ),
+      update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        if (store.columnsMissing && "sendVia" in data) throw missingColumn()
+        return Object.assign(store.campaigns.find((c) => c.id === where.id)!, data)
+      }),
     },
     emailCampaignRecipient: {
       updateMany: vi.fn(async ({ where, data }: { where: Record<string, unknown>; data: Partial<RecipientRow> }) => {
@@ -195,6 +219,11 @@ vi.mock("@/lib/db", () => ({
         return { count: hit.length }
       }),
       findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => store.recipients.filter((r) => matches(r, where))),
+      groupBy: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+        const counts = new Map<string, number>()
+        for (const r of store.recipients.filter((x) => matches(x, where))) counts.set(r.status, (counts.get(r.status) ?? 0) + 1)
+        return [...counts].map(([status, n]) => ({ status, _count: { _all: n } }))
+      }),
       count: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
         if (store.columnsMissing && "provider" in where) throw missingColumn()
         return store.recipients.filter((r) => matches(r, where)).length
@@ -236,7 +265,21 @@ import { LeadsError, deleteLeadList, importLeads, leadsOverview, listLeads, reso
 import { readUnsubscribeToken, unsubscribeToken, unsubscribeUrl, withUnsubscribe } from "@/lib/leadUnsubscribe"
 import { applyVariables } from "@/lib/broadcastRender"
 import { personalizeDesignedEmail } from "@/lib/emailDesignRender"
-import { CampaignError, UNSUBSCRIBED_NOTE, campaignAllowance, checkMergeFields, createCampaign, sendCampaignBatch } from "@/lib/campaigns"
+import {
+  CampaignError,
+  SENDING_SQL_MISSING,
+  UNSUBSCRIBED_NOTE,
+  campaignAllowance,
+  campaignSending,
+  checkMergeFields,
+  createCampaign,
+  getCampaign,
+  sendCampaignBatch,
+  setCampaignSending,
+} from "@/lib/campaigns"
+import { senderChoices, resolveSending } from "@/lib/senders"
+import { DEFAULT_SENDING } from "@/lib/sendingRules"
+import { POST as campaignsPost } from "@/app/api/admin/campaigns/route"
 import { CAMPAIGN_DAILY_LIMIT } from "@/lib/campaignRules"
 import {
   BREVO_DAILY_LIMIT,
@@ -261,7 +304,7 @@ import type { EmailDesign } from "@/lib/emailDesign"
 import type { BatchMailer } from "@/lib/emailBatchSend"
 
 // Users' emails go through Resend, leads' through Brevo: each fake keeps what it was given.
-type Sent = { from: string; to: string; subject: string; html: string; headers?: Record<string, string> }
+type Sent = { from: string; to: string; subject: string; html: string; headers?: Record<string, string>; replyTo?: string }
 const viaResend: Sent[][] = []
 const viaBrevo: Sent[][] = []
 const fakeMailer = (log: Sent[][]): BatchMailer => ({
@@ -877,23 +920,26 @@ describe("campaigns: leads through Brevo, everyone else through Resend", () => {
     await expect(send(["r2", "r0"])).resolves.toMatchObject({ sent: 1, skipped: 1 })
     await importLeads({ adminEmail: ADMIN, listName: "Day 2", columns: [], leads: [lead("sam@example.test")] })
     store.recipients.push(recipient({ id: "r3", email: "sam@example.test" }))
-    await expect(send(["r3"])).rejects.toThrow(/Today's limit for leads is used up \(280 lead emails a day on Brevo's free plan\)/)
-    expect((await campaignAllowance("leads:all")).left).toBe(0)
-    expect(await campaignAllowance("all")).toMatchObject({ via: "resend", left: 0, limit: CAMPAIGN_DAILY_LIMIT })
+    await expect(send(["r3"])).rejects.toThrow(/Today's Brevo limit is used up \(280 emails a day through Brevo's free plan\)/)
+    expect((await campaignAllowance({ audience: "leads:all" })).left).toBe(0)
+    expect(await campaignAllowance({ audience: "all" })).toMatchObject({ via: "resend", left: 0, limit: CAMPAIGN_DAILY_LIMIT })
   })
 
   it("lead emails don't use up Resend's limit for users", async () => {
     await seedMixed()
     sentToday(100, "brevo")
-    expect(await campaignAllowance("all")).toMatchObject({ via: "resend", sentToday: 0, left: CAMPAIGN_DAILY_LIMIT })
-    expect(await campaignAllowance("leads:new")).toMatchObject({ via: "brevo", sentToday: 100, left: BREVO_DAILY_LIMIT - 100 })
+    expect(await campaignAllowance({ audience: "all" })).toMatchObject({ via: "resend", sentToday: 0, left: CAMPAIGN_DAILY_LIMIT })
+    expect(await campaignAllowance({ audience: "leads:new" })).toMatchObject({ via: "brevo", sentToday: 100, left: BREVO_DAILY_LIMIT - 100 })
+    // A users' campaign set to Brevo counts against Brevo's.
+    expect(await campaignAllowance({ audience: "all", via: "brevo" })).toMatchObject({ via: "brevo" })
+    expect(await campaignAllowance({ audience: "leads:new", via: "resend" })).toMatchObject({ via: "resend" })
     expect((await send(["r1"])).sent).toBe(1)
   })
 
   it("says how many more leads can go", async () => {
     await seedMixed()
     sentToday(BREVO_DAILY_LIMIT - 1, "brevo")
-    await expect(send(["r0", "r2"])).rejects.toThrow(/You can send 1 more leads today/)
+    await expect(send(["r0", "r2"])).rejects.toThrow(/You can send 1 more through Brevo today/)
     expect(store.recipients.filter((r) => r.campaignId === "c1").every((r) => r.status === "pending")).toBe(true)
   })
 
@@ -1025,5 +1071,133 @@ describe("Brevo setup on the Leads page", () => {
     expect(await res.json()).toEqual({ status: { key: false }, from: "support@carouselabs.com", today: { via: "brevo", limit: BREVO_DAILY_LIMIT, sentToday: 0, left: BREVO_DAILY_LIMIT } })
     store.admin = null
     expect((await brevoGet()).status).toBe(403)
+  })
+})
+
+// ── Choosing what sends it and who it's from ────────────────────────────
+
+describe("the senders to pick from", () => {
+  const brevoSenderList = (senders: { email: string; name: string; active: boolean }[]) => fakeBrevo({ "/senders": { body: { senders } } }).fetchFn
+
+  it("support@ and every carouselabs.com sender added in Brevo: nothing else", async () => {
+    vi.stubEnv("BREVO_API_KEY", "k")
+    const fetchFn = brevoSenderList([
+      { email: "support@carouselabs.com", name: "CarouseLabs", active: true },
+      { email: "Anant@CarouseLabs.com", name: "Anant from CarouseLabs", active: true },
+      { email: "carouselabs@gmail.com", name: "CarouseLabs", active: true },
+      { email: "old@carouselabs.com", name: "Old", active: false },
+    ])
+    expect(await senderChoices(fetchFn)).toEqual({
+      brevoKnown: true,
+      senders: [
+        { name: "CarouseLabs", email: "support@carouselabs.com", inBrevo: true },
+        { name: "Anant from CarouseLabs", email: "anant@carouselabs.com", inBrevo: true },
+      ],
+    })
+    vi.stubEnv("BREVO_API_KEY", "")
+    expect(await senderChoices(fetchFn)).toEqual({ brevoKnown: false, senders: [{ name: "CarouseLabs", email: "support@carouselabs.com", inBrevo: false }] })
+  })
+
+  it("checks a choice: on the list, replies to the list, and in Brevo when Brevo sends", async () => {
+    vi.stubEnv("BREVO_API_KEY", "k")
+    const fetchFn = brevoSenderList([{ email: "anant@carouselabs.com", name: "Anant", active: true }])
+    expect(await resolveSending({ via: "auto", fromEmail: "support@carouselabs.com" }, true, fetchFn)).toEqual({ sending: DEFAULT_SENDING })
+    expect(await resolveSending({ via: "resend", fromEmail: "Anant@carouselabs.com", replyTo: "support@carouselabs.com" }, false, fetchFn)).toEqual({
+      sending: { via: "resend", from: "Anant <anant@carouselabs.com>", replyTo: "support@carouselabs.com" },
+    })
+    // Replies to the sender itself: nothing extra.
+    expect(await resolveSending({ via: "brevo", fromEmail: "anant@carouselabs.com", replyTo: "anant@carouselabs.com" }, true, fetchFn)).toEqual({
+      sending: { via: "brevo", from: "Anant <anant@carouselabs.com>", replyTo: null },
+    })
+    expect(await resolveSending({ via: "auto", fromEmail: "ceo@carouselabs.com" }, false, fetchFn)).toEqual({ problem: expect.stringMatching(/isn't one of your senders/) })
+    expect(await resolveSending({ via: "auto", fromEmail: "anant@carouselabs.com", replyTo: "x@gmail.com" }, false, fetchFn)).toEqual({ problem: expect.stringMatching(/replies can't go there/) })
+    // support@ isn't in this Brevo account: fine for Resend, not when Brevo sends.
+    expect(await resolveSending({ via: "resend", fromEmail: "support@carouselabs.com", replyTo: "anant@carouselabs.com" }, false, fetchFn)).toHaveProperty("sending")
+    expect(await resolveSending({ via: "brevo", fromEmail: "support@carouselabs.com" }, true, fetchFn)).toEqual({ problem: expect.stringMatching(/isn't a sender in Brevo yet/) })
+  })
+})
+
+describe("a campaign's service and sender", () => {
+  beforeEach(() => {
+    viaResend.length = 0
+    viaBrevo.length = 0
+  })
+  const anant = { via: "brevo" as const, from: "Anant <anant@carouselabs.com>", replyTo: "support@carouselabs.com" }
+  async function seed(sending: Partial<{ sendVia: string; sendFrom: string; replyTo: string }> = {}) {
+    await importLeads({ adminEmail: ADMIN, listName: "Day 1", columns: [], leads: [lead("asha@example.test", { firstName: "Asha" })] })
+    store.campaigns = [{ id: "c1", subject: "Hello", body: "Hello there.", status: "active", design: null, audience: "custom", ...sending }]
+    store.recipients = [recipient({ id: "r0", email: "asha@example.test" }), recipient({ id: "r1", userId: null, email: "typed@example.test" })]
+  }
+  const send = (ids: string[]) => sendCampaignBatch({ campaignId: "c1", recipientIds: ids, adminEmail: ADMIN, resend, brevo, from: "CarouseLabs <support@carouselabs.com>" })
+
+  it("is kept with the campaign; the defaults keep nothing", async () => {
+    await importLeads({ adminEmail: ADMIN, listName: "Day 1", columns: [], leads: [lead("asha@example.test")] })
+    await createCampaign({ adminEmail: ADMIN, subject: "Hi", body: "Hi.", recipients: "leads:all", audienceValue: null, sending: anant })
+    expect(store.campaigns[0]).toMatchObject({ sendVia: "brevo", sendFrom: anant.from, replyTo: anant.replyTo })
+    expect(await campaignSending(store.campaigns[0].id)).toEqual(anant)
+    await createCampaign({ adminEmail: ADMIN, subject: "Hi", body: "Hi.", recipients: "leads:all", audienceValue: null })
+    expect(store.campaigns[1]).not.toHaveProperty("sendVia")
+    expect(await campaignSending(store.campaigns[1].id)).toEqual(DEFAULT_SENDING)
+  })
+
+  it("everyone through Brevo, from its sender, with replies elsewhere", async () => {
+    await seed({ sendVia: "brevo", sendFrom: anant.from, replyTo: anant.replyTo })
+    expect((await send(["r0", "r1"])).sent).toBe(2)
+    expect(viaResend).toEqual([])
+    expect(viaBrevo.flat().map((e) => [e.to, e.from, e.replyTo])).toEqual([
+      ["asha@example.test", anant.from, anant.replyTo],
+      ["typed@example.test", anant.from, anant.replyTo],
+    ])
+    expect(store.recipients.map((r) => r.provider)).toEqual(["brevo", "brevo"])
+    // The lead still gets their Unsubscribe link.
+    expect(viaBrevo.flat()[0].html).toContain("/api/unsubscribe/")
+  })
+
+  it("everyone through Resend, leads too (with their Unsubscribe link)", async () => {
+    await seed({ sendVia: "resend" })
+    expect((await send(["r0", "r1"])).sent).toBe(2)
+    expect(viaBrevo).toEqual([])
+    expect(viaResend.flat().map((e) => [e.to, e.from])).toEqual([
+      ["asha@example.test", "CarouseLabs <support@carouselabs.com>"],
+      ["typed@example.test", "CarouseLabs <support@carouselabs.com>"],
+    ])
+    expect(viaResend.flat()[0].html).toContain("/api/unsubscribe/")
+    expect(store.recipients.map((r) => r.provider ?? null)).toEqual([null, null])
+  })
+
+  it("can be changed for the rest of a campaign, checked the same way", async () => {
+    vi.stubEnv("BREVO_API_KEY", "")
+    await seed()
+    await setCampaignSending("c1", { via: "resend", fromEmail: "support@carouselabs.com", replyTo: null }, ADMIN)
+    expect(store.campaigns[0]).toMatchObject({ sendVia: "resend", sendFrom: "CarouseLabs <support@carouselabs.com>", replyTo: null })
+    await expect(setCampaignSending("c1", { via: "auto", fromEmail: "ceo@carouselabs.com" }, ADMIN)).rejects.toThrow(/isn't one of your senders/)
+    // Back to the defaults: the columns are emptied.
+    await setCampaignSending("c1", { via: "auto", fromEmail: "support@carouselabs.com" }, ADMIN)
+    expect(store.campaigns[0]).toMatchObject({ sendVia: null, sendFrom: null, replyTo: null })
+    expect(store.audit.at(-1)).toMatchObject({ action: "SET_CAMPAIGN_SENDING" })
+    expect((await getCampaign("c1"))?.sending).toEqual(DEFAULT_SENDING)
+  })
+
+  it("the campaigns route checks the choice before making anything", async () => {
+    vi.stubEnv("BREVO_API_KEY", "")
+    const res = await campaignsPost(
+      new Request("https://admin.carouselabs.com/api/admin/campaigns", {
+        method: "POST",
+        body: JSON.stringify({ subject: "Hi", body: "Hi.", recipients: ["typed@example.test"], sending: { via: "resend", fromEmail: "ceo@carouselabs.com" } }),
+      }),
+    )
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toMatch(/isn't one of your senders/)
+    expect(store.campaigns).toEqual([])
+  })
+
+  it("before scripts/email-sending.sql: campaigns use the defaults; choosing anything else says to run it", async () => {
+    await seed({ sendVia: "brevo" })
+    store.columnsMissing = true
+    // Reading the choice fails over to the defaults; sending users still works (leads wait for leads.sql's part).
+    expect(await campaignSending("c1")).toEqual(DEFAULT_SENDING)
+    expect((await send(["r1"])).sent).toBe(1)
+    await expect(createCampaign({ adminEmail: ADMIN, subject: "Hi", body: "Hi.", recipients: ["typed@example.test"], audienceValue: null, sending: anant })).rejects.toThrow(SENDING_SQL_MISSING)
+    expect((await createCampaign({ adminEmail: ADMIN, subject: "Hi", body: "Hi.", recipients: ["new@example.test"], audienceValue: null })).total).toBe(1)
   })
 })

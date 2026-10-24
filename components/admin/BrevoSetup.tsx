@@ -58,7 +58,7 @@ export function BrevoSetup() {
   return (
     <AdminCard
       title="Sending through Brevo"
-      actions={answer && <span className="text-caption text-muted-foreground">Today: {answer.today.left} of {answer.today.limit} lead emails left</span>}
+      actions={answer && <span className="text-caption text-muted-foreground">Today: {answer.today.left} of {answer.today.limit} emails left through Brevo</span>}
     >
       <div className="flex flex-col gap-3">
         <p className="text-caption text-muted-foreground">

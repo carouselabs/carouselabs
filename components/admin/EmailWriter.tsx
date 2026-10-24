@@ -22,6 +22,9 @@ import { EmailArtPicker, type SavedArtItem } from "@/components/admin/EmailArtPi
 import { SeenStatus, type SeenInfo } from "@/components/admin/SeenStatus"
 import { UseAgainDialog } from "@/components/admin/UseAgainDialog"
 import { AudiencePicker, EMPTY_AUDIENCE, audienceRequest, type Audience } from "@/components/admin/AudiencePicker"
+import { SendingPicker } from "@/components/admin/SendingPicker"
+import { DEFAULT_SENDING_CHOICE, type SendingChoice } from "@/lib/sendingRules"
+import { isLeadAudience } from "@/lib/leadRules"
 import type { WriterTurn } from "@/lib/ai/emailWriter"
 
 const STORAGE_KEY = "email-writer-draft-v1"
@@ -68,6 +71,8 @@ export function EmailWriter({ recipient, reuse }: { recipient?: EmailRecipient; 
   const [previewHtml, setPreviewHtml] = useState("")
   const [device, setDevice] = useState<"desktop" | "phone">("desktop")
   const [audience, setAudience] = useState<Audience>(EMPTY_AUDIENCE)
+  // What sends it and who it's from (lib/sendingRules.ts).
+  const [sendingChoice, setSendingChoice] = useState<SendingChoice>(DEFAULT_SENDING_CHOICE)
   const [testing, setTesting] = useState(false)
   const [confirmCount, setConfirmCount] = useState<number | null>(null)
   const [creating, setCreating] = useState(false)
@@ -281,7 +286,7 @@ export function EmailWriter({ recipient, reuse }: { recipient?: EmailRecipient; 
     }
   }
 
-  const campaignBody = () => ({ design, ...recipients })
+  const campaignBody = () => ({ design, ...recipients, sending: sendingChoice })
 
   async function startCampaign() {
     try {
@@ -316,7 +321,7 @@ export function EmailWriter({ recipient, reuse }: { recipient?: EmailRecipient; 
     if (!design || !recipient) return
     setSending(true)
     try {
-      const data = await postJson<{ sentTo: string }>(`/api/admin/users/${recipient.id}/email`, { design })
+      const data = await postJson<{ sentTo: string }>(`/api/admin/users/${recipient.id}/email`, { design, sending: sendingChoice })
       toast(`Sent to ${data.sentTo}`, "success")
       try {
         localStorage.removeItem(storageKey)
@@ -598,6 +603,7 @@ export function EmailWriter({ recipient, reuse }: { recipient?: EmailRecipient; 
                   To <span className="font-semibold">{recipient.name ?? recipient.firstName}</span>{" "}
                   <span className="text-muted-foreground">&lt;{recipient.email}&gt;</span>
                 </p>
+                <SendingPicker idPrefix="person-sending" personal value={sendingChoice} onChange={setSendingChoice} />
                 {!painted && <p className="text-caption text-warning">Paint the picture and stickers before testing or sending.</p>}
                 <div className="flex flex-wrap gap-2">
                   <AdminButton variant="secondary" onClick={() => void sendTest()} loading={testing} disabled={!painted}>
@@ -660,6 +666,7 @@ export function EmailWriter({ recipient, reuse }: { recipient?: EmailRecipient; 
             <AdminCard title="Send it">
               <div className="flex flex-col gap-4">
                 <AudiencePicker id="writer-audience" value={audience} onChange={setAudience} />
+                <SendingPicker idPrefix="writer-sending" value={sendingChoice} onChange={setSendingChoice} forLeads={isLeadAudience(audience.audience)} />
                 {!painted && <p className="text-caption text-warning">Paint the picture and stickers before testing or sending.</p>}
                 <div className="flex flex-wrap gap-2">
                   <AdminButton variant="secondary" onClick={() => void sendTest()} loading={testing} disabled={!painted}>

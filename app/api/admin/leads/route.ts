@@ -1,15 +1,20 @@
-// /api/admin/leads — leads uploaded from CSV files (lib/leads.ts).
-//   GET ?list=<id>&q=<search>&page=<n> → { totals, lists, page, pageSize, total, leads }
-//   GET ?only=lists                    → { totals, lists } (for the audience pickers)
+// /api/admin/leads — leads, uploaded from CSV files or added by hand (lib/leads.ts).
+//   GET ?filter=<JSON, lib/leadFilters.ts>&page=<n>
+//        → { totals, lists, columns, page, pageSize, total, leads }
+//   GET ?only=lists                    → { totals, lists, columns } (for the audience pickers)
+//   GET ?only=leads&filter=…&page=…    → { page, pageSize, total, leads } (the table, without
+//        counting every list again)
 //   POST { listId?, listName, fileName?, columns: [{ key, label }], leads: [...] }
-//        one part of an upload (LEAD_IMPORT_CHUNK rows); the first part
-//        creates the list, the rest pass the listId it answered with
+//        one part of an upload or of leads added by hand (LEAD_IMPORT_CHUNK
+//        rows); the first part creates the list unless listId names one, the
+//        rest pass the listId it answered with
 //        → { listId, added, alreadySaved, alreadyUsers, unsubscribed, invalid }
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { FIELD_KEY_RE, LEAD_IMPORT_CHUNK } from "@/lib/leadRules"
 import { importLeads, leadsOverview, leadsProblem, listLeads } from "@/lib/leads"
+import { leadFilterSchema } from "@/lib/leadFilters"
 
 const nullableText = (max: number) => z.string().trim().max(max).nullable()
 
@@ -43,10 +48,19 @@ export async function GET(req: Request) {
   if (!admin) return adminForbidden()
   const params = new URL(req.url).searchParams
   try {
-    const overview = await leadsOverview()
-    if (params.get("only") === "lists") return NextResponse.json(overview)
-    const page = await listLeads({ listId: params.get("list"), search: params.get("q"), page: Number(params.get("page")) || 1 })
-    return NextResponse.json({ ...overview, ...page })
+    const only = params.get("only")
+    if (only === "lists") return NextResponse.json(await leadsOverview())
+    let raw: unknown = {}
+    try {
+      raw = JSON.parse(params.get("filter") || "{}")
+    } catch {
+      return NextResponse.json({ error: "Couldn't read the filters" }, { status: 400 })
+    }
+    const filter = leadFilterSchema.safeParse(raw)
+    if (!filter.success) return NextResponse.json({ error: "Couldn't read the filters" }, { status: 400 })
+    const page = await listLeads({ filter: filter.data, page: Number(params.get("page")) || 1 })
+    if (only === "leads") return NextResponse.json(page)
+    return NextResponse.json({ ...(await leadsOverview()), ...page })
   } catch (err) {
     return problemResponse(err)
   }

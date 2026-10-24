@@ -1592,11 +1592,16 @@ model Lead {
 
 // One upload, named by the admin. columns: the merge fields its file gave
 // ([{ key, label }]), so the writer and campaigns know what {{…}} exists.
+// kind (scripts/lead-lists.sql): "static", the people put on it (an upload,
+// or ticked by hand), or "smart", whoever matches filter now
+// (lib/leadFilters.ts), with no members of its own.
 model LeadList {
   id        String           @id @default(cuid())
   name      String
   fileName  String?
   columns   Json             @default("[]")
+  kind      String           @default("static")
+  filter    Json?
   createdBy String
   createdAt DateTime         @default(now())
   members   LeadListMember[]

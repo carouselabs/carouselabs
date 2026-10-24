@@ -32,6 +32,14 @@ export type AdminAuditAction =
   // Leads (lib/leads.ts): a CSV uploaded, a list deleted.
   | "IMPORT_LEADS"
   | "DELETE_LEAD_LIST"
+  // Your own lists and leads (lib/leads.ts): lists made, renamed or refiltered,
+  // leads put on or taken off a list, deleted, or edited.
+  | "CREATE_LEAD_LIST"
+  | "UPDATE_LEAD_LIST"
+  | "ADD_TO_LEAD_LIST"
+  | "REMOVE_FROM_LEAD_LIST"
+  | "DELETE_LEADS"
+  | "UPDATE_LEAD"
   // What sends a campaign and who it's from (lib/sendingRules.ts).
   | "SET_CAMPAIGN_SENDING"
   | "CREATE_INTERN"

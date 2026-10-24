@@ -32,7 +32,8 @@ export function audienceRequest(value: Audience): { recipients: string | string[
   return segment.needsValue ? { recipients: segment.value, recipientValue: value.segmentValue.trim() || undefined } : { recipients: segment.value }
 }
 
-export type LeadListSummary = { id: string; name: string; count: number }
+// kind: a smart list (a saved filter) fills itself; older answers have none.
+export type LeadListSummary = { id: string; name: string; count: number; kind?: "static" | "smart" }
 type LeadsSummary = { totals: { total: number; unsubscribed: number; neverEmailed: number }; lists: LeadListSummary[] }
 
 /** The saved leads lists, for the pickers; null while loading or when there are none to offer. */
@@ -65,7 +66,7 @@ export function LeadAudienceOptions({ leads }: { leads: LeadsSummary | null }) {
       <option value="leads:new">Leads never emailed ({count(leads.totals.neverEmailed)})</option>
       {leads.lists.map((l) => (
         <option key={l.id} value={leadListAudience(l.id)}>
-          List: {l.name} ({count(l.count)})
+          {l.kind === "smart" ? "Smart list" : "List"}: {l.name} ({count(l.count)})
         </option>
       ))}
     </optgroup>

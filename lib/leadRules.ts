@@ -205,6 +205,44 @@ export function buildLeads(rows: string[][], mapping: ColumnMapping[]): { leads:
 }
 
 /**
+ * Leads pasted one per line: "asha@acme.com", "Asha Shah <asha@acme.com>",
+ * "Asha Shah, asha@acme.com" or "asha@acme.com, Asha Shah" (commas, tabs or
+ * semicolons). Lines without a real address are counted as invalid, and an
+ * address twice is kept once.
+ */
+export function parsePastedLeads(text: string): { leads: LeadInput[]; invalid: number; duplicates: number } {
+  const seen = new Set<string>()
+  const leads: LeadInput[] = []
+  let invalid = 0
+  let duplicates = 0
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (!line) continue
+    const angle = /^(.*?)<([^>]+)>\s*$/.exec(line)
+    const parts = angle ? [angle[2], angle[1]] : line.split(/[,;\t]/)
+    const emailAt = parts.findIndex((p) => cleanEmail(p))
+    const email = emailAt >= 0 ? cleanEmail(parts[emailAt]) : null
+    if (!email) {
+      invalid++
+      continue
+    }
+    if (seen.has(email)) {
+      duplicates++
+      continue
+    }
+    seen.add(email)
+    const name = parts
+      .filter((_, i) => i !== emailAt)
+      .map((p) => p.replace(/^["']|["']$/g, "").trim())
+      .filter(Boolean)
+      .join(" ")
+      .slice(0, MAX_NAME)
+    leads.push({ email, firstName: null, lastName: null, name: name || null, fields: {} })
+  }
+  return { leads, invalid, duplicates }
+}
+
+/**
  * What a lead's {{merge fields}} become in their email: their first name
  * (from the name when the file had no first name, "there" when it had
  * neither), the rest of their name, their email and the file's columns.

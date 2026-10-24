@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // The leads screens: uploading a CSV (components/admin/LeadsUpload.tsx), the
-// Leads page (LeadsManager.tsx), "My leads" in the audience pickers
+// Leads page (LeadsManager.tsx: All leads with its filters, ticking and smart
+// lists, a lead's panel, Lists, Add & upload), "My leads" in the audience pickers
 // (AudiencePicker.tsx), the composer offering leads for campaigns only, and
 // the Brevo setup card (BrevoSetup.tsx).
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -131,51 +132,270 @@ describe("uploading leads", () => {
 const LEADS = {
   totals: { total: 3, unsubscribed: 1, neverEmailed: 2 },
   lists: [
-    { id: "list1", name: "Delhi founders", fileName: "delhi.csv", columns: [{ key: "company", label: "Company" }], createdBy: "admin@x", createdAt: "2026-10-24T00:00:00Z", count: 2 },
-    { id: "list2", name: "Mumbai", fileName: null, columns: [], createdBy: "admin@x", createdAt: "2026-10-23T00:00:00Z", count: 1 },
+    { id: "list1", name: "Delhi founders", fileName: "delhi.csv", columns: [{ key: "company", label: "Company" }], createdBy: "admin@x", createdAt: "2026-10-24T00:00:00Z", kind: "static", filter: null, count: 2 },
+    { id: "list2", name: "Mumbai", fileName: null, columns: [], createdBy: "admin@x", createdAt: "2026-10-23T00:00:00Z", kind: "static", filter: null, count: 1 },
+    { id: "list3", name: "Clicked recently", fileName: null, columns: [], createdBy: "admin@x", createdAt: "2026-10-22T00:00:00Z", kind: "smart", filter: { activity: "clicked", days: 30 }, count: 1 },
   ],
+  columns: [{ key: "company", label: "Company" }],
 }
 
 describe("the Leads page", () => {
   const page = {
-    ...LEADS,
     page: 1,
     pageSize: 50,
     total: 2,
     leads: [
-      { id: "l1", email: "asha@example.test", name: "Asha Shah", fields: { company: "Acme" }, lists: [{ id: "list1", name: "Delhi founders" }], createdAt: "2026-10-24T00:00:00Z", lastEmailedAt: "2026-10-24T05:00:00Z", emailCount: 2, unsubscribedAt: null },
-      { id: "l2", email: "gone@example.test", name: null, fields: {}, lists: [{ id: "list1", name: "Delhi founders" }], createdAt: "2026-10-24T00:00:00Z", lastEmailedAt: null, emailCount: 0, unsubscribedAt: "2026-10-24T06:00:00Z" },
+      {
+        id: "l1",
+        email: "asha@example.test",
+        name: "Asha Shah",
+        fields: { company: "Acme" },
+        lists: [{ id: "list1", name: "Delhi founders" }],
+        createdAt: "2026-10-24T00:00:00Z",
+        lastEmailedAt: "2026-10-24T05:00:00Z",
+        emailCount: 2,
+        lastSeenAt: "2026-10-24T05:10:00Z",
+        lastClickedAt: "2026-10-24T05:12:00Z",
+        unsubscribedAt: null,
+      },
+      {
+        id: "l2",
+        email: "gone@example.test",
+        name: null,
+        fields: {},
+        lists: [{ id: "list1", name: "Delhi founders" }],
+        createdAt: "2026-10-24T00:00:00Z",
+        lastEmailedAt: null,
+        emailCount: 0,
+        lastSeenAt: null,
+        lastClickedAt: null,
+        unsubscribedAt: "2026-10-24T06:00:00Z",
+      },
     ],
   }
+  const routes = (more: Record<string, Route> = {}, leads: unknown = page) => ({ ...more, "/api/admin/leads?only=lists": () => LEADS, "/api/admin/leads?only=leads": () => leads })
+  // The filters the table asked for, in order.
+  const filtersAsked = (calls: { url: string }[]) =>
+    calls.filter((c) => c.url.startsWith("/api/admin/leads?only=leads")).map((c) => JSON.parse(new URL(c.url, "https://x.test").searchParams.get("filter")!))
+  const openTab = (name: string) => fireEvent.click(screen.getByRole("tab", { name }))
 
-  it("shows the numbers, the lists with their merge fields, and the people", async () => {
-    server({ "/api/admin/leads": () => page })
+  it("opens on All leads: the numbers, and everyone with their columns, lists and what they did", async () => {
+    server(routes())
     render(withToasts(<LeadsManager />))
-    const list = await screen.findByRole("listitem", { name: "List Delhi founders" })
-    expect(within(list).getByText("{{company}}")).toBeTruthy()
-    expect(within(list).getByText(/2 people · uploaded/)).toBeTruthy()
+    const table = await screen.findByRole("table")
+    expect(screen.getByRole("tab", { name: "All leads" }).getAttribute("aria-selected")).toBe("true")
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["All leads", "Lists", "Add & upload", "Brevo setup"])
     expect(screen.getByText("Leads saved").parentElement?.parentElement?.textContent).toContain("3")
-    const table = screen.getByRole("table")
+    expect(screen.getByText("All leads (2)")).toBeTruthy()
     expect(within(table).getByText("asha@example.test")).toBeTruthy()
     expect(within(table).getByText("Acme")).toBeTruthy()
-    expect(within(table).getByText(/2× · last/)).toBeTruthy()
+    expect(within(table).getByText(/2 sent · last/)).toBeTruthy()
+    expect(within(table).getByText(/^Seen /)).toBeTruthy()
+    expect(within(table).getByText(/^Clicked /)).toBeTruthy()
     expect(within(table).getByText("Unsubscribed")).toBeTruthy()
   })
 
-  it("filters by list and search, and deletes a list after asking", async () => {
-    const calls = server({ "/api/admin/leads": () => page, "DELETE /api/admin/leads/lists/list2": () => ({ removed: 1 }) })
+  it("every filter goes to the server as one; See people in Lists shows that list", async () => {
+    const calls = server(routes())
     render(withToasts(<LeadsManager />))
-    const mumbai = await screen.findByRole("listitem", { name: "List Mumbai" })
-    fireEvent.click(within(mumbai).getByRole("button", { name: "See people" }))
-    await waitFor(() => expect(calls.some((c) => c.url.includes("list=list2"))).toBe(true))
-    fireEvent.change(screen.getByLabelText("Search leads"), { target: { value: "asha" } })
-    await waitFor(() => expect(calls.some((c) => c.url.includes("q=asha"))).toBe(true))
+    await screen.findByRole("table")
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "active" } })
+    fireEvent.change(screen.getByLabelText("Activity"), { target: { value: "seen" } })
+    fireEvent.change(screen.getByLabelText("Within"), { target: { value: "30" } })
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "company" } })
+    fireEvent.change(screen.getByLabelText("Value"), { target: { value: "bank" } })
+    fireEvent.change(screen.getByLabelText("Search leads"), { target: { value: "asha " } })
+    await waitFor(() =>
+      expect(filtersAsked(calls).at(-1)).toEqual({ status: "active", activity: "seen", days: 30, field: { key: "company", op: "contains", value: "bank" }, q: "asha" }),
+    )
+    // What's typed stays as typed, trailing space and all.
+    expect(screen.getByLabelText<HTMLInputElement>("Search leads").value).toBe("asha ")
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }))
+    await waitFor(() => expect(filtersAsked(calls).at(-1)).toEqual({}))
+    expect(screen.getByLabelText<HTMLInputElement>("Search leads").value).toBe("")
 
-    fireEvent.click(within(mumbai).getByRole("button", { name: "Delete" }))
-    const dialog = within(await screen.findByRole("alertdialog"))
-    expect(dialog.getByText(/anyone who unsubscribed is kept/)).toBeTruthy()
-    fireEvent.click(dialog.getByRole("button", { name: "Delete list" }))
-    await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.url === "/api/admin/leads/lists/list2")).toBe(true))
+    openTab("Lists")
+    fireEvent.click(within(screen.getByRole("listitem", { name: "List Mumbai" })).getByRole("button", { name: "See people" }))
+    await waitFor(() => expect(filtersAsked(calls).at(-1)).toEqual({ listId: "list2" }))
+    expect(screen.getByRole("tab", { name: "All leads" }).getAttribute("aria-selected")).toBe("true")
+    expect(await screen.findByText("Mumbai (2)")).toBeTruthy()
+  })
+
+  it("ticked leads go on a new list; all that match can be deleted, after asking", async () => {
+    const calls = server(routes({ "POST /api/admin/leads/bulk": (_u, init) => (JSON.parse(String(init!.body)).action === "add" ? { affected: 1, kept: 0, listId: "list9" } : { affected: 118, kept: 2 }) }, { ...page, total: 120 }))
+    render(withToasts(<LeadsManager />))
+    fireEvent.click(await screen.findByLabelText("Tick asha@example.test"))
+    const ticked = screen.getByRole("region", { name: "Ticked leads" })
+    expect(within(ticked).getByText("1 ticked")).toBeTruthy()
+    fireEvent.click(within(ticked).getByRole("button", { name: "Add to list" }))
+    const add = within(await screen.findByRole("dialog"))
+    fireEvent.change(add.getByLabelText("Which list"), { target: { value: "__new__" } })
+    fireEvent.change(add.getByLabelText("New list name"), { target: { value: "Hot" } })
+    fireEvent.click(add.getByRole("button", { name: "Add to list" }))
+    expect(await screen.findByText('Added 1 to "Hot"')).toBeTruthy()
+    expect(calls.find((c) => c.method === "POST")?.body).toEqual({ action: "add", newListName: "Hot", ids: ["l1"] })
+
+    fireEvent.click(screen.getByLabelText("Tick everyone on this page"))
+    fireEvent.click(await screen.findByRole("button", { name: "Tick all 120 that match" }))
+    expect(screen.getByText("120 ticked")).toBeTruthy()
+    fireEvent.click(within(screen.getByRole("region", { name: "Ticked leads" })).getByRole("button", { name: "Delete" }))
+    const confirm = within(await screen.findByRole("alertdialog"))
+    expect(confirm.getByText(/Anyone who unsubscribed, bounced or marked an email as spam is kept/)).toBeTruthy()
+    fireEvent.click(confirm.getByRole("button", { name: "Delete leads" }))
+    expect(await screen.findByText(/Deleted 118 leads. Kept 2 who stopped getting emails/)).toBeTruthy()
+    expect(calls.filter((c) => c.method === "POST").at(-1)?.body).toEqual({ action: "delete", filter: {} })
+  })
+
+  it("the filters can be saved as a smart list", async () => {
+    const calls = server(routes({ "POST /api/admin/leads/lists": () => ({ id: "list9" }) }))
+    render(withToasts(<LeadsManager />))
+    await screen.findByRole("table")
+    expect(screen.queryByRole("button", { name: "Save as smart list" })).toBeNull()
+    fireEvent.change(screen.getByLabelText("Activity"), { target: { value: "clicked" } })
+    fireEvent.change(screen.getByLabelText("Within"), { target: { value: "30" } })
+    fireEvent.click(screen.getByRole("button", { name: "Save as smart list" }))
+    const dialog = within(await screen.findByRole("dialog"))
+    expect(dialog.getByText("Clicked in the last 30 days")).toBeTruthy()
+    fireEvent.change(dialog.getByLabelText("Smart list name"), { target: { value: "Clicked this month" } })
+    fireEvent.click(dialog.getByRole("button", { name: "Save smart list" }))
+    expect(await screen.findByText(/Saved the smart list "Clicked this month"/)).toBeTruthy()
+    expect(calls.find((c) => c.method === "POST")?.body).toEqual({ name: "Clicked this month", kind: "smart", filter: { activity: "clicked", days: 30 } })
+    // Then it shows that list.
+    await waitFor(() => expect(filtersAsked(calls).at(-1)).toEqual({ listId: "list9" }))
+  })
+
+  it("Lists: fixed and smart, a new empty list, renaming, and deleting keeping the leads", async () => {
+    const calls = server(
+      routes({
+        "POST /api/admin/leads/lists": () => ({ id: "list9" }),
+        "PATCH /api/admin/leads/lists/list2": () => ({ ok: true }),
+        "DELETE /api/admin/leads/lists/list1": () => ({ removed: 0 }),
+        "DELETE /api/admin/leads/lists/list3": () => ({ removed: 0 }),
+      }),
+    )
+    render(withToasts(<LeadsManager />))
+    await screen.findByRole("table")
+    openTab("Lists")
+    const delhi = screen.getByRole("listitem", { name: "List Delhi founders" })
+    expect(within(delhi).getByText("Fixed")).toBeTruthy()
+    expect(within(delhi).getByText("{{company}}")).toBeTruthy()
+    expect(within(delhi).getByText(/2 people · uploaded .* from delhi.csv/)).toBeTruthy()
+    const smart = screen.getByRole("listitem", { name: "List Clicked recently" })
+    expect(within(smart).getByText("Smart")).toBeTruthy()
+    expect(within(smart).getByText("1 person now · Clicked in the last 30 days")).toBeTruthy()
+
+    fireEvent.click(screen.getByRole("button", { name: "New list" }))
+    let dialog = within(await screen.findByRole("dialog"))
+    fireEvent.change(dialog.getByLabelText("List name"), { target: { value: "Shortlist" } })
+    fireEvent.click(dialog.getByRole("button", { name: "Make list" }))
+    expect(await screen.findByText(/Made "Shortlist"/)).toBeTruthy()
+    expect(calls.find((c) => c.method === "POST")?.body).toEqual({ name: "Shortlist", kind: "static" })
+
+    fireEvent.click(within(screen.getByRole("listitem", { name: "List Mumbai" })).getByRole("button", { name: "Rename" }))
+    dialog = within(await screen.findByRole("dialog"))
+    expect(dialog.getByLabelText<HTMLInputElement>("New name").value).toBe("Mumbai")
+    fireEvent.change(dialog.getByLabelText("New name"), { target: { value: "Mumbai founders" } })
+    fireEvent.click(dialog.getByRole("button", { name: "Rename" }))
+    await waitFor(() => expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ name: "Mumbai founders" }))
+
+    fireEvent.click(within(screen.getByRole("listitem", { name: "List Delhi founders" })).getByRole("button", { name: "Delete" }))
+    dialog = within(await screen.findByRole("dialog"))
+    expect(dialog.getByText(/Anyone who unsubscribed is always kept/)).toBeTruthy()
+    fireEvent.click(dialog.getByRole("button", { name: "Delete list, keep leads" }))
+    await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.url === "/api/admin/leads/lists/list1?leads=keep")).toBe(true))
+
+    fireEvent.click(within(screen.getByRole("listitem", { name: "List Clicked recently" })).getByRole("button", { name: "Delete" }))
+    const confirm = within(await screen.findByRole("alertdialog"))
+    expect(confirm.getByText(/nobody is deleted/)).toBeTruthy()
+    fireEvent.click(confirm.getByRole("button", { name: "Delete smart list" }))
+    await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.url === "/api/admin/leads/lists/list3?leads=keep")).toBe(true))
+  })
+
+  it("a smart list's filters are changed in All leads and saved to it", async () => {
+    const calls = server(routes({ "PATCH /api/admin/leads/lists/list3": () => ({ ok: true }) }))
+    render(withToasts(<LeadsManager />))
+    await screen.findByRole("table")
+    openTab("Lists")
+    fireEvent.click(within(screen.getByRole("listitem", { name: "List Clicked recently" })).getByRole("button", { name: "Edit filters" }))
+    expect(await screen.findByText(/Changing the filters of the smart list/)).toBeTruthy()
+    expect(screen.getByLabelText<HTMLSelectElement>("Activity").value).toBe("clicked")
+    // A smart list can't be built on itself, or on another smart list.
+    expect(within(screen.getByLabelText("List")).queryByRole("option", { name: "Clicked recently" })).toBeNull()
+    fireEvent.change(screen.getByLabelText("Within"), { target: { value: "7" } })
+    await waitFor(() => expect(filtersAsked(calls).at(-1)).toEqual({ activity: "clicked", days: 7 }))
+    fireEvent.click(screen.getByRole("button", { name: 'Save to "Clicked recently"' }))
+    expect(await screen.findByText('Saved the filters of "Clicked recently"')).toBeTruthy()
+    expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ filter: { activity: "clicked", days: 7 } })
+    expect(screen.queryByText(/Changing the filters/)).toBeNull()
+  })
+
+  it("a lead opens with their details, lists and emails; changes are saved", async () => {
+    const detail = {
+      lead: { id: "l1", email: "asha@example.test", firstName: "Asha", lastName: "Shah", name: null, fields: { company: "Acme" }, createdAt: "2026-10-24T00:00:00Z", unsubscribedAt: null, stopReason: null },
+      lists: [{ id: "list1", name: "Delhi founders" }],
+      emails: [
+        { id: "r1", status: "sent", sentAt: "2026-10-24T05:00:00Z", error: null, openedAt: "2026-10-24T05:10:00Z", openCount: 1, clickedAt: "2026-10-24T05:12:00Z", clickCount: 1, campaign: { id: "c1", subject: "Hello banks" } },
+        { id: "r2", status: "failed", sentAt: null, error: "Mailbox full", openedAt: null, openCount: 0, clickedAt: null, clickCount: 0, campaign: { id: "c2", subject: "Second try" } },
+      ],
+      columns: [{ key: "company", label: "Company" }],
+    }
+    const calls = server(routes({ "PATCH /api/admin/leads/l1": () => ({ ok: true }), "/api/admin/leads/l1": () => detail }))
+    render(withToasts(<LeadsManager />))
+    fireEvent.click(await screen.findByRole("button", { name: "Open asha@example.test" }))
+    const panel = within(await screen.findByRole("dialog"))
+    expect(await panel.findByLabelText<HTMLInputElement>("First name")).toHaveProperty("value", "Asha")
+    expect(panel.getByText("Delhi founders")).toBeTruthy()
+    expect(panel.getByRole("link", { name: "Hello banks" })).toHaveProperty("href", expect.stringContaining("/admin/broadcasts/campaigns/c1"))
+    expect(panel.getByText(/^Seen /)).toBeTruthy()
+    expect(panel.getByRole("button", { name: "History for asha@example.test" })).toBeTruthy()
+    expect(panel.getByText("Didn't send: Mailbox full")).toBeTruthy()
+    fireEvent.change(panel.getByLabelText(/^Company/), { target: { value: "Acme Inc" } })
+    fireEvent.click(panel.getByRole("button", { name: "Save changes" }))
+    expect(await panel.findByText("Saved")).toBeTruthy()
+    expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ firstName: "Asha", lastName: "Shah", name: null, fields: { company: "Acme Inc" } })
+  })
+
+  it("Add & upload: one lead by hand, or many pasted, through the same save as an upload", async () => {
+    const calls = server(
+      routes({
+        "POST /api/admin/leads": (_u, init) =>
+          JSON.parse(String(init!.body)).listId
+            ? { listId: "list1", added: 1, alreadySaved: 1, alreadyUsers: 0, unsubscribed: 0, invalid: 0 }
+            : { listId: "list9", added: 1, alreadySaved: 0, alreadyUsers: 0, unsubscribed: 0, invalid: 0 },
+      }),
+    )
+    render(withToasts(<LeadsManager />))
+    await screen.findByRole("table")
+    openTab("Add & upload")
+    expect(screen.getByLabelText("CSV file")).toBeTruthy()
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "kiran@example.test" } })
+    fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Kiran" } })
+    fireEvent.change(screen.getByLabelText(/^Company/), { target: { value: "Initech" } })
+    const [oneList, manyList] = screen.getAllByLabelText<HTMLSelectElement>("Add to list")
+    expect(oneList.value).toBe("__new__")
+    // Smart lists fill themselves, so they aren't offered.
+    expect(within(oneList).queryByRole("option", { name: /Clicked recently/ })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Add lead" }))
+    expect(await screen.findByText("Added kiran@example.test.")).toBeTruthy()
+    expect(calls.find((c) => c.method === "POST")?.body).toEqual({
+      listName: "Added by hand",
+      columns: [{ key: "company", label: "Company" }],
+      leads: [{ email: "kiran@example.test", firstName: "Kiran", lastName: null, name: null, fields: { company: "Initech" } }],
+    })
+
+    fireEvent.change(screen.getByLabelText("Leads, one per line"), { target: { value: "a@example.test\nRavi Kumar <ravi@example.test>\nnot an email" } })
+    expect(screen.getByText(/2 to add · 1 without a real email \(left out\)/)).toBeTruthy()
+    fireEvent.change(manyList, { target: { value: "list1" } })
+    fireEvent.click(screen.getByRole("button", { name: "Add 2 leads" }))
+    expect(await screen.findByText("1 added · 1 already saved (now on this list too) · 1 without a real email (left out)")).toBeTruthy()
+    expect(calls.filter((c) => c.method === "POST").at(-1)?.body).toMatchObject({
+      listId: "list1",
+      listName: "Delhi founders",
+      leads: [
+        { email: "a@example.test", name: null },
+        { email: "ravi@example.test", name: "Ravi Kumar" },
+      ],
+    })
   })
 
   it("says to run the SQL when the tables aren't there yet", async () => {
@@ -247,6 +467,7 @@ describe("My leads in the pickers", () => {
     await waitFor(() => expect(within(select).getByRole("option", { name: "All my leads (2)" })).toBeTruthy())
     expect(within(select).getByRole("option", { name: "Leads never emailed (2)" })).toBeTruthy()
     expect(within(select).getByRole("option", { name: "List: Delhi founders (2)" })).toHaveProperty("value", "leads:list:list1")
+    expect(within(select).getByRole("option", { name: "Smart list: Clicked recently (1)" })).toHaveProperty("value", "leads:list:list3")
     fireEvent.change(select, { target: { value: "leads:list:list2" } })
     expect(onChange).toHaveBeenCalledWith({ ...EMPTY_AUDIENCE, audience: "leads:list:list2" })
   })

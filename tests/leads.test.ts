@@ -4,8 +4,10 @@
 // Unsubscribe link and headers, and nobody unsubscribed or already a user
 // emailed (lib/campaigns.ts); the Unsubscribe route; the upload route; what
 // the AI writer is told about leads; and sending leads' emails through Brevo
-// (lib/brevo.ts) with its own daily limit and webhook. Against an in-memory
-// database.
+// (lib/brevo.ts) with its own daily limit and webhook; and All leads: the
+// filters (lib/leadFilters.ts), lists made by hand and filled by ticking,
+// smart lists, many leads at once, one lead, and their routes. Against an
+// in-memory database.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { Prisma } from "@prisma/client"
 
@@ -22,7 +24,7 @@ type LeadRow = {
   emailCount: number
   createdAt: Date
 }
-type ListRow = { id: string; name: string; fileName: string | null; columns: unknown; createdBy: string; createdAt: Date }
+type ListRow = { id: string; name: string; fileName: string | null; columns: unknown; createdBy: string; createdAt: Date; kind?: string; filter?: unknown }
 type RecipientRow = {
   id: string
   campaignId: string
@@ -34,6 +36,10 @@ type RecipientRow = {
   error: string | null
   batchId: string | null
   provider?: string | null
+  openedAt?: Date | null
+  openCount?: number
+  clickedAt?: Date | null
+  clickCount?: number
   createdAt: Date
   updatedAt: Date
 }
@@ -60,6 +66,8 @@ const store = vi.hoisted(() => ({
   audit: [] as { action: string; details: string }[],
   // As before scripts/leads.sql's Brevo part is run: no Lead.stopReason or EmailCampaignRecipient.provider.
   columnsMissing: false,
+  // As before scripts/lead-lists.sql is run: no LeadList.kind or filter.
+  listsSqlMissing: false,
   nextId: 1,
 }))
 
@@ -78,6 +86,7 @@ function matches(row: Record<string, unknown>, where: Record<string, unknown> = 
       return true
     }
     if (key === "OR") return (cond as Record<string, unknown>[]).some((w) => matches(row, w))
+    if (key === "AND") return (cond as Record<string, unknown>[]).every((w) => matches(row, w))
     const value = row[key]
     if (cond === null) return value === null || value === undefined
     if (cond && typeof cond === "object" && !(cond instanceof Date)) {
@@ -97,14 +106,42 @@ function matches(row: Record<string, unknown>, where: Record<string, unknown> = 
 const pick = <T extends Record<string, unknown>>(row: T, select?: Record<string, unknown>) =>
   select ? (Object.fromEntries(Object.keys(select).map((k) => [k, row[k]])) as T) : { ...row }
 
+// Prisma's orderBy ([{ createdAt: "desc" }, { email: "asc" }]), skip and take.
+type Order = Record<string, "asc" | "desc">
+function ordered<T>(rows: T[], args: { orderBy?: Order | Order[]; skip?: number; take?: number }): T[] {
+  const orders = args.orderBy ? (Array.isArray(args.orderBy) ? args.orderBy : [args.orderBy]) : []
+  const value = (row: T, k: string) => {
+    const v = (row as Record<string, unknown>)[k]
+    return v instanceof Date ? v.getTime() : (v as string | number)
+  }
+  const sorted = [...rows].sort((a, b) => {
+    for (const o of orders) {
+      const [k, dir] = Object.entries(o)[0]
+      const x = value(a, k)
+      const y = value(b, k)
+      if (x !== y) return (x < y ? -1 : 1) * (dir === "desc" ? -1 : 1)
+    }
+    return 0
+  })
+  return sorted.slice(args.skip ?? 0, args.take === undefined ? undefined : (args.skip ?? 0) + args.take)
+}
+const listOf = (id: string) => ({ id, name: store.lists.find((x) => x.id === id)?.name })
+
 vi.mock("@/lib/db", () => ({
   db: {
     user: { findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => store.users.filter((u) => matches(u, where))) },
     lead: {
-      findMany: vi.fn(async ({ where, select, include }: { where?: Record<string, unknown>; select?: Record<string, unknown>; include?: { lists?: unknown } } = {}) =>
-        store.leads
-          .filter((l) => matches(l, where))
-          .map((l) => ({
+      findMany: vi.fn(
+        async ({
+          where,
+          select,
+          include,
+          ...order
+        }: { where?: Record<string, unknown>; select?: Record<string, unknown>; include?: { lists?: unknown }; orderBy?: Order | Order[]; skip?: number; take?: number } = {}) =>
+          ordered(
+            store.leads.filter((l) => matches(l, where)),
+            order,
+          ).map((l) => ({
             ...pick(l, select),
             ...(include?.lists || select?.lists
               ? { lists: store.members.filter((m) => m.leadId === l.id).map((m) => ({ list: { id: m.listId, name: store.lists.find((x) => x.id === m.listId)?.name } })) }
@@ -162,11 +199,21 @@ vi.mock("@/lib/db", () => ({
         const list = store.lists.find((l) => l.id === where.id)
         return list ? pick(list, select) : null
       }),
-      findMany: vi.fn(async ({ where }: { where?: Record<string, unknown> } = {}) =>
-        store.lists.filter((l) => matches(l, where)).map((l) => ({ ...l, _count: { members: store.members.filter((m) => m.listId === l.id).length } })),
-      ),
+      findMany: vi.fn(async ({ where, select }: { where?: Record<string, unknown>; select?: Record<string, unknown> } = {}) => {
+        if (store.listsSqlMissing && select && "kind" in select) throw missingColumn()
+        return ordered(
+          store.lists.filter((l) => matches(l, where)),
+          { orderBy: { createdAt: "desc" } },
+        ).map((l) => ({
+          ...l,
+          kind: store.listsSqlMissing ? undefined : (l.kind ?? "static"),
+          filter: store.listsSqlMissing ? undefined : (l.filter ?? null),
+          _count: { members: store.members.filter((m) => m.listId === l.id).length },
+        }))
+      }),
       create: vi.fn(async ({ data }: { data: Omit<ListRow, "id" | "createdAt"> }) => {
-        const list = { id: `list${store.nextId++}`, createdAt: new Date(), ...data } as ListRow
+        if (store.listsSqlMissing && "kind" in data) throw missingColumn()
+        const list = { id: `list${store.nextId++}`, createdAt: new Date(Date.UTC(2026, 9, 2, 0, 0, store.nextId)), ...data } as ListRow
         store.lists.push(list)
         return { id: list.id }
       }),
@@ -185,6 +232,14 @@ vi.mock("@/lib/db", () => ({
           count++
         }
         return { count }
+      }),
+      findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) =>
+        store.members.filter((m) => matches(m, where)).map((m) => ({ leadId: m.leadId, list: listOf(m.listId) })),
+      ),
+      deleteMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+        const before = store.members.length
+        store.members = store.members.filter((m) => !matches(m, where))
+        return { count: before - store.members.length }
       }),
     },
     $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
@@ -220,8 +275,27 @@ vi.mock("@/lib/db", () => ({
         for (const r of hit) Object.assign(r, data, { updatedAt: new Date() })
         return { count: hit.length }
       }),
-      findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => store.recipients.filter((r) => matches(r, where))),
-      groupBy: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+      findMany: vi.fn(async ({ where, select }: { where: Record<string, unknown>; select?: Record<string, unknown> }) =>
+        store.recipients
+          .filter((r) => matches(r, where))
+          .map((r) => (select?.campaign ? { ...r, campaign: { id: r.campaignId, subject: store.campaigns.find((c) => c.id === r.campaignId)?.subject } } : r)),
+      ),
+      groupBy: vi.fn(async ({ where, by }: { where: Record<string, unknown>; by?: string[] }) => {
+        if (by?.includes("email")) {
+          // What each address did: how many sent, and the latest of each time.
+          const groups = new Map<string, RecipientRow[]>()
+          for (const r of store.recipients.filter((x) => matches(x, where))) groups.set(r.email, [...(groups.get(r.email) ?? []), r])
+          const latest = (rows: RecipientRow[], k: "sentAt" | "openedAt" | "clickedAt") =>
+            rows
+              .map((r) => r[k])
+              .filter((d): d is Date => d instanceof Date)
+              .sort((a, b) => b.getTime() - a.getTime())[0] ?? null
+          return [...groups].map(([email, rows]) => ({
+            email,
+            _count: { _all: rows.length },
+            _max: { sentAt: latest(rows, "sentAt"), openedAt: latest(rows, "openedAt"), clickedAt: latest(rows, "clickedAt") },
+          }))
+        }
         const counts = new Map<string, number>()
         for (const r of store.recipients.filter((x) => matches(x, where))) counts.set(r.status, (counts.get(r.status) ?? 0) + 1)
         return [...counts].map(([status, n]) => ({ status, _count: { _all: n } }))
@@ -262,8 +336,27 @@ import {
   mergeFieldProblem,
   parseCsv,
   parseLeadAudience,
+  parsePastedLeads,
 } from "@/lib/leadRules"
-import { LeadsError, deleteLeadList, importLeads, leadsOverview, listLeads, resolveLeadAudience, stopLeadByEmail, unsubscribeLead, writerLeadFields } from "@/lib/leads"
+import {
+  LeadsError,
+  SMART_LISTS_SQL_MISSING,
+  bulkLeads,
+  createLeadList,
+  deleteLeadList,
+  importLeads,
+  leadDetail,
+  leadFieldKeys,
+  leadsOverview,
+  listLeads,
+  resolveLeadAudience,
+  stopLeadByEmail,
+  unsubscribeLead,
+  updateLead,
+  updateLeadList,
+  writerLeadFields,
+} from "@/lib/leads"
+import { NO_ENGAGEMENT, describeFilter, isEmptyFilter, matchesInMemory, type Engagement, type LeadFilter } from "@/lib/leadFilters"
 import { readUnsubscribeToken, unsubscribeToken, unsubscribeUrl, withUnsubscribe } from "@/lib/leadUnsubscribe"
 import { applyVariables } from "@/lib/broadcastRender"
 import { personalizeDesignedEmail } from "@/lib/emailDesignRender"
@@ -301,7 +394,11 @@ import { audienceLabel } from "@/components/admin/campaignLabels"
 import { leadsSection, writerFieldProblem } from "@/lib/ai/emailWriterLeads"
 import { writeEmail } from "@/lib/ai/emailWriter"
 import { GET as unsubscribeGet, POST as unsubscribePost } from "@/app/api/unsubscribe/[token]/route"
-import { POST as leadsPost } from "@/app/api/admin/leads/route"
+import { GET as leadsGet, POST as leadsPost } from "@/app/api/admin/leads/route"
+import { POST as bulkPost } from "@/app/api/admin/leads/bulk/route"
+import { POST as listsPost } from "@/app/api/admin/leads/lists/route"
+import { DELETE as listDelete, PATCH as listPatch } from "@/app/api/admin/leads/lists/[id]/route"
+import { GET as leadGet, PATCH as leadPatch } from "@/app/api/admin/leads/[id]/route"
 import type { EmailDesign } from "@/lib/emailDesign"
 import type { BatchMailer } from "@/lib/emailBatchSend"
 
@@ -358,6 +455,7 @@ beforeEach(() => {
   store.recipients = []
   store.audit = []
   store.columnsMissing = false
+  store.listsSqlMissing = false
   store.nextId = 1
 })
 afterEach(() => vi.unstubAllEnvs())
@@ -535,9 +633,9 @@ describe("saving an upload", () => {
     const overview = await leadsOverview()
     expect(overview.totals).toEqual({ total: 2, unsubscribed: 1, neverEmailed: 1 })
     expect(overview.lists).toEqual([expect.objectContaining({ id: listId, name: "Day 1", count: 2, columns: [{ key: "company", label: "Company" }] })])
-    const page = await listLeads({ search: "asha" })
+    const page = await listLeads({ filter: { q: "asha" } })
     expect(page.leads).toEqual([expect.objectContaining({ email: "a@example.test", name: "Asha", lists: [{ id: listId, name: "Day 1" }] })])
-    expect((await listLeads({ listId })).total).toBe(2)
+    expect((await listLeads({ filter: { listId } })).total).toBe(2)
   })
 })
 
@@ -1201,5 +1299,378 @@ describe("a campaign's service and sender", () => {
     expect((await send(["r1"])).sent).toBe(1)
     await expect(createCampaign({ adminEmail: ADMIN, subject: "Hi", body: "Hi.", recipients: ["typed@example.test"], audienceValue: null, sending: anant })).rejects.toThrow(SENDING_SQL_MISSING)
     expect((await createCampaign({ adminEmail: ADMIN, subject: "Hi", body: "Hi.", recipients: ["new@example.test"], audienceValue: null })).total).toBe(1)
+  })
+})
+
+// ── All leads, lists you make, smart lists, one lead ─────────────────────
+
+const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000)
+const idOf = (email: string) => leadByEmail(email).id
+
+// Four leads on two lists: two at banks, one on both lists, one from a meetup.
+// Asha saw and clicked the bank email, Ravi saw it 40 days ago, Priya got it
+// and never opened it, and Dev's didn't send.
+async function seedFinding() {
+  const banks = await importLeads({
+    adminEmail: ADMIN,
+    listName: "Banks",
+    columns: [
+      { key: "company", label: "Company" },
+      { key: "city", label: "City" },
+    ],
+    leads: [
+      lead("asha@hdfc.test", { name: "Asha Shah", fields: { company: "HDFC Bank", city: "Mumbai" } }),
+      lead("ravi@icici.test", { firstName: "Ravi", fields: { company: "ICICI Bank", city: "Delhi" } }),
+      lead("priya@acme.test", { name: "Priya", fields: { company: "Acme" } }),
+    ],
+  })
+  const meetup = await importLeads({ adminEmail: ADMIN, listName: "Meetup", columns: [{ key: "role", label: "Role" }], leads: [lead("dev@globex.test", { fields: { role: "CTO" } }), lead("priya@acme.test")] })
+  store.campaigns.push({ id: "c1", subject: "Hello banks", body: "", status: "active", design: null })
+  store.recipients.push(
+    recipient({ campaignId: "c1", email: "asha@hdfc.test", status: "sent", sentAt: daysAgo(2), openedAt: daysAgo(2), clickedAt: daysAgo(1) }),
+    recipient({ campaignId: "c1", email: "ravi@icici.test", status: "sent", sentAt: daysAgo(40), openedAt: daysAgo(40) }),
+    recipient({ campaignId: "c1", email: "priya@acme.test", status: "sent", sentAt: daysAgo(3) }),
+    recipient({ campaignId: "c1", email: "dev@globex.test", status: "failed", error: "Mailbox full" }),
+  )
+  return { banks: banks.listId, meetup: meetup.listId }
+}
+const emailsOf = async (filter: LeadFilter, page = 1) => (await listLeads({ filter, page })).leads.map((l) => l.email)
+
+describe("pasting leads", () => {
+  it("one per line: an address, a name with it either side, or Name <address>", () => {
+    const pasted = parsePastedLeads(
+      ["asha@acme.test", "Ravi Kumar <Ravi@Globex.test>", '"Priya Shah", priya@initech.test', "kiran@x.test; Kiran", "Meera\tmeera@y.test", "", "not an email", "ASHA@acme.test"].join("\n"),
+    )
+    expect(pasted.leads.map((l) => [l.email, l.name])).toEqual([
+      ["asha@acme.test", null],
+      ["ravi@globex.test", "Ravi Kumar"],
+      ["priya@initech.test", "Priya Shah"],
+      ["kiran@x.test", "Kiran"],
+      ["meera@y.test", "Meera"],
+    ])
+    expect(pasted).toMatchObject({ invalid: 1, duplicates: 1 })
+  })
+})
+
+describe("the filters", () => {
+  const asha = { email: "asha@hdfc.test", firstName: null, lastName: null, name: "Asha Shah", fields: { company: "HDFC Bank" } }
+
+  it("a column: contains, is, empty, has a value, in any case; their own name and email too", () => {
+    const has = (field: LeadFilter["field"]) => matchesInMemory(asha, NO_ENGAGEMENT, { field })
+    expect(has({ key: "company", op: "contains", value: "BANK" })).toBe(true)
+    expect(has({ key: "company", op: "contains", value: "icici" })).toBe(false)
+    expect(has({ key: "company", op: "is", value: "hdfc bank" })).toBe(true)
+    expect(has({ key: "company", op: "is", value: "hdfc" })).toBe(false)
+    expect(has({ key: "company", op: "empty" })).toBe(false)
+    expect(has({ key: "city", op: "empty" })).toBe(true)
+    expect(has({ key: "company", op: "not_empty" })).toBe(true)
+    expect(has({ key: "city", op: "not_empty" })).toBe(false)
+    expect(has({ key: "name", op: "contains", value: "shah" })).toBe(true)
+    expect(has({ key: "email", op: "contains", value: "@hdfc" })).toBe(true)
+  })
+
+  it("what they did with the emails, within so many days", () => {
+    const e: Engagement = { emails: 2, lastSentAt: daysAgo(2), lastSeenAt: daysAgo(40), lastClickedAt: null }
+    const did = (activity: LeadFilter["activity"], days?: number, engagement = e) => matchesInMemory(asha, engagement, { activity, days })
+    expect(did("emailed", 7)).toBe(true)
+    expect(did("emailed", 1)).toBe(false)
+    expect(did("seen")).toBe(true)
+    expect(did("seen", 30)).toBe(false)
+    expect(did("not_seen")).toBe(false)
+    expect(did("clicked")).toBe(false)
+    expect(did("not_clicked")).toBe(true)
+    expect(did("never")).toBe(false)
+    // Never emailed is "never", not "emailed and never seen".
+    expect(did("never", undefined, NO_ENGAGEMENT)).toBe(true)
+    expect(did("not_seen", undefined, NO_ENGAGEMENT)).toBe(false)
+  })
+
+  it("in words, for a smart list", () => {
+    expect(
+      describeFilter(
+        { activity: "clicked", days: 30, field: { key: "company", op: "contains", value: "bank" }, status: "active", listId: "l1", addedDays: 7, q: "shah" },
+        { lists: { l1: "Banks" }, columns: { company: "Company" } },
+      ),
+    ).toBe('Clicked in the last 30 days · Company contains "bank" · Can be emailed · on "Banks" · added in the last 7 days · matching "shah"')
+    expect(describeFilter({ activity: "never", days: 30 })).toBe("Never emailed")
+    expect(describeFilter({})).toBe("Every lead")
+    expect(isEmptyFilter({})).toBe(true)
+    expect(isEmptyFilter({ status: "active" })).toBe(false)
+  })
+})
+
+describe("all leads in one table", () => {
+  it("everyone, newest first, with their lists and what they did with the emails", async () => {
+    const { banks, meetup } = await seedFinding()
+    const page = await listLeads({ filter: {} })
+    expect(page).toMatchObject({ page: 1, pageSize: 50, total: 4 })
+    expect(page.leads.map((l) => l.email)).toEqual(["dev@globex.test", "priya@acme.test", "ravi@icici.test", "asha@hdfc.test"])
+    const priya = page.leads[1]
+    expect(priya.lists).toEqual([
+      { id: banks, name: "Banks" },
+      { id: meetup, name: "Meetup" },
+    ])
+    const asha = page.leads[3]
+    expect(asha).toMatchObject({ name: "Asha Shah", emailCount: 1, fields: { company: "HDFC Bank", city: "Mumbai" } })
+    expect(asha.lastSeenAt).toBeInstanceOf(Date)
+    expect(asha.lastClickedAt).toBeInstanceOf(Date)
+    // An email that didn't send isn't counted.
+    expect(page.leads[0]).toMatchObject({ emailCount: 0, lastSeenAt: null, lastClickedAt: null })
+  })
+
+  it("narrowed by search, list, status, a column, what they did and when they were added", async () => {
+    const { banks, meetup } = await seedFinding()
+    await stopLeadByEmail("ravi@icici.test", "bounced")
+    expect(await emailsOf({ q: "SHAH" })).toEqual(["asha@hdfc.test"])
+    expect(await emailsOf({ listId: meetup })).toEqual(["dev@globex.test", "priya@acme.test"])
+    expect(await emailsOf({ status: "active" })).toEqual(["dev@globex.test", "priya@acme.test", "asha@hdfc.test"])
+    expect(await emailsOf({ status: "stopped" })).toEqual(["ravi@icici.test"])
+    expect(await emailsOf({ status: "bounced" })).toEqual(["ravi@icici.test"])
+    expect(await emailsOf({ status: "unsubscribed" })).toEqual([])
+    expect(await emailsOf({ field: { key: "company", op: "contains", value: "bank" } })).toEqual(["ravi@icici.test", "asha@hdfc.test"])
+    expect(await emailsOf({ activity: "clicked", days: 7 })).toEqual(["asha@hdfc.test"])
+    expect(await emailsOf({ activity: "seen", days: 30 })).toEqual(["asha@hdfc.test"])
+    expect(await emailsOf({ activity: "seen" })).toEqual(["ravi@icici.test", "asha@hdfc.test"])
+    expect(await emailsOf({ activity: "never" })).toEqual(["dev@globex.test"])
+    expect(await emailsOf({ activity: "not_seen" })).toEqual(["priya@acme.test"])
+    expect(await emailsOf({ listId: banks, activity: "not_clicked" })).toEqual(["priya@acme.test", "ravi@icici.test"])
+    for (const l of store.leads) l.createdAt = daysAgo(30)
+    leadByEmail("dev@globex.test").createdAt = daysAgo(1)
+    expect(await emailsOf({ addedDays: 7 })).toEqual(["dev@globex.test"])
+    expect((await listLeads({ filter: { addedDays: 90 } })).total).toBe(4)
+  })
+
+  it("a page at a time, whether the database or the column filter finds them", async () => {
+    await seedFinding()
+    await importLeads({ adminEmail: ADMIN, listName: "Bulk", columns: [], leads: Array.from({ length: 55 }, (_, i) => lead(`p${i}@bulk.test`)) })
+    const second = await listLeads({ filter: {}, page: 2 })
+    expect(second).toMatchObject({ page: 2, total: 59 })
+    expect(second.leads).toHaveLength(9)
+    expect(second.leads.at(-1)?.email).toBe("asha@hdfc.test")
+    const columned = await listLeads({ filter: { field: { key: "email", op: "contains", value: "@bulk" } }, page: 2 })
+    expect(columned).toMatchObject({ page: 2, total: 55 })
+    expect(columned.leads).toHaveLength(5)
+  })
+})
+
+describe("lists you make", () => {
+  it("an empty list, filled by ticking leads; it learns their columns, and nobody is on it twice", async () => {
+    await seedFinding()
+    const { id } = await createLeadList({ admin: ADMIN, name: "  Shortlist ", kind: "static" })
+    expect(store.lists.find((l) => l.id === id)).toMatchObject({ name: "Shortlist", createdBy: ADMIN })
+    expect(store.members.filter((m) => m.listId === id)).toHaveLength(0)
+    expect(await bulkLeads({ admin: ADMIN, action: "add", ids: [idOf("asha@hdfc.test"), idOf("dev@globex.test")], listId: id })).toEqual({ affected: 2, kept: 0, listId: id })
+    expect((await bulkLeads({ admin: ADMIN, action: "add", ids: [idOf("asha@hdfc.test"), idOf("priya@acme.test")], listId: id })).affected).toBe(1)
+    expect(store.members.filter((m) => m.listId === id)).toHaveLength(3)
+    expect(store.lists.find((l) => l.id === id)?.columns).toEqual([
+      { key: "company", label: "Company" },
+      { key: "city", label: "City" },
+      { key: "role", label: "Role" },
+    ])
+    expect(store.audit.map((a) => a.action)).toEqual(expect.arrayContaining(["CREATE_LEAD_LIST", "ADD_TO_LEAD_LIST"]))
+    await expect(createLeadList({ admin: ADMIN, name: "   ", kind: "static" })).rejects.toThrow("Name the list")
+  })
+
+  it("ticked leads can go on a new list named there, and so can everyone a filter finds", async () => {
+    await seedFinding()
+    const hot = await bulkLeads({ admin: ADMIN, action: "add", ids: [idOf("asha@hdfc.test"), idOf("dev@globex.test")], newListName: "Hot" })
+    expect(store.lists.find((l) => l.id === hot.listId)?.name).toBe("Hot")
+    expect(store.members.filter((m) => m.listId === hot.listId).map((m) => m.leadId)).toEqual([idOf("asha@hdfc.test"), idOf("dev@globex.test")])
+    const banks = await bulkLeads({ admin: ADMIN, action: "add", filter: { field: { key: "company", op: "contains", value: "bank" } }, newListName: "Bank people" })
+    expect(banks.affected).toBe(2)
+    await expect(bulkLeads({ admin: ADMIN, action: "add", ids: [idOf("asha@hdfc.test")], newListName: " " })).rejects.toThrow("Name the new list")
+    await expect(bulkLeads({ admin: ADMIN, action: "add", ids: [], newListName: "Empty" })).rejects.toThrow("Pick at least one lead")
+    await expect(bulkLeads({ admin: ADMIN, action: "add", filter: { q: "nobody" }, newListName: "Empty" })).rejects.toThrow("Pick at least one lead")
+    await expect(bulkLeads({ admin: ADMIN, action: "add", ids: [idOf("asha@hdfc.test")], listId: "gone" })).rejects.toMatchObject({ status: 404 })
+  })
+
+  it("taking leads off a list keeps them saved; deleting leads keeps anyone who stopped", async () => {
+    const { banks } = await seedFinding()
+    expect((await bulkLeads({ admin: ADMIN, action: "remove", ids: [idOf("asha@hdfc.test")], listId: banks })).affected).toBe(1)
+    expect(leadByEmail("asha@hdfc.test")).toBeDefined()
+    expect(store.members.some((m) => m.listId === banks && m.leadId === idOf("asha@hdfc.test"))).toBe(false)
+    expect(store.members.filter((m) => m.listId === banks)).toHaveLength(2)
+    await expect(bulkLeads({ admin: ADMIN, action: "remove", ids: [idOf("ravi@icici.test")] })).rejects.toThrow("Which list?")
+
+    await unsubscribeLead(idOf("ravi@icici.test"))
+    const priya = idOf("priya@acme.test")
+    expect(await bulkLeads({ admin: ADMIN, action: "delete", ids: [idOf("ravi@icici.test"), priya] })).toEqual({ affected: 1, kept: 1 })
+    expect(store.leads.map((l) => l.email).sort()).toEqual(["asha@hdfc.test", "dev@globex.test", "ravi@icici.test"])
+    expect(store.members.some((m) => m.leadId === priya)).toBe(false)
+    expect(store.audit.at(-1)).toMatchObject({ action: "DELETE_LEADS" })
+  })
+
+  it("renaming; deleting a list can keep its leads, or delete the ones only on it", async () => {
+    const { banks, meetup } = await seedFinding()
+    await updateLeadList(banks, { admin: ADMIN, name: " Bank leads " })
+    expect(store.lists.find((l) => l.id === banks)?.name).toBe("Bank leads")
+    expect(store.audit.at(-1)).toMatchObject({ action: "UPDATE_LEAD_LIST" })
+    await expect(updateLeadList(banks, { admin: ADMIN, name: "  " })).rejects.toThrow("Name the list")
+    await expect(updateLeadList("gone", { admin: ADMIN, name: "x" })).rejects.toMatchObject({ status: 404 })
+
+    expect(await deleteLeadList(meetup, ADMIN, { withLeads: false })).toEqual({ removed: 0 })
+    expect(leadByEmail("dev@globex.test")).toBeDefined()
+    expect(await deleteLeadList(banks, ADMIN)).toEqual({ removed: 3 })
+    expect(store.leads.map((l) => l.email)).toEqual(["dev@globex.test"])
+  })
+})
+
+describe("smart lists", () => {
+  it("are whoever matches the filter now, and change by themselves", async () => {
+    await seedFinding()
+    const { id } = await createLeadList({ admin: ADMIN, name: "Seen it", kind: "smart", filter: { activity: "seen" } })
+    const seen = (await leadsOverview()).lists.find((l) => l.id === id)
+    expect(seen).toMatchObject({ name: "Seen it", kind: "smart", filter: { activity: "seen" }, count: 2, columns: [] })
+    expect(await emailsOf({ listId: id })).toEqual(["ravi@icici.test", "asha@hdfc.test"])
+    // Priya opens the email: she's on it now.
+    store.recipients.find((r) => r.email === "priya@acme.test")!.openedAt = new Date()
+    expect((await leadsOverview()).lists.find((l) => l.id === id)?.count).toBe(3)
+    // More filters narrow it further.
+    expect(await emailsOf({ listId: id, field: { key: "company", op: "contains", value: "hdfc" } })).toEqual(["asha@hdfc.test"])
+    expect(store.audit.at(-1)).toMatchObject({ action: "CREATE_LEAD_LIST", details: '"Seen it" (smart: Seen an email)' })
+  })
+
+  it("can be built on a fixed list, and a campaign to one goes to whoever matches it then, oldest first", async () => {
+    const { banks } = await seedFinding()
+    const { id } = await createLeadList({ admin: ADMIN, name: "Banks that saw it", kind: "smart", filter: { listId: banks, activity: "seen" } })
+    expect(await emailsOf({ listId: id })).toEqual(["ravi@icici.test", "asha@hdfc.test"])
+    expect((await resolveLeadAudience(`leads:list:${id}`)).map((p) => p.email)).toEqual(["asha@hdfc.test", "ravi@icici.test"])
+    // Not anyone who stopped, nor anyone who has since signed up.
+    await unsubscribeLead(idOf("ravi@icici.test"))
+    store.users.push({ id: "u9", email: "asha@hdfc.test" })
+    expect(await resolveLeadAudience(`leads:list:${id}`)).toEqual([])
+    // Its merge fields are every column: its people can come from any list.
+    expect((await leadFieldKeys(id)).map((c) => c.key)).toEqual(["role", "company", "city"])
+    expect((await leadFieldKeys(banks)).map((c) => c.key)).toEqual(["company", "city"])
+  })
+
+  it("need a filter, can't be built on another smart list or themselves, and can't be filled by hand", async () => {
+    const { banks } = await seedFinding()
+    await expect(createLeadList({ admin: ADMIN, name: "Everyone", kind: "smart", filter: {} })).rejects.toThrow("Pick at least one filter")
+    await expect(createLeadList({ admin: ADMIN, name: "Everyone", kind: "smart" })).rejects.toThrow("Pick at least one filter")
+    const { id } = await createLeadList({ admin: ADMIN, name: "Clicked", kind: "smart", filter: { activity: "clicked" } })
+    await expect(createLeadList({ admin: ADMIN, name: "On clicked", kind: "smart", filter: { listId: id, status: "active" } })).rejects.toThrow("another smart list")
+    await expect(updateLeadList(id, { admin: ADMIN, filter: { listId: id } })).rejects.toThrow("built on itself")
+    await expect(updateLeadList(id, { admin: ADMIN, filter: {} })).rejects.toThrow("Pick at least one filter")
+    await expect(updateLeadList(banks, { admin: ADMIN, filter: { activity: "seen" } })).rejects.toThrow("Only a smart list has a filter")
+    await expect(bulkLeads({ admin: ADMIN, action: "add", ids: [idOf("dev@globex.test")], listId: id })).rejects.toThrow("fills itself")
+    await expect(bulkLeads({ admin: ADMIN, action: "remove", ids: [idOf("asha@hdfc.test")], listId: id })).rejects.toThrow("fills itself")
+    await expect(importLeads({ adminEmail: ADMIN, listId: id, listName: "Clicked", columns: [], leads: [lead("new@example.test")] })).rejects.toThrow("fills itself")
+    expect(store.members.some((m) => m.listId === id)).toBe(false)
+  })
+
+  it("changing the filter changes who's on it; deleting one never deletes anyone", async () => {
+    await seedFinding()
+    const { id } = await createLeadList({ admin: ADMIN, name: "Watching", kind: "smart", filter: { activity: "seen" } })
+    await updateLeadList(id, { admin: ADMIN, filter: { activity: "clicked" } })
+    expect(store.lists.find((l) => l.id === id)?.filter).toEqual({ activity: "clicked" })
+    expect(await emailsOf({ listId: id })).toEqual(["asha@hdfc.test"])
+    expect(await deleteLeadList(id, ADMIN)).toEqual({ removed: 0 })
+    expect(store.leads).toHaveLength(4)
+    expect(store.audit.at(-1)).toMatchObject({ action: "DELETE_LEAD_LIST", details: 'Smart list "Watching"' })
+  })
+
+  it("before scripts/lead-lists.sql: lists work as before, and a smart list says to run it", async () => {
+    store.listsSqlMissing = true
+    const { banks } = await seedFinding()
+    expect((await leadsOverview()).lists.map((l) => [l.name, l.kind])).toEqual([
+      ["Meetup", "static"],
+      ["Banks", "static"],
+    ])
+    expect(await emailsOf({ listId: banks, activity: "seen" })).toEqual(["ravi@icici.test", "asha@hdfc.test"])
+    await expect(createLeadList({ admin: ADMIN, name: "Seen", kind: "smart", filter: { activity: "seen" } })).rejects.toMatchObject({ status: 503, message: SMART_LISTS_SQL_MISSING })
+    const { id } = await createLeadList({ admin: ADMIN, name: "Shortlist", kind: "static" })
+    expect((await bulkLeads({ admin: ADMIN, action: "add", ids: [idOf("dev@globex.test")], listId: id })).affected).toBe(1)
+  })
+})
+
+describe("one lead", () => {
+  it("their details, lists, and every email they were sent with when they saw and clicked it", async () => {
+    const { banks } = await seedFinding()
+    const detail = await leadDetail(idOf("asha@hdfc.test"))
+    expect(detail.lead).toMatchObject({ email: "asha@hdfc.test", name: "Asha Shah", fields: { company: "HDFC Bank", city: "Mumbai" }, unsubscribedAt: null })
+    expect(detail.lists).toEqual([{ id: banks, name: "Banks" }])
+    expect(detail.emails).toEqual([expect.objectContaining({ status: "sent", campaign: { id: "c1", subject: "Hello banks" }, openedAt: expect.any(Date), clickedAt: expect.any(Date) })])
+    expect(detail.columns.map((c) => c.key)).toEqual(["role", "company", "city"])
+    expect((await leadDetail(idOf("dev@globex.test"))).emails).toEqual([expect.objectContaining({ status: "failed", error: "Mailbox full" })])
+    await expect(leadDetail("gone")).rejects.toMatchObject({ status: 404 })
+  })
+
+  it("changing their name and columns; an empty value removes that column", async () => {
+    await seedFinding()
+    await updateLead(idOf("asha@hdfc.test"), { admin: ADMIN, firstName: " Asha ", lastName: "", name: null, fields: { company: " HDFC ", city: "  ", "not a key!": "x" } })
+    expect(leadByEmail("asha@hdfc.test")).toMatchObject({ firstName: "Asha", lastName: null, name: null })
+    expect(leadByEmail("asha@hdfc.test").fields).toEqual({ company: "HDFC" })
+    expect(store.audit.at(-1)).toMatchObject({ action: "UPDATE_LEAD", details: "asha@hdfc.test" })
+    await expect(updateLead("gone", { admin: ADMIN, firstName: null, lastName: null, name: null, fields: {} })).rejects.toMatchObject({ status: 404 })
+  })
+})
+
+describe("the leads routes", () => {
+  const json = (url: string, method: string, body?: unknown) =>
+    new Request(`https://carouselabs.test${url}`, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) })
+  const params = (id: string) => ({ params: Promise.resolve({ id }) })
+
+  it("are for admins only", async () => {
+    store.admin = null
+    expect((await leadsGet(json("/api/admin/leads", "GET"))).status).toBe(403)
+    expect((await bulkPost(json("/api/admin/leads/bulk", "POST", { action: "delete", ids: ["x"] }))).status).toBe(403)
+    expect((await listsPost(json("/api/admin/leads/lists", "POST", { name: "x", kind: "static" }))).status).toBe(403)
+    expect((await listPatch(json("/api/admin/leads/lists/l1", "PATCH", { name: "x" }), params("l1"))).status).toBe(403)
+    expect((await listDelete(json("/api/admin/leads/lists/l1", "DELETE"), params("l1"))).status).toBe(403)
+    expect((await leadGet(json("/api/admin/leads/x", "GET"), params("x"))).status).toBe(403)
+    expect((await leadPatch(json("/api/admin/leads/x", "PATCH", {}), params("x"))).status).toBe(403)
+    expect(store.audit).toEqual([])
+  })
+
+  it("the table takes real filters only, and can answer without the lists", async () => {
+    await seedFinding()
+    expect((await leadsGet(json("/api/admin/leads?filter=nope", "GET"))).status).toBe(400)
+    expect((await leadsGet(json(`/api/admin/leads?filter=${encodeURIComponent('{"status":"gone"}')}`, "GET"))).status).toBe(400)
+    const only = await (await leadsGet(json(`/api/admin/leads?only=leads&filter=${encodeURIComponent('{"q":"asha"}')}`, "GET"))).json()
+    expect(only.totals).toBeUndefined()
+    expect(only.leads.map((l: { email: string }) => l.email)).toEqual(["asha@hdfc.test"])
+    const full = await (await leadsGet(json(`/api/admin/leads?filter=${encodeURIComponent('{"activity":"never"}')}`, "GET"))).json()
+    expect(full).toMatchObject({ totals: { total: 4 }, total: 1 })
+    expect(full.columns.map((c: { key: string }) => c.key)).toEqual(["role", "company", "city"])
+  })
+
+  it("many at once: an action and the leads (ticked, or a filter)", async () => {
+    await seedFinding()
+    expect((await bulkPost(json("/api/admin/leads/bulk", "POST", { action: "add", newListName: "x" }))).status).toBe(400)
+    expect((await bulkPost(json("/api/admin/leads/bulk", "POST", { action: "nuke", ids: ["x"] }))).status).toBe(400)
+    const res = await bulkPost(json("/api/admin/leads/bulk", "POST", { action: "add", filter: { activity: "seen" }, newListName: "Seen" }))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ affected: 2, kept: 0 })
+    const wrong = await bulkPost(json("/api/admin/leads/bulk", "POST", { action: "remove", ids: [idOf("dev@globex.test")] }))
+    expect(wrong.status).toBe(400)
+    expect(await wrong.json()).toEqual({ error: "Which list?" })
+  })
+
+  it("lists: make, rename, change the filter, and delete keeping or deleting the leads", async () => {
+    const { meetup } = await seedFinding()
+    expect((await listsPost(json("/api/admin/leads/lists", "POST", { kind: "static" }))).status).toBe(400)
+    expect((await listsPost(json("/api/admin/leads/lists", "POST", { name: "Smart", kind: "smart", filter: { status: "gone" } }))).status).toBe(400)
+    const made = await listsPost(json("/api/admin/leads/lists", "POST", { name: "Clicked", kind: "smart", filter: { activity: "clicked" } }))
+    expect(made.status).toBe(201)
+    const { id } = await made.json()
+    expect((await listPatch(json(`/api/admin/leads/lists/${id}`, "PATCH", { name: "Clickers", filter: { activity: "seen" } }), params(id))).status).toBe(200)
+    expect(store.lists.find((l) => l.id === id)).toMatchObject({ name: "Clickers", filter: { activity: "seen" } })
+    expect((await listPatch(json(`/api/admin/leads/lists/${meetup}`, "PATCH", { filter: { activity: "seen" } }), params(meetup))).status).toBe(400)
+    expect(await (await listDelete(json(`/api/admin/leads/lists/${meetup}?leads=keep`, "DELETE"), params(meetup))).json()).toEqual({ removed: 0 })
+    expect(store.leads).toHaveLength(4)
+    expect((await listDelete(json(`/api/admin/leads/lists/${meetup}`, "DELETE"), params(meetup))).status).toBe(404)
+  })
+
+  it("one lead: read it, and change it with real column keys only", async () => {
+    await seedFinding()
+    const id = idOf("asha@hdfc.test")
+    const got = await (await leadGet(json(`/api/admin/leads/${id}`, "GET"), params(id))).json()
+    expect(got.lead.email).toBe("asha@hdfc.test")
+    expect((await leadGet(json("/api/admin/leads/gone", "GET"), params("gone"))).status).toBe(404)
+    const body = { firstName: "Asha", lastName: null, name: null, fields: { company: "HDFC" } }
+    expect((await leadPatch(json(`/api/admin/leads/${id}`, "PATCH", { ...body, fields: { "bad key": "x" } }), params(id))).status).toBe(400)
+    expect((await leadPatch(json(`/api/admin/leads/${id}`, "PATCH", body), params(id))).status).toBe(200)
+    expect(leadByEmail("asha@hdfc.test").fields).toEqual({ company: "HDFC" })
   })
 })

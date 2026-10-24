@@ -347,9 +347,26 @@ export async function getCampaign(id: string) {
     },
   })
   if (!campaign) return null
+  const scanners = await scannerColumns(id)
+  const recipients = campaign.recipients.map((r) => ({ ...r, ...scanners.get(r.id) }))
   const sending = await campaignSending(id)
   const [counts, allowance] = await Promise.all([statusCounts({ campaignId: id }), campaignAllowance({ audience: campaign.audience, via: sending.via }, now)])
-  return { ...campaign, sending, progress: campaignProgress(counts), allowance }
+  return { ...campaign, recipients, sending, progress: campaignProgress(counts), allowance }
+}
+
+// Each person's security-scanner activity and last click (lib/emailScanners.ts);
+// none before scripts/email-scanners.sql is run.
+async function scannerColumns(campaignId: string) {
+  try {
+    const rows = await db.emailCampaignRecipient.findMany({
+      where: { campaignId },
+      select: { id: true, lastClickedAt: true, scannedAt: true, scanReason: true, autoOpenedAt: true },
+    })
+    return new Map(rows.map(({ id, ...rest }) => [id, rest]))
+  } catch (err) {
+    if (isEngageSchemaMissing(err)) return new Map<string, never>()
+    throw err
+  }
 }
 
 /** Checks a choice of service and sender for these people (lib/senders.ts), or says what's wrong. */

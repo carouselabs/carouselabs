@@ -242,6 +242,10 @@ describe("sending it to them", () => {
         openCount: 0,
         clickedAt: null,
         clickCount: 0,
+        lastClickedAt: null,
+        scannedAt: null,
+        scanReason: null,
+        autoOpenedAt: null,
         // Not kept in full, so it can't be used again.
         reuse: null,
       },

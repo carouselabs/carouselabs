@@ -1477,12 +1477,19 @@ model EmailCampaignRecipient {
   provider   String?
   // Whether they opened ("seen") and clicked it (lib/emailTracking.ts,
   // scripts/email-tracking.sql). openedAt: first seen (a click counts too);
-  // the counts are every load and every click.
+  // the counts are every load and every click. Only a person's: a security
+  // scanner's activity is kept apart (lib/emailScanners.ts,
+  // scripts/email-scanners.sql): scannedAt (first) and why, autoOpenedAt
+  // (Apple Mail opening it by itself), lastClickedAt (a person's last click).
   openedAt     DateTime?
   lastOpenedAt DateTime?
   openCount    Int       @default(0)
   clickedAt    DateTime?
+  lastClickedAt DateTime?
   clickCount   Int       @default(0)
+  scannedAt    DateTime?
+  scanReason   String?
+  autoOpenedAt DateTime?
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
 
@@ -1512,10 +1519,37 @@ model PersonalEmailTrack {
   lastOpenedAt DateTime?
   openCount    Int       @default(0)
   clickedAt    DateTime?
+  lastClickedAt DateTime?
   clickCount   Int       @default(0)
+  // A security scanner's activity, apart from the person's (as on
+  // EmailCampaignRecipient).
+  scannedAt    DateTime?
+  scanReason   String?
+  autoOpenedAt DateTime?
   createdAt    DateTime  @default(now())
 
   @@index([userId])
+}
+
+// Every open and click of a tracked email, with what it was judged to be
+// (lib/emailScanners.ts): a person, a security scanner, Apple Mail opening
+// it by itself, or a click not yet confirmed by a real browser. The seen and
+// clicked shown on EmailCampaignRecipient / PersonalEmailTrack are worked out
+// from these (scripts/email-scanners.sql). source: a keyed hash of the IP
+// address, never the address itself.
+model EmailTrackEvent {
+  id        String   @id @default(cuid())
+  kind      String // "campaign" | "personal"
+  refId     String // EmailCampaignRecipient.id | PersonalEmailTrack.emailId
+  type      String // "open" | "click" | "human" | "trap"
+  at        DateTime @default(now())
+  link      String? // where a click went
+  source    String?
+  userAgent String?
+  verdict   String // "person" | "scanner" | "apple" | "unconfirmed"
+  reason    String?
+
+  @@index([kind, refId, at])
 }
 
 model EmailArt {

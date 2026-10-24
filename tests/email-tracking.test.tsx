@@ -18,7 +18,20 @@ const m = vi.hoisted(() => ({
   audit: vi.fn(),
   auditRows: [] as Record<string, unknown>[],
   failUpdates: null as null | Error,
+  // The activity log (lib/emailScanners.ts) and the rows' worked-out seen and clicked.
+  events: [] as Record<string, unknown>[],
+  rowUpdates: [] as { table: string; where: Record<string, unknown>; data: Record<string, unknown> }[],
+  sentAt: new Date("2026-10-22T09:00:00.000Z") as Date | null,
 }))
+
+// Enough of Prisma's where for the activity log's queries.
+function eventMatches(e: Record<string, unknown>, where: Record<string, unknown>) {
+  return Object.entries(where).every(([k, v]) => {
+    if (v && typeof v === "object" && "gte" in (v as object)) return (e[k] as Date) >= (v as { gte: Date }).gte
+    if (v && typeof v === "object" && "in" in (v as object)) return (v as { in: unknown[] }).in.includes(e[k])
+    return e[k] === v
+  })
+}
 
 vi.mock("next/server", async (original) => ({
   ...(await original<typeof import("next/server")>()),
@@ -33,12 +46,31 @@ vi.mock("@/lib/db", () => ({
         m.recipientUpdates.push(q)
         return { count: 1 }
       }),
+      findUnique: vi.fn(async () => {
+        if (m.failUpdates) throw m.failUpdates
+        return { sentAt: m.sentAt }
+      }),
+      update: vi.fn(async (q: { where: Record<string, unknown>; data: Record<string, unknown> }) => m.rowUpdates.push({ table: "campaign", ...q })),
+    },
+    emailTrackEvent: {
+      findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => m.events.filter((e) => eventMatches(e, where)).map((e) => ({ ...e }))),
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        const row = { id: `ev${m.events.length + 1}`, ...data }
+        m.events.push(row)
+        return row
+      }),
+      updateMany: vi.fn(async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        for (const e of m.events.filter((x) => eventMatches(x, where))) Object.assign(e, data)
+        return { count: 1 }
+      }),
     },
     personalEmailTrack: {
       updateMany: vi.fn(async (q: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         m.personalUpdates.push(q)
         return { count: 1 }
       }),
+      findUnique: vi.fn(async () => ({ createdAt: m.sentAt })),
+      update: vi.fn(async (q: { where: Record<string, unknown>; data: Record<string, unknown> }) => m.rowUpdates.push({ table: "personal", ...q })),
       create: m.trackCreate,
       delete: m.trackDelete,
       findMany: vi.fn(async ({ where }: { where: { emailId: { in: string[] } } }) => m.tracks.filter((t) => where.emailId.in.includes(String(t.emailId)))),
@@ -62,6 +94,8 @@ import { clickDestination, readTrackingToken, recordEmailEvent, trackingToken, w
 import { campaignEngagement, percentOf } from "@/lib/campaignRules"
 import { GET as openRoute } from "@/app/api/email-track/open/[token]/route"
 import { GET as clickRoute } from "@/app/api/email-track/click/[token]/route"
+import { POST as humanRoute } from "@/app/api/email-track/human/[token]/route"
+import { GET as trapRoute } from "@/app/api/email-track/check/[token]/route"
 import { GET as historyRoute, POST as personalRoute } from "@/app/api/admin/users/[userId]/email/route"
 import { sendUserBroadcast } from "@/lib/broadcast"
 import { sendDesignedEmails } from "@/lib/emailDesignRender"
@@ -82,6 +116,9 @@ beforeEach(() => {
   m.tracks = []
   m.auditRows = []
   m.failUpdates = null
+  m.events = []
+  m.rowUpdates = []
+  m.sentAt = new Date(Date.now() - 60 * 60 * 1000)
   for (const fn of [m.trackCreate, m.trackDelete, m.send, m.batch, m.audit]) fn.mockReset()
   m.trackCreate.mockResolvedValue({})
   m.trackDelete.mockResolvedValue({})
@@ -128,6 +165,9 @@ describe("a tracked copy", () => {
     expect(out).toContain(`href="mailto:support@carouselabs.com"`)
     // Tracking twice changes nothing more.
     expect(withTracking(out, token()).match(/email-track\/click/g)).toHaveLength(1)
+    // The hidden link only robots follow: first in the body, invisible and out of reach.
+    const trap = new RegExp(`<body><a href="${SITE}/api/email-track/check/${token().replace(/[.]/g, "\\.")}" aria-hidden="true" tabindex="-1" style="display:none[^"]*">&#8203;</a>`)
+    expect(out).toMatch(trap)
   })
 
   it("goes only where our emails may link", () => {
@@ -180,44 +220,75 @@ describe("a tracked designed campaign copy", () => {
 describe("the public routes", () => {
   const params = (token: string) => ({ params: Promise.resolve({ token }) })
 
+  const browser = { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36", "x-forwarded-for": "203.0.113.7" }
+
   it("the image always comes back at once; only a real token is counted, afterwards", async () => {
     const token = trackingToken({ kind: "campaign", id: "r1" })!
-    const res = await openRoute(new Request("https://x/"), params(token))
+    const res = await openRoute(new Request("https://x/", { headers: browser }), params(token))
     expect(res.headers.get("Content-Type")).toBe("image/gif")
     expect(res.headers.get("Cache-Control")).toContain("no-store")
     expect(new Uint8Array(await res.arrayBuffer()).length).toBeGreaterThan(30)
-    expect(m.recipientUpdates).toEqual([])
+    expect(m.events).toEqual([])
     await runAfter()
-    expect(m.recipientUpdates.map((u) => u.where)).toEqual([{ id: "r1", openedAt: null }, { id: "r1" }])
-    expect(m.recipientUpdates[1].data).toMatchObject({ openCount: { increment: 1 }, lastOpenedAt: expect.any(Date) })
+    expect(m.events).toEqual([expect.objectContaining({ kind: "campaign", refId: "r1", type: "open", verdict: "person" })])
+    expect(m.rowUpdates.at(-1)).toMatchObject({ table: "campaign", where: { id: "r1" }, data: { openCount: 1, openedAt: expect.any(Date) } })
+    // The network address is never kept, only a keyed hash of it.
+    expect(JSON.stringify(m.events)).not.toContain("203.0.113.7")
 
     const bad = await openRoute(new Request("https://x/"), params("cr1.forgedforgedforgedfor"))
     expect(bad.headers.get("Content-Type")).toBe("image/gif")
     expect(m.jobs).toEqual([])
   })
 
-  it("a click goes straight on and is counted; elsewhere goes home, uncounted", async () => {
+  it("a click goes straight on through the browser check, and counts once a real browser confirms it; elsewhere goes home", async () => {
     const token = trackingToken({ kind: "personal", id: "e1" })!
     const to = "https://carouselabs.com/extension"
-    const res = await clickRoute(new Request(`https://x/?to=${encodeURIComponent(to)}`), params(token))
-    expect(res.status).toBe(302)
-    expect(res.headers.get("Location")).toBe(to)
+    const res = await clickRoute(new Request(`https://x/?to=${encodeURIComponent(to)}`, { headers: browser }), params(token))
+    expect(res.status).toBe(200)
+    expect(res.headers.get("Content-Type")).toContain("text/html")
+    const page = await res.text()
+    expect(page).toContain(`location.replace("${to}")`)
+    expect(page).toContain(`navigator.sendBeacon("/api/email-track/human/${token}?to=${encodeURIComponent(to)}")`)
+    // Without scripts it still goes on.
+    expect(page).toContain(`<noscript><meta http-equiv="refresh" content="0;url=${to}"></noscript>`)
     await runAfter()
-    expect(m.personalUpdates.map((u) => u.where)).toEqual([{ emailId: "e1", openedAt: null }, { emailId: "e1", clickedAt: null }, { emailId: "e1" }])
-    expect(m.personalUpdates[2].data).toEqual({ clickCount: { increment: 1 } })
+    // Visiting the link alone isn't a click yet.
+    expect(m.events).toEqual([expect.objectContaining({ type: "click", verdict: "unconfirmed", link: to })])
+    expect(m.rowUpdates.at(-1)).toMatchObject({ table: "personal", data: { clickCount: 0, clickedAt: null } })
+
+    // The page's script ran: a person clicked.
+    expect((await humanRoute(new Request(`https://x/?to=${encodeURIComponent(to)}`, { method: "POST", headers: browser }), params(token))).status).toBe(204)
+    await runAfter()
+    expect(m.rowUpdates.at(-1)).toMatchObject({ table: "personal", where: { emailId: "e1" }, data: { clickCount: 1, clickedAt: expect.any(Date), openedAt: expect.any(Date) } })
 
     const away = await clickRoute(new Request(`https://x/?to=${encodeURIComponent("https://evil.example.com/")}`), params(token))
     expect(away.headers.get("Location")).toBe(`${SITE}/`)
     expect(m.jobs).toEqual([])
     const forged = await clickRoute(new Request(`https://x/?to=${encodeURIComponent(to)}`), params("pe1.forgedforgedforgedfor"))
-    expect(forged.headers.get("Location")).toBe(to)
+    expect(await forged.text()).toContain(`location.replace("${to}")`)
     expect(m.jobs).toEqual([])
+  })
+
+  it("a link can't be used to inject script into the click page", async () => {
+    const token = trackingToken({ kind: "personal", id: "e1" })!
+    const to = 'https://carouselabs.com/a"</script><script>alert(1)</script>'
+    const page = await (await clickRoute(new Request(`https://x/?to=${encodeURIComponent(to)}`), params(token))).text()
+    expect(page).not.toContain("<script>alert(1)")
+    expect(page).toContain("\\u003c/script>")
+  })
+
+  it("the hidden link marks a robot, never a person", async () => {
+    const token = trackingToken({ kind: "campaign", id: "r1" })!
+    expect((await trapRoute(new Request("https://x/", { headers: browser }), params(token))).status).toBe(200)
+    await runAfter()
+    expect(m.events).toEqual([expect.objectContaining({ type: "trap", verdict: "scanner" })])
+    expect(m.rowUpdates.at(-1)).toMatchObject({ data: { scannedAt: expect.any(Date), openedAt: null, openCount: 0 } })
   })
 
   it("a database problem never breaks anything", async () => {
     m.failUpdates = new Error("database hiccup")
     vi.spyOn(console, "error").mockImplementation(() => {})
-    await expect(recordEmailEvent({ kind: "campaign", id: "r1" }, "open")).resolves.toBeUndefined()
+    await expect(recordEmailEvent({ kind: "campaign", id: "r1" }, { type: "open" })).resolves.toBeUndefined()
   })
 })
 
@@ -278,7 +349,14 @@ describe("the campaign page", () => {
       { status: "sent", openedAt: null, clickedAt: null },
       { status: "pending", openedAt: null, clickedAt: null },
     ]
-    expect(campaignEngagement(list)).toEqual({ sent: 3, seen: 2, clicked: 1 })
+    expect(campaignEngagement(list)).toEqual({ sent: 3, seen: 2, clicked: 1, scanned: 0, maybe: 0 })
+    expect(
+      campaignEngagement([
+        { status: "sent", openedAt: null, clickedAt: null, scannedAt: "x" },
+        { status: "sent", openedAt: "x", clickedAt: null, scannedAt: "x" },
+        { status: "sent", openedAt: null, clickedAt: null, autoOpenedAt: "x" },
+      ]),
+    ).toEqual({ sent: 3, seen: 1, clicked: 0, scanned: 2, maybe: 1 })
     expect(percentOf(2, 3)).toBe("67%")
     expect(percentOf(0, 0)).toBe("0%")
   })

@@ -17,7 +17,7 @@ import { emailDesignSchema } from "@/lib/emailDesign"
 import { artProblem } from "@/lib/emailArtCheck"
 import { personalizeDesignedEmail, renderDesignedEmail } from "@/lib/emailDesignRender"
 import { resolveVariables } from "@/lib/broadcastVariables"
-import { trackingToken, withTracking } from "@/lib/emailTracking"
+import { findPersonalTracks, trackingToken, withTracking } from "@/lib/emailTracking"
 import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
 import { mergeFieldProblem } from "@/lib/leadRules"
 import { BREVO_MISSING, brevoMailer } from "@/lib/brevo"
@@ -40,7 +40,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
   // Emails sent before tracking existed have no emailId: they show as not tracked.
   const emailIds = sent.flatMap((s) => (s.value.emailId ? [s.value.emailId] : []))
   const tracks = emailIds.length
-    ? await db.personalEmailTrack.findMany({ where: { emailId: { in: emailIds } } }).catch((err) => {
+    ? await findPersonalTracks({ where: { emailId: { in: emailIds } } }).catch((err) => {
         if (isEngageSchemaMissing(err)) return []
         throw err
       })
@@ -60,6 +60,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
         openCount: track?.openCount ?? 0,
         clickedAt: track?.clickedAt ?? null,
         clickCount: track?.clickCount ?? 0,
+        // A security scanner's visits, Apple Mail's own opening, a person's last click (lib/emailScanners.ts).
+        lastClickedAt: track?.lastClickedAt ?? null,
+        scannedAt: track?.scannedAt ?? null,
+        scanReason: track?.scanReason ?? null,
+        autoOpenedAt: track?.autoOpenedAt ?? null,
         // Kept in full (lib/sentEmails.ts): it can be used again.
         reuse: track?.design && value.emailId ? `personal:${value.emailId}` : null,
       }

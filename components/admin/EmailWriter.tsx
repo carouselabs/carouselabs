@@ -641,7 +641,16 @@ export function EmailWriter({ recipient, reuse }: { recipient?: EmailRecipient; 
                         </span>
                         {e.tracked && (
                           <span className="text-caption">
-                            <SeenStatus openedAt={e.openedAt ?? null} openCount={e.openCount ?? 0} clickedAt={e.clickedAt ?? null} clickCount={e.clickCount ?? 0} />
+                            <SeenStatus
+                              openedAt={e.openedAt ?? null}
+                              openCount={e.openCount ?? 0}
+                              clickedAt={e.clickedAt ?? null}
+                              clickCount={e.clickCount ?? 0}
+                              lastClickedAt={e.lastClickedAt}
+                              scannedAt={e.scannedAt}
+                              scanReason={e.scanReason}
+                              autoOpenedAt={e.autoOpenedAt}
+                            />
                           </span>
                         )}
                       </span>

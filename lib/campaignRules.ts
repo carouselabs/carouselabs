@@ -76,13 +76,23 @@ export function campaignProgress(counts: Partial<Record<CampaignRecipientStatus,
 
 // Of the people a campaign was sent to, how many saw it and how many clicked
 // (lib/emailTracking.ts). "Seen" is a good guess (see there); a click is certain.
-export function campaignEngagement(recipients: { status: string; openedAt?: unknown; clickedAt?: unknown }[]): {
+export function campaignEngagement(recipients: { status: string; openedAt?: unknown; clickedAt?: unknown; scannedAt?: unknown; autoOpenedAt?: unknown }[]): {
   sent: number
   seen: number
   clicked: number
+  // Checked by their email's security scanner (lib/emailScanners.ts), and
+  // opened by Apple Mail by itself with nothing from them: neither counts as seen.
+  scanned: number
+  maybe: number
 } {
   const sent = recipients.filter((r) => r.status === "sent")
-  return { sent: sent.length, seen: sent.filter((r) => !!r.openedAt).length, clicked: sent.filter((r) => !!r.clickedAt).length }
+  return {
+    sent: sent.length,
+    seen: sent.filter((r) => !!r.openedAt).length,
+    clicked: sent.filter((r) => !!r.clickedAt).length,
+    scanned: sent.filter((r) => !!r.scannedAt).length,
+    maybe: sent.filter((r) => !r.openedAt && !!r.autoOpenedAt).length,
+  }
 }
 
 // "45%" of the sent; "0%" when nothing is sent.

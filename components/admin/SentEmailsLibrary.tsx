@@ -42,6 +42,10 @@ type Personal = {
   openCount: number
   clickedAt: string | null
   clickCount: number
+  lastClickedAt?: string | null
+  scannedAt?: string | null
+  scanReason?: string | null
+  autoOpenedAt?: string | null
   templateId: string | null
 }
 type Library = { templates: Template[]; campaigns: Campaign[]; personal: Personal[] }
@@ -259,7 +263,7 @@ export function SentEmailsLibrary() {
                     · {fmtDateTime(p.sentAt)}
                   </span>
                   <span className="text-caption">
-                    <SeenStatus openedAt={p.openedAt} openCount={p.openCount} clickedAt={p.clickedAt} clickCount={p.clickCount} />
+                    <SeenStatus {...p} />
                   </span>
                 </span>
                 <span className="flex items-center gap-3">

@@ -9,6 +9,7 @@ import { db } from "@/lib/db"
 import { logAdminAction } from "@/lib/auditLog"
 import { designPlainText, emailDesignSchema, type EmailDesign } from "@/lib/emailDesign"
 import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
+import { findPersonalTracks } from "@/lib/emailTracking"
 
 export type EmailSource = { kind: "campaign" | "personal" | "template"; id: string }
 
@@ -100,7 +101,7 @@ export async function listSentEmails() {
       take: LIST_LIMIT,
       select: { id: true, subject: true, audience: true, audienceValue: true, status: true, design: true, createdAt: true, createdBy: true },
     }),
-    orEmpty(db.personalEmailTrack.findMany({ orderBy: { createdAt: "desc" }, take: LIST_LIMIT })),
+    orEmpty(findPersonalTracks({ orderBy: { createdAt: "desc" }, take: LIST_LIMIT })),
     orEmpty(db.emailTemplate.findMany({ orderBy: { createdAt: "desc" }, take: LIST_LIMIT })),
   ])
 
@@ -176,6 +177,10 @@ export async function listSentEmails() {
         openCount: t.openCount,
         clickedAt: t.clickedAt,
         clickCount: t.clickCount,
+        lastClickedAt: t.lastClickedAt,
+        scannedAt: t.scannedAt,
+        scanReason: t.scanReason,
+        autoOpenedAt: t.autoOpenedAt,
         templateId: starred.get(`personal:${t.emailId}`) ?? null,
       }
     }),

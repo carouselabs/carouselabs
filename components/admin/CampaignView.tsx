@@ -38,11 +38,16 @@ type Recipient = {
   status: string
   sentAt: string | null
   error: string | null
-  // Seen and clicked (lib/emailTracking.ts).
+  // Seen and clicked (lib/emailTracking.ts), and what was only a security
+  // scanner or Apple Mail (lib/emailScanners.ts).
   openedAt: string | null
   openCount: number
   clickedAt: string | null
   clickCount: number
+  lastClickedAt?: string | null
+  scannedAt?: string | null
+  scanReason?: string | null
+  autoOpenedAt?: string | null
 }
 
 type Campaign = {
@@ -315,8 +320,16 @@ export function CampaignView({ id }: { id: string }) {
                 Seen by <span className="font-semibold">{engagement.seen}</span> of {engagement.sent} sent ({percentOf(engagement.seen, engagement.sent)})
                 <span className="text-muted-foreground"> · </span>
                 Clicked by <span className="font-semibold">{engagement.clicked}</span> ({percentOf(engagement.clicked, engagement.sent)})
+                {(engagement.scanned > 0 || engagement.maybe > 0) && (
+                  <span className="block text-caption text-muted-foreground">
+                    {engagement.scanned > 0 && `Checked by a security scanner: ${engagement.scanned} (not counted)`}
+                    {engagement.scanned > 0 && engagement.maybe > 0 && " · "}
+                    {engagement.maybe > 0 && `Maybe seen in Apple Mail: ${engagement.maybe}`}
+                  </span>
+                )}
                 <span className="block text-caption text-muted-foreground/80">
-                  Seen is a good guess: some email apps load the email by themselves, others block it. A click is certain.
+                  Only people count: company security scanners that check every email and link are left out, and a click counts once
+                  a real browser makes it. Seen is still a good guess: some email apps block images.
                 </span>
               </p>
             )}

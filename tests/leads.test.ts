@@ -191,7 +191,9 @@ vi.mock("@/lib/db", () => ({
     emailCampaign: {
       findUnique: vi.fn(async ({ where, select }: { where: { id: string }; select?: Record<string, unknown> }) => {
         if (store.columnsMissing && select && "sendVia" in select) throw missingColumn()
-        return store.campaigns.find((c) => c.id === where.id) ?? null
+        const campaign = store.campaigns.find((c) => c.id === where.id)
+        if (!campaign) return null
+        return select?.recipients ? { ...campaign, recipients: store.recipients.filter((r) => r.campaignId === campaign.id) } : campaign
       }),
       create: vi.fn(
         async ({

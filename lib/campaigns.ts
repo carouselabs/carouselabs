@@ -5,7 +5,9 @@
 // never both email someone), sends through Resend's batch endpoint like a
 // broadcast (leads through Brevo's, lib/brevo.ts, or whichever the campaign
 // was set to, from the sender it was set to: lib/sendingRules.ts), then marks
-// each person sent or failed with the reason it gave.
+// each person sent or failed with the reason it gave. The email is written
+// by hand, with the AI writer (lib/emailDesign.ts), or a ready-made one
+// (lib/readyEmails.ts).
 // Pure rules (daily allowance, next 10, progress) live in lib/campaignRules.ts.
 import { randomUUID } from "node:crypto"
 import type { BatchMailer, BatchSendResult } from "@/lib/emailBatchSend"
@@ -17,6 +19,8 @@ import { resolveRecipients, sendUserBroadcast, type BroadcastRecipients } from "
 import { emailDesignSchema, type EmailDesign } from "@/lib/emailDesign"
 import { artProblem } from "@/lib/emailArtCheck"
 import { sendDesignedEmails } from "@/lib/emailDesignRender"
+import { readyDesignOf, type ReadyDesign } from "@/lib/readyEmails"
+import { sendReadyEmails } from "@/lib/readyEmailSend"
 import {
   CAMPAIGN_DAILY_LIMIT,
   CAMPAIGN_MAX_RECIPIENTS,
@@ -106,8 +110,9 @@ export async function createCampaign(input: {
   body: string
   recipients: BroadcastRecipients
   audienceValue: string | null
-  // An AI-written email (subject and body are then its subject and plain text).
-  design?: EmailDesign
+  // An AI-written email, or a ready-made one (subject and body are then its
+  // subject and plain text).
+  design?: EmailDesign | ReadyDesign
   // What sends it and who it's from, already checked (lib/senders.ts resolveSending).
   sending?: Sending
 }) {
@@ -141,7 +146,7 @@ export async function createCampaign(input: {
   await logAdminAction({
     adminEmail: input.adminEmail,
     action: "CREATE_CAMPAIGN",
-    details: `"${input.subject}" → ${rows.length} people (${Array.isArray(input.recipients) ? "custom list" : input.recipients})${input.design ? " · written with AI" : ""}${isDefaultSending(sending) ? "" : ` · ${describeSending(sending)}`}`,
+    details: `"${input.subject}" → ${rows.length} people (${Array.isArray(input.recipients) ? "custom list" : input.recipients})${input.design ? (readyDesignOf(input.design) ? " · ready-made email" : " · written with AI") : ""}${isDefaultSending(sending) ? "" : ` · ${describeSending(sending)}`}`,
   })
   return { id: campaign.id, total: rows.length }
 }
@@ -430,7 +435,8 @@ export async function sendCampaignBatch(input: {
   })
   if (!campaign) throw new CampaignError("Campaign not found", 404)
   if (campaign.status === "archived") throw new CampaignError("This campaign is archived. Restore it to send.")
-  const design = campaignDesign(campaign.design)
+  const ready = readyDesignOf(campaign.design)
+  const design = ready ? null : campaignDesign(campaign.design)
 
   await releaseStuckSends(campaign.id, now)
   const choice = await campaignSending(campaign.id)
@@ -503,9 +509,11 @@ export async function sendCampaignBatch(input: {
   const sendThrough = async (mailer: BatchMailer, group: typeof people, prefix: string): Promise<BatchSendResult> =>
     group.length === 0
       ? { sent: 0, failed: 0, failedTo: [] }
-      : design
-        ? sendDesignedEmails(mailer, from, group, design, prefix, { replyTo: choice.replyTo })
-        : sendUserBroadcast(mailer, from, group, campaign.subject, campaign.body, prefix, { replyTo: choice.replyTo })
+      : ready
+        ? sendReadyEmails(mailer, from, group, ready, prefix, { replyTo: choice.replyTo })
+        : design
+          ? sendDesignedEmails(mailer, from, group, design, prefix, { replyTo: choice.replyTo })
+          : sendUserBroadcast(mailer, from, group, campaign.subject, campaign.body, prefix, { replyTo: choice.replyTo })
   const viaResend = await sendThrough(input.resend, people.filter((p) => !p.byBrevo), idempotencyPrefix)
   const viaBrevo = input.brevo ? await sendThrough(input.brevo, people.filter((p) => p.byBrevo), `${idempotencyPrefix}-brevo`) : null
   const result = {

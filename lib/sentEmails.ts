@@ -3,19 +3,21 @@
 // admin profile; kept in full since scripts/email-reuse.sql), and templates
 // (the existing EmailTemplate, which a sent email can be starred into).
 // "Use again" loads one (emailContent) into a new campaign, the AI writer,
-// or a personal email to someone else.
+// or a personal email to someone else. A ready-made email (lib/readyEmails.ts),
+// or a campaign or template made from one, can only go out as a campaign.
 import { Prisma } from "@prisma/client"
 import { db } from "@/lib/db"
 import { logAdminAction } from "@/lib/auditLog"
 import { designPlainText, emailDesignSchema, type EmailDesign } from "@/lib/emailDesign"
 import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
 import { findPersonalTracks } from "@/lib/emailTracking"
+import { readyDesignOf, readyEmailById, readyEmailText, readySnapshot } from "@/lib/readyEmails"
 
-export type EmailSource = { kind: "campaign" | "personal" | "template"; id: string }
+export type EmailSource = { kind: "campaign" | "personal" | "template" | "ready"; id: string }
 
-// "campaign:<id>", "personal:<emailId>", "template:<id>": how a source travels in URLs.
+// "campaign:<id>", "personal:<emailId>", "template:<id>", "ready:<id>": how a source travels in URLs.
 export function parseSource(value: string | null | undefined): EmailSource | null {
-  const match = /^(campaign|personal|template):([\w-]{1,64})$/.exec(value ?? "")
+  const match = /^(campaign|personal|template|ready):([\w-]{1,64})$/.exec(value ?? "")
   return match ? { kind: match[1] as EmailSource["kind"], id: match[2] } : null
 }
 export const sourceKey = (source: EmailSource) => `${source.kind}:${source.id}`
@@ -47,7 +49,16 @@ export interface EmailContent {
   body: string
   // The AI-written email; null for one written as plain text.
   design: EmailDesign | null
+  // A ready-made email's id (lib/readyEmails.ts): it's sent as it is.
+  readyEmail?: string | null
   mentionsName: string | null
+}
+
+// A ready-made email as it's used again: by its id, so it goes out as it is now.
+function readyContent(stored: unknown, fallback: { subject: string; body: string }): EmailContent | null {
+  const ready = readyDesignOf(stored)
+  if (!ready) return null
+  return { subject: ready.subject, body: fallback.body, design: null, readyEmail: ready.id, mentionsName: null }
 }
 
 async function personalRecipientName(emailId: string): Promise<string | null> {
@@ -59,9 +70,15 @@ async function personalRecipientName(emailId: string): Promise<string | null> {
 
 /** The email itself, ready to send again; null when it isn't there (or wasn't kept). */
 export async function emailContent(source: EmailSource): Promise<EmailContent | null> {
+  if (source.kind === "ready") {
+    const ready = readyEmailById(source.id)
+    return ready ? { subject: ready.subject, body: readyEmailText(ready), design: null, readyEmail: ready.id, mentionsName: null } : null
+  }
   if (source.kind === "campaign") {
     const campaign = await db.emailCampaign.findUnique({ where: { id: source.id }, select: { subject: true, body: true, design: true } })
     if (!campaign) return null
+    const ready = readyContent(campaign.design, campaign)
+    if (ready) return ready
     const design = asDesign(campaign.design)
     return { subject: design?.subject ?? campaign.subject, body: campaign.body, design, mentionsName: null }
   }
@@ -74,6 +91,8 @@ export async function emailContent(source: EmailSource): Promise<EmailContent | 
   }
   const template = await db.emailTemplate.findUnique({ where: { id: source.id } })
   if (!template) return null
+  const ready = readyContent(template.design, template)
+  if (ready) return ready
   const design = asDesign(template.design)
   const content = { subject: design?.subject ?? template.subject, body: template.body, design }
   const name = template.sourceKind === "personal" && template.sourceId ? await personalRecipientName(template.sourceId) : null
@@ -196,14 +215,16 @@ export class TemplateError extends Error {
 /** Stars a campaign or personal email as a named template: a copy of the email as it is now. */
 export async function saveTemplate(input: { source: EmailSource; name: string; adminEmail: string }) {
   if (input.source.kind === "template") throw new TemplateError("That's already a template")
+  if (input.source.kind === "ready") throw new TemplateError("A ready-made email is always there to use: it doesn't need a template")
   const content = await emailContent(input.source)
   if (!content) throw new TemplateError("That email wasn't kept, so it can't be a template", 404)
+  const ready = content.readyEmail ? readyEmailById(content.readyEmail) : null
   const template = await db.emailTemplate.create({
     data: {
       name: input.name,
       subject: content.subject,
       body: content.body,
-      design: content.design ?? Prisma.DbNull,
+      design: ready ? readySnapshot(ready) : (content.design ?? Prisma.DbNull),
       sourceKind: input.source.kind,
       sourceId: input.source.id,
       createdBy: input.adminEmail,

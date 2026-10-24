@@ -2,7 +2,8 @@
 // Using emails again (Admin → Broadcasts → Sent emails, lib/sentEmails.ts):
 // the library, loading any sent email or template, the "still says Priya"
 // check, starring templates, adding people to a campaign (nobody twice),
-// personal emails kept in full, and the screens that use them.
+// personal emails kept in full, the screens that use them, and ready-made
+// emails (components/admin/ReadyEmails.tsx).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 
@@ -46,6 +47,7 @@ import { UseAgainDialog } from "@/components/admin/UseAgainDialog"
 import { SentEmailsLibrary } from "@/components/admin/SentEmailsLibrary"
 import { AddPeopleDialog } from "@/components/admin/AddPeopleDialog"
 import { EmailWriter } from "@/components/admin/EmailWriter"
+import { ReadyEmails } from "@/components/admin/ReadyEmails"
 
 const R2 = "https://art.example.test"
 const art = (name: string) => `${R2}/email-art/2026-10/${name}`
@@ -419,5 +421,48 @@ describe("the plain template picker", () => {
     const dialog = within(await screen.findByRole("dialog"))
     expect(await dialog.findByText("Old plain")).toBeTruthy()
     expect(dialog.queryByText("Starred AI email")).toBeNull()
+  })
+})
+
+describe("Ready-made emails", () => {
+  it("shows each one as people get it, with an example name and the button replying to the sender", () => {
+    server({})
+    render(<ReadyEmails />)
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(["Dharma Ramasamy · Email 1", "Dharma Ramasamy · Email 2"])
+    expect(screen.getByText("App registrations in your Entra tenant")).toBeTruthy()
+    expect(screen.getByText("Quick question about your Entra tenant")).toBeTruthy()
+    expect(screen.getAllByText("Dharma Ramasamy <support@carouselabs.com>")).toHaveLength(2)
+    const preview = screen.getByTitle("Dharma Ramasamy · Email 2 preview").getAttribute("srcdoc")!
+    expect(preview).toContain("Hello Priya,")
+    expect(preview).not.toContain("{{firstName}}")
+    expect(preview).toContain('href="mailto:support@carouselabs.com?subject=Re%3A%20Quick%20question%20about%20your%20Entra%20tenant"')
+  })
+
+  it("Use this email makes a campaign of it as it is: it can't be edited or sent to one person", async () => {
+    const calls = server({
+      "/api/admin/sent-emails/content": () => ({ subject: "Quick question about your Entra tenant", body: "b", design: null, readyEmail: "dharma-2", mentionsName: null }),
+      "POST /api/admin/campaigns": (_u, init) => (JSON.parse(String(init?.body)).dryRun ? { count: 3 } : { id: "c7" }),
+    })
+    render(<ReadyEmails />)
+    fireEvent.click(screen.getAllByRole("button", { name: "Use this email" })[1])
+    const dialog = within(await screen.findByRole("dialog", { name: "Send this email" }))
+    fireEvent.click(await dialog.findByRole("button", { name: "Check who it reaches" }))
+    expect(calls[0].url).toBe("/api/admin/sent-emails/content?source=ready%3Adharma-2")
+    expect(dialog.getByText(/this email, exactly as it is/)).toBeTruthy()
+    expect(dialog.getByRole("radio", { name: "Edit first" })).toHaveProperty("disabled", true)
+    expect(dialog.getByRole("radio", { name: "Edit first" }).getAttribute("title")).toBe("A ready-made email is sent as it is")
+    expect(dialog.getByRole("radio", { name: "Send to one person" })).toHaveProperty("disabled", true)
+    fireEvent.click(await dialog.findByRole("button", { name: "Make campaign for 3" }))
+    await waitFor(() => expect(m.push).toHaveBeenCalledWith("/admin/broadcasts/campaigns/c7"))
+    const made = calls.filter((c) => c.method === "POST").at(-1)!.body as Record<string, unknown>
+    expect(made).toMatchObject({ readyEmail: "dharma-2", recipients: "engage_linkedin" })
+    expect(made).not.toHaveProperty("design")
+    expect(made).not.toHaveProperty("body")
+  })
+
+  it("the content route hands out a ready-made email by its id", async () => {
+    const res = await contentRoute(new Request("https://carouselabs.test/api/admin/sent-emails/content?source=ready:dharma-1"))
+    expect(await res.json()).toMatchObject({ readyEmail: "dharma-1", design: null, subject: "App registrations in your Entra tenant" })
+    expect((await contentRoute(new Request("https://carouselabs.test/api/admin/sent-emails/content?source=ready:nope"))).status).toBe(404)
   })
 })

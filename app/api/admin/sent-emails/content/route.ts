@@ -1,7 +1,7 @@
-// GET /api/admin/sent-emails/content?source=campaign:<id>|personal:<id>|template:<id>
+// GET /api/admin/sent-emails/content?source=campaign:<id>|personal:<id>|template:<id>|ready:<id>
 // — one email ready to use again (lib/sentEmails.ts): its subject, plain
-// text, the AI-written email (null for plain text), and the name it greets
-// someone by outright, if any.
+// text, the AI-written email (null for plain text) or the ready-made
+// email's id, and the name it greets someone by outright, if any.
 import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { emailContent, parseSource } from "@/lib/sentEmails"

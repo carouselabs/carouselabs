@@ -5,7 +5,8 @@
 // one person as a personal email. An AI-written email keeps its painted
 // picture and stickers, so nothing is painted again. When the email still
 // names the person it was written for ("Hi Priya"), it says so and asks to
-// edit it first, or to confirm.
+// edit it first, or to confirm. A ready-made email (lib/readyEmails.ts) is
+// sent as it is, as a campaign; its page opens this too, to send it.
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { PenLine, Send, Users } from "lucide-react"
@@ -16,7 +17,7 @@ import { SendingPicker } from "./SendingPicker"
 import { DEFAULT_SENDING_CHOICE, type SendingChoice } from "@/lib/sendingRules"
 import { isLeadAudience } from "@/lib/leadRules"
 
-type Content = { subject: string; body: string; design: unknown; mentionsName: string | null }
+type Content = { subject: string; body: string; design: unknown; readyEmail?: string | null; mentionsName: string | null }
 type Person = { id: string; email: string; name: string | null }
 type Choice = "people" | "edit" | "person"
 
@@ -26,7 +27,17 @@ async function json<T>(res: Response): Promise<T> {
   return data as T
 }
 
-export function UseAgainDialog({ source, subject, onClose }: { source: string; subject: string; onClose: () => void }) {
+export function UseAgainDialog({
+  source,
+  subject,
+  onClose,
+  title = "Use this email again",
+}: {
+  source: string
+  subject: string
+  onClose: () => void
+  title?: string
+}) {
   const router = useRouter()
   const { toast } = useToast()
   const [content, setContent] = useState<Content | null>(null)
@@ -64,9 +75,16 @@ export function UseAgainDialog({ source, subject, onClose }: { source: string; s
   }, [choice, query])
 
   const designed = !!content?.design
+  const ready = content?.readyEmail ?? null
   const blockedByName = !!content?.mentionsName && !anyway
   const request = audienceRequest(audience)
-  const emailFields = content ? (designed ? { design: content.design } : { subject: content.subject, body: content.body }) : null
+  const emailFields = content
+    ? ready
+      ? { readyEmail: ready }
+      : designed
+        ? { design: content.design }
+        : { subject: content.subject, body: content.body }
+    : null
 
   function changeAudience(next: Audience) {
     setAudience(next)
@@ -113,12 +131,12 @@ export function UseAgainDialog({ source, subject, onClose }: { source: string; s
 
   const choices: { key: Choice; label: string; icon: typeof Send; disabled?: string }[] = [
     { key: "people", label: "Send to new people", icon: Users },
-    { key: "edit", label: "Edit first", icon: PenLine, disabled: designed ? undefined : "Written without the AI writer" },
-    { key: "person", label: "Send to one person", icon: Send, disabled: designed ? undefined : "Written without the AI writer" },
+    { key: "edit", label: "Edit first", icon: PenLine, disabled: ready ? "A ready-made email is sent as it is" : designed ? undefined : "Written without the AI writer" },
+    { key: "person", label: "Send to one person", icon: Send, disabled: ready ? "A ready-made email goes out as a campaign" : designed ? undefined : "Written without the AI writer" },
   ]
 
   return (
-    <Modal open onClose={onClose} title="Use this email again" wide>
+    <Modal open onClose={onClose} title={title} wide>
       <div className="flex flex-col gap-4">
         <p className="truncate text-label font-semibold text-foreground">{subject}</p>
         {error ? (
@@ -167,7 +185,7 @@ export function UseAgainDialog({ source, subject, onClose }: { source: string; s
                 <AudiencePicker id="use-again-audience" value={audience} onChange={changeAudience} />
                 <SendingPicker idPrefix="use-again-sending" value={sendingChoice} onChange={setSendingChoice} forLeads={isLeadAudience(audience.audience)} />
                 <p className="text-caption text-muted-foreground">
-                  It becomes a new campaign with {designed ? "the same picture and stickers (nothing painted again)" : "the same words"}.
+                  It becomes a new campaign with {ready ? "this email, exactly as it is" : designed ? "the same picture and stickers (nothing painted again)" : "the same words"}.
                   Nothing is sent until you pick who gets it.
                 </p>
                 <div className="flex flex-wrap items-center justify-end gap-2">

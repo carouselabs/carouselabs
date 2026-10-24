@@ -6,7 +6,8 @@
 // the AI writer is told about leads; and sending leads' emails through Brevo
 // (lib/brevo.ts) with its own daily limit and webhook; and All leads: the
 // filters (lib/leadFilters.ts), lists made by hand and filled by ticking,
-// smart lists, many leads at once, one lead, and their routes. Against an
+// smart lists, many leads at once, one lead, and their routes; and
+// ready-made emails sent as campaigns (lib/readyEmails.ts). Against an
 // in-memory database.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { Prisma } from "@prisma/client"
@@ -399,6 +400,9 @@ import { POST as bulkPost } from "@/app/api/admin/leads/bulk/route"
 import { POST as listsPost } from "@/app/api/admin/leads/lists/route"
 import { DELETE as listDelete, PATCH as listPatch } from "@/app/api/admin/leads/lists/[id]/route"
 import { GET as leadGet, PATCH as leadPatch } from "@/app/api/admin/leads/[id]/route"
+import { READY_EMAILS, REPLY_LINK, personalizePreview, readyDesignOf, readyEmailHtml, readyEmailText, readySnapshot } from "@/lib/readyEmails"
+import { readyFrom, readyHtml } from "@/lib/readyEmailSend"
+import { TemplateError, emailContent, parseSource, saveTemplate } from "@/lib/sentEmails"
 import type { EmailDesign } from "@/lib/emailDesign"
 import type { BatchMailer } from "@/lib/emailBatchSend"
 
@@ -1672,5 +1676,141 @@ describe("the leads routes", () => {
     expect((await leadPatch(json(`/api/admin/leads/${id}`, "PATCH", { ...body, fields: { "bad key": "x" } }), params(id))).status).toBe(400)
     expect((await leadPatch(json(`/api/admin/leads/${id}`, "PATCH", body), params(id))).status).toBe(200)
     expect(leadByEmail("asha@hdfc.test").fields).toEqual({ company: "HDFC" })
+  })
+})
+
+// ── Ready-made emails (lib/readyEmails.ts) ───────────────────────────────
+
+describe("ready-made emails", () => {
+  beforeEach(() => {
+    viaResend.length = 0
+    viaBrevo.length = 0
+  })
+  const post = (body: unknown) =>
+    campaignsPost(new Request("https://carouselabs.test/api/admin/campaigns", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }))
+
+  it("are the approved emails word for word, with each person's first name and the reply link still to fill in", () => {
+    const [one, two] = READY_EMAILS
+    expect(READY_EMAILS.map((e) => [e.id, e.subject, e.fromName])).toEqual([
+      ["dharma-1", "App registrations in your Entra tenant", "Dharma Ramasamy"],
+      ["dharma-2", "Quick question about your Entra tenant", "Dharma Ramasamy"],
+    ])
+    const html = readyEmailHtml(one)
+    for (const words of [
+      "Hello {{firstName}},",
+      "Do you know how many app registrations in your Entra tenant still have secrets valid for over a year — including apps nobody owns anymore?",
+      "Application.Read.All</code>:",
+      "Get-MgApplication -All | Where { $_.PasswordCredentials.EndDateTime -gt (Get-Date).AddYears(1) } | Measure-Object",
+      "Would a quick 20-minute conversation be useful?",
+      "Identity Security &amp; SSO Specialist",
+      "26 Years of Experience &middot; Microsoft Entra ID",
+      'href="https://www.linkedin.com/in/dharma-ramasamy/"',
+      'href="https://dharmaramasamy.com"',
+      "Professional experience",
+      "Worth a quick chat?",
+      `href="${REPLY_LINK}"`,
+    ])
+      expect(html).toContain(words)
+    expect(html).not.toContain("[phone]")
+    expect(readyEmailHtml(two)).toContain("I run fixed-scope assessments on exactly that — inventory, ownership, permission scope, credential age, and a prioritised fix list.")
+    // Every picture from the live site: nothing embedded, which Gmail wouldn't show.
+    const pictures = [...html.matchAll(/<img src="([^"]+)"/g)].map((m) => m[1])
+    expect(pictures).toHaveLength(8)
+    expect(pictures.every((src) => /^https:\/\/[^/]+\/images\/email\/dharma\/[\w-]+\.(png|gif)$/.test(src))).toBe(true)
+    expect(html).not.toContain("data:")
+    expect(readyEmailText(two)).toBe(
+      [
+        "Hello {{firstName}},",
+        "Quick question about your Entra tenant.",
+        "If you asked your team today how many app registrations exist and who owns each one, how long would it take them to come back with an answer?",
+        "In most environments that question takes weeks, because nobody has looked since the apps were created. Meanwhile the secrets keep working and the permissions never change.",
+        "I run fixed-scope assessments on exactly that — inventory, ownership, permission scope, credential age, and a prioritised fix list.",
+        "Worth 20 minutes?",
+        "Dharma Ramasamy",
+      ].join("\n\n"),
+    )
+  })
+
+  it("the button replies to where replies go (or the sender), with the subject; the preview shows an example name", () => {
+    const ready = readySnapshot(READY_EMAILS[0])
+    expect(readyHtml(ready, "CarouseLabs <support@carouselabs.com>", null)).toContain('href="mailto:support@carouselabs.com?subject=Re%3A%20App%20registrations%20in%20your%20Entra%20tenant"')
+    expect(readyHtml(ready, "CarouseLabs <support@carouselabs.com>", "team@carouselabs.com")).toContain('href="mailto:team@carouselabs.com?subject=')
+    expect(readyHtml(ready, "x <support@carouselabs.com>", null)).not.toContain(REPLY_LINK)
+    expect(readyFrom(ready, "CarouseLabs <hello@carouselabs.com>")).toBe("Dharma Ramasamy <hello@carouselabs.com>")
+    expect(personalizePreview(ready.html, "Priya <3")).toContain("Hello Priya &lt;3,")
+    expect(readyDesignOf(ready)).toEqual(ready)
+    expect(readyDesignOf({ version: 1, subject: "An AI email" })).toBeNull()
+  })
+
+  it("a campaign is made from one by its id, keeping a copy of the email; an unknown one is refused", async () => {
+    const { listId } = await importLeads({ adminEmail: ADMIN, listName: "Entra", columns: [], leads: [lead("asha@example.test", { firstName: "Asha" })] })
+    const counted = await post({ readyEmail: "dharma-1", recipients: `leads:list:${listId}`, dryRun: true })
+    expect(await counted.json()).toMatchObject({ dryRun: true, count: 1 })
+    expect(store.campaigns).toHaveLength(0)
+
+    const made = await post({ readyEmail: "dharma-1", recipients: `leads:list:${listId}` })
+    expect(made.status).toBe(201)
+    const campaign = store.campaigns[0]
+    expect(campaign.subject).toBe("App registrations in your Entra tenant")
+    expect(campaign.body).toBe(readyEmailText(READY_EMAILS[0]))
+    expect(campaign.design).toEqual(readySnapshot(READY_EMAILS[0]))
+    expect(store.audit.at(-1)?.details).toContain("· ready-made email")
+
+    const unknown = await post({ readyEmail: "nope", recipients: `leads:list:${listId}` })
+    expect(unknown.status).toBe(400)
+    expect(await unknown.json()).toEqual({ error: "That ready-made email isn't there any more" })
+  })
+
+  it("goes out as it is: each lead's first name, from its own name, the button replying, tracked, with an Unsubscribe link", async () => {
+    const { listId } = await importLeads({
+      adminEmail: ADMIN,
+      listName: "Entra",
+      columns: [],
+      leads: [lead("asha@example.test", { firstName: "Asha" }), lead("kiran@example.test")],
+    })
+    await post({ readyEmail: "dharma-2", recipients: `leads:list:${listId}` })
+    const campaignId = store.campaigns[0].id
+    const ids = store.recipients.map((r) => r.id)
+
+    const result = await sendCampaignBatch({ campaignId, recipientIds: ids, adminEmail: ADMIN, resend, brevo, from: "CarouseLabs <support@carouselabs.com>" })
+
+    expect(result).toMatchObject({ sent: 2, failed: 0 })
+    expect(viaResend).toEqual([])
+    const [asha, kiran] = viaBrevo.flat()
+    expect([asha.to, asha.from, asha.subject]).toEqual(["asha@example.test", "Dharma Ramasamy <support@carouselabs.com>", "Quick question about your Entra tenant"])
+    expect(asha.html).toContain("Hello Asha,")
+    expect(kiran.html).toContain("Hello there,")
+    for (const html of [asha.html, kiran.html]) {
+      expect(html).not.toContain("{{")
+      expect(html).not.toContain(REPLY_LINK)
+    }
+    expect(asha.html).toContain('href="mailto:support@carouselabs.com?subject=Re%3A%20Quick%20question%20about%20your%20Entra%20tenant"')
+    // LinkedIn clicks are counted; the website link goes straight there.
+    expect(asha.html).toMatch(/href="[^"]*email-track\/click\/[^"]+\?to=https%3A%2F%2Fwww\.linkedin\.com%2Fin%2Fdharma-ramasamy%2F"/)
+    expect(asha.html).toContain('href="https://dharmaramasamy.com"')
+    expect(readTrackingToken(/email-track\/open\/([^"]+)"/.exec(asha.html)![1])).toEqual({ kind: "campaign", id: ids[0] })
+    const link = unsubscribeUrl(unsubscribeToken(leadByEmail("asha@example.test").id)!)
+    expect(asha.html).toContain(link)
+    expect(asha.headers).toEqual({ "List-Unsubscribe": `<${link}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" })
+    expect(store.recipients.map((r) => r.status)).toEqual(["sent", "sent"])
+  })
+
+  it("a typed-in address gets it through Resend, greeted as there, with no Unsubscribe link", async () => {
+    await post({ readyEmail: "dharma-1", recipients: ["me@example.test"] })
+    const result = await sendCampaignBatch({ campaignId: store.campaigns[0].id, recipientIds: [store.recipients[0].id], adminEmail: ADMIN, resend, brevo, from: "CarouseLabs <support@carouselabs.com>" })
+    expect(result.sent).toBe(1)
+    const [mine] = viaResend.flat()
+    expect([mine.to, mine.from]).toEqual(["me@example.test", "Dharma Ramasamy <support@carouselabs.com>"])
+    expect(mine.html).toContain("Hello there,")
+    expect(mine.html).not.toContain("Unsubscribe")
+  })
+
+  it("used again, a ready-made campaign comes back as the same ready-made email; on its own it can be sent but isn't a template", async () => {
+    await post({ readyEmail: "dharma-1", recipients: ["me@example.test"] })
+    expect(await emailContent({ kind: "campaign", id: store.campaigns[0].id })).toMatchObject({ design: null, readyEmail: "dharma-1", subject: "App registrations in your Entra tenant", mentionsName: null })
+    expect(parseSource("ready:dharma-2")).toEqual({ kind: "ready", id: "dharma-2" })
+    expect(await emailContent({ kind: "ready", id: "dharma-2" })).toMatchObject({ readyEmail: "dharma-2", subject: "Quick question about your Entra tenant", design: null })
+    expect(await emailContent({ kind: "ready", id: "nope" })).toBeNull()
+    await expect(saveTemplate({ source: { kind: "ready", id: "dharma-1" }, name: "x", adminEmail: ADMIN })).rejects.toBeInstanceOf(TemplateError)
   })
 })

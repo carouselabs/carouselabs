@@ -3,13 +3,15 @@
 // /admin/broadcasts/leads — people who don't use CarouseLabs yet, uploaded
 // from CSV files (lib/leads.ts): upload a file (LeadsUpload), see each list
 // and everyone saved, and delete a list. Emailing them is a campaign: in the
-// AI writer or the composer, "Who it's for" → My leads.
+// AI writer or the composer, "Who it's for" → My leads. Their emails go
+// through Brevo (BrevoSetup shows whether it's ready).
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, ChevronLeft, ChevronRight, MailX, Search, Sparkles, Trash2, Users } from "lucide-react"
 import { AdminButton, AdminCard, AdminInput, AdminSelect, ConfirmModal, Spinner, StatCard, fmtDate, tableCls } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
 import { LeadsUpload } from "./LeadsUpload"
+import { BrevoSetup } from "./BrevoSetup"
 
 type LeadList = { id: string; name: string; fileName: string | null; columns: { key: string; label: string }[]; createdBy: string; createdAt: string; count: number }
 type Lead = {
@@ -22,6 +24,8 @@ type Lead = {
   lastEmailedAt: string | null
   emailCount: number
   unsubscribedAt: string | null
+  // Why they stopped, when Brevo told us; null for our own Unsubscribe link.
+  stopReason?: string | null
 }
 type LeadsPage = {
   totals: { total: number; unsubscribed: number; neverEmailed: number }
@@ -33,6 +37,8 @@ type LeadsPage = {
 }
 
 const count = (n: number) => n.toLocaleString("en-US")
+
+const STOPPED: Record<string, string> = { unsubscribed: "Unsubscribed", bounced: "Bounced", spam: "Marked spam", blocked: "Blocked by Brevo" }
 
 export function LeadsManager() {
   const { toast } = useToast()
@@ -127,11 +133,13 @@ export function LeadsManager() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Leads saved" value={count(data.totals.total)} icon={<Users />} />
         <StatCard label="Never emailed" value={count(data.totals.neverEmailed)} hint="No campaign has reached them yet" />
-        <StatCard label="Unsubscribed" value={count(data.totals.unsubscribed)} icon={<MailX />} hint="Never emailed again" />
+        <StatCard label="Stopped" value={count(data.totals.unsubscribed)} icon={<MailX />} hint="Unsubscribed, bounced or marked spam: never emailed again" />
         <StatCard label="Lists" value={count(data.lists.length)} />
       </div>
 
       <LeadsUpload onSaved={() => void load()} />
+
+      <BrevoSetup />
 
       <AdminCard title={`Lists (${data.lists.length})`}>
         {data.lists.length === 0 ? (
@@ -241,7 +249,9 @@ export function LeadsManager() {
                       <td className={`${tableCls.td} text-muted-foreground`}>{fmtDate(lead.createdAt)}</td>
                       <td className={tableCls.td}>
                         {lead.unsubscribedAt ? (
-                          <span className="inline-flex rounded-full bg-danger-soft px-2 py-0.5 text-[11px] font-semibold text-danger">Unsubscribed</span>
+                          <span className="inline-flex rounded-full bg-danger-soft px-2 py-0.5 text-[11px] font-semibold text-danger">
+                            {STOPPED[lead.stopReason ?? "unsubscribed"] ?? "Unsubscribed"}
+                          </span>
                         ) : lead.lastEmailedAt ? (
                           <span className="text-muted-foreground">
                             {lead.emailCount}× · last {fmtDate(lead.lastEmailedAt)}

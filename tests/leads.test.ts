@@ -2,10 +2,12 @@
 // (lib/leadRules.ts); saving uploads, lead audiences and deleting a list
 // (lib/leads.ts); campaigns to leads with their own merge fields, the
 // Unsubscribe link and headers, and nobody unsubscribed or already a user
-// emailed (lib/campaigns.ts); the Unsubscribe route; the upload route; and
-// what the AI writer is told about leads. Against an in-memory database.
+// emailed (lib/campaigns.ts); the Unsubscribe route; the upload route; what
+// the AI writer is told about leads; and sending leads' emails through Brevo
+// (lib/brevo.ts) with its own daily limit and webhook. Against an in-memory
+// database.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { Resend } from "resend"
+import { Prisma } from "@prisma/client"
 
 type LeadRow = {
   id: string
@@ -15,6 +17,7 @@ type LeadRow = {
   name: string | null
   fields: Record<string, string>
   unsubscribedAt: Date | null
+  stopReason?: string | null
   lastEmailedAt: Date | null
   emailCount: number
   createdAt: Date
@@ -30,6 +33,7 @@ type RecipientRow = {
   sentAt: Date | null
   error: string | null
   batchId: string | null
+  provider?: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -43,8 +47,14 @@ const store = vi.hoisted(() => ({
   campaigns: [] as { id: string; subject: string; body: string; status: string; design: unknown; audience?: string; audienceValue?: string | null }[],
   recipients: [] as RecipientRow[],
   audit: [] as { action: string; details: string }[],
+  // As before scripts/leads.sql's Brevo part is run: no Lead.stopReason or EmailCampaignRecipient.provider.
+  columnsMissing: false,
   nextId: 1,
 }))
+
+function missingColumn() {
+  return new Prisma.PrismaClientKnownRequestError("The column does not exist in the current database.", { code: "P2022", clientVersion: "5.22.0" })
+}
 
 // Enough of Prisma's `where` for the queries lib/leads.ts and lib/campaigns.ts make.
 function matches(row: Record<string, unknown>, where: Record<string, unknown> = {}): boolean {
@@ -85,7 +95,7 @@ vi.mock("@/lib/db", () => ({
           .filter((l) => matches(l, where))
           .map((l) => ({
             ...pick(l, select),
-            ...(include?.lists
+            ...(include?.lists || select?.lists
               ? { lists: store.members.filter((m) => m.leadId === l.id).map((m) => ({ list: { id: m.listId, name: store.lists.find((x) => x.id === m.listId)?.name } })) }
               : {}),
           })),
@@ -119,6 +129,7 @@ vi.mock("@/lib/db", () => ({
       }),
       update: vi.fn(async ({ where, data }: { where: { id: string }; data: Partial<LeadRow> }) => Object.assign(store.leads.find((l) => l.id === where.id)!, data)),
       updateMany: vi.fn(async ({ where, data }: { where: Record<string, unknown>; data: Partial<LeadRow> & { emailCount?: { increment: number } } }) => {
+        if (store.columnsMissing && "stopReason" in data) throw missingColumn()
         const hit = store.leads.filter((l) => matches(l, where))
         const { emailCount, ...rest } = data
         for (const l of hit) {
@@ -184,7 +195,10 @@ vi.mock("@/lib/db", () => ({
         return { count: hit.length }
       }),
       findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => store.recipients.filter((r) => matches(r, where))),
-      count: vi.fn(async ({ where }: { where: Record<string, unknown> }) => store.recipients.filter((r) => matches(r, where)).length),
+      count: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+        if (store.columnsMissing && "provider" in where) throw missingColumn()
+        return store.recipients.filter((r) => matches(r, where)).length
+      }),
     },
   },
 }))
@@ -218,11 +232,25 @@ import {
   parseCsv,
   parseLeadAudience,
 } from "@/lib/leadRules"
-import { LeadsError, deleteLeadList, importLeads, leadsOverview, listLeads, resolveLeadAudience, unsubscribeLead, writerLeadFields } from "@/lib/leads"
+import { LeadsError, deleteLeadList, importLeads, leadsOverview, listLeads, resolveLeadAudience, stopLeadByEmail, unsubscribeLead, writerLeadFields } from "@/lib/leads"
 import { readUnsubscribeToken, unsubscribeToken, unsubscribeUrl, withUnsubscribe } from "@/lib/leadUnsubscribe"
 import { applyVariables } from "@/lib/broadcastRender"
 import { personalizeDesignedEmail } from "@/lib/emailDesignRender"
-import { CampaignError, UNSUBSCRIBED_NOTE, checkMergeFields, createCampaign, sendCampaignBatch } from "@/lib/campaigns"
+import { CampaignError, UNSUBSCRIBED_NOTE, campaignAllowance, checkMergeFields, createCampaign, sendCampaignBatch } from "@/lib/campaigns"
+import { CAMPAIGN_DAILY_LIMIT } from "@/lib/campaignRules"
+import {
+  BREVO_DAILY_LIMIT,
+  BREVO_MISSING,
+  brevoMailer,
+  brevoStatus,
+  brevoWebhookToken,
+  connectBrevoWebhook,
+  idempotencyUuid,
+  parseFrom,
+} from "@/lib/brevo"
+import { sendInBatches } from "@/lib/emailBatchSend"
+import { POST as brevoWebhook } from "@/app/api/webhooks/brevo/route"
+import { GET as brevoGet } from "@/app/api/admin/brevo/route"
 import { readTrackingToken } from "@/lib/emailTracking"
 import { audienceLabel } from "@/components/admin/campaignLabels"
 import { leadsSection, writerFieldProblem } from "@/lib/ai/emailWriterLeads"
@@ -230,6 +258,22 @@ import { writeEmail } from "@/lib/ai/emailWriter"
 import { GET as unsubscribeGet, POST as unsubscribePost } from "@/app/api/unsubscribe/[token]/route"
 import { POST as leadsPost } from "@/app/api/admin/leads/route"
 import type { EmailDesign } from "@/lib/emailDesign"
+import type { BatchMailer } from "@/lib/emailBatchSend"
+
+// Users' emails go through Resend, leads' through Brevo: each fake keeps what it was given.
+type Sent = { from: string; to: string; subject: string; html: string; headers?: Record<string, string> }
+const viaResend: Sent[][] = []
+const viaBrevo: Sent[][] = []
+const fakeMailer = (log: Sent[][]): BatchMailer => ({
+  batch: {
+    send: vi.fn(async (emails: Sent[]) => {
+      log.push(emails)
+      return { data: { data: emails.map((_, i) => ({ id: `e${i}` })), errors: [] }, error: null }
+    }),
+  },
+})
+const resend = fakeMailer(viaResend)
+const brevo = fakeMailer(viaBrevo)
 
 function recipient(r: Partial<RecipientRow>): RecipientRow {
   return {
@@ -268,6 +312,7 @@ beforeEach(() => {
   store.campaigns = []
   store.recipients = []
   store.audit = []
+  store.columnsMissing = false
   store.nextId = 1
 })
 afterEach(() => vi.unstubAllEnvs())
@@ -486,17 +531,9 @@ describe("who a lead audience is", () => {
 })
 
 describe("campaigns to leads", () => {
-  const sent: { to: string; subject: string; html: string; headers?: Record<string, string> }[][] = []
-  const resend = {
-    batch: {
-      send: vi.fn(async (emails: { to: string; subject: string; html: string; headers?: Record<string, string> }[]) => {
-        sent.push(emails)
-        return { data: { data: emails.map((_, i) => ({ id: `e${i}` })) }, error: null }
-      }),
-    },
-  } as unknown as Resend
   beforeEach(() => {
-    sent.length = 0
+    viaResend.length = 0
+    viaBrevo.length = 0
   })
 
   it("a list's campaign keeps the list's name and its people's names, leaving out the unsubscribed", async () => {
@@ -539,10 +576,11 @@ describe("campaigns to leads", () => {
     store.recipients = ["asha@example.test", "ravi@example.test", "gone@example.test"].map((email, i) => recipient({ id: `r${i}`, email }))
     leadByEmail("gone@example.test").unsubscribedAt = new Date()
 
-    const result = await sendCampaignBatch({ campaignId: "c1", recipientIds: ["r0", "r1", "r2"], adminEmail: ADMIN, resend, from: "CarouseLabs <hello@carouselabs.com>" })
+    const result = await sendCampaignBatch({ campaignId: "c1", recipientIds: ["r0", "r1", "r2"], adminEmail: ADMIN, resend, brevo, from: "CarouseLabs <hello@carouselabs.com>" })
 
     expect(result).toMatchObject({ sent: 2, failed: 1, error: "1 unsubscribed, so not sent" })
-    const emails = sent.flat()
+    expect(viaResend).toEqual([])
+    const emails = viaBrevo.flat()
     expect(emails.map((e) => [e.to, e.subject])).toEqual([
       ["asha@example.test", "For Asha at Acme"],
       ["ravi@example.test", "For Ravi at "],
@@ -569,9 +607,9 @@ describe("campaigns to leads", () => {
     expect(leadByEmail("gone@example.test")).toMatchObject({ emailCount: 0, lastEmailedAt: null })
 
     // Sending to the unsubscribed lead again still doesn't email them.
-    sent.length = 0
-    await sendCampaignBatch({ campaignId: "c1", recipientIds: ["r2"], adminEmail: ADMIN, resend, from: "x" })
-    expect(sent.flat()).toEqual([])
+    viaBrevo.length = 0
+    await sendCampaignBatch({ campaignId: "c1", recipientIds: ["r2"], adminEmail: ADMIN, resend, brevo, from: "x" })
+    expect(viaBrevo.flat()).toEqual([])
   })
 
   it("a lead's email isn't sent without its Unsubscribe link; a user's copy has none", async () => {
@@ -579,11 +617,12 @@ describe("campaigns to leads", () => {
     store.campaigns = [{ id: "c1", subject: "Hello", body: "Hello there.", status: "active", design: null }]
     store.recipients = [recipient({ id: "r0", email: "asha@example.test" }), recipient({ id: "r1", email: "someone@example.test" })]
     vi.stubEnv("CLERK_SECRET_KEY", "")
-    const result = await sendCampaignBatch({ campaignId: "c1", recipientIds: ["r0", "r1"], adminEmail: ADMIN, resend, from: "x" })
+    const result = await sendCampaignBatch({ campaignId: "c1", recipientIds: ["r0", "r1"], adminEmail: ADMIN, resend, brevo, from: "x" })
     expect(result.sent).toBe(1)
-    expect(sent.flat().map((e) => e.to)).toEqual(["someone@example.test"])
-    expect(sent.flat()[0].headers).toBeUndefined()
-    expect(sent.flat()[0].html).not.toContain("Unsubscribe")
+    expect(viaBrevo).toEqual([])
+    expect(viaResend.flat().map((e) => e.to)).toEqual(["someone@example.test"])
+    expect(viaResend.flat()[0].headers).toBeUndefined()
+    expect(viaResend.flat()[0].html).not.toContain("Unsubscribe")
     expect(store.recipients[0]).toMatchObject({ status: "failed", error: expect.stringMatching(/Unsubscribe link couldn't be made/) })
   })
 })
@@ -720,5 +759,271 @@ describe("what the writer is told", () => {
     anthropic.create.mockResolvedValueOnce(answer({ reply: "Draft", design: design("Hi {{firstName}}") }))
     await writeEmail({ history: [], request: "For users", current: null, leads: null })
     expect(anthropic.create.mock.calls[2][0].system).not.toContain("LEADS")
+  })
+})
+
+// ── Brevo ───────────────────────────────────────────────────────────────
+
+type BrevoCall = { url: string; init: RequestInit; body: Record<string, unknown> }
+// A stand-in for Brevo's API: answers each path with the given status and body.
+function fakeBrevo(routes: Record<string, { status?: number; body?: unknown } | (() => never)>) {
+  const calls: BrevoCall[] = []
+  const fetchFn = vi.fn(async (url: string | URL | Request, init: RequestInit = {}) => {
+    const href = String(url)
+    calls.push({ url: href, init, body: init.body ? JSON.parse(String(init.body)) : {} })
+    const key = Object.keys(routes).find((k) => href.includes(k))
+    const route = key ? routes[key] : { status: 404, body: { code: "not_found", message: "no route" } }
+    if (typeof route === "function") return route()
+    return Response.json(route.body ?? {}, { status: route.status ?? 200 })
+  }) as unknown as typeof fetch
+  return { calls, fetchFn }
+}
+
+describe("sending through Brevo", () => {
+  const email = (to: string) => ({ from: "CarouseLabs <support@carouselabs.com>", to, subject: `Hi ${to}`, html: `<p>${to}</p>`, headers: { "List-Unsubscribe": "<x>" } })
+
+  it("is only there with an API key", () => {
+    vi.stubEnv("BREVO_API_KEY", "")
+    expect(brevoMailer()).toBeNull()
+  })
+
+  it("sends each email as one version of one request, from the same sender, with an idempotency key", async () => {
+    vi.stubEnv("BREVO_API_KEY", "test-brevo-key")
+    const { calls, fetchFn } = fakeBrevo({ "/smtp/email": { status: 201, body: { messageIds: ["a", "b"] } } })
+    const answer = await brevoMailer(fetchFn)!.batch.send([email("a@example.test"), email("b@example.test")], { idempotencyKey: "campaign-c1-batch-0" })
+    expect(answer).toEqual({ data: { errors: [] }, error: null })
+    expect(calls).toHaveLength(1)
+    expect(calls[0].url).toBe("https://api.brevo.com/v3/smtp/email")
+    expect((calls[0].init.headers as Record<string, string>)["api-key"]).toBe("test-brevo-key")
+    expect(calls[0].body).toEqual({
+      sender: { name: "CarouseLabs", email: "support@carouselabs.com" },
+      subject: "Hi a@example.test",
+      htmlContent: "<p>a@example.test</p>",
+      messageVersions: [
+        { to: [{ email: "a@example.test" }], subject: "Hi a@example.test", htmlContent: "<p>a@example.test</p>" },
+        { to: [{ email: "b@example.test" }], subject: "Hi b@example.test", htmlContent: "<p>b@example.test</p>" },
+      ],
+      // Brevo adds its own List-Unsubscribe and won't take ours.
+      headers: { idempotencyKey: idempotencyUuid("campaign-c1-batch-0") },
+    })
+    expect(idempotencyUuid("campaign-c1-batch-0")).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    expect(idempotencyUuid("campaign-c1-batch-0")).not.toBe(idempotencyUuid("campaign-c1-batch-1"))
+    expect(parseFrom("support@carouselabs.com")).toEqual({ email: "support@carouselabs.com" })
+  })
+
+  it("answers Brevo's refusals the way the batch sender understands", async () => {
+    vi.stubEnv("BREVO_API_KEY", "k")
+    const send = async (status: number, body: unknown, key?: string) =>
+      (await brevoMailer(fakeBrevo({ "/smtp/email": { status, body } }).fetchFn)!.batch.send([email("a@example.test")], key ? { idempotencyKey: key } : {})).error
+    expect(await send(402, { code: "not_enough_credits", message: "Not enough credits" })).toEqual({ name: "daily_quota_exceeded", message: "Not enough credits" })
+    expect(await send(400, { code: "invalid_parameter", message: "Insufficient credits" })).toMatchObject({ name: "daily_quota_exceeded" })
+    expect(await send(429, { message: "Too many requests" })).toMatchObject({ name: "rate_limit_exceeded" })
+    expect(await send(503, {})).toEqual({ name: "internal_server_error", message: "error 503" })
+    expect(await send(400, { code: "invalid_parameter", message: "sender is not valid" })).toEqual({ name: "invalid_parameter", message: "sender is not valid" })
+    // The same batch again within Brevo's 30 minutes: it was already sent.
+    expect(await send(400, { code: "duplicate_parameter", message: "duplicate" }, "batch-0")).toBeNull()
+    const down = brevoMailer(fakeBrevo({ "/smtp/email": () => { throw new TypeError("fetch failed") } }).fetchFn)!
+    expect((await down.batch.send([email("a@example.test")])).error).toEqual({ name: "application_error", message: "Brevo couldn't be reached" })
+  })
+
+  it("Brevo's daily limit stops the send and says so", async () => {
+    vi.stubEnv("BREVO_API_KEY", "k")
+    const mailer = brevoMailer(fakeBrevo({ "/smtp/email": { status: 402, body: { code: "not_enough_credits", message: "Your daily limit is reached" } } }).fetchFn)!
+    const result = await sendInBatches(mailer, "x <x@x.test>", ["a@x.test", "b@x.test"], async (batch) => batch.map((to) => ({ to, subject: "s", html: "h" })), { sleepFn: async () => {} })
+    expect(result).toEqual({ sent: 0, failed: 2, failedTo: ["a@x.test", "b@x.test"], error: "Brevo: Your daily limit is reached" })
+  })
+})
+
+describe("campaigns: leads through Brevo, everyone else through Resend", () => {
+  beforeEach(() => {
+    viaResend.length = 0
+    viaBrevo.length = 0
+  })
+  async function seedMixed() {
+    await importLeads({ adminEmail: ADMIN, listName: "Day 1", columns: [], leads: [lead("asha@example.test", { firstName: "Asha" }), lead("ravi@example.test")] })
+    store.campaigns = [{ id: "c1", subject: "Hello {{firstName}}", body: "Hello.", status: "active", design: null }]
+    store.recipients = [
+      recipient({ id: "r0", email: "asha@example.test" }),
+      recipient({ id: "r1", email: "typed@example.test" }),
+      recipient({ id: "r2", email: "ravi@example.test" }),
+    ]
+  }
+  const sentToday = (n: number, provider: string | null) => {
+    for (let i = 0; i < n; i++) store.recipients.push(recipient({ campaignId: "old", email: `old${i}@example.test`, status: "sent", sentAt: new Date(), provider }))
+  }
+  const send = (recipientIds: string[], mailers: { brevo?: BatchMailer | null } = { brevo }) =>
+    sendCampaignBatch({ campaignId: "c1", recipientIds, adminEmail: ADMIN, resend, from: "CarouseLabs <support@carouselabs.com>", ...mailers })
+
+  it("splits one batch between them, and records what sent each", async () => {
+    await seedMixed()
+    expect(await send(["r0", "r1", "r2"])).toMatchObject({ sent: 3, failed: 0 })
+    expect(viaBrevo.flat().map((e) => e.to)).toEqual(["asha@example.test", "ravi@example.test"])
+    expect(viaResend.flat().map((e) => e.to)).toEqual(["typed@example.test"])
+    expect(store.recipients.filter((r) => r.campaignId === "c1").map((r) => [r.email, r.status, r.provider])).toEqual([
+      ["asha@example.test", "sent", "brevo"],
+      ["typed@example.test", "sent", null],
+      ["ravi@example.test", "sent", "brevo"],
+    ])
+  })
+
+  it("each has its own daily limit", async () => {
+    await seedMixed()
+    sentToday(CAMPAIGN_DAILY_LIMIT, null)
+    // Resend's 80 are used up; leads still go.
+    await expect(send(["r1"])).rejects.toThrow(/Today's limit is used up/)
+    expect((await send(["r0"])).sent).toBe(1)
+    sentToday(BREVO_DAILY_LIMIT - 2, "brevo")
+    // 279 today: r0 already went, so only r2 is new, and it fits.
+    await expect(send(["r2", "r0"])).resolves.toMatchObject({ sent: 1, skipped: 1 })
+    await importLeads({ adminEmail: ADMIN, listName: "Day 2", columns: [], leads: [lead("sam@example.test")] })
+    store.recipients.push(recipient({ id: "r3", email: "sam@example.test" }))
+    await expect(send(["r3"])).rejects.toThrow(/Today's limit for leads is used up \(280 lead emails a day on Brevo's free plan\)/)
+    expect((await campaignAllowance("leads:all")).left).toBe(0)
+    expect(await campaignAllowance("all")).toMatchObject({ via: "resend", left: 0, limit: CAMPAIGN_DAILY_LIMIT })
+  })
+
+  it("lead emails don't use up Resend's limit for users", async () => {
+    await seedMixed()
+    sentToday(100, "brevo")
+    expect(await campaignAllowance("all")).toMatchObject({ via: "resend", sentToday: 0, left: CAMPAIGN_DAILY_LIMIT })
+    expect(await campaignAllowance("leads:new")).toMatchObject({ via: "brevo", sentToday: 100, left: BREVO_DAILY_LIMIT - 100 })
+    expect((await send(["r1"])).sent).toBe(1)
+  })
+
+  it("says how many more leads can go", async () => {
+    await seedMixed()
+    sentToday(BREVO_DAILY_LIMIT - 1, "brevo")
+    await expect(send(["r0", "r2"])).rejects.toThrow(/You can send 1 more leads today/)
+    expect(store.recipients.filter((r) => r.campaignId === "c1").every((r) => r.status === "pending")).toBe(true)
+  })
+
+  it("without Brevo set up, leads aren't sent and nobody is claimed", async () => {
+    await seedMixed()
+    await expect(send(["r0", "r1"], { brevo: null })).rejects.toThrow(BREVO_MISSING)
+    expect(store.recipients.filter((r) => r.campaignId === "c1").every((r) => r.status === "pending")).toBe(true)
+    // Users still send.
+    expect((await send(["r1"], { brevo: null })).sent).toBe(1)
+  })
+
+  it("before the SQL's Brevo part is run: users send exactly as before, leads wait", async () => {
+    await seedMixed()
+    store.columnsMissing = true
+    expect((await send(["r1"])).sent).toBe(1)
+    expect(store.recipients.find((r) => r.id === "r1")).not.toHaveProperty("provider")
+    await expect(send(["r0"])).rejects.toThrow(/Run scripts\/leads.sql/)
+    expect(viaBrevo).toEqual([])
+  })
+})
+
+describe("Brevo telling us who to stop emailing", () => {
+  const hook = (body: unknown, auth: { token?: string | null; bearer?: string } = {}) => {
+    const token = auth.token === undefined ? brevoWebhookToken() : auth.token
+    return brevoWebhook(
+      new Request(`https://carouselabs.com/api/webhooks/brevo${token ? `?token=${token}` : ""}`, {
+        method: "POST",
+        headers: auth.bearer ? { authorization: `Bearer ${auth.bearer}` } : {},
+        body: JSON.stringify(body),
+      }),
+    )
+  }
+  async function seedFive() {
+    await importLeads({ adminEmail: ADMIN, listName: "Day 1", columns: [], leads: ["a", "b", "c", "d", "e"].map((x) => lead(`${x}@example.test`)) })
+  }
+
+  it("refuses a call without our token", async () => {
+    await seedFive()
+    expect((await hook({ event: "unsubscribed", email: "a@example.test" }, { token: null })).status).toBe(401)
+    expect((await hook({ event: "unsubscribed", email: "a@example.test" }, { token: "x".repeat(32) })).status).toBe(401)
+    expect(leadByEmail("a@example.test").unsubscribedAt).toBeNull()
+  })
+
+  it("stops each lead Brevo stopped, saying why; anything else is ignored", async () => {
+    await seedFive()
+    const events = [
+      { event: "unsubscribed", email: "A@Example.test" },
+      { event: "spam", email: "b@example.test" },
+      { event: "hard_bounce", email: "c@example.test" },
+      { event: "invalid_email", email: "d@example.test" },
+      { event: "blocked", email: "nobody@example.test" },
+      { event: "delivered", email: "e@example.test" },
+      { event: "opened", email: "e@example.test" },
+    ]
+    const res = await hook(events)
+    expect(await res.json()).toEqual({ ok: true, stopped: 4 })
+    expect(["a", "b", "c", "d", "e"].map((x) => leadByEmail(`${x}@example.test`).stopReason ?? null)).toEqual(["unsubscribed", "spam", "bounced", "bounced", null])
+    expect(leadByEmail("e@example.test").unsubscribedAt).toBeNull()
+  })
+
+  it("takes one event at a time too, by bearer token, and keeps the first reason", async () => {
+    await seedFive()
+    expect((await hook({ event: "spam", email: "a@example.test" }, { token: null, bearer: brevoWebhookToken()! })).status).toBe(200)
+    await hook({ event: "hard_bounce", email: "a@example.test" })
+    expect(leadByEmail("a@example.test")).toMatchObject({ stopReason: "spam", unsubscribedAt: expect.any(Date) })
+  })
+
+  it("still stops them before the SQL's Brevo part is run, just without the reason", async () => {
+    await seedFive()
+    store.columnsMissing = true
+    expect(await stopLeadByEmail("a@example.test", "bounced")).toBe(1)
+    expect(await unsubscribeLead(leadByEmail("b@example.test").id)).toBe(true)
+    expect(leadByEmail("a@example.test")).toMatchObject({ unsubscribedAt: expect.any(Date) })
+    expect(leadByEmail("a@example.test")).not.toHaveProperty("stopReason")
+    expect(leadByEmail("b@example.test").unsubscribedAt).toBeInstanceOf(Date)
+  })
+})
+
+describe("Brevo setup on the Leads page", () => {
+  const ready = {
+    "/senders/domains": { body: { domains: [{ domain_name: "carouselabs.com", authenticated: true }] } },
+    "/senders": { body: { senders: [{ email: "Support@carouselabs.com", active: true }] } },
+    "/webhooks": { body: { webhooks: [{ url: `https://carouselabs.com/api/webhooks/brevo?token=${"t"}` }] } },
+  }
+
+  it("says what's missing: the key, the sender, the domain, the webhook", async () => {
+    vi.stubEnv("BREVO_API_KEY", "")
+    expect(await brevoStatus("support@carouselabs.com")).toEqual({ key: false })
+    vi.stubEnv("BREVO_API_KEY", "k")
+    expect(await brevoStatus("support@carouselabs.com", fakeBrevo(ready).fetchFn)).toEqual({
+      key: true,
+      sender: { email: "support@carouselabs.com", active: true },
+      domain: { name: "carouselabs.com", authenticated: true },
+      webhook: true,
+    })
+    // A new account: Brevo answers the webhook list with "Webhook record does not exist".
+    const noWebhooks = { status: 400, body: { code: "document_not_found", message: "Webhook record does not exist" } }
+    const fresh = fakeBrevo({ "/senders/domains": { body: { domains: [] } }, "/senders": { body: { senders: [{ email: "carouselabs@gmail.com", active: true }] } }, "/webhooks": noWebhooks })
+    expect(await brevoStatus("support@carouselabs.com", fresh.fetchFn)).toEqual({ key: true, sender: null, domain: null, webhook: false })
+    const wrongKey = fakeBrevo({ "/senders": { status: 401, body: { code: "unauthorized", message: "Key not found" } } })
+    expect(await brevoStatus("support@carouselabs.com", wrongKey.fetchFn)).toMatchObject({ key: true, error: "Key not found" })
+  })
+
+  it("turns on the webhook once, protected by our token, for the events that stop a lead", async () => {
+    vi.stubEnv("BREVO_API_KEY", "k")
+    const brevoApi = fakeBrevo({
+      "/webhooks?type": { status: 400, body: { code: "document_not_found", message: "Webhook record does not exist" } },
+      "/webhooks": { status: 201, body: { id: 5 } },
+    })
+    await connectBrevoWebhook(brevoApi.fetchFn)
+    const made = brevoApi.calls.find((c) => c.init.method === "POST")!
+    expect(made.url).toBe("https://api.brevo.com/v3/webhooks")
+    expect(made.body).toMatchObject({
+      type: "transactional",
+      url: `https://carouselabs.com/api/webhooks/brevo?token=${brevoWebhookToken()}`,
+      events: ["unsubscribed", "spam", "hardBounce", "invalid", "blocked"],
+    })
+    // Already there: nothing new is made.
+    const again = fakeBrevo({ "/webhooks": { body: { webhooks: [{ url: made.body.url }] } } })
+    await connectBrevoWebhook(again.fetchFn)
+    expect(again.calls.some((c) => c.init.method === "POST")).toBe(false)
+    vi.stubEnv("BREVO_API_KEY", "")
+    await expect(connectBrevoWebhook(again.fetchFn)).rejects.toThrow(BREVO_MISSING)
+  })
+
+  it("the admin route answers with the checks and today's lead emails, for admins only", async () => {
+    vi.stubEnv("BREVO_API_KEY", "")
+    const res = await brevoGet()
+    expect(await res.json()).toEqual({ status: { key: false }, from: "support@carouselabs.com", today: { via: "brevo", limit: BREVO_DAILY_LIMIT, sentToday: 0, left: BREVO_DAILY_LIMIT } })
+    store.admin = null
+    expect((await brevoGet()).status).toBe(403)
   })
 })

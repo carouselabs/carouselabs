@@ -4,12 +4,11 @@
 // {{variables}} filled in (HTML-escaped, so a name can't break the email).
 // Sending goes through Resend's batch endpoint like every broadcast.
 import { render } from "@react-email/render"
-import type { Resend } from "resend"
 import { DesignedEmail } from "@/emails/DesignedEmail"
 import { EMAIL_COLORS } from "@/emails/theme"
 import { applyVariables, type VariableValues } from "@/lib/broadcastRender"
 import { resolveVariablesMany } from "@/lib/broadcastVariables"
-import { sendInBatches, type BatchSendResult } from "@/lib/emailBatchSend"
+import { sendInBatches, type BatchMailer, type BatchSendResult } from "@/lib/emailBatchSend"
 import type { EmailDesign } from "@/lib/emailDesign"
 import { withTracking } from "@/lib/emailTracking"
 import { finishCopy } from "@/lib/leadUnsubscribe"
@@ -70,7 +69,7 @@ export function personalizeDesignedEmail(
  * they carry a trackingToken, lib/emailTracking.ts; a lead's with its
  * Unsubscribe link), in batches of 100. */
 export async function sendDesignedEmails(
-  resend: Resend,
+  resend: BatchMailer,
   from: string,
   recipients: BroadcastRecipient[],
   design: EmailDesign,

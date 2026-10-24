@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // The leads screens: uploading a CSV (components/admin/LeadsUpload.tsx), the
 // Leads page (LeadsManager.tsx), "My leads" in the audience pickers
-// (AudiencePicker.tsx) and the composer offering leads for campaigns only.
+// (AudiencePicker.tsx), the composer offering leads for campaigns only, and
+// the Brevo setup card (BrevoSetup.tsx).
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 
@@ -13,6 +14,7 @@ import { AudiencePicker, EMPTY_AUDIENCE, audienceRequest, type Audience } from "
 import { BroadcastComposer } from "@/components/admin/BroadcastComposer"
 import { ToastProvider } from "@/components/admin/Toast"
 import { LEAD_IMPORT_CHUNK } from "@/lib/leadRules"
+import { BrevoSetup } from "@/components/admin/BrevoSetup"
 
 afterEach(() => {
   cleanup()
@@ -180,6 +182,55 @@ describe("the Leads page", () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: "Run scripts/leads.sql in Supabase first: the leads tables aren't there yet." }, { status: 503 })))
     render(withToasts(<LeadsManager />))
     expect(await screen.findByText(/Run scripts\/leads.sql in Supabase first/)).toBeTruthy()
+  })
+})
+
+describe("the Brevo card", () => {
+  const today = { via: "brevo", limit: 280, sentToday: 30, left: 250 }
+
+  it("asks for the API key first", async () => {
+    server({ "/api/admin/brevo": () => ({ status: { key: false }, from: "support@carouselabs.com", today }) })
+    render(<BrevoSetup />)
+    expect(await screen.findByText(/Add BREVO_API_KEY in Vercel/)).toBeTruthy()
+    expect(screen.getByText("Today: 250 of 280 lead emails left")).toBeTruthy()
+  })
+
+  it("shows what's done and what isn't, and turns on the webhook", async () => {
+    const calls = server({
+      "GET /api/admin/brevo": () => ({
+        status: { key: true, sender: { email: "support@carouselabs.com", active: true }, domain: { name: "carouselabs.com", authenticated: false }, webhook: false },
+        from: "support@carouselabs.com",
+        today,
+      }),
+      "POST /api/admin/brevo": () => ({
+        status: { key: true, sender: { email: "support@carouselabs.com", active: true }, domain: { name: "carouselabs.com", authenticated: false }, webhook: true },
+        from: "support@carouselabs.com",
+        today,
+      }),
+    })
+    render(<BrevoSetup />)
+    const sender = (await screen.findByText("Sender support@carouselabs.com")).closest("li")!
+    expect(within(sender).getByLabelText("Done")).toBeTruthy()
+    const domain = screen.getByText("Domain carouselabs.com authenticated").closest("li")!
+    expect(within(domain).getByLabelText("To do")).toBeTruthy()
+    expect(within(domain).getByText(/add the DNS records it shows/)).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Turn on" }))
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Turn on" })).toBeNull())
+    expect(calls.some((c) => c.method === "POST" && c.url === "/api/admin/brevo")).toBe(true)
+  })
+
+  it("says when Brevo turned the key down", async () => {
+    server({ "/api/admin/brevo": () => ({ status: { key: true, error: "Key not found", sender: null, domain: null, webhook: false }, from: "support@carouselabs.com", today }) })
+    render(<BrevoSetup />)
+    expect(await screen.findByText("Brevo didn't accept the key")).toBeTruthy()
+    expect(screen.getByText("Key not found")).toBeTruthy()
+  })
+
+  it("says what to change when Brevo only takes approved IP addresses", async () => {
+    const error = "We have detected you are using an unrecognised IP address 203.0.113.9. If you performed this action make sure to add the new IP address in this link: https://app.brevo.com/security/authorised_ips"
+    server({ "/api/admin/brevo": () => ({ status: { key: true, error, sender: null, domain: null, webhook: false }, from: "support@carouselabs.com", today }) })
+    render(<BrevoSetup />)
+    expect(await screen.findByText(/Security → Authorised IPs, turn off IP blocking/)).toBeTruthy()
   })
 })
 

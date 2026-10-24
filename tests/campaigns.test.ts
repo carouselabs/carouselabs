@@ -39,6 +39,8 @@ function matches(row: Record<string, unknown>, where: Record<string, unknown>): 
       if (c.gte && !(value instanceof Date && value >= c.gte)) return false
       return true
     }
+    // "No provider" (lib/campaigns.ts: sent through Resend) matches rows that never had one.
+    if (cond === null) return value === null || value === undefined
     return value === cond
   })
 }

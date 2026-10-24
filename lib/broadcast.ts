@@ -6,10 +6,9 @@ import { db } from "@/lib/db"
 import { availableCredits } from "@/lib/credits"
 import { ENGAGE_LOW_USE_SEGMENTS, ENGAGE_SEGMENTS, lowUseEngageUsers, usesEngageWhere } from "@/lib/engage/audience"
 import type { SegmentType } from "@/lib/segments"
-import type { Resend } from "resend"
 import { applyVariables, renderBroadcastEmailHtml } from "@/lib/broadcastRender"
 import { resolveVariablesMany } from "@/lib/broadcastVariables"
-import { sendInBatches, type BatchSendResult } from "@/lib/emailBatchSend"
+import { sendInBatches, type BatchMailer, type BatchSendResult } from "@/lib/emailBatchSend"
 import { withTracking } from "@/lib/emailTracking"
 import { isLeadAudience, type LeadAudience } from "@/lib/leadRules"
 import { resolveLeadAudience } from "@/lib/leads"
@@ -155,7 +154,7 @@ export async function resolveRecipients(
 // idempotencyPrefix: the same prefix never sends the same batch twice
 // (a scheduled email's id, so a retried run doesn't email anyone again).
 export async function sendUserBroadcast(
-  resend: Resend,
+  resend: BatchMailer,
   from: string,
   recipients: BroadcastRecipient[],
   subject: string,

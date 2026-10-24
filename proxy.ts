@@ -56,6 +56,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/webhooks/clerk(.*)",
   "/api/webhooks/lemonsqueezy(.*)",
   "/api/webhooks/resend(.*)",
+  "/api/webhooks/brevo(.*)", // Brevo telling us a lead unsubscribed, bounced or marked spam; checks its own token (lib/brevo.ts)
   "/api/maintenance-status(.*)",
   // Vercel Cron invokes these server-to-server with a CRON_SECRET header —
   // never a Clerk session. Without this exemption, Clerk's own

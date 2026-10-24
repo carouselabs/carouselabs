@@ -28,7 +28,7 @@ export class LeadsError extends Error {
   }
 }
 
-export const LEADS_SQL_MISSING = "Run scripts/leads.sql in Supabase first: the leads tables aren't there yet."
+export const LEADS_SQL_MISSING = "Run scripts/leads.sql in Supabase first: what leads need in the database isn't there yet."
 
 // The tables aren't there yet (scripts/leads.sql not run).
 export const leadsTableMissing = isEngageSchemaMissing
@@ -112,7 +112,9 @@ export async function importLeads(input: {
   const leads = [...byEmail.values()].filter((l) => !users.has(l.email))
   const emails = leads.map((l) => l.email)
 
-  const existing = emails.length ? await db.lead.findMany({ where: { email: { in: emails } } }) : []
+  const existing = emails.length
+    ? await db.lead.findMany({ where: { email: { in: emails } }, select: { id: true, email: true, firstName: true, lastName: true, name: true, fields: true } })
+    : []
   const existingBy = new Map(existing.map((l) => [l.email, l]))
   const fresh = leads.filter((l) => !existingBy.has(l.email))
   if (fresh.length) {
@@ -213,7 +215,20 @@ export async function listLeads(input: { listId?: string | null; search?: string
     orderBy: [{ createdAt: "desc" }, { email: "asc" }],
     skip: (page - 1) * LEADS_PAGE_SIZE,
     take: LEADS_PAGE_SIZE,
-    include: { lists: { select: { list: { select: { id: true, name: true } } } } },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      name: true,
+      fields: true,
+      createdAt: true,
+      lastEmailedAt: true,
+      emailCount: true,
+      unsubscribedAt: true,
+      stopReason: true,
+      lists: { select: { list: { select: { id: true, name: true } } } },
+    },
   })
   const total = await db.lead.count({ where })
   return {
@@ -230,6 +245,7 @@ export async function listLeads(input: { listId?: string | null; search?: string
       lastEmailedAt: l.lastEmailedAt,
       emailCount: l.emailCount,
       unsubscribedAt: l.unsubscribedAt,
+      stopReason: l.stopReason,
     })),
   }
 }
@@ -317,7 +333,10 @@ export type LeadSendInfo = { id: string; values: Record<string, string>; unsubsc
 export async function leadSendInfo(emails: string[]): Promise<Map<string, LeadSendInfo>> {
   if (emails.length === 0) return new Map()
   try {
-    const leads = await db.lead.findMany({ where: { email: { in: emails.map((e) => e.toLowerCase()) } } })
+    const leads = await db.lead.findMany({
+      where: { email: { in: emails.map((e) => e.toLowerCase()) } },
+      select: { id: true, email: true, firstName: true, lastName: true, name: true, fields: true, unsubscribedAt: true },
+    })
     return new Map(leads.map((l) => [l.email, { id: l.id, values: leadValues(l), unsubscribed: !!l.unsubscribedAt }]))
   } catch (err) {
     if (leadsTableMissing(err)) return new Map()
@@ -331,10 +350,33 @@ export async function markLeadsEmailed(leadIds: string[], at: Date): Promise<voi
   await db.lead.updateMany({ where: { id: { in: leadIds } }, data: { lastEmailedAt: at, emailCount: { increment: 1 } } })
 }
 
+// Why a lead isn't emailed any more: our Unsubscribe link or Brevo's button,
+// or Brevo telling us (lib/brevo.ts BREVO_STOP_EVENTS).
+export type StopReason = "unsubscribed" | "bounced" | "spam" | "blocked"
+
+// Stops emailing these leads (once: the first reason stays). stopReason needs
+// scripts/leads.sql's Brevo part; until it's run they're still stopped, just
+// without the reason.
+async function stopLeads(where: Prisma.LeadWhereInput, reason: StopReason, at: Date): Promise<number> {
+  const target = { ...where, unsubscribedAt: null }
+  try {
+    return (await db.lead.updateMany({ where: target, data: { unsubscribedAt: at, stopReason: reason } })).count
+  } catch (err) {
+    if (!leadsTableMissing(err)) throw err
+    return (await db.lead.updateMany({ where: target, data: { unsubscribedAt: at } })).count
+  }
+}
+
 /** They clicked Unsubscribe. Returns false for a lead that isn't there. */
 export async function unsubscribeLead(id: string, at: Date = new Date()): Promise<boolean> {
-  const lead = await db.lead.findUnique({ where: { id }, select: { unsubscribedAt: true } })
+  const lead = await db.lead.findUnique({ where: { id }, select: { id: true } })
   if (!lead) return false
-  if (!lead.unsubscribedAt) await db.lead.update({ where: { id }, data: { unsubscribedAt: at } })
+  await stopLeads({ id }, "unsubscribed", at)
   return true
+}
+
+/** Brevo stopped this address (lib/brevo.ts): its lead isn't emailed again. Returns how many leads that was (0 or 1). */
+export async function stopLeadByEmail(email: string, reason: StopReason, at: Date = new Date()): Promise<number> {
+  const clean = cleanEmail(email)
+  return clean ? stopLeads({ email: clean }, reason, at) : 0
 }

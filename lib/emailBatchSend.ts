@@ -2,12 +2,12 @@
 // Sends many emails through Resend's batch endpoint: up to 100 emails per
 // request, requests spaced to stay under Resend's rate limit, and a request
 // Resend turns away for going too fast tried again. Every broadcast (users
-// and interns, sent now or scheduled) goes through here.
+// and interns, sent now or scheduled) goes through here, and so do leads'
+// campaign emails, through Brevo's stand-in for Resend (lib/brevo.ts).
 //
 // Sending each email as its own request, all at once, is what capped
 // broadcasts at around ten: Resend answers "rate_limit_exceeded" to every
 // request past its few-per-second limit, so the rest failed.
-import type { Resend } from "resend"
 
 // Resend's maximum emails per batch request.
 export const BATCH_SIZE = 100
@@ -22,6 +22,19 @@ export interface OutgoingEmail {
   html: string
   // e.g. a lead's List-Unsubscribe (lib/leadUnsubscribe.ts).
   headers?: Record<string, string>
+}
+
+// What the emails go through: Resend itself, or lib/brevo.ts's stand-in,
+// which takes and answers the same way.
+export interface BatchMailer {
+  // Who it is, for the reason shown when something fails ("Brevo: …"); Resend when unset.
+  label?: string
+  batch: {
+    send(
+      emails: { from: string; to: string; subject: string; html: string; headers?: Record<string, string> }[],
+      options?: { batchValidation?: "permissive" | "strict"; idempotencyKey?: string },
+    ): Promise<{ data: { data?: unknown; errors?: { index: number; message: string }[] } | null; error: { name: string; message: string } | null }>
+  }
 }
 
 export interface BatchSendResult {
@@ -53,7 +66,7 @@ export function chunk<T>(items: readonly T[], size: number = BATCH_SIZE): T[][] 
 // `prepare` turns one batch of items into its emails just before that batch
 // is sent, so a large broadcast is never personalized all at once.
 export async function sendInBatches<T>(
-  resend: Resend,
+  resend: BatchMailer,
   from: string,
   items: readonly T[],
   prepare: (batch: T[]) => Promise<OutgoingEmail[]>,
@@ -112,7 +125,7 @@ export async function sendInBatches<T>(
 
       if (QUOTA_ERRORS.has(error.name)) {
         fail(emails)
-        result.error = `Resend: ${error.message}`
+        result.error = `${resend.label ?? "Resend"}: ${error.message}`
         stopped = true
         break
       }
@@ -122,7 +135,7 @@ export async function sendInBatches<T>(
       }
       console.error("[emailBatchSend] batch failed:", error)
       fail(emails)
-      result.error ??= `Resend: ${error.message}`
+      result.error ??= `${resend.label ?? "Resend"}: ${error.message}`
       break
     }
   }

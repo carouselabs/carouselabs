@@ -6,10 +6,14 @@
 --   "LeadList"       one upload, named by the admin
 --   "LeadListMember" which leads came in on which list
 --
--- Three new tables: nothing existing changes. Idempotent: safe to re-run.
+-- Three new tables and two new empty columns: nothing existing changes.
+-- Idempotent: safe to re-run.
 -- Run in Supabase BEFORE the website code that uses it is deployed (until
 -- then the Leads page says to run it, and campaigns work as before).
 -- Undo: scripts/leads-rollback.sql.
+--
+-- Added for Brevo (leads' emails go through Brevo, lib/brevo.ts): two new
+-- columns at the end. Running this whole file again is safe.
 
 CREATE TABLE IF NOT EXISTS "Lead" (
   "id"             TEXT PRIMARY KEY,
@@ -57,3 +61,10 @@ BEGIN
       FOREIGN KEY ("leadId") REFERENCES "Lead"("id") ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
 END $$;
+
+-- ── Brevo ───────────────────────────────────────────────────────────────
+-- Why a lead stopped getting emails, when Brevo told us (bounced, spam...).
+ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "stopReason" TEXT;
+-- What sent each campaign email: empty = Resend, 'brevo' = Brevo. Each has
+-- its own daily limit; everything sent before this was Resend.
+ALTER TABLE "EmailCampaignRecipient" ADD COLUMN IF NOT EXISTS "provider" TEXT;

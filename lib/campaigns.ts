@@ -3,10 +3,13 @@
 // list of people in batches the admin picks. The list is taken once, when the
 // campaign is created; each Send claims the ticked people (so two clicks can
 // never both email someone), sends through Resend's batch endpoint like a
-// broadcast, then marks each person sent or failed with Resend's reason.
+// broadcast (leads through Brevo's, lib/brevo.ts), then marks each person
+// sent or failed with the reason it gave.
 // Pure rules (daily allowance, next 10, progress) live in lib/campaignRules.ts.
 import { randomUUID } from "node:crypto"
-import type { Resend } from "resend"
+import type { BatchMailer, BatchSendResult } from "@/lib/emailBatchSend"
+import { BREVO_DAILY_LIMIT, BREVO_MISSING } from "@/lib/brevo"
+import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
 import { db } from "@/lib/db"
 import { logAdminAction } from "@/lib/auditLog"
 import { resolveRecipients, sendUserBroadcast, type BroadcastRecipients } from "@/lib/broadcast"
@@ -25,7 +28,7 @@ import {
 } from "@/lib/campaignRules"
 import { trackingToken } from "@/lib/emailTracking"
 import { isLeadAudience, mergeFieldProblem, parseLeadAudience } from "@/lib/leadRules"
-import { leadFieldKeys, leadListName, leadSendInfo, markLeadsEmailed } from "@/lib/leads"
+import { LEADS_SQL_MISSING, leadFieldKeys, leadListName, leadSendInfo, markLeadsEmailed } from "@/lib/leads"
 import { unsubscribeToken, unsubscribeUrl } from "@/lib/leadUnsubscribe"
 
 // Beside a lead who clicked Unsubscribe: they're never sent to again.
@@ -174,13 +177,59 @@ async function statusCounts(where: { campaignId?: string }) {
   return Object.fromEntries(groups.map((g) => [g.status, g._count._all])) as Partial<Record<CampaignRecipientStatus, number>>
 }
 
-/** Campaign emails sent today (the UTC day, as Resend counts) plus any sending right now, and what's left of the daily limit. */
-export async function campaignAllowance(now: Date = new Date()) {
-  const [sentToday, sendingNow] = await Promise.all([
-    db.emailCampaignRecipient.count({ where: { status: "sent", sentAt: { gte: campaignDayStart(now) } } }),
-    db.emailCampaignRecipient.count({ where: { status: "sending" } }),
-  ])
-  return { limit: CAMPAIGN_DAILY_LIMIT, sentToday, left: allowanceLeft(sentToday, sendingNow) }
+export type Allowance = { via: "resend" | "brevo"; limit: number; sentToday: number; left: number }
+
+/**
+ * Each sender's campaign emails today (the UTC day, as Resend counts) plus
+ * any sending right now, and what's left of its daily limit: Resend's for
+ * users and typed-in addresses, Brevo's for leads. split is false until
+ * scripts/leads.sql's Brevo part has been run: every email is Resend's then,
+ * as before, and leads can't be sent.
+ */
+export async function campaignAllowances(now: Date = new Date()): Promise<{ split: boolean; resend: Allowance; brevo: Allowance }> {
+  const day = campaignDayStart(now)
+  const count = (where: Record<string, unknown>) => db.emailCampaignRecipient.count({ where })
+  const pool = (via: Allowance["via"], limit: number, sentToday: number, sendingNow: number): Allowance => ({
+    via,
+    limit,
+    sentToday,
+    left: allowanceLeft(sentToday, sendingNow, limit),
+  })
+  try {
+    const resendSent = await count({ status: "sent", sentAt: { gte: day }, provider: null })
+    const resendSending = await count({ status: "sending", provider: null })
+    const brevoSent = await count({ status: "sent", sentAt: { gte: day }, provider: "brevo" })
+    const brevoSending = await count({ status: "sending", provider: "brevo" })
+    return {
+      split: true,
+      resend: pool("resend", CAMPAIGN_DAILY_LIMIT, resendSent, resendSending),
+      brevo: pool("brevo", BREVO_DAILY_LIMIT, brevoSent, brevoSending),
+    }
+  } catch (err) {
+    if (!isEngageSchemaMissing(err)) throw err
+    const sent = await count({ status: "sent", sentAt: { gte: day } })
+    const sending = await count({ status: "sending" })
+    return {
+      split: false,
+      resend: pool("resend", CAMPAIGN_DAILY_LIMIT, sent, sending),
+      brevo: { via: "brevo", limit: BREVO_DAILY_LIMIT, sentToday: 0, left: 0 },
+    }
+  }
+}
+
+/** The allowance a campaign's page shows: Brevo's for a leads audience, Resend's otherwise. */
+export async function campaignAllowance(audience: string | null = null, now: Date = new Date()): Promise<Allowance> {
+  const all = await campaignAllowances(now)
+  return audience && isLeadAudience(audience) ? all.brevo : all.resend
+}
+
+// "You can send 5 more today", or that the day's limit is used up.
+function overLimitMessage(pool: Allowance): string {
+  const what = pool.via === "brevo" ? `${BREVO_DAILY_LIMIT} lead emails a day on Brevo's free plan` : `${CAMPAIGN_DAILY_LIMIT} campaign emails a day on Resend's free plan`
+  const who = pool.via === "brevo" ? " leads" : ""
+  return pool.left === 0
+    ? `Today's limit${pool.via === "brevo" ? " for leads" : ""} is used up (${what}). It resets at ${DAY_RESETS_AT}.`
+    : `You can send ${pool.left} more${who} today (${what}). Pick ${pool.left} or fewer.`
 }
 
 // A send cut off mid-way leaves people "sending" forever; after a while they
@@ -252,7 +301,7 @@ export async function getCampaign(id: string) {
     },
   })
   if (!campaign) return null
-  const [counts, allowance] = await Promise.all([statusCounts({ campaignId: id }), campaignAllowance(now)])
+  const [counts, allowance] = await Promise.all([statusCounts({ campaignId: id }), campaignAllowance(campaign.audience, now)])
   return { ...campaign, progress: campaignProgress(counts), allowance }
 }
 
@@ -275,7 +324,9 @@ export async function sendCampaignBatch(input: {
   campaignId: string
   recipientIds: string[]
   adminEmail: string
-  resend: Resend
+  resend: BatchMailer
+  // Leads' emails go through Brevo (lib/brevo.ts brevoMailer); null when it isn't set up.
+  brevo?: BatchMailer | null
   from: string
   ipAddress?: string | null
 }) {
@@ -292,36 +343,43 @@ export async function sendCampaignBatch(input: {
   const design = campaignDesign(campaign.design)
 
   await releaseStuckSends(campaign.id, now)
-  const { left } = await campaignAllowance(now)
-  if (ids.length > left) {
-    throw new CampaignError(
-      left === 0
-        ? `Today's limit is used up (${CAMPAIGN_DAILY_LIMIT} campaign emails a day on Resend's free plan). It resets at ${DAY_RESETS_AT}.`
-        : `You can send ${left} more today (${CAMPAIGN_DAILY_LIMIT} a day on Resend's free plan). Pick ${left} or fewer.`,
-      429,
-    )
+
+  // Who's going out: leads (lib/leads.ts) through Brevo, everyone else
+  // through Resend, each within its own daily limit.
+  const open = { campaignId: campaign.id, status: { in: ["pending", "failed"] } }
+  const candidates = await db.emailCampaignRecipient.findMany({ where: { id: { in: ids }, ...open }, select: { id: true, userId: true, email: true } })
+  const leads = await leadSendInfo(candidates.flatMap((r) => (r.userId ? [] : [r.email])))
+  const leadOf = (r: { userId: string | null; email: string }) => (r.userId ? undefined : leads.get(r.email.toLowerCase()))
+  const toBrevo = candidates.filter((r) => leadOf(r)).map((r) => r.id)
+  const toResend = candidates.filter((r) => !leadOf(r)).map((r) => r.id)
+  const allowance = await campaignAllowances(now)
+  if (toBrevo.length > 0 && !allowance.split) throw new CampaignError(LEADS_SQL_MISSING, 503)
+  if (toBrevo.length > 0 && !input.brevo) throw new CampaignError(BREVO_MISSING, 503)
+  for (const [wanted, pool] of [[toResend.length, allowance.resend], [toBrevo.length, allowance.brevo]] as const) {
+    if (wanted > pool.left) throw new CampaignError(overLimitMessage(pool), 429)
   }
 
   // Claim: only people not sent yet (or failed) and not taken by another click.
   const batchId = randomUUID()
-  await db.emailCampaignRecipient.updateMany({
-    where: { id: { in: ids }, campaignId: campaign.id, status: { in: ["pending", "failed"] } },
-    data: { status: "sending", batchId, error: null },
-  })
+  for (const [group, provider] of [[toResend, null], [toBrevo, "brevo"]] as const) {
+    if (group.length === 0) continue
+    await db.emailCampaignRecipient.updateMany({
+      where: { id: { in: group }, ...open },
+      data: { status: "sending", batchId, error: null, ...(allowance.split ? { provider } : {}) },
+    })
+  }
   const claimed = await db.emailCampaignRecipient.findMany({
     where: { campaignId: campaign.id, batchId, status: "sending" },
     select: { id: true, userId: true, email: true },
   })
   const skipped = ids.length - claimed.length
+  const left = toBrevo.length > 0 && toResend.length === 0 ? allowance.brevo.left : allowance.resend.left
   if (claimed.length === 0) {
     return { sent: 0, failed: 0, skipped, error: undefined, left }
   }
 
-  // Leads (lib/leads.ts) get their own merge fields and an Unsubscribe link;
-  // one who unsubscribed isn't sent to, and neither is one whose link
-  // couldn't be made.
-  const leads = await leadSendInfo(claimed.flatMap((r) => (r.userId ? [] : [r.email])))
-  const leadOf = (r: { userId: string | null; email: string }) => (r.userId ? undefined : leads.get(r.email.toLowerCase()))
+  // Leads get their own merge fields and an Unsubscribe link; one who
+  // unsubscribed isn't sent to, and neither is one whose link couldn't be made.
   const blocked = new Map<string, string>()
   for (const r of claimed) {
     const lead = leadOf(r)
@@ -347,12 +405,18 @@ export async function sendCampaignBatch(input: {
     }
   })
   const idempotencyPrefix = `campaign-${campaign.id}-${batchId}`
-  const result =
-    people.length === 0
-      ? { sent: 0, failed: 0, failedTo: [], error: undefined }
+  const sendThrough = async (mailer: BatchMailer, group: typeof people, prefix: string): Promise<BatchSendResult> =>
+    group.length === 0
+      ? { sent: 0, failed: 0, failedTo: [] }
       : design
-        ? await sendDesignedEmails(input.resend, input.from, people, design, idempotencyPrefix)
-        : await sendUserBroadcast(input.resend, input.from, people, campaign.subject, campaign.body, idempotencyPrefix)
+        ? sendDesignedEmails(mailer, input.from, group, design, prefix)
+        : sendUserBroadcast(mailer, input.from, group, campaign.subject, campaign.body, prefix)
+  const viaResend = await sendThrough(input.resend, people.filter((p) => !p.unsubscribeUrl), idempotencyPrefix)
+  const viaBrevo = input.brevo ? await sendThrough(input.brevo, people.filter((p) => p.unsubscribeUrl), `${idempotencyPrefix}-brevo`) : null
+  const result = {
+    failedTo: [...viaResend.failedTo, ...(viaBrevo?.failedTo ?? [])],
+    error: viaResend.error ?? viaBrevo?.error,
+  }
 
   const failedTo = new Set(result.failedTo.map((e) => e.toLowerCase()))
   const failedIds = sending.filter((r) => failedTo.has(r.email.toLowerCase())).map((r) => r.id)

@@ -54,7 +54,8 @@ type Campaign = {
   createdAt: string
   recipients: Recipient[]
   progress: CampaignProgress
-  allowance: { limit: number; sentToday: number; left: number }
+  // Resend's daily limit, or Brevo's for a leads campaign (lib/campaigns.ts).
+  allowance: { via?: "resend" | "brevo"; limit: number; sentToday: number; left: number }
 }
 
 type Filter = "all" | "pending" | "sent" | "failed" | "seen" | "unseen"
@@ -299,7 +300,8 @@ export function CampaignView({ id }: { id: string }) {
                 </span>
               )}
               <span className="text-caption text-muted-foreground">
-                Today: <span className="font-medium text-foreground">{allowance.left}</span> of {allowance.limit} campaign emails left
+                Today: <span className="font-medium text-foreground">{allowance.left}</span> of {allowance.limit}{" "}
+                {allowance.via === "brevo" ? "lead emails left (Brevo)" : "campaign emails left"}
               </span>
             </div>
             <ProgressBar progress={progress} className="h-2" />

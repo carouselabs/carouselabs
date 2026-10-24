@@ -1465,6 +1465,9 @@ model EmailCampaignRecipient {
   // The send (one click of Send) that took this person: claims them so two
   // clicks can't both send to them, and groups who went out together.
   batchId    String?
+  // What sent it: null = Resend, "brevo" = Brevo (a lead, lib/brevo.ts).
+  // Each has its own daily limit.
+  provider   String?
   // Whether they opened ("seen") and clicked it (lib/emailTracking.ts,
   // scripts/email-tracking.sql). openedAt: first seen (a click counts too);
   // the counts are every load and every click.
@@ -1525,7 +1528,9 @@ model EmailArt {
 // (lowercase), whichever lists it came in on. fields: the file's other
 // columns, by merge-field key ({ "company": "Acme" } → {{company}}).
 // unsubscribedAt: they clicked Unsubscribe and are never emailed again, even
-// if a later file has them. lastEmailedAt: a campaign last reached them.
+// if a later file has them; stopReason says why when it wasn't our link
+// ("unsubscribed" | "bounced" | "spam" | "blocked", from Brevo's webhook,
+// lib/brevo.ts). lastEmailedAt: a campaign last reached them.
 model Lead {
   id             String           @id @default(cuid())
   email          String           @unique
@@ -1534,6 +1539,7 @@ model Lead {
   name           String?
   fields         Json             @default("{}")
   unsubscribedAt DateTime?
+  stopReason     String?
   lastEmailedAt  DateTime?
   emailCount     Int              @default(0)
   createdAt      DateTime         @default(now())

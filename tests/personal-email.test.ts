@@ -248,6 +248,7 @@ describe("sending it to them", () => {
         autoOpenedAt: null,
         // Not kept in full, so it can't be used again.
         reuse: null,
+        emailId: null,
       },
     ])
   })

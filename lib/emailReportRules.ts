@@ -183,6 +183,59 @@ export function leadStops(stops: LeadStop[]): { unsubscribed: number; bounced: n
   }
 }
 
+// One line of a person's history with an email.
+export type ActivityItem = {
+  at: Date
+  what: "seen" | "clicked" | "scanner" | "apple" | "visited"
+  link: string | null
+  app: string | null
+  reason: string | null
+  // A scanner's burst of visits is one line: how many it made.
+  count: number
+}
+
+// A confirmed click's own link visit comes just before it: shown once.
+const SAME_CLICK_MS = 15_000
+const SCANNER_BURST_MS = 60_000
+
+/**
+ * Everything that happened with one email, oldest first: each time they saw
+ * it and clicked (with the link and app), a security scanner's checks (a
+ * burst as one line, with why), Apple Mail opening it by itself, and link
+ * visits no browser confirmed.
+ */
+export function activityOf(events: (PersonEvent & { verdict: string; reason: string | null })[]): ActivityItem[] {
+  const sorted = [...events].sort((a, b) => a.at.getTime() - b.at.getTime())
+  const items: ActivityItem[] = []
+  for (const e of sorted) {
+    if (e.verdict === "scanner") {
+      const prev = items.at(-1)
+      if (prev?.what === "scanner" && e.at.getTime() - prev.at.getTime() <= SCANNER_BURST_MS) {
+        prev.count++
+        continue
+      }
+      items.push({ at: e.at, what: "scanner", link: null, app: null, reason: e.reason, count: 1 })
+    } else if (e.verdict === "apple") {
+      items.push({ at: e.at, what: "apple", link: null, app: "Apple Mail", reason: e.reason, count: 1 })
+    } else if (e.verdict === "unconfirmed") {
+      const confirmed = sorted.some(
+        (h) => h.type === "human" && h.verdict === "person" && h.link === e.link && h.at.getTime() - e.at.getTime() >= 0 && h.at.getTime() - e.at.getTime() <= SAME_CLICK_MS,
+      )
+      if (!confirmed) items.push({ at: e.at, what: "visited", link: e.link, app: e.userAgent ? emailApp(e.userAgent) : null, reason: e.reason, count: 1 })
+    } else if (e.verdict === "person") {
+      items.push({
+        at: e.at,
+        what: e.type === "human" ? "clicked" : "seen",
+        link: e.type === "human" ? e.link : null,
+        app: e.userAgent ? emailApp(e.userAgent) : null,
+        reason: null,
+        count: 1,
+      })
+    }
+  }
+  return items
+}
+
 /**
  * One campaign's first 48 hours: by hours after each person's email went,
  * how many people had seen and clicked it so far.

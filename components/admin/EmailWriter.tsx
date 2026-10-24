@@ -43,7 +43,7 @@ const personStarters = (first: string) => [
 export type EmailRecipient = { id: string; email: string; name: string | null; firstName: string }
 // tracked: emails sent before tracking existed have no seen/clicked.
 // reuse: "personal:<id>" when it was kept in full and can be used again.
-type SentEmail = { id: string; sentAt: string; by: string; subject: string; picture: string | null; tracked?: boolean; reuse?: string | null } & Partial<SeenInfo>
+type SentEmail = { id: string; sentAt: string; by: string; subject: string; picture: string | null; tracked?: boolean; reuse?: string | null; emailId?: string | null } & Partial<SeenInfo>
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
@@ -650,6 +650,7 @@ export function EmailWriter({ recipient, reuse }: { recipient?: EmailRecipient; 
                               scannedAt={e.scannedAt}
                               scanReason={e.scanReason}
                               autoOpenedAt={e.autoOpenedAt}
+                              activity={e.emailId && recipient ? { kind: "personal", id: e.emailId, who: recipient.name ?? recipient.email } : undefined}
                             />
                           </span>
                         )}

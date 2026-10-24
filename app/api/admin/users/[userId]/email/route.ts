@@ -67,6 +67,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
         autoOpenedAt: track?.autoOpenedAt ?? null,
         // Kept in full (lib/sentEmails.ts): it can be used again.
         reuse: track?.design && value.emailId ? `personal:${value.emailId}` : null,
+        // Its tracking row, for its history (/api/admin/email-activity).
+        emailId: track ? value.emailId : null,
       }
     }),
   })

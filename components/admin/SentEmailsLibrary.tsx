@@ -263,7 +263,7 @@ export function SentEmailsLibrary() {
                     · {fmtDateTime(p.sentAt)}
                   </span>
                   <span className="text-caption">
-                    <SeenStatus {...p} />
+                    <SeenStatus {...p} activity={{ kind: "personal", id: p.id, who: p.to?.name ?? p.to?.email ?? "them" }} />
                   </span>
                 </span>
                 <span className="flex items-center gap-3">

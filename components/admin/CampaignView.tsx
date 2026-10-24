@@ -474,7 +474,9 @@ export function CampaignView({ id }: { id: string }) {
                       <td className={`${tableCls.td} max-w-[320px] truncate text-muted-foreground`} title={r.error ?? undefined}>
                         {r.status === "sent" && r.sentAt ? fmtDateTime(r.sentAt) : r.status === "failed" ? r.error : ""}
                       </td>
-                      <td className={`${tableCls.td} text-caption`}>{r.status === "sent" && <SeenStatus {...r} />}</td>
+                      <td className={`${tableCls.td} text-caption`}>
+                        {r.status === "sent" && <SeenStatus {...r} activity={{ kind: "campaign", id: r.id, who: r.name ?? r.email }} />}
+                      </td>
                     </tr>
                   )
                 })}

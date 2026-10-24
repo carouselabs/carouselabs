@@ -9,6 +9,8 @@ import { EmailReport } from "@/components/admin/EmailReport"
 import { EmailReportStrip } from "@/components/admin/EmailReportStrip"
 import { ReadingHeatmap } from "@/components/admin/EmailReportParts"
 import { CampaignActivity } from "@/components/admin/CampaignActivity"
+import { SeenStatus } from "@/components/admin/SeenStatus"
+import { afterSending } from "@/components/admin/EmailActivityDialog"
 
 // recharts measures its box with ResizeObserver, which jsdom doesn't have.
 beforeEach(() => {
@@ -119,6 +121,64 @@ describe("the email report", () => {
     await screen.findByText("30%")
     expect(screen.getByLabelText("/sign-up: 3 people")).toBeTruthy()
     expect(screen.getByLabelText("Gmail: 7 people")).toBeTruthy()
+  })
+})
+
+describe("seen and clicked, each with its time, and the history", () => {
+  const status = {
+    openedAt: "2026-10-24T10:56:30Z",
+    openCount: 1,
+    clickedAt: "2026-10-24T11:01:11Z",
+    clickCount: 2,
+    lastClickedAt: "2026-10-24T12:40:00Z",
+  }
+  const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+
+  it("shows when they saw it and when they clicked, first and last", () => {
+    render(<SeenStatus {...status} />)
+    expect(screen.getByText(`Seen ${fmt(status.openedAt)}`)).toBeTruthy()
+    const clicked = screen.getByText(`Clicked ${fmt(status.clickedAt)}`, { exact: false })
+    expect(clicked.textContent).toContain(`2× · last ${fmt(status.lastClickedAt)}`)
+  })
+
+  it("History opens everything that happened, with how long after sending", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          sentAt: "2026-10-24T10:56:12Z",
+          items: [
+            { at: "2026-10-24T10:56:15Z", what: "scanner", link: null, app: null, reason: "Within a minute of sending", count: 3 },
+            { at: "2026-10-24T10:56:30Z", what: "seen", link: null, app: "Gmail", reason: null, count: 1 },
+            { at: "2026-10-24T11:01:11Z", what: "clicked", link: "https://carouselabs.com/sign-up", app: "iPhone / iPad", reason: null, count: 1 },
+          ],
+        }),
+      ),
+    )
+    render(<SeenStatus {...status} activity={{ kind: "campaign", id: "r1", who: "Asha Shah" }} />)
+    fireEvent.click(screen.getByRole("button", { name: "History for Asha Shah" }))
+    const list = await screen.findByRole("list", { name: "What happened" })
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/admin/email-activity?kind=campaign&id=r1")
+    expect(list.textContent).toContain("Sent")
+    expect(list.textContent).toContain("A security scanner checked it (3 times)")
+    expect(list.textContent).toContain("Seen · Gmail")
+    expect(list.textContent).toContain("18 sec after sending")
+    expect(list.textContent).toContain("Clicked /sign-up · iPhone / iPad")
+    expect(list.textContent).toContain("5 min after sending")
+  })
+
+  it("no History before anything happened", () => {
+    render(<SeenStatus openedAt={null} openCount={0} clickedAt={null} clickCount={0} activity={{ kind: "campaign", id: "r1", who: "Asha" }} />)
+    expect(screen.queryByRole("button", { name: /History/ })).toBeNull()
+  })
+
+  it("reads how long after sending", () => {
+    const sent = "2026-10-24T10:00:00Z"
+    expect(afterSending("2026-10-24T10:00:18Z", sent)).toBe("18 sec after sending")
+    expect(afterSending("2026-10-24T10:05:00Z", sent)).toBe("5 min after sending")
+    expect(afterSending("2026-10-24T12:10:00Z", sent)).toBe("2 h 10 min after sending")
+    expect(afterSending("2026-10-27T10:00:00Z", sent)).toBe("3 days after sending")
+    expect(afterSending("2026-10-24T09:00:00Z", sent)).toBeNull()
   })
 })
 

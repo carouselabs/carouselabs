@@ -29,8 +29,14 @@ function matches(row: Record<string, unknown>, where: Record<string, unknown> = 
 
 vi.mock("@/lib/db", () => ({
   db: {
-    emailCampaignRecipient: { findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => m.recipients.filter((r) => matches(r, where))) },
-    personalEmailTrack: { findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => m.personal.filter((r) => matches(r, where))) },
+    emailCampaignRecipient: {
+      findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => m.recipients.filter((r) => matches(r, where))),
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) => m.recipients.find((r) => r.id === where.id) ?? null),
+    },
+    personalEmailTrack: {
+      findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => m.personal.filter((r) => matches(r, where))),
+      findUnique: vi.fn(async ({ where }: { where: { emailId: string } }) => m.personal.find((r) => r.emailId === where.emailId) ?? null),
+    },
     emailCampaign: { findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => m.campaigns.filter((r) => matches(r, where))) },
     emailTrackEvent: {
       findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
@@ -47,6 +53,7 @@ vi.mock("@/lib/adminAuth", () => ({
 }))
 
 import {
+  activityOf,
   appsOf,
   campaignLines,
   dailyOf,
@@ -62,6 +69,7 @@ import {
 } from "@/lib/emailReportRules"
 import { campaignActivity, emailReport } from "@/lib/emailReport"
 import { GET as reportRoute } from "@/app/api/admin/email-report/route"
+import { GET as activityRoute } from "@/app/api/admin/email-activity/route"
 
 const D = (iso: string) => new Date(iso)
 const row = (over: Partial<SentRow>): SentRow => ({
@@ -214,6 +222,54 @@ describe("the numbers", () => {
     expect(timeline[1]).toEqual({ hour: 1, seen: 1, clicked: 0 })
     expect(timeline[3]).toEqual({ hour: 3, seen: 1, clicked: 1 })
     expect(timeline[22]).toEqual({ hour: 22, seen: 2, clicked: 1 })
+  })
+})
+
+describe("one email's history", () => {
+  const e = (type: string, at: string, verdict: string, over: Record<string, unknown> = {}) => ({
+    kind: "campaign",
+    refId: "r1",
+    type,
+    at: D(at),
+    link: null,
+    userAgent: null,
+    verdict,
+    reason: null,
+    ...over,
+  })
+
+  it("each seen and click with its time, link and app; a scanner's burst as one line; a confirmed click once", () => {
+    const items = activityOf([
+      e("trap", "2026-10-24T10:54:05Z", "scanner", { reason: "Followed the hidden link only robots see" }),
+      e("click", "2026-10-24T10:54:06Z", "scanner", { reason: "Several links at once", link: "https://carouselabs.com/a" }),
+      e("click", "2026-10-24T10:54:06Z", "scanner", { reason: "Several links at once", link: "https://carouselabs.com/b" }),
+      e("open", "2026-10-24T10:56:30Z", "person", { userAgent: GMAIL }),
+      e("click", "2026-10-24T11:01:10Z", "unconfirmed", { link: "https://carouselabs.com/sign-up", userAgent: CHROME_IPHONE }),
+      e("human", "2026-10-24T11:01:11Z", "person", { link: "https://carouselabs.com/sign-up", userAgent: CHROME_IPHONE }),
+      e("click", "2026-10-24T12:00:00Z", "unconfirmed", { link: "https://carouselabs.com/pricing", userAgent: CHROME_IPHONE }),
+      e("open", "2026-10-24T13:00:00Z", "apple", { reason: "Apple Mail opens emails by itself" }),
+    ])
+    expect(items.map((i) => [i.what, i.at.toISOString(), i.link, i.app, i.count])).toEqual([
+      ["scanner", "2026-10-24T10:54:05.000Z", null, null, 3],
+      ["seen", "2026-10-24T10:56:30.000Z", null, "Gmail", 1],
+      ["clicked", "2026-10-24T11:01:11.000Z", "https://carouselabs.com/sign-up", "iPhone / iPad", 1],
+      ["visited", "2026-10-24T12:00:00.000Z", "https://carouselabs.com/pricing", "iPhone / iPad", 1],
+      ["apple", "2026-10-24T13:00:00.000Z", null, "Apple Mail", 1],
+    ])
+    expect(items[0].reason).toBe("Followed the hidden link only robots see")
+  })
+
+  it("the route: admins only, the email's send time and history", async () => {
+    m.recipients = [{ id: "r1", campaignId: "c1", sentAt: D("2026-10-24T10:54:00Z") }]
+    m.events = [e("open", "2026-10-24T10:56:30Z", "person", { userAgent: GMAIL })]
+    const get = (q: string) => activityRoute(new Request(`https://admin.carouselabs.com/api/admin/email-activity?${q}`))
+    const body = await (await get("kind=campaign&id=r1")).json()
+    expect(body).toEqual({ sentAt: "2026-10-24T10:54:00.000Z", items: [expect.objectContaining({ what: "seen", app: "Gmail" })] })
+    expect((await get("kind=campaign&id=gone")).status).toBe(404)
+    expect((await get("kind=other&id=r1")).status).toBe(400)
+    m.admin = null
+    expect((await get("kind=campaign&id=r1")).status).toBe(403)
+    m.admin = { email: "admin@carouselabs.com" }
   })
 })
 

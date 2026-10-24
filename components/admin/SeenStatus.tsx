@@ -1,11 +1,17 @@
+"use client"
+
 // Whether one tracked email was seen and clicked (lib/emailTracking.ts), for
-// a campaign's list of people and a person's personal email history. Only a
-// person's activity counts (lib/emailScanners.ts): a company's security
-// scanner checking the email is shown apart and never counts, and Apple Mail
-// opening it by itself is only a "maybe". A click is confirmed by a real
-// browser, and counts as seen.
-import { Eye, MousePointerClick, ShieldCheck } from "lucide-react"
+// a campaign's list of people and a person's personal email history: when
+// they first saw it, and when they first (and last) clicked. Only a person's
+// activity counts (lib/emailScanners.ts): a company's security scanner
+// checking the email is shown apart and never counts, and Apple Mail opening
+// it by itself is only a "maybe". A click is confirmed by a real browser, and
+// counts as seen. History opens everything that happened, with times
+// (EmailActivityDialog).
+import { useState } from "react"
+import { Eye, History, MousePointerClick, ShieldCheck } from "lucide-react"
 import { fmtDateTime } from "@/components/admin/ui"
+import { EmailActivityDialog } from "./EmailActivityDialog"
 
 export type SeenInfo = {
   openedAt: string | null
@@ -18,7 +24,21 @@ export type SeenInfo = {
   autoOpenedAt?: string | null
 }
 
-export function SeenStatus({ openedAt, openCount, clickedAt, clickCount, lastClickedAt, scannedAt, scanReason, autoOpenedAt }: SeenInfo) {
+export function SeenStatus({
+  openedAt,
+  openCount,
+  clickedAt,
+  clickCount,
+  lastClickedAt,
+  scannedAt,
+  scanReason,
+  autoOpenedAt,
+  activity,
+}: SeenInfo & {
+  // The email, to open its history; who it went to, for the history's title.
+  activity?: { kind: "campaign" | "personal"; id: string; who: string }
+}) {
+  const [showing, setShowing] = useState(false)
   return (
     <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
       {openedAt ? (
@@ -37,11 +57,16 @@ export function SeenStatus({ openedAt, openCount, clickedAt, clickCount, lastCli
       {clickedAt && (
         <span
           className="inline-flex items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-caption font-medium text-brand"
-          title={`Clicked by them in a real browser. First ${fmtDateTime(clickedAt)}${lastClickedAt && lastClickedAt !== clickedAt ? `, last ${fmtDateTime(lastClickedAt)}` : ""}`}
+          title="Clicked by them in a real browser"
         >
           <MousePointerClick className="size-3" aria-hidden />
-          Clicked{clickCount > 1 ? ` ${clickCount}×` : ""}
-          {lastClickedAt && clickCount > 1 && <span className="font-normal"> · last {fmtDateTime(lastClickedAt)}</span>}
+          Clicked {fmtDateTime(clickedAt)}
+          {clickCount > 1 && (
+            <span className="font-normal">
+              {" "}
+              · {clickCount}×{lastClickedAt && lastClickedAt !== clickedAt ? ` · last ${fmtDateTime(lastClickedAt)}` : ""}
+            </span>
+          )}
         </span>
       )}
       {scannedAt && (
@@ -53,6 +78,18 @@ export function SeenStatus({ openedAt, openCount, clickedAt, clickCount, lastCli
           Security scanner
         </span>
       )}
+      {activity && (openedAt || clickedAt || scannedAt || autoOpenedAt) && (
+        <button
+          type="button"
+          onClick={() => setShowing(true)}
+          aria-label={`History for ${activity.who}`}
+          className="inline-flex items-center gap-1 text-caption font-medium text-brand hover:underline"
+        >
+          <History className="size-3" aria-hidden />
+          History
+        </button>
+      )}
+      {showing && activity && <EmailActivityDialog kind={activity.kind} id={activity.id} who={activity.who} onClose={() => setShowing(false)} />}
     </span>
   )
 }

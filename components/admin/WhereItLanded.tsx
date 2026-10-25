@@ -158,6 +158,7 @@ export function PlacementSummary({ report, onRetest, retesting, canTest }: { rep
       <p className="text-caption text-muted-foreground/80">
         No one can see inside a person&apos;s own inbox, so each person shows what&apos;s known (bounced, marked as spam, seen, clicked) or
         else where the test copy landed at their kind of inbox: the Gmail test stands for everyone on Gmail and Google Workspace.
+        Business inboxes have no tabs, so for business addresses any tab shows as Inbox (Spam stays Spam).
       </p>
     </div>
   )

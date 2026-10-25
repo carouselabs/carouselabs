@@ -316,7 +316,13 @@ describe("what the column says", () => {
 
   it("otherwise the test copy at their kind of inbox: Gmail's for Gmail and Google Workspace", () => {
     expect(landingOf(person(), tests)).toEqual({ label: "Gmail: Promotions tab", detail: "From the test copy", tone: "warn" })
-    expect(landingOf(person({ mailbox: "google-workspace" }), [test({ placement: "primary" })])).toMatchObject({ label: "Google Workspace: Primary", tone: "good" })
+    // Business inboxes have no tabs: any tab is their inbox; Spam stays Spam; personal Gmail keeps the tab.
+    expect(landingOf(person({ mailbox: "google-workspace" }), [test({ placement: "primary" })])).toMatchObject({ label: "Google Workspace: Inbox", tone: "good" })
+    expect(landingOf(person({ mailbox: "google-workspace" }), tests)).toMatchObject({ label: "Google Workspace: Inbox", tone: "good" })
+    expect(landingOf(person({ mailbox: "google-workspace" }), [test({ placement: "updates" })]).label).toBe("Google Workspace: Inbox")
+    expect(landingOf(person({ mailbox: "google-workspace" }), [test({ placement: "spam" })])).toMatchObject({ label: "Google Workspace: Spam", tone: "bad" })
+    expect(landingOf(person({ mailbox: "google-workspace", openedAt: "2026-10-25T11:00:00Z" }), tests).detail).toBe("Google Workspace test: Inbox")
+    expect(landingOf(person({ mailbox: "gmail" }), [test({ placement: "updates" })]).label).toBe("Gmail: Updates tab")
     expect(landingOf(person(), [test({ placement: "spam" })])).toMatchObject({ label: "Gmail: Spam", tone: "bad" })
     expect(landingOf(person({ mailbox: "microsoft-365" }), tests)).toMatchObject({ label: "Microsoft 365: not tested", tone: "muted" })
     expect(landingOf(person(), [test({ status: "waiting", placement: null })])).toMatchObject({ label: "Gmail: Checking…" })

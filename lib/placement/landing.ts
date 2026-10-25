@@ -37,10 +37,18 @@ export const PLACEMENT_LABEL: Record<Placement, string> = {
 
 export const placementTone = (p: Placement): LandingTone => (p === "primary" || p === "inbox" ? "good" : p === "spam" || p === "archived" ? "bad" : "warn")
 
-/** A test's result in words, e.g. "Promotions tab · Important", or why there's none. */
-export function testResult(test: PlacementTestView): Landing {
+// Personal inboxes have tabs. A business inbox (Google Workspace, Microsoft
+// 365, a company's own) has none, so for its people a copy that landed in
+// any tab is simply in their inbox. Spam is spam everywhere.
+const PERSONAL: ReadonlySet<Mailbox> = new Set<Mailbox>(["gmail", "outlook", "yahoo", "icloud"])
+const TABS: ReadonlySet<Placement> = new Set<Placement>(["primary", "promotions", "updates", "social", "forums"])
+export const isBusinessInbox = (mailbox: Mailbox) => !PERSONAL.has(mailbox)
+
+/** A test's result in words (e.g. "Promotions tab", or "Inbox" for a business inbox), or why there's none. */
+export function testResult(test: PlacementTestView, forMailbox: Mailbox | null = null): Landing {
   if (test.status === "found" && test.placement) {
-    return { label: PLACEMENT_LABEL[test.placement], detail: test.important ? "Marked important" : undefined, tone: placementTone(test.placement) }
+    const placement = forMailbox && isBusinessInbox(forMailbox) && TABS.has(test.placement) ? "inbox" : test.placement
+    return { label: PLACEMENT_LABEL[placement], detail: test.important ? "Marked important" : undefined, tone: placementTone(placement) }
   }
   if (test.status === "missing") return { label: "Never arrived", detail: "The test copy didn't reach the test inbox in 30 minutes", tone: "bad" }
   if (test.status === "failed") return { label: "Test copy not sent", detail: test.error ?? undefined, tone: "muted" }
@@ -79,7 +87,7 @@ export function landingOf(person: LandingPerson, tests: PlacementTestView[]): La
   if (stoppedAfter === "spam") return { label: "Marked as spam", detail: "They reported it as spam", tone: "bad" }
 
   const test = testFor(tests, person.mailbox, person.via)
-  const tested = test ? testResult(test) : null
+  const tested = test ? testResult(test, person.mailbox) : null
   const atTest = tested && test?.status === "found" ? `${provider ?? "Their inbox"} test: ${tested.label}` : undefined
   if (person.clickedAt) return { label: "Clicked", detail: atTest ?? "It reached them", tone: "good" }
   if (person.openedAt) return { label: "Seen", detail: atTest ?? "It reached them", tone: "good" }

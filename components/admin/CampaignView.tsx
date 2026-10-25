@@ -28,6 +28,7 @@ import { ProgressBar } from "./CampaignsList"
 import { RECIPIENT_STATUS, audienceLabel } from "./campaignLabels"
 import { CampaignSending } from "./CampaignSending"
 import { CampaignActivity } from "./CampaignActivity"
+import { LandingBadge, PlacementSummary, landingFor, usePlacement } from "./WhereItLanded"
 import { DEFAULT_SENDING, type Sending } from "@/lib/sendingRules"
 import { isLeadAudience } from "@/lib/leadRules"
 import { readyDesignOf } from "@/lib/readyEmails"
@@ -105,6 +106,8 @@ export function CampaignView({ id }: { id: string }) {
   useEffect(() => void load(), [load])
 
   const recipients = useMemo(() => campaign?.recipients ?? [], [campaign])
+  // Where it landed (lib/placement): asked again whenever more have been sent.
+  const placement = usePlacement(id, campaign?.progress.sent, !!campaign)
   const engagement = useMemo(() => campaignEngagement(recipients), [recipients])
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -335,6 +338,7 @@ export function CampaignView({ id }: { id: string }) {
                 </span>
               </p>
             )}
+            <PlacementSummary report={placement.report} onRetest={() => void placement.retest()} retesting={placement.retesting} canTest={!archived && progress.sent > 0} />
             <p className="text-caption text-muted-foreground/80">
               Resend&apos;s free plan sends 100 emails a day for the whole account, so campaigns stop at {CAMPAIGN_DAILY_LIMIT} a day
               and leave the rest for automatic emails (welcome, credits, posts). The day resets at {DAY_RESETS_AT}.
@@ -436,12 +440,13 @@ export function CampaignView({ id }: { id: string }) {
                   <th className={tableCls.th}>Status</th>
                   <th className={tableCls.th}>When / why</th>
                   <th className={tableCls.th}>Seen</th>
+                  <th className={tableCls.th}>Where it landed</th>
                 </tr>
               </thead>
               <tbody>
                 {shown.length === 0 && (
                   <tr>
-                    <td className={tableCls.td} colSpan={6}>
+                    <td className={tableCls.td} colSpan={7}>
                       Nobody here.
                     </td>
                   </tr>
@@ -477,6 +482,9 @@ export function CampaignView({ id }: { id: string }) {
                       </td>
                       <td className={`${tableCls.td} text-caption`}>
                         {r.status === "sent" && <SeenStatus {...r} activity={{ kind: "campaign", id: r.id, who: r.name ?? r.email }} />}
+                      </td>
+                      <td className={tableCls.td}>
+                        <LandingBadge landing={landingFor(r.id, r, placement.report)} />
                       </td>
                     </tr>
                   )

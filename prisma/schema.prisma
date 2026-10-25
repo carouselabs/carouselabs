@@ -1453,6 +1453,9 @@ model EmailCampaign {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   recipients    EmailCampaignRecipient[]
+  // Test copies sent to the test inbox, to see where it lands (lib/placement,
+  // scripts/email-placement.sql).
+  placementTests EmailPlacementTest[]
 
   @@index([createdAt])
 }
@@ -1490,6 +1493,10 @@ model EmailCampaignRecipient {
   scannedAt    DateTime?
   scanReason   String?
   autoOpenedAt DateTime?
+  // Whose servers hold their inbox: "gmail" | "google-workspace" | "outlook"
+  // | "microsoft-365" | "yahoo" | … (lib/placement/mailbox.ts), for "Where
+  // it landed" (scripts/email-placement.sql).
+  mailbox      String?
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
 
@@ -1497,6 +1504,30 @@ model EmailCampaignRecipient {
   @@index([campaignId, status])
   // The daily allowance counts what campaigns sent in the last 24 hours.
   @@index([status, sentAt])
+}
+
+// One test copy of a campaign, sent through one service (via "resend" |
+// "brevo") to the test Gmail (PLACEMENT_GMAIL_USER) at its own +address, and
+// where Gmail put it (lib/placement/tests.ts, scripts/email-placement.sql):
+// status "waiting" (not found yet) | "found" | "missing" (not there after 30
+// minutes) | "failed" (couldn't be sent); placement "primary" | "promotions"
+// | "updates" | "social" | "forums" | "inbox" | "archived" | "spam".
+model EmailPlacementTest {
+  id         String        @id @default(cuid())
+  campaignId String
+  campaign   EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  via        String
+  inbox      String        @default("gmail")
+  address    String
+  status     String        @default("waiting")
+  placement  String?
+  important  Boolean       @default(false)
+  error      String?
+  sentAt     DateTime      @default(now())
+  checkedAt  DateTime?
+  foundAt    DateTime?
+
+  @@index([campaignId, sentAt])
 }
 
 // The AI email writer's saved art (scripts/email-art-library.sql): every

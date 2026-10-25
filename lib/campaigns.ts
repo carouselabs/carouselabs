@@ -15,7 +15,7 @@ import { BREVO_DAILY_LIMIT, BREVO_MISSING } from "@/lib/brevo"
 import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
 import { db } from "@/lib/db"
 import { logAdminAction } from "@/lib/auditLog"
-import { resolveRecipients, sendUserBroadcast, type BroadcastRecipients } from "@/lib/broadcast"
+import { resolveRecipients, sendUserBroadcast, type BroadcastRecipient, type BroadcastRecipients } from "@/lib/broadcast"
 import { emailDesignSchema, type EmailDesign } from "@/lib/emailDesign"
 import { artProblem } from "@/lib/emailArtCheck"
 import { sendDesignedEmails } from "@/lib/emailDesignRender"
@@ -37,6 +37,7 @@ import { LEADS_SQL_MISSING, leadFieldKeys, leadListName, leadSendInfo, markLeads
 import { unsubscribeToken, unsubscribeUrl } from "@/lib/leadUnsubscribe"
 import { DEFAULT_SENDING, VIA_CHOICES, usesBrevo, type Sending, type SendingChoice, type Via } from "@/lib/sendingRules"
 import { resolveSending } from "@/lib/senders"
+import { sendTestCopy, testOnFirstSend, type PlacementVia } from "@/lib/placement/tests"
 
 // Beside a lead who clicked Unsubscribe: they're never sent to again.
 export const UNSUBSCRIBED_NOTE = "Unsubscribed, so not sent"
@@ -408,6 +409,18 @@ export async function setCampaignStatus(id: string, status: "active" | "archived
   })
 }
 
+// A campaign's email, as it's stored: a ready-made email, the AI writer's
+// design, or plain text (rendered like a broadcast).
+type CampaignEmail = { ready: ReadyDesign | null; design: EmailDesign | null; subject: string; body: string }
+
+/** Sends the campaign's email to these people through one service (Resend or Brevo). */
+function sendCampaignEmails(mailer: BatchMailer, from: string, group: BroadcastRecipient[], email: CampaignEmail, prefix: string, replyTo: string | null): Promise<BatchSendResult> {
+  if (group.length === 0) return Promise.resolve({ sent: 0, failed: 0, failedTo: [] })
+  if (email.ready) return sendReadyEmails(mailer, from, group, email.ready, prefix, { replyTo })
+  if (email.design) return sendDesignedEmails(mailer, from, group, email.design, prefix, { replyTo })
+  return sendUserBroadcast(mailer, from, group, email.subject, email.body, prefix, { replyTo })
+}
+
 /**
  * Sends the campaign's email to the ticked people who haven't had it yet.
  * Anyone already sent (or being sent by another click) is skipped, so a
@@ -506,14 +519,8 @@ export async function sendCampaignBatch(input: {
     }
   })
   const idempotencyPrefix = `campaign-${campaign.id}-${batchId}`
-  const sendThrough = async (mailer: BatchMailer, group: typeof people, prefix: string): Promise<BatchSendResult> =>
-    group.length === 0
-      ? { sent: 0, failed: 0, failedTo: [] }
-      : ready
-        ? sendReadyEmails(mailer, from, group, ready, prefix, { replyTo: choice.replyTo })
-        : design
-          ? sendDesignedEmails(mailer, from, group, design, prefix, { replyTo: choice.replyTo })
-          : sendUserBroadcast(mailer, from, group, campaign.subject, campaign.body, prefix, { replyTo: choice.replyTo })
+  const email: CampaignEmail = { ready, design, subject: campaign.subject, body: campaign.body }
+  const sendThrough = (mailer: BatchMailer, group: typeof people, prefix: string) => sendCampaignEmails(mailer, from, group, email, prefix, choice.replyTo)
   const viaResend = await sendThrough(input.resend, people.filter((p) => !p.byBrevo), idempotencyPrefix)
   const viaBrevo = input.brevo ? await sendThrough(input.brevo, people.filter((p) => p.byBrevo), `${idempotencyPrefix}-brevo`) : null
   const result = {
@@ -542,6 +549,16 @@ export async function sendCampaignBatch(input: {
   const sentLeads = sending.flatMap((r) => (sentIdSet.has(r.id) ? (leadOf(r)?.id ?? []) : []))
   await markLeadsEmailed(sentLeads, sentAt).catch((err) => console.error("[campaigns] marking leads emailed failed:", err))
 
+  // Where it lands: each service's first send also sends one test copy, like
+  // that send's people (lib/placement/tests.ts; never throws).
+  for (const [via, mailer, sentHere, group] of [
+    ["resend", input.resend, viaResend.sent, people.filter((p) => !p.byBrevo)],
+    ["brevo", input.brevo, viaBrevo?.sent ?? 0, people.filter((p) => p.byBrevo)],
+  ] as const) {
+    if (!mailer || sentHere === 0) continue
+    await testOnFirstSend({ campaignId: campaign.id, via, asLead: group.some((p) => !!p.unsubscribeUrl), send: (person, prefix) => sendThrough(mailer, [{ ...person, trackingToken: person.trackingToken ?? null, byBrevo: via === "brevo" }], prefix) })
+  }
+
   const unsubscribed = [...blocked.values()].filter((e) => e === UNSUBSCRIBED_NOTE).length
   const error =
     result.error ??
@@ -555,4 +572,33 @@ export async function sendCampaignBatch(input: {
   })
 
   return { sent: sentIds.length, failed, skipped, error, left: Math.max(0, left - sentIds.length) }
+}
+
+/**
+ * "Test again" on the campaign page: a new test copy through each service
+ * its people were sent by (before anyone is, the one it would use), as a
+ * lead's copy when the people sent that way were leads.
+ */
+export async function sendPlacementTests(input: { campaignId: string; resend: BatchMailer; brevo?: BatchMailer | null; from: string }) {
+  const campaign = await db.emailCampaign.findUnique({ where: { id: input.campaignId }, select: { id: true, subject: true, body: true, design: true, audience: true } })
+  if (!campaign) throw new CampaignError("Campaign not found", 404)
+  const ready = readyDesignOf(campaign.design)
+  const email: CampaignEmail = { ready, design: ready ? null : campaignDesign(campaign.design), subject: campaign.subject, body: campaign.body }
+  const choice = await campaignSending(campaign.id)
+  const from = choice.from === DEFAULT_SENDING.from ? input.from : choice.from
+
+  // One row per service its people went through.
+  const ways = await db.emailCampaignRecipient.findMany({ where: { campaignId: campaign.id, status: "sent" }, select: { provider: true }, distinct: ["provider"] })
+  const vias = new Set<PlacementVia>(ways.map((r) => (r.provider === "brevo" ? "brevo" : "resend")))
+  if (vias.size === 0) vias.add(usesBrevo(choice.via, isLeadAudience(campaign.audience)) ? "brevo" : "resend")
+  const tests = []
+  for (const via of vias) {
+    const mailer = via === "brevo" ? input.brevo : input.resend
+    if (!mailer) throw new CampaignError(BREVO_MISSING, 503)
+    // Leads are the people with no account; their copies carry an Unsubscribe link.
+    const leadsThisWay = await db.emailCampaignRecipient.count({ where: { campaignId: campaign.id, status: "sent", provider: via === "brevo" ? "brevo" : null, userId: null } })
+    const asLead = leadsThisWay > 0 || (ways.length === 0 && isLeadAudience(campaign.audience))
+    tests.push(await sendTestCopy({ campaignId: campaign.id, via, asLead, send: (person, prefix) => sendCampaignEmails(mailer, from, [person], email, prefix, choice.replyTo) }))
+  }
+  return tests
 }

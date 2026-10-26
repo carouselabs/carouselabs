@@ -55,7 +55,7 @@ function platformSql(platform: OverviewPlatform, column: Prisma.Sql): Prisma.Sql
 }
 
 const missingTable = (err: unknown, table: string) =>
-  isEngageSchemaMissing(err) || new RegExp(`relation "${table}" does not exist`).test(String(err))
+  isEngageSchemaMissing(err) || new RegExp(`relation "(public\\.)?${table}" does not exist`).test(String(err))
 
 const n = (v: unknown) => (v === null || v === undefined ? 0 : Number(v))
 const iso = (v: unknown) => new Date(v as string | Date).toISOString()
@@ -82,19 +82,19 @@ export async function engageErrors(from: Date, to: Date, platform: OverviewPlatf
           db.$queryRaw<Rows>(Prisma.sql`
             SELECT e.feature, e.code, min(e.message) AS message, count(*) AS count, count(DISTINCT e."userId") AS people,
                    array_remove(array_agg(DISTINCT e."extensionVersion"), NULL) AS versions, max(e."createdAt") AS "lastAt"
-            FROM "EngageClientError" e WHERE ${extWhere}
+            FROM public."EngageClientError" e WHERE ${extWhere}
             GROUP BY 1, 2 ORDER BY count DESC, "lastAt" DESC LIMIT 50
           `),
           db.$queryRaw<Rows>(Prisma.sql`
             SELECT e.id, e."createdAt" AS at, e."userId", u.email, e.feature, e.code AS what, e."extensionVersion" AS version
-            FROM "EngageClientError" e LEFT JOIN "User" u ON u.id = e."userId" WHERE ${extWhere}
+            FROM public."EngageClientError" e LEFT JOIN public."User" u ON u.id = e."userId" WHERE ${extWhere}
             ORDER BY e."createdAt" DESC LIMIT 30
           `),
           db.$queryRaw<Rows>(Prisma.sql`
             SELECT to_char(date_trunc('day', e."createdAt"), 'YYYY-MM-DD') AS day, count(*) AS count
-            FROM "EngageClientError" e WHERE ${extWhere} GROUP BY 1
+            FROM public."EngageClientError" e WHERE ${extWhere} GROUP BY 1
           `),
-          db.$queryRaw<Rows>(Prisma.sql`SELECT DISTINCT e."userId" FROM "EngageClientError" e WHERE ${extWhere} AND e."userId" IS NOT NULL`),
+          db.$queryRaw<Rows>(Prisma.sql`SELECT DISTINCT e."userId" FROM public."EngageClientError" e WHERE ${extWhere} AND e."userId" IS NOT NULL`),
         ]),
       [[], [], [], []],
     ),
@@ -104,19 +104,19 @@ export async function engageErrors(from: Date, to: Date, platform: OverviewPlatf
         Promise.all([
           db.$queryRaw<Rows>(Prisma.sql`
             SELECT c.feature, c.model, c.outcome, count(*) AS count, count(DISTINCT c."userId") AS people, max(c."createdAt") AS "lastAt"
-            FROM "EngageAiCall" c WHERE ${aiWhere}
+            FROM public."EngageAiCall" c WHERE ${aiWhere}
             GROUP BY 1, 2, 3 ORDER BY count DESC, "lastAt" DESC LIMIT 50
           `),
           db.$queryRaw<Rows>(Prisma.sql`
             SELECT c.id, c."createdAt" AS at, c."userId", u.email, c.feature, c.model, c.outcome, NULL AS version
-            FROM "EngageAiCall" c LEFT JOIN "User" u ON u.id = c."userId" WHERE ${aiWhere}
+            FROM public."EngageAiCall" c LEFT JOIN public."User" u ON u.id = c."userId" WHERE ${aiWhere}
             ORDER BY c."createdAt" DESC LIMIT 30
           `),
           db.$queryRaw<Rows>(Prisma.sql`
             SELECT to_char(date_trunc('day', c."createdAt"), 'YYYY-MM-DD') AS day, count(*) AS count
-            FROM "EngageAiCall" c WHERE ${aiWhere} GROUP BY 1
+            FROM public."EngageAiCall" c WHERE ${aiWhere} GROUP BY 1
           `),
-          db.$queryRaw<Rows>(Prisma.sql`SELECT DISTINCT c."userId" FROM "EngageAiCall" c WHERE ${aiWhere} AND c."userId" IS NOT NULL`),
+          db.$queryRaw<Rows>(Prisma.sql`SELECT DISTINCT c."userId" FROM public."EngageAiCall" c WHERE ${aiWhere} AND c."userId" IS NOT NULL`),
         ]),
       [[], [], [], []],
     ),

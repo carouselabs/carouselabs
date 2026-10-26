@@ -107,20 +107,20 @@ export async function aiUsage(
                avg(c.ms) AS "avgMs",
                percentile_cont(0.95) WITHIN GROUP (ORDER BY c.ms) AS "p95Ms",
                avg(c."firstTokenMs") AS "avgFirstTokenMs"
-        FROM "EngageAiCall" c WHERE ${where}
+        FROM public."EngageAiCall" c WHERE ${where}
         GROUP BY 1, 2
       `),
       db.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
         SELECT to_char(date_trunc('day', c."createdAt"), 'YYYY-MM-DD') AS day, c.model, count(*) AS calls,
                coalesce(sum(c."inputTokens"), 0) AS "inputTokens", coalesce(sum(c."outputTokens"), 0) AS "outputTokens"
-        FROM "EngageAiCall" c WHERE ${where}
+        FROM public."EngageAiCall" c WHERE ${where}
         GROUP BY 1, 2
       `),
       db.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
         SELECT c."userId", u.email, count(*) AS calls,
                coalesce(sum(c."inputTokens"), 0) AS "inputTokens", coalesce(sum(c."outputTokens"), 0) AS "outputTokens",
                ${costSql(prices)} AS cost
-        FROM "EngageAiCall" c LEFT JOIN "User" u ON u.id = c."userId"
+        FROM public."EngageAiCall" c LEFT JOIN public."User" u ON u.id = c."userId"
         WHERE ${where} AND c."userId" IS NOT NULL
         GROUP BY 1, 2
         ORDER BY cost DESC, (coalesce(sum(c."inputTokens"), 0) + coalesce(sum(c."outputTokens"), 0)) DESC
@@ -130,7 +130,7 @@ export async function aiUsage(
   } catch (err) {
     // Before scripts/engage-admin-phase-c.sql: nothing recorded yet. (A raw
     // query reports a missing table in Postgres's own words, not as P2021.)
-    if (!isEngageSchemaMissing(err) && !/relation "EngageAiCall" does not exist/.test(String(err))) throw err
+    if (!isEngageSchemaMissing(err) && !/relation "(public\.)?EngageAiCall" does not exist/.test(String(err))) throw err
     return emptyUsage(from, to)
   }
 
@@ -228,7 +228,7 @@ export async function aiCostByUser(
       SELECT c."userId", u.email, count(*) AS calls,
              coalesce(sum(c."inputTokens"), 0) AS "inputTokens", coalesce(sum(c."outputTokens"), 0) AS "outputTokens",
              ${costSql(prices)} AS cost
-      FROM "EngageAiCall" c LEFT JOIN "User" u ON u.id = c."userId"
+      FROM public."EngageAiCall" c LEFT JOIN public."User" u ON u.id = c."userId"
       WHERE ${where} AND c."userId" IS NOT NULL
       GROUP BY 1, 2
       ORDER BY cost DESC, (coalesce(sum(c."inputTokens"), 0) + coalesce(sum(c."outputTokens"), 0)) DESC
@@ -243,7 +243,7 @@ export async function aiCostByUser(
       cost: num(r.cost),
     }))
   } catch (err) {
-    if (isEngageSchemaMissing(err) || /relation "EngageAiCall" does not exist/.test(String(err))) return []
+    if (isEngageSchemaMissing(err) || /relation "(public\.)?EngageAiCall" does not exist/.test(String(err))) return []
     throw err
   }
 }

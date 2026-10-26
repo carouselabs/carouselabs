@@ -4,6 +4,11 @@
 // never downloads the whole user base; details are then loaded for that page
 // only. Every value is a bound parameter (Prisma.sql); ORDER BY comes from a
 // fixed list.
+//
+// Raw SQL names tables as public."X", here and in the other lib/engage
+// queries: the Supabase pooler is shared with Dharma Mail, whose Prisma sets
+// search_path = dharma on pooled connections, so an unqualified "User" can
+// end up looked for in the dharma schema ("relation does not exist").
 import { Prisma } from "@prisma/client"
 import { db } from "@/lib/db"
 import {
@@ -26,21 +31,21 @@ import { kindsFor } from "@/lib/extensionHistory"
 // u = "User". An Engage user is anyone who ever signed in to the extension,
 // generated with it, subscribed to it, or was given access to it.
 const ENGAGE_USER = Prisma.sql`(
-  EXISTS (SELECT 1 FROM "ExtensionToken" t WHERE t."userId" = u.id)
-  OR EXISTS (SELECT 1 FROM "CommentHistory" h WHERE h."userId" = u.id)
+  EXISTS (SELECT 1 FROM public."ExtensionToken" t WHERE t."userId" = u.id)
+  OR EXISTS (SELECT 1 FROM public."CommentHistory" h WHERE h."userId" = u.id)
   ${Prisma.join(
-    ENGAGE_PLATFORMS.map((p) => Prisma.sql`OR EXISTS (SELECT 1 FROM ${Prisma.raw(`"${SUBSCRIPTION_TABLES[p]}"`)} s WHERE s."userId" = u.id)`),
+    ENGAGE_PLATFORMS.map((p) => Prisma.sql`OR EXISTS (SELECT 1 FROM ${Prisma.raw(`public."${SUBSCRIPTION_TABLES[p]}"`)} s WHERE s."userId" = u.id)`),
     " ",
   )}
-  OR EXISTS (SELECT 1 FROM "EngageAccessGrant" g WHERE g."userId" = u.id OR (g."userId" IS NULL AND g.email = lower(u.email)))
-  OR EXISTS (SELECT 1 FROM "EngageUserControl" c WHERE c."userId" = u.id)
+  OR EXISTS (SELECT 1 FROM public."EngageAccessGrant" g WHERE g."userId" = u.id OR (g."userId" IS NULL AND g.email = lower(u.email)))
+  OR EXISTS (SELECT 1 FROM public."EngageUserControl" c WHERE c."userId" = u.id)
 )`
 
 // The extensions are sold separately. "any": paying for (or granted) any.
 type PlanScope = EngagePlatform | "any"
 
 const paidIn = (platform: EngagePlatform, now: Date) => Prisma.sql`EXISTS (
-  SELECT 1 FROM ${Prisma.raw(`"${SUBSCRIPTION_TABLES[platform]}"`)} s WHERE s."userId" = u.id
+  SELECT 1 FROM ${Prisma.raw(`public."${SUBSCRIPTION_TABLES[platform]}"`)} s WHERE s."userId" = u.id
   AND (s.status IN ('active', 'on_trial', 'past_due') OR (s.status = 'cancelled' AND s."endsAt" > ${now}))
 )`
 
@@ -53,27 +58,27 @@ const paidAt = (now: Date, scope: PlanScope = "any") =>
     : paidIn(scope, now)
 
 const grantedAt = (now: Date, scope: PlanScope = "any") => Prisma.sql`EXISTS (
-  SELECT 1 FROM "EngageAccessGrant" g
+  SELECT 1 FROM public."EngageAccessGrant" g
   WHERE (g."userId" = u.id OR (g."userId" IS NULL AND g.email = lower(u.email)))
   AND g."revokedAt" IS NULL AND g."startsAt" <= ${now} AND (g."endsAt" IS NULL OR g."endsAt" > ${now})
   ${scope === "any" ? Prisma.empty : Prisma.sql`AND g.platform IN (${Prisma.join(grantPlatformsFor(scope))})`}
 )`
 
 const SUSPENDED = Prisma.sql`(u."suspendedAt" IS NOT NULL OR EXISTS (
-  SELECT 1 FROM "EngageUserControl" c WHERE c."userId" = u.id AND c."suspendedAt" IS NOT NULL
+  SELECT 1 FROM public."EngageUserControl" c WHERE c."userId" = u.id AND c."suspendedAt" IS NOT NULL
 ))`
 
 const HAS_OVERRIDES = Prisma.sql`EXISTS (
-  SELECT 1 FROM "EngageUserControl" c WHERE c."userId" = u.id
+  SELECT 1 FROM public."EngageUserControl" c WHERE c."userId" = u.id
   AND (c.features <> '{}'::jsonb OR c.limits <> '{}'::jsonb OR c."freeGenerations" IS NOT NULL)
 )`
 
-const LAST_ACTIVE = Prisma.sql`(SELECT max(t."lastUsedAt") FROM "ExtensionToken" t WHERE t."userId" = u.id)`
+const LAST_ACTIVE = Prisma.sql`(SELECT max(t."lastUsedAt") FROM public."ExtensionToken" t WHERE t."userId" = u.id)`
 
 // Someone who uses that extension: signed in to it, or generated with it.
 const USES = (platform: EngagePlatform) => Prisma.sql`(
-  EXISTS (SELECT 1 FROM "ExtensionToken" t WHERE t."userId" = u.id AND ${tokenSql(platform)})
-  OR EXISTS (SELECT 1 FROM "CommentHistory" h WHERE h."userId" = u.id AND h.kind IN (${Prisma.join([...kindsFor(platform)])}))
+  EXISTS (SELECT 1 FROM public."ExtensionToken" t WHERE t."userId" = u.id AND ${tokenSql(platform)})
+  OR EXISTS (SELECT 1 FROM public."CommentHistory" h WHERE h."userId" = u.id AND h.kind IN (${Prisma.join([...kindsFor(platform)])}))
 )`
 
 const monthStartUtc = (now: Date) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
@@ -130,7 +135,7 @@ export async function listEngageUsers(params: UserListParams, now: Date = new Da
   if (q) {
     const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
     where.push(Prisma.sql`(u.email ILIKE ${like} OR u.id = ${q}
-      OR EXISTS (SELECT 1 FROM "Profile" p WHERE p."userId" = u.id AND p.name ILIKE ${like}))`)
+      OR EXISTS (SELECT 1 FROM public."Profile" p WHERE p."userId" = u.id AND p.name ILIKE ${like}))`)
   }
   // With an extension picked, the plan filters are about that extension.
   const scope: PlanScope = isEngagePlatform(params.platform) ? params.platform : "any"
@@ -154,11 +159,11 @@ export async function listEngageUsers(params: UserListParams, now: Date = new Da
   if (params.activity === "never") where.push(Prisma.sql`${LAST_ACTIVE} IS NULL`)
 
   if (params.tag) {
-    where.push(Prisma.sql`EXISTS (SELECT 1 FROM "AdminUserTag" at WHERE at."userId" = u.id AND at.tag = ${params.tag})`)
+    where.push(Prisma.sql`EXISTS (SELECT 1 FROM public."AdminUserTag" at WHERE at."userId" = u.id AND at.tag = ${params.tag})`)
   }
 
   const monthStart = monthStartUtc(now)
-  const usageMonth = Prisma.sql`(SELECT count(*) FROM "CommentHistory" h WHERE h."userId" = u.id AND h."createdAt" >= ${monthStart})`
+  const usageMonth = Prisma.sql`(SELECT count(*) FROM public."CommentHistory" h WHERE h."userId" = u.id AND h."createdAt" >= ${monthStart})`
   const orderBy = {
     last_active: Prisma.sql`${LAST_ACTIVE} DESC NULLS LAST, u."createdAt" DESC`,
     newest: Prisma.sql`u."createdAt" DESC`,
@@ -173,7 +178,7 @@ export async function listEngageUsers(params: UserListParams, now: Date = new Da
 
   const rows = await db.$queryRaw<{ id: string; total: bigint }[]>(Prisma.sql`
     SELECT u.id, count(*) OVER () AS total
-    FROM "User" u
+    FROM public."User" u
     WHERE ${Prisma.join(where, " AND ")}
     ORDER BY ${orderBy}
     LIMIT ${pageSize} OFFSET ${offset}
@@ -185,7 +190,7 @@ export async function listEngageUsers(params: UserListParams, now: Date = new Da
 
 async function countWhere(where: Prisma.Sql[]): Promise<number> {
   const [{ count }] = await db.$queryRaw<{ count: bigint }[]>(Prisma.sql`
-    SELECT count(*) AS count FROM "User" u WHERE ${Prisma.join(where, " AND ")}
+    SELECT count(*) AS count FROM public."User" u WHERE ${Prisma.join(where, " AND ")}
   `)
   return Number(count)
 }
@@ -373,7 +378,7 @@ export async function engageOverview(
       count(*) FILTER (WHERE ${paidAt(now, platform === "all" ? "any" : platform)}) AS paid,
       count(*) FILTER (WHERE ${grantedAt(now, platform === "all" ? "any" : platform)} AND NOT ${paidAt(now, platform === "all" ? "any" : platform)}) AS granted,
       count(*) FILTER (WHERE ${SUSPENDED}) AS suspended
-    FROM "User" u
+    FROM public."User" u
     WHERE ${ENGAGE_USER} AND u."deletedAt" IS NULL
   `)
 
@@ -384,12 +389,12 @@ export async function engageOverview(
     db.commentHistory.groupBy({ by: ["kind"], where: { createdAt: { gte: from, lt: to }, ...historyKinds }, _count: { _all: true } }),
     db.commentHistory.groupBy({ by: ["action"], where: { createdAt: { gte: from, lt: to }, ...historyKinds }, _count: { _all: true } }),
     db.$queryRaw<{ count: bigint }[]>(Prisma.sql`
-      SELECT count(DISTINCT "userId") AS count FROM "CommentHistory"
+      SELECT count(DISTINCT "userId") AS count FROM public."CommentHistory"
       WHERE "createdAt" >= ${from} AND "createdAt" < ${to} ${kindSql}
     `),
     db.$queryRaw<{ count: bigint }[]>(Prisma.sql`
       SELECT count(*) AS count FROM (
-        SELECT "userId", min("createdAt") AS first FROM "ExtensionToken" t ${tokenFilter} GROUP BY "userId"
+        SELECT "userId", min("createdAt") AS first FROM public."ExtensionToken" t ${tokenFilter} GROUP BY "userId"
       ) f WHERE f.first >= ${from} AND f.first < ${to}
     `),
     db.engageClientError.count({ where: { createdAt: { gte: from, lt: to }, ...errorFeatures } }).catch(() => null),
@@ -398,7 +403,7 @@ export async function engageOverview(
     >(Prisma.sql`
       SELECT to_char(date_trunc('day', "createdAt"), 'YYYY-MM-DD') AS day, kind,
              count(*) AS generations, count(DISTINCT "userId") AS users
-      FROM "CommentHistory"
+      FROM public."CommentHistory"
       WHERE "createdAt" >= ${from} AND "createdAt" < ${to} ${kindSql}
       GROUP BY 1, 2
     `),
@@ -406,12 +411,12 @@ export async function engageOverview(
 
   const newPerDay = await db.$queryRaw<{ day: string; count: bigint }[]>(Prisma.sql`
     SELECT to_char(date_trunc('day', f.first), 'YYYY-MM-DD') AS day, count(*) AS count FROM (
-      SELECT "userId", min("createdAt") AS first FROM "ExtensionToken" t ${tokenFilter} GROUP BY "userId"
+      SELECT "userId", min("createdAt") AS first FROM public."ExtensionToken" t ${tokenFilter} GROUP BY "userId"
     ) f WHERE f.first >= ${from} AND f.first < ${to} GROUP BY 1
   `)
   const activePerDay = await db.$queryRaw<{ day: string; count: bigint }[]>(Prisma.sql`
     SELECT to_char(date_trunc('day', "createdAt"), 'YYYY-MM-DD') AS day, count(DISTINCT "userId") AS count
-    FROM "CommentHistory" WHERE "createdAt" >= ${from} AND "createdAt" < ${to} ${kindSql} GROUP BY 1
+    FROM public."CommentHistory" WHERE "createdAt" >= ${from} AND "createdAt" < ${to} ${kindSql} GROUP BY 1
   `)
 
   // One point per UTC day in the range, zeros included, so charts never skip

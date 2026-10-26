@@ -28,16 +28,16 @@ export async function extensionVersions(now: Date = new Date()): Promise<Version
     db.$queryRaw<{ platform: EngagePlatform; version: string; browsers: bigint; people: bigint; lastSeenAt: Date }[]>(Prisma.sql`
       SELECT ${PLATFORM_OF_TOKEN} AS platform, c."extensionVersion" AS version,
              count(*) AS browsers, count(DISTINCT c."userId") AS people, max(c."lastSeenAt") AS "lastSeenAt"
-      FROM "EngageClientInfo" c
-      JOIN "ExtensionToken" t ON t.id = c."tokenId"
+      FROM public."EngageClientInfo" c
+      JOIN public."ExtensionToken" t ON t.id = c."tokenId"
       WHERE c."lastSeenAt" >= ${since} AND t."revokedAt" IS NULL
       GROUP BY 1, 2
     `),
     db.$queryRaw<{ platform: EngagePlatform; browsers: bigint; people: bigint; lastSeenAt: Date | null }[]>(Prisma.sql`
       SELECT ${PLATFORM_OF_TOKEN} AS platform,
              count(*) AS browsers, count(DISTINCT t."userId") AS people, max(t."lastUsedAt") AS "lastSeenAt"
-      FROM "ExtensionToken" t
-      LEFT JOIN "EngageClientInfo" c ON c."tokenId" = t.id
+      FROM public."ExtensionToken" t
+      LEFT JOIN public."EngageClientInfo" c ON c."tokenId" = t.id
       WHERE c."tokenId" IS NULL AND t."lastUsedAt" >= ${since} AND t."revokedAt" IS NULL
       GROUP BY 1
     `),

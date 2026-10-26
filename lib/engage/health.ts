@@ -82,7 +82,7 @@ export async function engageHealth(now: Date = new Date()): Promise<EngageHealth
 
   // Setup SQL.
   const tables = await db.$queryRaw<{ name: string; present: boolean }[]>(Prisma.sql`
-    SELECT t.name, to_regclass('"' || t.name || '"') IS NOT NULL AS present
+    SELECT t.name, to_regclass('public."' || t.name || '"') IS NOT NULL AS present
     FROM unnest(${SETUP.map((s) => s.table)}::text[]) AS t(name)
   `)
   const present = new Set(tables.filter((t) => t.present).map((t) => t.name))
@@ -107,7 +107,7 @@ export async function engageHealth(now: Date = new Date()): Promise<EngageHealth
   if (present.has("EngageAiCall")) {
     const rows = await db.$queryRaw<{ model: string; calls: bigint; failed: bigint; avgMs: number | null }[]>(Prisma.sql`
       SELECT model, count(*) AS calls, count(*) FILTER (WHERE outcome IN ('error', 'timeout')) AS failed, avg(ms) AS "avgMs"
-      FROM "EngageAiCall" WHERE "createdAt" >= ${since} GROUP BY model
+      FROM public."EngageAiCall" WHERE "createdAt" >= ${since} GROUP BY model
     `)
     const byModel = new Map(rows.map((r) => [r.model, r]))
     for (const key of AI_MODEL_KEYS) {
@@ -128,9 +128,9 @@ export async function engageHealth(now: Date = new Date()): Promise<EngageHealth
 
   // The last hour's activity.
   const [generations, extErrors] = await Promise.all([
-    count(Prisma.sql`SELECT count(*) AS count FROM "CommentHistory" WHERE "createdAt" >= ${since}`),
+    count(Prisma.sql`SELECT count(*) AS count FROM public."CommentHistory" WHERE "createdAt" >= ${since}`),
     present.has("EngageUserControl")
-      ? count(Prisma.sql`SELECT count(*) AS count FROM "EngageClientError" WHERE "createdAt" >= ${since}`)
+      ? count(Prisma.sql`SELECT count(*) AS count FROM public."EngageClientError" WHERE "createdAt" >= ${since}`)
       : Promise.resolve(null),
   ])
   checks.push({

@@ -30,16 +30,19 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser()
   if (!user) redirect("/sign-in")
 
-  // Step 3: send new users through onboarding
-  if (!user.profile?.onboardingDone) {
-    redirect("/onboarding")
-  }
-
   // employee.carouselabs.com is the intern-only subdomain (see proxy.ts) —
   // computed server-side so the app frame renders the restricted nav on
   // first paint, with no client-side flash of the full app nav.
   const hostname = (await headers()).get("host") || ""
   const isEmployeeSubdomain = hostname.startsWith("employee.")
+
+  // Step 3: send new users through onboarding. Not on the intern-only
+  // subdomain: only the portal is reachable there and it doesn't use the
+  // customer profile, and proxy.ts bounces /onboarding back to "/" on that
+  // host, so redirecting a new intern would loop forever.
+  if (!user.profile?.onboardingDone && !isEmployeeSubdomain) {
+    redirect("/onboarding")
+  }
 
   // Same fields lib/credits.ts's availableCredits() checks to gate
   // generation itself — this banner is purely the visibility layer on top,

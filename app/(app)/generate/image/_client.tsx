@@ -30,6 +30,9 @@ import {
 } from "@/components/create/CreateKit"
 import { CaptionSetup } from "@/components/create/CaptionSetup"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
+import { StyleChooser } from "@/components/generate/StyleChooser"
+import { loadLookReference } from "@/lib/lookReference"
+import { parseStyleChoice, styleChoiceLabel, styleDescriptionOf, type StyleChoice } from "@/lib/styleChoice"
 import { InstructionBox } from "@/components/generate/InstructionBox"
 import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { ImagePreview } from "@/components/generate/ImagePreview"
@@ -119,6 +122,10 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
   // Step 3
   const [referenceImage, setReferenceImage] = useState<string | null>(null)
   const [referenceMediaType, setReferenceMediaType] = useState("image/jpeg")
+  // Picked after "Skip, generate without reference" (StyleChooser): a look,
+  // AI decides, or a described style. Kept per idea, so a reload keeps it.
+  const [styleChoice, setStyleChoice] = useState<StyleChoice | null>(null)
+  const [choosingStyle, setChoosingStyle] = useState(false)
 
   // Step 4 — image prompt is generated silently (not shown); only the final
   // image is rendered.
@@ -188,6 +195,13 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     let savedPrompt: string | null = null
     let savedImageUrl: string | null = null
     let savedSize: ImageSize | null = null
+
+    try {
+      const style = localStorage.getItem(`imageStyle_${ideaId}`)
+      if (style) setStyleChoice(parseStyleChoice(JSON.parse(style)))
+    } catch {
+      // unreadable — no style choice
+    }
 
     try {
       savedCaption = localStorage.getItem(`imageCaption_${ideaId}`)
@@ -388,7 +402,9 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
   // changing/removing it makes any already-generated image stale. Clear the
   // saved prompt + image and bounce the user out of step 4 so they regenerate
   // with the new style. No-op for an image that hasn't been generated yet.
-  function invalidateGeneratedImage() {
+  function invalidateGeneratedImage(
+    notice: string | null = "Reference image changed — please regenerate your image to apply the new style.",
+  ) {
     if (!imagePrompt && !imageUrl) return
     setImagePrompt(null)
     setImageUrl(null)
@@ -401,15 +417,43 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     } catch {
       // best-effort
     }
-    setReferenceNotice(
-      "Reference image changed — please regenerate your image to apply the new style.",
-    )
+    if (notice) setReferenceNotice(notice)
     if (step === 4) setStep(3)
+  }
+
+  function saveStyleChoice(choice: StyleChoice | null) {
+    setStyleChoice(choice)
+    try {
+      if (choice) localStorage.setItem(`imageStyle_${ideaId}`, JSON.stringify(choice))
+      else localStorage.removeItem(`imageStyle_${ideaId}`)
+    } catch {
+      // best-effort
+    }
+  }
+
+  // A look, AI decides, or a described style was picked: on to step 4. A
+  // different style than the one an image was made with clears that image.
+  function handleStyleChoice(choice: StyleChoice) {
+    if (JSON.stringify(choice) !== JSON.stringify(styleChoice)) invalidateGeneratedImage(null)
+    saveStyleChoice(choice)
+    if (choice.kind === "look") void loadLookReference(choice.lookId).catch(() => {}) // fetched now, ready at Generate
+    setChoosingStyle(false)
+    setStep(4)
+  }
+
+  // The style reference to send: the user's own upload, or the chosen look's
+  // sample picture. Only the upload goes to the structure step: a look sets
+  // the style, never the layout.
+  async function styleReference(): Promise<{ data: string; mediaType: string } | null> {
+    if (referenceImage) return { data: referenceImage, mediaType: referenceMediaType }
+    if (styleChoice?.kind === "look") return loadLookReference(styleChoice.lookId)
+    return null
   }
 
   function handleReferenceChange(b64: string, mediaType: string) {
     setReferenceImage(b64)
     setReferenceMediaType(mediaType)
+    saveStyleChoice(null) // their own reference replaces a look or a described style
     invalidateGeneratedImage()
   }
 
@@ -519,6 +563,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     setPostId(null)
 
     try {
+      const styleRef = await styleReference()
       // 1) Presentation structure decision.
       setImageGenStage("structure")
       const structureRes = await fetch("/api/own-idea/presentation-structure", {
@@ -552,8 +597,9 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
           ideaId,
           caption,
           size,
-          referenceImage: referenceImage ?? undefined,
-          referenceMediaType: referenceImage ? referenceMediaType : undefined,
+          referenceImage: styleRef?.data,
+          referenceMediaType: styleRef?.mediaType,
+          styleDescription: styleRef ? undefined : styleDescriptionOf(styleChoice),
           userInstruction,
           isOwnIdea: true,
           presentationStructure,
@@ -582,8 +628,8 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
           imagePrompt: newPrompt,
           caption,
           size,
-          referenceImage: referenceImage ?? undefined,
-          referenceMediaType: referenceImage ? referenceMediaType : undefined,
+          referenceImage: styleRef?.data,
+          referenceMediaType: styleRef?.mediaType,
           isRegen, // server charges image_regen (8) for regenerations
         }),
       })
@@ -1062,8 +1108,13 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
           </StepColumn>
         )}
 
-        {/* ── STEP 3: Reference Image ── */}
-        {step === 3 && (
+        {/* ── STEP 3: Reference Image, or how it should look without one ── */}
+        {step === 3 && choosingStyle && (
+          <StepColumn wide>
+            <StyleChooser choice={styleChoice} onChoose={handleStyleChoice} onBack={() => setChoosingStyle(false)} />
+          </StepColumn>
+        )}
+        {step === 3 && !choosingStyle && (
           <StepColumn>
             <ChoiceHeader
               title="Upload a style reference (optional)"
@@ -1080,6 +1131,15 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
               <p role="status" className="text-label text-warning">{referenceNotice}</p>
             )}
 
+            {!referenceImage && styleChoice && (
+              <p className="text-label text-muted-foreground">
+                {styleChoiceLabel(styleChoice)} ·{" "}
+                <button type="button" onClick={() => setChoosingStyle(true)} className="font-medium text-foreground underline underline-offset-2">
+                  Change
+                </button>
+              </p>
+            )}
+
             <StepActions>
               <Button variant="ghost" onClick={() => setStep(2)}>
                 ← Back
@@ -1088,14 +1148,17 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
                 <Button
                   variant="outline"
                   onClick={() => {
-                    handleReferenceClear()
-                    setStep(4)
+                    // Only an actual reference is cleared; skipping with none keeps the image.
+                    if (referenceImage) handleReferenceClear()
+                    setChoosingStyle(true)
                   }}
                 >
                   Skip, generate without reference
                 </Button>
-                {referenceImage && (
+                {referenceImage ? (
                   <Button onClick={() => setStep(4)}>Continue with reference →</Button>
+                ) : (
+                  styleChoice && <Button onClick={() => setStep(4)}>Continue with this style →</Button>
                 )}
               </div>
             </StepActions>
@@ -1106,7 +1169,14 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
         {step === 4 && imageStructureStep !== "ready" && (
           <StepColumn>
             {imageStructureStep === "select" ? (
-              <BackButton onClick={() => setStep(3)}>Back</BackButton>
+              <BackButton
+                onClick={() => {
+                  setStep(3)
+                  if (!referenceImage && styleChoice) setChoosingStyle(true)
+                }}
+              >
+                Back
+              </BackButton>
             ) : (
               <BackButton onClick={() => setImageStructureStep("select")}>Back to structure options</BackButton>
             )}
@@ -1118,6 +1188,9 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
                   title="How should this image be structured?"
                   description="Choose the best visual format for your content."
                 />
+                {!referenceImage && styleChoice && (
+                  <p className="-mt-4 text-label text-muted-foreground">{styleChoiceLabel(styleChoice)}</p>
+                )}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <ChoiceCard
                     art={<StructureArt kind="auto" />}

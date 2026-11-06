@@ -31,6 +31,9 @@ import {
 } from "@/components/create/CreateKit"
 import { CaptionSetup } from "@/components/create/CaptionSetup"
 import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
+import { StyleChooser } from "@/components/generate/StyleChooser"
+import { loadLookReference } from "@/lib/lookReference"
+import { parseStyleChoice, styleChoiceLabel, styleDescriptionOf, type StyleChoice } from "@/lib/styleChoice"
 import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { CarouselImageGrid, type SlideImage } from "@/components/generate/CarouselImageGrid"
 import { PostToLinkedInButton } from "@/components/generate/PostToLinkedInButton"
@@ -138,6 +141,10 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   // Step 3
   const [referenceImage, setReferenceImage] = useState<string | null>(null)
   const [referenceMediaType, setReferenceMediaType] = useState("image/jpeg")
+  // Picked after "Skip, generate without reference" (StyleChooser): a look,
+  // AI decides, or a described style. Kept per idea, so a reload keeps it.
+  const [styleChoice, setStyleChoice] = useState<StyleChoice | null>(null)
+  const [choosingStyle, setChoosingStyle] = useState(false)
 
   // Step 4
   const [slides, setSlides] = useState<Slide[] | null>(null)
@@ -234,6 +241,13 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     let savedSlides: Slide[] | null = null
     let savedImages: SlideImage[] | null = null
     let savedSize: ImageSize | null = null
+
+    try {
+      const style = localStorage.getItem(`carouselStyle_${ideaId}`)
+      if (style) setStyleChoice(parseStyleChoice(JSON.parse(style)))
+    } catch {
+      // unreadable — no style choice
+    }
 
     try {
       savedCaption = localStorage.getItem(`carouselCaption_${ideaId}`)
@@ -444,7 +458,9 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   // changing/removing it makes any already-generated carousel stale. Clear those
   // saved slides/images and bounce the user out of step 4 so they regenerate
   // with the new style. No-op for a carousel that hasn't been generated yet.
-  function invalidateGeneratedCarousel() {
+  function invalidateGeneratedCarousel(
+    notice: string | null = "Reference image changed — please regenerate your carousel to apply the new style.",
+  ) {
     if (!slides && slideImages.length === 0) return
     setSlides(null)
     setSlideImages([])
@@ -455,15 +471,43 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     } catch {
       // best-effort
     }
-    setReferenceNotice(
-      "Reference image changed — please regenerate your carousel to apply the new style.",
-    )
+    if (notice) setReferenceNotice(notice)
     if (step === 4) setStep(3)
+  }
+
+  function saveStyleChoice(choice: StyleChoice | null) {
+    setStyleChoice(choice)
+    try {
+      if (choice) localStorage.setItem(`carouselStyle_${ideaId}`, JSON.stringify(choice))
+      else localStorage.removeItem(`carouselStyle_${ideaId}`)
+    } catch {
+      // best-effort
+    }
+  }
+
+  // A look, AI decides, or a described style was picked: on to step 4. A
+  // different style than the one the slides were made with clears them.
+  function handleStyleChoice(choice: StyleChoice) {
+    if (JSON.stringify(choice) !== JSON.stringify(styleChoice)) invalidateGeneratedCarousel(null)
+    saveStyleChoice(choice)
+    if (choice.kind === "look") void loadLookReference(choice.lookId).catch(() => {}) // fetched now, ready at Generate
+    setChoosingStyle(false)
+    setStep(4)
+  }
+
+  // The style reference to send: the user's own upload, or the chosen look's
+  // sample picture. Only the upload goes to the structure step: a look sets
+  // the style, never the slide layout.
+  async function styleReference(): Promise<{ data: string; mediaType: string } | null> {
+    if (referenceImage) return { data: referenceImage, mediaType: referenceMediaType }
+    if (styleChoice?.kind === "look") return loadLookReference(styleChoice.lookId)
+    return null
   }
 
   function handleReferenceChange(b64: string, mediaType: string) {
     setReferenceImage(b64)
     setReferenceMediaType(mediaType)
+    saveStyleChoice(null) // their own reference replaces a look or a described style
     invalidateGeneratedCarousel()
   }
 
@@ -482,6 +526,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   // slide vanished with no log, no error, nothing.
   async function requestOneSlideImage(slide: Slide): Promise<SlideImage | null> {
     try {
+      const styleRef = await styleReference()
       const imgRes = await fetch("/api/generate/carousel-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -490,8 +535,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
           size: size ?? "4:5",
           ideaId,
           persist: false,
-          referenceImage: referenceImage ?? undefined,
-          referenceMediaType: referenceImage ? referenceMediaType : undefined,
+          referenceImage: styleRef?.data,
+          referenceMediaType: styleRef?.mediaType,
         }),
       })
       const imgData = await imgRes.json()
@@ -584,6 +629,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
 
     let generatedSlides: Slide[]
     try {
+      const styleRef = await styleReference()
       const promptRes = await fetch("/api/generate/carousel-prompt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -591,8 +637,9 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
           ideaId,
           caption,
           size,
-          referenceImage: referenceImage ?? undefined,
-          referenceMediaType: referenceImage ? referenceMediaType : undefined,
+          referenceImage: styleRef?.data,
+          referenceMediaType: styleRef?.mediaType,
+          styleDescription: styleRef ? undefined : styleDescriptionOf(styleChoice),
           ...(structureDecision ? { isOwnIdea: true, carouselStructureDecision: structureDecision } : {}),
           expectedSlideCount,
         }),
@@ -773,6 +820,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     setError(null)
     try {
       const userInstruction = slideInstructions[slideNumber]?.trim() || undefined
+      const styleRef = await styleReference()
       const res = await fetch("/api/generate/carousel-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -782,8 +830,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
           slides: [slide],
           persist: false,
           userInstruction,
-          referenceImage: referenceImage ?? undefined,
-          referenceMediaType: referenceImage ? referenceMediaType : undefined,
+          referenceImage: styleRef?.data,
+          referenceMediaType: styleRef?.mediaType,
           isRegen: true, // server charges slide_regen (8) per slide
         }),
       })
@@ -1171,8 +1219,13 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
           </StepColumn>
         )}
 
-        {/* ── STEP 3: Reference Image ── */}
-        {step === 3 && (
+        {/* ── STEP 3: Reference Image, or how it should look without one ── */}
+        {step === 3 && choosingStyle && (
+          <StepColumn wide>
+            <StyleChooser choice={styleChoice} onChoose={handleStyleChoice} onBack={() => setChoosingStyle(false)} />
+          </StepColumn>
+        )}
+        {step === 3 && !choosingStyle && (
           <StepColumn>
             <ChoiceHeader
               title="Upload a style reference (optional)"
@@ -1189,6 +1242,15 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
               <p role="status" className="text-label text-warning">{referenceNotice}</p>
             )}
 
+            {!referenceImage && styleChoice && (
+              <p className="text-label text-muted-foreground">
+                {styleChoiceLabel(styleChoice)} ·{" "}
+                <button type="button" onClick={() => setChoosingStyle(true)} className="font-medium text-foreground underline underline-offset-2">
+                  Change
+                </button>
+              </p>
+            )}
+
             <StepActions>
               <Button variant="ghost" onClick={() => setStep(2)}>
                 ← Back
@@ -1197,14 +1259,17 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
                 <Button
                   variant="outline"
                   onClick={() => {
-                    handleReferenceClear()
-                    setStep(4)
+                    // Only an actual reference is cleared; skipping with none keeps the slides.
+                    if (referenceImage) handleReferenceClear()
+                    setChoosingStyle(true)
                   }}
                 >
                   Skip, generate without reference
                 </Button>
-                {referenceImage && (
+                {referenceImage ? (
                   <Button onClick={() => setStep(4)}>Continue with reference →</Button>
+                ) : (
+                  styleChoice && <Button onClick={() => setStep(4)}>Continue with this style →</Button>
                 )}
               </div>
             </StepActions>
@@ -1215,7 +1280,14 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
         {step === 4 && carouselStructureStep !== "ready" && (
           <StepColumn>
             {carouselStructureStep === "select" ? (
-              <BackButton onClick={() => setStep(3)}>Back</BackButton>
+              <BackButton
+                onClick={() => {
+                  setStep(3)
+                  if (!referenceImage && styleChoice) setChoosingStyle(true)
+                }}
+              >
+                Back
+              </BackButton>
             ) : (
               <BackButton onClick={() => setCarouselStructureStep("select")}>Back to structure options</BackButton>
             )}
@@ -1227,6 +1299,9 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
                   title="How should this carousel be structured?"
                   description="Choose the best slide flow for your content."
                 />
+                {!referenceImage && styleChoice && (
+                  <p className="-mt-4 text-label text-muted-foreground">{styleChoiceLabel(styleChoice)}</p>
+                )}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <ChoiceCard
                     art={<StructureArt kind="auto" />}

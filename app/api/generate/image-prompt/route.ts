@@ -12,6 +12,7 @@ import {
 } from "@/lib/ai/prompts/ownIdeaImagePrompt"
 import { hasGenerationBalance } from "@/lib/credits"
 import { validateReferenceImage } from "@/lib/validateImage"
+import { checkStyleDescription, styleDescriptionBlock } from "@/lib/styleDescriptionCheck"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -262,6 +263,7 @@ export async function POST(req: Request) {
   let currentImagePrompt: string | undefined
   let isOwnIdea: boolean
   let presentationStructure: string | undefined
+  let rawStyleDescription: unknown
 
   try {
     const body = await req.json()
@@ -284,6 +286,8 @@ export async function POST(req: Request) {
       typeof body.presentationStructure === "string" && body.presentationStructure.trim()
         ? body.presentationStructure.trim()
         : undefined
+    // "Describe your style" after skipping a reference (lib/styleChoice.ts).
+    rawStyleDescription = body.styleDescription
     if (!ideaId) throw new Error("Missing ideaId")
     // TEMP diagnostic — confirm in Vercel logs exactly what the client sent.
     console.log("[ref-image] Reference image present:", !!referenceImage, "length:", referenceImage?.length ?? 0)
@@ -305,6 +309,15 @@ export async function POST(req: Request) {
     referenceImage = check.data
     referenceMediaType = check.mediaType
   }
+
+  // A described style is checked again here, including a content-safety check,
+  // before any model sees it; it then rides along as a fenced block that can
+  // only shape the look (lib/styleDescriptionCheck.ts).
+  const styleCheck = await checkStyleDescription(rawStyleDescription)
+  if (!styleCheck.ok) {
+    return NextResponse.json({ error: styleCheck.error, code: "style_description" }, { status: 400 })
+  }
+  const styleBlock = styleCheck.text ? styleDescriptionBlock(styleCheck.text) : ""
 
   const idea = await db.idea.findUnique({
     where: { id: ideaId },
@@ -333,7 +346,7 @@ export async function POST(req: Request) {
   if (presentationStructure) {
     try {
       const sizeBlock = size === "1:1" ? "Square 1080x1080px" : "Portrait 1080x1350px"
-      const userInstructionBlock = userInstruction ? `Special Instruction: ${userInstruction}` : ""
+      const userInstructionBlock = [userInstruction ? `Special Instruction: ${userInstruction}` : "", styleBlock].filter(Boolean).join("\n\n")
       const nicheBlock = niche ? `Niche: ${niche}` : ""
 
       const userMessage = buildOwnIdeaImagePromptUserMessage(
@@ -472,7 +485,7 @@ export async function POST(req: Request) {
       ? buildImageEditPrompt(currentImagePrompt, userInstruction)
       : `${CAPTION_GHOSTWRITER_INSTRUCTION}
 
-${buildImagePrompt(breakdown.refinedHook, breakdown.deepDive, caption, size, userInstruction, niche)}`
+${buildImagePrompt(breakdown.refinedHook, breakdown.deepDive, caption, size, userInstruction, niche)}${styleBlock ? `\n\n${styleBlock}` : ""}`
 
   console.log("[image-prompt] Full prompt sent to model:\n", prompt)
 

@@ -224,6 +224,8 @@ export function buildOwnIdeaCarouselUserMessage(
   carouselStructureDecision: string,
   sizeBlock: string,
   totalSlideCount: number,
+  // The user's own described style (lib/styleDescriptionCheck.ts), if any.
+  styleBlock = "",
 ): string {
   return `Topic:
 ${topic}
@@ -243,6 +245,6 @@ This carousel has EXACTLY ${totalSlideCount} slides — no more, no fewer. Every
 CRITICAL SIZE REQUIREMENT:
 ${sizeBlock}
 STRICTLY follow this ratio for every single slide. Non-negotiable.
-
+${styleBlock ? `\n${styleBlock}\nApply this style identically to every slide.\n` : ""}
 Generate the complete carousel now following all instructions. Return ONLY the JSON object.`
 }

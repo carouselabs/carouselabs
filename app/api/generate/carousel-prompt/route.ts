@@ -16,6 +16,7 @@ import {
 } from "@/lib/ai/prompts/ownIdeaCarouselPrompt"
 import { countPlannedSlides } from "@/lib/carouselStructureTemplates"
 import { validateReferenceImage } from "@/lib/validateImage"
+import { checkStyleDescription, styleDescriptionBlock } from "@/lib/styleDescriptionCheck"
 import { hasGenerationBalance } from "@/lib/credits"
 import { chargeCreditsForAction } from "@/lib/chargeCredits"
 import { refundCreditsForAction } from "@/lib/refundCredits"
@@ -403,6 +404,7 @@ export async function POST(req: Request) {
   let isOwnIdea: boolean
   let carouselStructureDecision: string | undefined
   let expectedSlideCount: number | undefined
+  let rawStyleDescription: unknown
 
   try {
     const body = await req.json()
@@ -434,6 +436,8 @@ export async function POST(req: Request) {
       typeof body.expectedSlideCount === "number" && body.expectedSlideCount > 0
         ? body.expectedSlideCount
         : undefined
+    // "Describe your style" after skipping a reference (lib/styleChoice.ts).
+    rawStyleDescription = body.styleDescription
     if (!ideaId) throw new Error("Missing ideaId")
     // TEMP diagnostic — confirm in Vercel logs exactly what the client sent.
     console.log("[ref-image] Reference image present:", !!referenceImageBase64, "length:", referenceImageBase64?.length ?? 0)
@@ -455,6 +459,15 @@ export async function POST(req: Request) {
     referenceImageBase64 = check.data
     referenceMediaType = check.mediaType
   }
+
+  // A described style is checked again here, including a content-safety check,
+  // before the credit charge below; it then rides along as a fenced block that
+  // can only shape the look (lib/styleDescriptionCheck.ts).
+  const styleCheck = await checkStyleDescription(rawStyleDescription)
+  if (!styleCheck.ok) {
+    return NextResponse.json({ error: styleCheck.error, code: "style_description" }, { status: 400 })
+  }
+  const styleBlock = styleCheck.text ? styleDescriptionBlock(styleCheck.text) : ""
 
   const idea = await db.idea.findUnique({
     where: { id: ideaId },
@@ -539,6 +552,7 @@ export async function POST(req: Request) {
           carouselStructureDecision!,
           size === "1:1" ? "Square 1080x1080px" : "Portrait 1080x1350px",
           expectedSlideCount!,
+          styleBlock,
         )
       : buildCarouselUserMessage(
           breakdown.refinedHook,
@@ -548,7 +562,7 @@ export async function POST(req: Request) {
           hasReference,
           niche,
           userInstruction,
-        )
+        ) + (styleBlock ? `\n\n${styleBlock}` : "")
 
   // Full generations use one of two system prompts depending on flow; edit
   // mode's prompt is self-contained and never attaches a system prompt (see

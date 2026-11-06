@@ -23,6 +23,7 @@ import { PHASE_5B_PAGES } from "./phase5b"
 import { CampaignsList } from "@/components/admin/CampaignsList"
 import { CampaignView } from "@/components/admin/CampaignView"
 import { EmailWriter } from "@/components/admin/EmailWriter"
+import { PostEmailEditor } from "@/components/admin/postEmail/PostEmailEditor"
 
 // Development-only: the admin pages in the real admin frame (dark theme,
 // sidebar), with example data, without signing in. Pages that load their own
@@ -35,7 +36,7 @@ import { EmailWriter } from "@/components/admin/EmailWriter"
 //   /design-preview/admin/[subscriptions|posts|credits|referrals|tasks|analytics|audit-logs|settings|prefill-user]
 //   Phase 5b: engage[/users[/eu1]|access|controls|ai|errors|health|sessions|audit], interns[/i1[/checklist]|broadcast],
 //   broadcasts, sequences[/new|/q1], scheduled-emails
-//   Campaigns: broadcasts/campaigns[/c1], broadcasts/writer, users/u1/email (personal email)
+//   Campaigns: broadcasts/campaigns[/c1], broadcasts/writer, broadcasts/post (share a post), users/u1/email (personal email)
 
 // Example "now", read once when the module loads.
 const NOW = new Date()
@@ -155,6 +156,7 @@ const PAGES: Record<string, () => ReactNode> = {
   "broadcasts/campaigns": () => <CampaignsList />,
   "broadcasts/campaigns/c1": () => <CampaignView id="c1" />,
   "broadcasts/writer": () => <EmailWriter />,
+  "broadcasts/post": () => <PostEmailEditor />,
   "users/u1/email": () => (
     <EmailWriter recipient={{ id: "u1", email: "priya@example.com", name: "Priya Sharma", firstName: "Priya" }} />
   ),

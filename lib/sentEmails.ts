@@ -4,7 +4,9 @@
 // (the existing EmailTemplate, which a sent email can be starred into).
 // "Use again" loads one (emailContent) into a new campaign, the AI writer,
 // or a personal email to someone else. A ready-made email (lib/readyEmails.ts),
-// or a campaign or template made from one, can only go out as a campaign.
+// or a campaign or template made from one, can only go out as a campaign; so
+// can a shared LinkedIn post (lib/postEmail.ts), which can also be edited on
+// its own page first.
 import { Prisma } from "@prisma/client"
 import { db } from "@/lib/db"
 import { logAdminAction } from "@/lib/auditLog"
@@ -12,6 +14,7 @@ import { designPlainText, emailDesignSchema, type EmailDesign } from "@/lib/emai
 import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
 import { findPersonalTracks } from "@/lib/emailTracking"
 import { readyDesignOf, readyEmailById, readyEmailText, readySnapshot } from "@/lib/readyEmails"
+import { postDesignOf, postSnapshot, type PostEmail } from "@/lib/postEmail"
 
 export type EmailSource = { kind: "campaign" | "personal" | "template" | "ready"; id: string }
 
@@ -51,6 +54,8 @@ export interface EmailContent {
   design: EmailDesign | null
   // A ready-made email's id (lib/readyEmails.ts): it's sent as it is.
   readyEmail?: string | null
+  // A shared LinkedIn post (lib/postEmail.ts), as data: sent as it is, or edited first.
+  post?: PostEmail | null
   mentionsName: string | null
 }
 
@@ -59,6 +64,25 @@ function readyContent(stored: unknown, fallback: { subject: string; body: string
   const ready = readyDesignOf(stored)
   if (!ready) return null
   return { subject: ready.subject, body: fallback.body, design: null, readyEmail: ready.id, mentionsName: null }
+}
+
+// A shared post as it's used again: the email as data, pictures and all.
+function postContent(stored: unknown, fallback: { body: string }): EmailContent | null {
+  const post = postDesignOf(stored)
+  if (!post) return null
+  return { subject: post.subject, body: fallback.body, design: null, post: post.email, mentionsName: null }
+}
+
+// What kind of email it is, for the library's lists.
+function kindOf(stored: unknown): string {
+  if (readyDesignOf(stored)) return "ready-made"
+  if (postDesignOf(stored)) return "shared post"
+  return asDesign(stored) ? "AI-written" : "plain text"
+}
+
+// The picture beside it in the library: the AI-written email's, or the shared post author's photo.
+function pictureOf(stored: unknown): string | null {
+  return asDesign(stored)?.hero.imageUrl ?? postDesignOf(stored)?.email.post.author.photo?.url ?? null
 }
 
 async function personalRecipientName(emailId: string): Promise<string | null> {
@@ -77,7 +101,7 @@ export async function emailContent(source: EmailSource): Promise<EmailContent | 
   if (source.kind === "campaign") {
     const campaign = await db.emailCampaign.findUnique({ where: { id: source.id }, select: { subject: true, body: true, design: true } })
     if (!campaign) return null
-    const ready = readyContent(campaign.design, campaign)
+    const ready = readyContent(campaign.design, campaign) ?? postContent(campaign.design, campaign)
     if (ready) return ready
     const design = asDesign(campaign.design)
     return { subject: design?.subject ?? campaign.subject, body: campaign.body, design, mentionsName: null }
@@ -91,7 +115,7 @@ export async function emailContent(source: EmailSource): Promise<EmailContent | 
   }
   const template = await db.emailTemplate.findUnique({ where: { id: source.id } })
   if (!template) return null
-  const ready = readyContent(template.design, template)
+  const ready = readyContent(template.design, template) ?? postContent(template.design, template)
   if (ready) return ready
   const design = asDesign(template.design)
   const content = { subject: design?.subject ?? template.subject, body: template.body, design }
@@ -155,8 +179,9 @@ export async function listSentEmails() {
         id: t.id,
         name: t.name,
         subject: design?.subject ?? t.subject,
-        picture: design?.hero.imageUrl ?? null,
+        picture: pictureOf(t.design),
         designed: !!design,
+        kind: kindOf(t.design),
         from: t.sourceKind && t.sourceId ? `${t.sourceKind}:${t.sourceId}` : null,
         createdAt: t.createdAt,
         createdBy: t.createdBy,
@@ -170,7 +195,7 @@ export async function listSentEmails() {
         audience: c.audience,
         audienceValue: c.audienceValue,
         archived: c.status === "archived",
-        picture: design?.hero.imageUrl ?? null,
+        picture: pictureOf(c.design),
         designed: !!design,
         createdAt: c.createdAt,
         createdBy: c.createdBy,
@@ -224,7 +249,7 @@ export async function saveTemplate(input: { source: EmailSource; name: string; a
       name: input.name,
       subject: content.subject,
       body: content.body,
-      design: ready ? readySnapshot(ready) : (content.design ?? Prisma.DbNull),
+      design: ready ? readySnapshot(ready) : content.post ? postSnapshot(content.post) : (content.design ?? Prisma.DbNull),
       sourceKind: input.source.kind,
       sourceId: input.source.id,
       createdBy: input.adminEmail,

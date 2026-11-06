@@ -1,6 +1,6 @@
 // GET /api/admin/campaigns/[id]/preview → { html } — the campaign's email as
-// people get it (an AI-written design, a ready-made email, or a hand-written
-// one in the broadcast layout), with {{variables}} still in it.
+// people get it (an AI-written design, a ready-made email or shared post, or
+// a hand-written one in the broadcast layout), with {{variables}} still in it.
 import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { db } from "@/lib/db"
@@ -8,7 +8,7 @@ import { emailDesignSchema } from "@/lib/emailDesign"
 import { renderDesignedEmail } from "@/lib/emailDesignRender"
 import { renderBroadcastEmailHtml } from "@/lib/broadcastRender"
 import { campaignSending } from "@/lib/campaigns"
-import { readyDesignOf } from "@/lib/readyEmails"
+import { fixedHtmlOf } from "@/lib/postEmail"
 import { readyHtml } from "@/lib/readyEmailSend"
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -17,8 +17,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params
   const campaign = await db.emailCampaign.findUnique({ where: { id }, select: { subject: true, body: true, design: true } })
   if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
-  // A ready-made email, its button replying to where this campaign's replies go.
-  const ready = readyDesignOf(campaign.design)
+  // A ready-made email (its button replying to where this campaign's replies
+  // go) or a shared post.
+  const ready = fixedHtmlOf(campaign.design)
   if (ready) {
     const sending = await campaignSending(id)
     return NextResponse.json({ html: readyHtml(ready, sending.from, sending.replyTo) })

@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Send, Eye, Mail, CalendarClock, Braces, UserSearch, ListChecks, Repeat, Sparkles, Contact, BarChart3, MailCheck } from "lucide-react"
+import { Send, Eye, Mail, CalendarClock, Braces, UserSearch, ListChecks, Repeat, Sparkles, Contact, BarChart3, MailCheck, Share2 } from "lucide-react"
 import {
   AdminButton,
   AdminCard,
@@ -302,6 +302,13 @@ export function BroadcastComposer() {
         >
           <Sparkles className="h-3.5 w-3.5 text-brand" />
           Write with AI
+        </Link>
+        <Link
+          href="/admin/broadcasts/post"
+          className="inline-flex items-center gap-1.5 text-caption font-medium text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Share2 className="h-3.5 w-3.5" />
+          Share a post
         </Link>
         <Link
           href="/admin/broadcasts/ready"

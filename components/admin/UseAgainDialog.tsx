@@ -6,7 +6,9 @@
 // picture and stickers, so nothing is painted again. When the email still
 // names the person it was written for ("Hi Priya"), it says so and asks to
 // edit it first, or to confirm. A ready-made email (lib/readyEmails.ts) is
-// sent as it is, as a campaign; its page opens this too, to send it.
+// sent as it is, as a campaign; its page opens this too, to send it. A
+// shared LinkedIn post (lib/postEmail.ts) goes out as a campaign or is edited
+// on its page; that page opens this with the email it's making (`content`).
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { PenLine, Send, Users } from "lucide-react"
@@ -17,7 +19,8 @@ import { SendingPicker } from "./SendingPicker"
 import { DEFAULT_SENDING_CHOICE, type SendingChoice } from "@/lib/sendingRules"
 import { isLeadAudience } from "@/lib/leadRules"
 
-type Content = { subject: string; body: string; design: unknown; readyEmail?: string | null; mentionsName: string | null }
+export type UseAgainContent = { subject: string; body: string; design: unknown; readyEmail?: string | null; post?: unknown; mentionsName: string | null }
+type Content = UseAgainContent
 type Person = { id: string; email: string; name: string | null }
 type Choice = "people" | "edit" | "person"
 
@@ -32,15 +35,19 @@ export function UseAgainDialog({
   subject,
   onClose,
   title = "Use this email again",
+  content: given,
 }: {
+  // "campaign:<id>" and so on (lib/sentEmails.ts); "" with `content`.
   source: string
   subject: string
   onClose: () => void
   title?: string
+  // The email itself, when it isn't a saved one: only "send to new people".
+  content?: Content
 }) {
   const router = useRouter()
   const { toast } = useToast()
-  const [content, setContent] = useState<Content | null>(null)
+  const [content, setContent] = useState<Content | null>(given ?? null)
   const [error, setError] = useState<string | null>(null)
   const [choice, setChoice] = useState<Choice>("people")
   const [audience, setAudience] = useState<Audience>(EMPTY_AUDIENCE)
@@ -52,6 +59,7 @@ export function UseAgainDialog({
   const [people, setPeople] = useState<Person[] | null>(null)
 
   useEffect(() => {
+    if (given) return
     let cancelled = false
     fetch(`/api/admin/sent-emails/content?source=${encodeURIComponent(source)}`)
       .then((res) => json<Content>(res))
@@ -60,7 +68,7 @@ export function UseAgainDialog({
     return () => {
       cancelled = true
     }
-  }, [source])
+  }, [source, given])
 
   // Search people as you type (at least two characters).
   useEffect(() => {
@@ -76,12 +84,15 @@ export function UseAgainDialog({
 
   const designed = !!content?.design
   const ready = content?.readyEmail ?? null
+  const post = content?.post ?? null
   const blockedByName = !!content?.mentionsName && !anyway
   const request = audienceRequest(audience)
   const emailFields = content
     ? ready
       ? { readyEmail: ready }
-      : designed
+      : post
+        ? { post }
+        : designed
         ? { design: content.design }
         : { subject: content.subject, body: content.body }
     : null
@@ -131,8 +142,8 @@ export function UseAgainDialog({
 
   const choices: { key: Choice; label: string; icon: typeof Send; disabled?: string }[] = [
     { key: "people", label: "Send to new people", icon: Users },
-    { key: "edit", label: "Edit first", icon: PenLine, disabled: ready ? "A ready-made email is sent as it is" : designed ? undefined : "Written without the AI writer" },
-    { key: "person", label: "Send to one person", icon: Send, disabled: ready ? "A ready-made email goes out as a campaign" : designed ? undefined : "Written without the AI writer" },
+    { key: "edit", label: "Edit first", icon: PenLine, disabled: ready ? "A ready-made email is sent as it is" : designed || post ? undefined : "Written without the AI writer" },
+    { key: "person", label: "Send to one person", icon: Send, disabled: ready ? "A ready-made email goes out as a campaign" : post ? "A shared post goes out as a campaign" : designed ? undefined : "Written without the AI writer" },
   ]
 
   return (
@@ -147,6 +158,7 @@ export function UseAgainDialog({
           <p className="text-caption text-muted-foreground">Loading…</p>
         ) : (
           <>
+            {!given && (
             <div role="radiogroup" aria-label="How to use it" className="grid gap-2 sm:grid-cols-3">
               {choices.map((c) => (
                 <button
@@ -164,6 +176,7 @@ export function UseAgainDialog({
                 </button>
               ))}
             </div>
+            )}
 
             {content.mentionsName && (
               <div role="alert" className="flex flex-col gap-2 rounded-control-sm border border-warning/40 bg-warning/10 px-3 py-2.5 text-caption text-foreground">
@@ -185,7 +198,7 @@ export function UseAgainDialog({
                 <AudiencePicker id="use-again-audience" value={audience} onChange={changeAudience} />
                 <SendingPicker idPrefix="use-again-sending" value={sendingChoice} onChange={setSendingChoice} forLeads={isLeadAudience(audience.audience)} />
                 <p className="text-caption text-muted-foreground">
-                  It becomes a new campaign with {ready ? "this email, exactly as it is" : designed ? "the same picture and stickers (nothing painted again)" : "the same words"}.
+                  It becomes a new campaign with {ready ? "this email, exactly as it is" : post ? "this shared post, its pictures included" : designed ? "the same picture and stickers (nothing painted again)" : "the same words"}.
                   Nothing is sent until you pick who gets it.
                 </p>
                 <div className="flex flex-wrap items-center justify-end gap-2">
@@ -207,7 +220,22 @@ export function UseAgainDialog({
               </div>
             )}
 
-            {choice === "edit" && (
+            {choice === "edit" && post && (
+              <div className="flex flex-col gap-3">
+                <p className="text-caption text-muted-foreground">
+                  Opens it in Share a post with everything filled in: the post, its pictures and your words. Change anything,
+                  then make a campaign.
+                </p>
+                <div className="flex justify-end">
+                  <AdminButton onClick={() => router.push(`/admin/broadcasts/post?reuse=${encodeURIComponent(source)}`)}>
+                    <PenLine aria-hidden />
+                    Open in Share a post
+                  </AdminButton>
+                </div>
+              </div>
+            )}
+
+            {choice === "edit" && !post && (
               <div className="flex flex-col gap-3">
                 <p className="text-caption text-muted-foreground">
                   Opens it in the AI writer, picture and stickers included. Change the words or ask the writer for changes,

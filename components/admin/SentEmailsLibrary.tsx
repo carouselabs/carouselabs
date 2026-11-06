@@ -15,7 +15,7 @@ import { audienceLabel } from "./campaignLabels"
 import { SeenStatus } from "./SeenStatus"
 import { UseAgainDialog } from "./UseAgainDialog"
 
-type Template = { id: string; name: string; subject: string; picture: string | null; designed: boolean; from: string | null; createdAt: string; createdBy: string }
+type Template = { id: string; name: string; subject: string; picture: string | null; designed: boolean; kind?: string; from: string | null; createdAt: string; createdBy: string }
 type Campaign = {
   id: string
   subject: string
@@ -193,7 +193,7 @@ export function SentEmailsLibrary() {
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-label font-semibold text-foreground">{t.name}</span>
                   <span className="truncate text-caption text-muted-foreground">
-                    {t.subject} · {t.designed ? "AI-written" : "plain text"} · saved {fmtDate(t.createdAt)}
+                    {t.subject} · {t.kind ?? (t.designed ? "AI-written" : "plain text")} · saved {fmtDate(t.createdAt)}
                   </span>
                 </span>
                 <span className="flex items-center gap-2">

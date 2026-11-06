@@ -99,6 +99,7 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith("/admin/engage/users/")) return "Engage user"
   if (pathname === "/admin/engage") return "Engage overview"
   if (pathname === "/admin/broadcasts/writer") return "Write with AI"
+  if (pathname === "/admin/broadcasts/post") return "Share a post"
   if (pathname === "/admin/broadcasts/campaigns") return "Campaigns"
   if (pathname === "/admin/broadcasts/sent") return "Sent emails"
   if (pathname === "/admin/broadcasts/leads") return "Leads"

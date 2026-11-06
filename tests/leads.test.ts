@@ -7,7 +7,8 @@
 // (lib/brevo.ts) with its own daily limit and webhook; and All leads: the
 // filters (lib/leadFilters.ts), lists made by hand and filled by ticking,
 // smart lists, many leads at once, one lead, and their routes; and
-// ready-made emails sent as campaigns (lib/readyEmails.ts). Against an
+// ready-made emails and shared LinkedIn posts sent as campaigns
+// (lib/readyEmails.ts, lib/postEmail.ts). Against an
 // in-memory database.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { Prisma } from "@prisma/client"
@@ -1812,5 +1813,109 @@ describe("ready-made emails", () => {
     expect(await emailContent({ kind: "ready", id: "dharma-2" })).toMatchObject({ readyEmail: "dharma-2", subject: "Quick question about your Entra tenant", design: null })
     expect(await emailContent({ kind: "ready", id: "nope" })).toBeNull()
     await expect(saveTemplate({ source: { kind: "ready", id: "dharma-1" }, name: "x", adminEmail: ADMIN })).rejects.toBeInstanceOf(TemplateError)
+  })
+})
+
+// Share a LinkedIn post (lib/postEmail.ts) sent as a campaign: checked before
+// it's counted, its pictures found (made earlier, so nothing is uploaded
+// here), kept as data and HTML, and sent like a ready-made email: tracked,
+// every LinkedIn link counted, a lead's copy with its Unsubscribe link.
+describe("shared LinkedIn posts", () => {
+  const R2 = "https://media.test"
+  const POST_URL = "https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000000/"
+  const before = process.env.CLOUDFLARE_R2_PUBLIC_URL
+  beforeEach(() => {
+    viaResend.length = 0
+    viaBrevo.length = 0
+    process.env.CLOUDFLARE_R2_PUBLIC_URL = R2
+    // The header picture was made before; anything else isn't there.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => (init?.method === "HEAD" && String(url).startsWith(`${R2}/email-post/built/`) ? new Response(null, { status: 200 }) : new Response("missing", { status: 404 }))),
+    )
+  })
+  afterEach(() => {
+    process.env.CLOUDFLARE_R2_PUBLIC_URL = before
+    vi.unstubAllGlobals()
+  })
+  const post = (body: unknown) =>
+    campaignsPost(new Request("https://carouselabs.test/api/admin/campaigns", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }))
+
+  async function shared() {
+    const { createHash } = await import("node:crypto")
+    const { newPostEmail, pictureKeys } = await import("@/lib/postEmail")
+    const e = newPostEmail("2026-11-06")
+    e.subject = "The 10-minute habit"
+    e.intro = "Maya's post on daily commenting is the clearest case I've seen."
+    e.post = {
+      ...e.post,
+      url: POST_URL,
+      caption: "I stopped posting for 30 days. I only commented.",
+      counts: { reactions: "2,318", comments: "412", reposts: "96" },
+      author: { ...e.post.author, name: "Maya Rao", bio: "Growth lead", followers: "18,402", time: "2d", photo: { url: `${R2}/email-post/up/maya.jpg`, width: 400, height: 400 } },
+    }
+    const key = pictureKeys(e).header!
+    const url = `${R2}/email-post/built/header-${createHash("sha256").update(key).digest("hex").slice(0, 32)}-1116x236.jpg`
+    e.built = { header: { url, width: 1116, height: 236, key } }
+    return e
+  }
+
+  it("is checked before it's counted: everything filled in and only our own pictures", async () => {
+    const { listId } = await importLeads({ adminEmail: ADMIN, listName: "Founders", columns: [], leads: [lead("asha@example.test", { firstName: "Asha" })] })
+    const e = await shared()
+    const counted = await post({ post: e, recipients: `leads:list:${listId}`, dryRun: true })
+    expect(await counted.json()).toMatchObject({ dryRun: true, count: 1 })
+
+    const noPhoto = await post({ post: { ...e, post: { ...e.post, author: { ...e.post.author, photo: null } } }, recipients: `leads:list:${listId}`, dryRun: true })
+    expect([noPhoto.status, (await noPhoto.json()).error]).toEqual([400, "Upload the author's photo"])
+    const elsewhere = await post({ post: { ...e, post: { ...e.post, author: { ...e.post.author, photo: { url: "https://evil.example/x.jpg", width: 1, height: 1 } } } }, recipients: `leads:list:${listId}` })
+    expect([elsewhere.status, (await elsewhere.json()).error]).toEqual([400, "This email points at a picture that isn't one of ours. Upload it again."])
+    const notLinkedIn = await post({ post: { ...e, post: { ...e.post, url: "https://example.com/p" } }, recipients: `leads:list:${listId}`, dryRun: true })
+    expect(notLinkedIn.status).toBe(400)
+    expect(await post({ post: e, readyEmail: "dharma-1", recipients: `leads:list:${listId}` }).then((r) => r.json())).toEqual({ error: "Pick one email" })
+    expect(store.campaigns).toHaveLength(0)
+  })
+
+  it("is kept as data and as its HTML, with its plain text; nothing is made again", async () => {
+    const { listId } = await importLeads({ adminEmail: ADMIN, listName: "Founders", columns: [], leads: [lead("asha@example.test", { firstName: "Asha" })] })
+    const e = await shared()
+    const made = await post({ post: e, recipients: `leads:list:${listId}` })
+    expect(made.status).toBe(201)
+    const campaign = store.campaigns[0]
+    const { postEmailHtml, postEmailText } = await import("@/lib/postEmail")
+    expect(campaign.subject).toBe("The 10-minute habit")
+    expect(campaign.body).toBe(postEmailText(e))
+    expect(campaign.design).toMatchObject({ kind: "post", subject: "The 10-minute habit", fromName: "CarouseLabs", html: postEmailHtml(e) })
+    expect((campaign.design as { html: string }).html).toContain(e.built.header!.url)
+    expect(store.audit.at(-1)?.details).toContain("· shared LinkedIn post")
+    expect(await emailContent({ kind: "campaign", id: campaign.id })).toMatchObject({ subject: "The 10-minute habit", design: null, post: { post: { url: POST_URL } } })
+  })
+
+  it("goes out to each lead by name, from its own name, every LinkedIn link counted, with an Unsubscribe link", async () => {
+    const { listId } = await importLeads({
+      adminEmail: ADMIN,
+      listName: "Founders",
+      columns: [],
+      leads: [lead("asha@example.test", { firstName: "Asha" }), lead("kiran@example.test")],
+    })
+    const e = await shared()
+    e.fromName = "Anant from CarouseLabs"
+    await post({ post: e, recipients: `leads:list:${listId}` })
+    const ids = store.recipients.map((r) => r.id)
+    const result = await sendCampaignBatch({ campaignId: store.campaigns[0].id, recipientIds: ids, adminEmail: ADMIN, resend, brevo, from: "CarouseLabs <support@carouselabs.com>" })
+
+    expect(result).toMatchObject({ sent: 2, failed: 0 })
+    const [asha, kiran] = viaBrevo.flat()
+    expect([asha.to, asha.from, asha.subject]).toEqual(["asha@example.test", "Anant from CarouseLabs <support@carouselabs.com>", "The 10-minute habit"])
+    expect(asha.html).toContain("Hi Asha,")
+    expect(kiran.html).toContain("Hi there,")
+    expect(asha.html).not.toContain("{{")
+    const post_ = encodeURIComponent(POST_URL)
+    const clicks = [...asha.html.matchAll(/href="([^"]*email-track\/click\/[^"]+)"/g)].map((m) => m[1])
+    expect(clicks.filter((h) => h.endsWith(`?to=${post_}`)).length).toBeGreaterThanOrEqual(5)
+    expect(asha.html).not.toContain(`href="${POST_URL}"`)
+    expect(readTrackingToken(/email-track\/open\/([^"]+)"/.exec(asha.html)![1])).toEqual({ kind: "campaign", id: ids[0] })
+    expect(asha.html).toContain(unsubscribeUrl(unsubscribeToken(leadByEmail("asha@example.test").id)!))
+    expect(store.recipients.map((r) => r.status)).toEqual(["sent", "sent"])
   })
 })

@@ -6,8 +6,8 @@
 // broadcast (leads through Brevo's, lib/brevo.ts, or whichever the campaign
 // was set to, from the sender it was set to: lib/sendingRules.ts), then marks
 // each person sent or failed with the reason it gave. The email is written
-// by hand, with the AI writer (lib/emailDesign.ts), or a ready-made one
-// (lib/readyEmails.ts).
+// by hand, with the AI writer (lib/emailDesign.ts), a ready-made one
+// (lib/readyEmails.ts), or a shared LinkedIn post (lib/postEmail.ts).
 // Pure rules (daily allowance, next 10, progress) live in lib/campaignRules.ts.
 import { randomUUID } from "node:crypto"
 import type { BatchMailer, BatchSendResult } from "@/lib/emailBatchSend"
@@ -20,6 +20,7 @@ import { emailDesignSchema, type EmailDesign } from "@/lib/emailDesign"
 import { artProblem } from "@/lib/emailArtCheck"
 import { sendDesignedEmails } from "@/lib/emailDesignRender"
 import { readyDesignOf, type ReadyDesign } from "@/lib/readyEmails"
+import { fixedHtmlOf, postDesignOf, type PostDesign } from "@/lib/postEmail"
 import { sendReadyEmails } from "@/lib/readyEmailSend"
 import {
   CAMPAIGN_DAILY_LIMIT,
@@ -111,9 +112,9 @@ export async function createCampaign(input: {
   body: string
   recipients: BroadcastRecipients
   audienceValue: string | null
-  // An AI-written email, or a ready-made one (subject and body are then its
-  // subject and plain text).
-  design?: EmailDesign | ReadyDesign
+  // An AI-written email, a ready-made one or a shared post (subject and body
+  // are then its subject and plain text).
+  design?: EmailDesign | ReadyDesign | PostDesign
   // What sends it and who it's from, already checked (lib/senders.ts resolveSending).
   sending?: Sending
 }) {
@@ -147,7 +148,7 @@ export async function createCampaign(input: {
   await logAdminAction({
     adminEmail: input.adminEmail,
     action: "CREATE_CAMPAIGN",
-    details: `"${input.subject}" → ${rows.length} people (${Array.isArray(input.recipients) ? "custom list" : input.recipients})${input.design ? (readyDesignOf(input.design) ? " · ready-made email" : " · written with AI") : ""}${isDefaultSending(sending) ? "" : ` · ${describeSending(sending)}`}`,
+    details: `"${input.subject}" → ${rows.length} people (${Array.isArray(input.recipients) ? "custom list" : input.recipients})${input.design ? (readyDesignOf(input.design) ? " · ready-made email" : postDesignOf(input.design) ? " · shared LinkedIn post" : " · written with AI") : ""}${isDefaultSending(sending) ? "" : ` · ${describeSending(sending)}`}`,
   })
   return { id: campaign.id, total: rows.length }
 }
@@ -409,8 +410,8 @@ export async function setCampaignStatus(id: string, status: "active" | "archived
   })
 }
 
-// A campaign's email, as it's stored: a ready-made email, the AI writer's
-// design, or plain text (rendered like a broadcast).
+// A campaign's email, as it's stored: fixed HTML (a ready-made email or a
+// shared post), the AI writer's design, or plain text (rendered like a broadcast).
 type CampaignEmail = { ready: ReadyDesign | null; design: EmailDesign | null; subject: string; body: string }
 
 /** Sends the campaign's email to these people through one service (Resend or Brevo). */
@@ -448,7 +449,7 @@ export async function sendCampaignBatch(input: {
   })
   if (!campaign) throw new CampaignError("Campaign not found", 404)
   if (campaign.status === "archived") throw new CampaignError("This campaign is archived. Restore it to send.")
-  const ready = readyDesignOf(campaign.design)
+  const ready = fixedHtmlOf(campaign.design)
   const design = ready ? null : campaignDesign(campaign.design)
 
   await releaseStuckSends(campaign.id, now)
@@ -582,7 +583,7 @@ export async function sendCampaignBatch(input: {
 export async function sendPlacementTests(input: { campaignId: string; resend: BatchMailer; brevo?: BatchMailer | null; from: string }) {
   const campaign = await db.emailCampaign.findUnique({ where: { id: input.campaignId }, select: { id: true, subject: true, body: true, design: true, audience: true } })
   if (!campaign) throw new CampaignError("Campaign not found", 404)
-  const ready = readyDesignOf(campaign.design)
+  const ready = fixedHtmlOf(campaign.design)
   const email: CampaignEmail = { ready, design: ready ? null : campaignDesign(campaign.design), subject: campaign.subject, body: campaign.body }
   const choice = await campaignSending(campaign.id)
   const from = choice.from === DEFAULT_SENDING.from ? input.from : choice.from

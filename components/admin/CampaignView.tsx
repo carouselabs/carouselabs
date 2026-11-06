@@ -32,6 +32,7 @@ import { LandingBadge, PlacementSummary, landingFor, usePlacement } from "./Wher
 import { DEFAULT_SENDING, type Sending } from "@/lib/sendingRules"
 import { isLeadAudience } from "@/lib/leadRules"
 import { readyDesignOf } from "@/lib/readyEmails"
+import { postDesignOf } from "@/lib/postEmail"
 
 type Recipient = {
   id: string
@@ -275,7 +276,7 @@ export function CampaignView({ id }: { id: string }) {
               <p className="mt-1 text-caption text-muted-foreground">
                 {audienceLabel(campaign.audience, campaign.audienceValue)} · {progress.total} people · created{" "}
                 {fmtDate(campaign.createdAt)} by {campaign.createdBy}
-                {campaign.design != null && <span className="font-medium text-brand"> · {readyDesignOf(campaign.design) ? "Ready-made email" : "Written with AI"}</span>}
+                {campaign.design != null && <span className="font-medium text-brand"> · {readyDesignOf(campaign.design) ? "Ready-made email" : postDesignOf(campaign.design) ? "Shared LinkedIn post" : "Written with AI"}</span>}
                 {archived && <span className="font-medium text-warning"> · Archived</span>}
               </p>
             </div>

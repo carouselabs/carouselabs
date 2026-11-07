@@ -1,6 +1,6 @@
 // lib/ai/ctaWriter.ts — "Write with AI" in My CTA (lib/creatorCta.ts): three
 // short call-to-action lines for a creator, written from their profile (what
-// they post about, for whom, in their voice), e.g. "Follow Maya Rao for one
+// they post about, for whom, in their voice), e.g. "Follow <their name> for one
 // LinkedIn growth idea every weekday". The creator picks one and edits it.
 import Anthropic from "@anthropic-ai/sdk"
 import { parseJsonObject } from "@/lib/ai/jsonAnswer"
@@ -27,11 +27,11 @@ const TELLS = [/—/, /\bunlock\b/i, /\belevate\b/i, /\bgame[- ]changer\b/i, /\b
 const SYSTEM = `You write the one-line call to action a LinkedIn creator puts at the end of their carousels and images, next to their photo and name.
 
 Write exactly 3 different lines, each a real option:
-1. a follow line that says what they'll get by following, specific to what this creator posts about (e.g. "Follow Maya Rao for one LinkedIn growth idea every weekday")
+1. a follow line that says what they'll get by following, specific to what this creator posts about (shaped like "Follow <their name> for one practical idea about <their topic> every weekday")
 2. a share or save line (e.g. "Repost this to help someone in your network", "Save this for your next launch")
 3. a conversation line: a question or an invitation to comment that fits their topic
 
-Rules: each under ${CTA_LIMITS.line} characters; plain, specific and human, in the creator's voice; at most one emoji in a line, and none is fine; no hashtags, no links, no em dashes, no hype words ("unlock", "elevate", "game-changer", "journey"). Use the creator's name only in the follow line.
+Rules: each under ${CTA_LIMITS.line} characters; plain, specific and human, in the creator's voice; at most one emoji in a line, and none is fine; no hashtags, no links, no em dashes, no hype words ("unlock", "elevate", "game-changer", "journey"). Use the creator's name only in the follow line, spelled exactly as given after "Creator:", and never any other person's name. If no name is given, write the follow line without a name ("Follow me for ...").
 
 Answer with JSON only: {"lines": ["...", "...", "..."]}`
 

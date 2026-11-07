@@ -75,6 +75,10 @@ describe("Settings → My CTA", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Use my LinkedIn photo" }))
     await waitFor(() => expect((screen.getByAltText("Your CTA photo") as HTMLImageElement).src).toBe("https://media.test/cta/u1/linkedin.jpg"))
     expect((screen.getByLabelText("Your name, as shown") as HTMLInputElement).value).toBe("Maya Rao")
+    // The example in the empty line box uses the name typed, never a made-up one.
+    fireEvent.change(screen.getByLabelText("Your name, as shown"), { target: { value: "Anant" } })
+    expect((screen.getByLabelText("Your CTA line") as HTMLTextAreaElement).placeholder).toBe("e.g. Follow Anant for more posts like this")
+    fireEvent.change(screen.getByLabelText("Your name, as shown"), { target: { value: "Maya Rao" } })
     fireEvent.change(screen.getByLabelText("What should the CTA do? (optional)"), { target: { value: "get followers" } })
     fireEvent.click(screen.getByRole("button", { name: "Write with AI" }))
     const ideas = await screen.findByRole("group", { name: "Suggested CTA lines" })

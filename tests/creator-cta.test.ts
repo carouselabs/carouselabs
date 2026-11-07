@@ -288,6 +288,9 @@ describe("Write with AI", () => {
     const first = h.ai.mock.calls[0][0]
     expect(first.messages[0].content).toContain("Posts about: LinkedIn growth")
     expect(first.messages[0].content).toContain("What they want the CTA to do: get followers")
+    // Its instructions carry no made-up name for it to copy, only theirs.
+    expect(first.system).not.toMatch(/Maya|Rao/)
+    expect(first.system).toContain("never any other person's name")
   })
 
   it("a single line is checked like a saved one", () => {

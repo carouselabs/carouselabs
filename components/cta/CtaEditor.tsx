@@ -105,8 +105,8 @@ export function CtaEditor({
     <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_auto]">
       <div className="flex min-w-0 flex-col gap-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Your name, as shown" value={form.name} onChange={(name) => set({ name })} max={CTA_LIMITS.name} placeholder="Maya Rao" />
-          <Field label="Headline (optional)" value={form.headline} onChange={(headline) => set({ headline })} max={CTA_LIMITS.headline} placeholder="Growth lead · B2B founders" />
+          <Field label="Your name, as shown" value={form.name} onChange={(name) => set({ name })} max={CTA_LIMITS.name} placeholder="Your name" />
+          <Field label="Headline (optional)" value={form.headline} onChange={(headline) => set({ headline })} max={CTA_LIMITS.headline} placeholder="e.g. Founder · I write about hiring" />
         </div>
         <div className="flex flex-col gap-2">
           <label htmlFor={lineId} className="text-caption font-medium text-muted-foreground">
@@ -117,7 +117,7 @@ export function CtaEditor({
             value={form.line}
             maxLength={CTA_LIMITS.line}
             rows={2}
-            placeholder="Follow Maya Rao for one LinkedIn growth idea every weekday"
+            placeholder={`e.g. Follow ${form.name.trim() || "me"} for more posts like this`}
             onChange={(e) => set({ line: e.target.value })}
             className={cn(controlClasses, "resize-none px-3 py-2 text-label leading-relaxed md:text-label")}
           />
@@ -155,7 +155,7 @@ export function CtaEditor({
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Extra line (optional)" value={form.extra} onChange={(extra) => set({ extra })} max={CTA_LIMITS.extra} placeholder="linkedin.com/in/mayarao" hint="Small text under the CTA, like your profile address." />
+          <Field label="Extra line (optional)" value={form.extra} onChange={(extra) => set({ extra })} max={CTA_LIMITS.extra} placeholder="e.g. linkedin.com/in/yourname" hint="Small text under the CTA, like your profile address." />
           <Field label="Name for this CTA" value={form.label} onChange={(label) => set({ label })} max={CTA_LIMITS.label} placeholder="Follow me" hint="Only you see this, when choosing a CTA." />
         </div>
         <label className="flex items-center gap-2 text-label text-foreground">

@@ -12,6 +12,9 @@ import { hasGenerationBalance, type CreditReceipt } from "@/lib/credits"
 import { chargeCreditsForAction } from "@/lib/chargeCredits"
 import { refundCreditsForAction } from "@/lib/refundCredits"
 import { validateReferenceImage } from "@/lib/validateImage"
+import { drawsCreatorCta, hasCarouselabsSection, hasCtaSection } from "@/lib/creatorCta"
+import { CtaError } from "@/lib/creatorCtaStore"
+import { paintWithCta, paintingInputs, readRequestCta, type RequestCta } from "@/lib/creatorCtaPaint"
 
 export const maxDuration = 300
 
@@ -111,10 +114,12 @@ export async function POST(req: Request) {
   let userInstruction: string | undefined
   let referenceImageBase64: string | undefined
   let referenceMediaType: string
+  let rawCta: unknown
 
   try {
     const body = await req.json()
     isRegen = body.isRegen === true
+    rawCta = body.cta
     slides = Array.isArray(body.slides) ? body.slides : []
     ideaId = body.ideaId
     // Only 4:5 and 1:1 are offered; default to 4:5 (LinkedIn feed).
@@ -166,6 +171,19 @@ export async function POST(req: Request) {
   const idea = await db.idea.findUnique({ where: { id: ideaId } })
   if (!idea || idea.userId !== user.id) {
     return NextResponse.json({ error: "Idea not found" }, { status: 404 })
+  }
+
+  // Their CTA (lib/creatorCta.ts), checked before any credits are charged: a
+  // slide whose brief has the CREATOR CTA section gets their photo with it,
+  // the CarouseLabs slide gets the logo.
+  let cta: RequestCta | null = null
+  if (!persistOnly) {
+    try {
+      cta = await readRequestCta(user.id, rawCta, "carousel")
+    } catch (err) {
+      if (err instanceof CtaError) return NextResponse.json({ error: err.message, code: "cta" }, { status: err.status })
+      throw err
+    }
   }
 
   // ── Server-side credit charge (V1 fix) ──
@@ -324,9 +342,27 @@ export async function POST(req: Request) {
         ? `${withInstruction}\n\n${REFERENCE_STYLE_BLOCK}`
         : `${withInstruction}\n\nThis slide belongs to a multi-slide carousel that must read as one designed set. Follow the typography, color palette, illustration style, lighting, and layout treatment specified in this brief exactly — same fonts, same colors, same rendering style as every other slide in the set. Premium, modern, editorial design quality throughout. No logos, watermarks, or brand names; the only text on the slide is the text specified in this brief.`
 
+      // A slide with their CTA gets their photo; the CarouseLabs slide gets the
+      // logo. Both ride along with the prompt, in this same generation.
+      const prompt = slide.prompt ?? ""
+      const photo = !!cta?.card && drawsCreatorCta(cta.choice) && hasCtaSection(prompt)
+      const logo = cta?.choice.last === "carouselabs" && hasCarouselabsSection(prompt)
+      const painting =
+        photo || logo
+          ? await paintingInputs({
+              userId: user.id,
+              style: referenceImageBase64 ? { data: referenceImageBase64, mediaType: referenceMediaType } : null,
+              photoUrl: cta?.photoUrl ?? null,
+              photo,
+              logo: !!logo,
+            })
+          : null
+
       // With a style reference, use images.edit so gpt-image-2 receives the
       // reference image itself alongside the prompt; otherwise plain generate.
-      const imageResponse = referenceFile
+      const imageResponse = painting
+        ? await paintWithCta(openai, { model: "gpt-image-2", prompt: `${finalPrompt}\n\n${painting.note}`, n: 1, size: openaiSize, quality: "medium" }, painting)
+        : referenceFile
         ? await openai.images.edit({
             model: "gpt-image-2",
             image: referenceFile,

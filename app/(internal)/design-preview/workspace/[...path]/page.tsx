@@ -16,6 +16,7 @@ import { XReplyProfiles, XSettingsPanel } from "@/components/extension/XExtensio
 import { BillingView } from "@/components/settings/BillingView"
 import ProfileSettingsPage from "@/app/(app)/settings/profile/page"
 import VoicePresetsPage from "@/app/(app)/settings/voice-presets/page"
+import MyCtaPage from "@/app/(app)/settings/cta/page"
 import ReferralsPage from "@/app/(app)/settings/referrals/page"
 import StartPageSettingsPage from "@/app/(app)/settings/start-page/page"
 import AccountSettingsPage from "@/app/(app)/settings/account/page"
@@ -37,7 +38,7 @@ import { parseDollars, priceFor, standardPrice } from "@/lib/engage/priceRules"
 // so the preview refuses to run then.
 //   /design-preview/workspace/engage[/profiles|agents|history|settings|billing]
 //   /design-preview/workspace/engage-x[/…]
-//   /design-preview/workspace/settings/[profile|voice-presets|billing|referrals|start-page|account]
+//   /design-preview/workspace/settings/[profile|voice-presets|cta|billing|referrals|start-page|account]
 //   /design-preview/workspace/content-hub[/ideas] · toolkit · thumbnail · intern
 //   ?access=unlimited      the extension plan is paid (default: free); also Toolkit
 //   ?price=5               a special price an admin set (dollars, until Nov 30); also Toolkit
@@ -107,6 +108,8 @@ function Settings({ page, plan }: { page: string; plan?: string }) {
       return <ProfileSettingsPage />
     case "voice-presets":
       return <VoicePresetsPage />
+    case "cta":
+      return <MyCtaPage />
     case "referrals":
       return <ReferralsPage />
     case "start-page":

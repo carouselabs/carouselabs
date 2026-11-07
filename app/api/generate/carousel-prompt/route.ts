@@ -17,6 +17,9 @@ import {
 import { countPlannedSlides } from "@/lib/carouselStructureTemplates"
 import { validateReferenceImage } from "@/lib/validateImage"
 import { checkStyleDescription, styleDescriptionBlock } from "@/lib/styleDescriptionCheck"
+import { carouselCtaBlock, enforceCtaSlides } from "@/lib/creatorCta"
+import { CtaError } from "@/lib/creatorCtaStore"
+import { readRequestCta, type RequestCta } from "@/lib/creatorCtaPaint"
 import { hasGenerationBalance } from "@/lib/credits"
 import { chargeCreditsForAction } from "@/lib/chargeCredits"
 import { refundCreditsForAction } from "@/lib/refundCredits"
@@ -405,6 +408,7 @@ export async function POST(req: Request) {
   let carouselStructureDecision: string | undefined
   let expectedSlideCount: number | undefined
   let rawStyleDescription: unknown
+  let rawCta: unknown
 
   try {
     const body = await req.json()
@@ -438,6 +442,8 @@ export async function POST(req: Request) {
         : undefined
     // "Describe your style" after skipping a reference (lib/styleChoice.ts).
     rawStyleDescription = body.styleDescription
+    // Their CTA (lib/creatorCta.ts): which slides carry it, and the last slide.
+    rawCta = body.cta
     if (!ideaId) throw new Error("Missing ideaId")
     // TEMP diagnostic — confirm in Vercel logs exactly what the client sent.
     console.log("[ref-image] Reference image present:", !!referenceImageBase64, "length:", referenceImageBase64?.length ?? 0)
@@ -468,6 +474,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: styleCheck.error, code: "style_description" }, { status: 400 })
   }
   const styleBlock = styleCheck.text ? styleDescriptionBlock(styleCheck.text) : ""
+
+  // Their CTA: checked before any credits are charged, then told to the
+  // brief writer (and the briefs made to match after, below).
+  let cta: RequestCta | null = null
+  try {
+    cta = await readRequestCta(user.id, rawCta, "carousel")
+  } catch (err) {
+    if (err instanceof CtaError) return NextResponse.json({ error: err.message, code: "cta" }, { status: err.status })
+    throw err
+  }
+  const ctaBlock = cta ? carouselCtaBlock(cta.choice, cta.card) : ""
+  const extraBlocks = [styleBlock, ctaBlock].filter(Boolean).join("\n\n")
 
   const idea = await db.idea.findUnique({
     where: { id: ideaId },
@@ -552,7 +570,7 @@ export async function POST(req: Request) {
           carouselStructureDecision!,
           size === "1:1" ? "Square 1080x1080px" : "Portrait 1080x1350px",
           expectedSlideCount!,
-          styleBlock,
+          extraBlocks,
         )
       : buildCarouselUserMessage(
           breakdown.refinedHook,
@@ -562,7 +580,7 @@ export async function POST(req: Request) {
           hasReference,
           niche,
           userInstruction,
-        ) + (styleBlock ? `\n\n${styleBlock}` : "")
+        ) + (extraBlocks ? `\n\n${extraBlocks}` : "")
 
   // Full generations use one of two system prompts depending on flow; edit
   // mode's prompt is self-contained and never attaches a system prompt (see
@@ -759,6 +777,8 @@ export async function POST(req: Request) {
   }
 
   const parsed = finalResult.parsed
+  // The CTA where it was chosen and nowhere else, whatever the briefs say.
+  if (cta) parsed.slides = enforceCtaSlides(parsed.slides, cta.choice, cta.card)
 
   // Both attempts (or the only attempt, if expectedSlideCount wasn't given)
   // still don't match the planned count — this is exactly the "12 planned,

@@ -33,6 +33,8 @@ import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
 import { StyleChooser } from "@/components/generate/StyleChooser"
 import { loadLookReference } from "@/lib/lookReference"
 import { parseStyleChoice, styleChoiceLabel, styleDescriptionOf, type StyleChoice } from "@/lib/styleChoice"
+import { CtaChooser } from "@/components/generate/CtaChooser"
+import { ctaChoiceLabel, readCtaChoice, saveCtaChoice, type CtaChoice } from "@/lib/creatorCta"
 import { InstructionBox } from "@/components/generate/InstructionBox"
 import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { ImagePreview } from "@/components/generate/ImagePreview"
@@ -77,7 +79,7 @@ type StructureMode = "auto" | "custom" | "template"
 // Image structure selection — appears after reference image upload/size
 // selection, right before the actual image generation call. Shown for
 // every idea.
-type ImageStructureStep = "select" | "custom" | "template" | "ready"
+type ImageStructureStep = "select" | "custom" | "template" | "cta" | "ready"
 type ImageStructureMode = "auto" | "custom" | "template" | "reference-only"
 
 export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: ImageClientProps) {
@@ -125,6 +127,10 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
   // Picked after "Skip, generate without reference" (StyleChooser): a look,
   // AI decides, or a described style. Kept per idea, so a reload keeps it.
   const [styleChoice, setStyleChoice] = useState<StyleChoice | null>(null)
+  // Their CTA for this image (components/generate/CtaChooser.tsx): which saved
+  // CTA and where the AI draws it, chosen after the structure. Kept per idea.
+  const [ctaChoice, setCtaChoice] = useState<CtaChoice | null>(null)
+  const [ctaLabel, setCtaLabel] = useState<string | null>(null)
   const [choosingStyle, setChoosingStyle] = useState(false)
 
   // Step 4 — image prompt is generated silently (not shown); only the final
@@ -201,6 +207,11 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
       if (style) setStyleChoice(parseStyleChoice(JSON.parse(style)))
     } catch {
       // unreadable — no style choice
+    }
+    const savedCta = readCtaChoice(`imageCta_${ideaId}`, "image")
+    if (savedCta) {
+      setCtaChoice(savedCta.choice)
+      setCtaLabel(savedCta.label)
     }
 
     try {
@@ -441,6 +452,17 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
     setStep(4)
   }
 
+  // Their CTA was chosen: on to the Generate screen. A different CTA than the
+  // one an image was made with clears that image.
+  function handleCtaChoice(choice: CtaChoice, card: { label: string } | null) {
+    if (JSON.stringify(choice) !== JSON.stringify(ctaChoice)) invalidateGeneratedImage(null)
+    setCtaChoice(choice)
+    setCtaLabel(card?.label ?? null)
+    saveCtaChoice(`imageCta_${ideaId}`, "image", choice, card?.label ?? null)
+    setImageStructureStep("ready")
+    setStep(4)
+  }
+
   // The style reference to send: the user's own upload, or the chosen look's
   // sample picture. Only the upload goes to the structure step: a look sets
   // the style, never the layout.
@@ -600,6 +622,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
           referenceImage: styleRef?.data,
           referenceMediaType: styleRef?.mediaType,
           styleDescription: styleRef ? undefined : styleDescriptionOf(styleChoice),
+          cta: ctaChoice ?? undefined,
           userInstruction,
           isOwnIdea: true,
           presentationStructure,
@@ -630,6 +653,7 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
           size,
           referenceImage: styleRef?.data,
           referenceMediaType: styleRef?.mediaType,
+          cta: ctaChoice ?? undefined,
           isRegen, // server charges image_regen (8) for regenerations
         }),
       })
@@ -854,7 +878,8 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
       customImageStructure: custom,
       selectedImageTemplateId: templateId,
     })
-    setImageStructureStep("ready")
+    // Then their CTA (components/generate/CtaChooser.tsx), then Generate.
+    setImageStructureStep("cta")
   }
 
   function handleSelectImageAuto() {
@@ -1166,7 +1191,13 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
         )}
 
         {/* ── STEP 4: Image structure selection or Final Screen ── */}
-        {step === 4 && imageStructureStep !== "ready" && (
+        {step === 4 && imageStructureStep === "cta" && (
+          <StepColumn wide>
+            <CtaChooser format="image" choice={ctaChoice} onChoose={handleCtaChoice} onBack={() => setImageStructureStep("select")} />
+          </StepColumn>
+        )}
+
+        {step === 4 && imageStructureStep !== "ready" && imageStructureStep !== "cta" && (
           <StepColumn>
             {imageStructureStep === "select" ? (
               <BackButton
@@ -1296,6 +1327,13 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
                   )}
 
                   <h1 className="sr-only">Image + Caption</h1>
+
+                  <p className="mx-auto w-full max-w-xl text-label text-muted-foreground">
+                    {ctaChoiceLabel(ctaChoice, ctaLabel ? { label: ctaLabel } : null) ?? "CTA: not chosen"} ·{" "}
+                    <button type="button" onClick={() => setImageStructureStep("cta")} className="font-medium text-foreground underline underline-offset-2">
+                      Change
+                    </button>
+                  </p>
 
                   <div className="mx-auto flex w-full max-w-xl flex-col gap-5">
                     {/* Generated image (the prompt step is bypassed) */}

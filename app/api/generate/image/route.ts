@@ -13,6 +13,8 @@ import { type CreditReceipt } from "@/lib/credits"
 import { chargeCreditsForAction } from "@/lib/chargeCredits"
 import { refundCreditsForAction } from "@/lib/refundCredits"
 import { validateReferenceImage } from "@/lib/validateImage"
+import { CtaError } from "@/lib/creatorCtaStore"
+import { paintWithCta, paintingInputs, readRequestCta, type PaintingInputs } from "@/lib/creatorCtaPaint"
 import type { Prisma } from "@prisma/client"
 
 export const maxDuration = 300
@@ -61,6 +63,7 @@ export async function POST(req: Request) {
   let referenceImageBase64: string | undefined
   let referenceMediaType: string
   let isRegen: boolean
+  let rawCta: unknown
 
   try {
     const body = await req.json()
@@ -68,6 +71,7 @@ export async function POST(req: Request) {
     imagePrompt = body.imagePrompt
     caption = body.caption ?? ""
     isRegen = body.isRegen === true
+    rawCta = body.cta
     // Only 4:5 and 1:1 are offered; default to 4:5 (LinkedIn feed) for restored
     // sessions where the client may not re-send the size.
     size = body.size === "1:1" ? "1:1" : "4:5"
@@ -96,6 +100,28 @@ export async function POST(req: Request) {
   const idea = await db.idea.findUnique({ where: { id: ideaId } })
   if (!idea || idea.userId !== user.id) {
     return NextResponse.json({ error: "Idea not found" }, { status: 404 })
+  }
+
+  // Their CTA (lib/creatorCta.ts): when the image shows it, their photo goes
+  // to the image model with the prompt, so the CTA is drawn in this same
+  // generation. Checked and loaded before any credits are charged.
+  let painting: PaintingInputs | null = null
+  let ctaUsed: { where: string; ctaId: string | null } | null = null
+  try {
+    const cta = await readRequestCta(user.id, rawCta, "image")
+    if (cta) ctaUsed = { where: cta.choice.where, ctaId: cta.choice.ctaId }
+    if (cta?.card && cta.choice.where !== "none") {
+      painting = await paintingInputs({
+        userId: user.id,
+        style: referenceImageBase64 ? { data: referenceImageBase64, mediaType: referenceMediaType } : null,
+        photoUrl: cta.photoUrl,
+        photo: true,
+        logo: false,
+      })
+    }
+  } catch (err) {
+    if (err instanceof CtaError) return NextResponse.json({ error: err.message, code: "cta" }, { status: err.status })
+    throw err
   }
 
   // ── Server-side credit charge (V1 fix) ──
@@ -190,7 +216,15 @@ export async function POST(req: Request) {
 
     // With a style reference, use images.edit so gpt-image-2 receives the
     // reference image itself alongside the prompt; otherwise plain generate.
-    const imageResponse = referenceImageBase64
+    // With their CTA: the photo (after any style reference) rides along, and
+    // the model is asked to keep the face as it is.
+    const imageResponse = painting
+      ? await paintWithCta(
+          openai,
+          { model: "gpt-image-2", prompt: `${referenceImageBase64 ? editPrompt : finalPrompt}\n\n${painting.note}`, n: 1, size: openaiSize, quality: "medium" },
+          painting,
+        )
+      : referenceImageBase64
       ? await openai.images.edit({
           model: "gpt-image-2",
           image: await toFile(
@@ -295,7 +329,7 @@ export async function POST(req: Request) {
       status: "READY",
       imageUrls: [imageUrl],
       r2Keys: [filename],
-      metadata: { imagePrompt, size } as unknown as Prisma.InputJsonValue,
+      metadata: { imagePrompt, size, ...(ctaUsed ? { cta: ctaUsed } : {}) } as unknown as Prisma.InputJsonValue,
       slides: {
         create: {
           role: "COVER",

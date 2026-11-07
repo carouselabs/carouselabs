@@ -13,6 +13,9 @@ import {
 import { hasGenerationBalance } from "@/lib/credits"
 import { validateReferenceImage } from "@/lib/validateImage"
 import { checkStyleDescription, styleDescriptionBlock } from "@/lib/styleDescriptionCheck"
+import { imageCtaBlock } from "@/lib/creatorCta"
+import { CtaError } from "@/lib/creatorCtaStore"
+import { readRequestCta } from "@/lib/creatorCtaPaint"
 import type { BreakdownOutline } from "@/lib/types/breakdown"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -264,6 +267,7 @@ export async function POST(req: Request) {
   let isOwnIdea: boolean
   let presentationStructure: string | undefined
   let rawStyleDescription: unknown
+  let rawCta: unknown
 
   try {
     const body = await req.json()
@@ -288,6 +292,8 @@ export async function POST(req: Request) {
         : undefined
     // "Describe your style" after skipping a reference (lib/styleChoice.ts).
     rawStyleDescription = body.styleDescription
+    // Their CTA (lib/creatorCta.ts): which saved CTA, and where it goes.
+    rawCta = body.cta
     if (!ideaId) throw new Error("Missing ideaId")
     // TEMP diagnostic — confirm in Vercel logs exactly what the client sent.
     console.log("[ref-image] Reference image present:", !!referenceImage, "length:", referenceImage?.length ?? 0)
@@ -319,6 +325,18 @@ export async function POST(req: Request) {
   }
   const styleBlock = styleCheck.text ? styleDescriptionBlock(styleCheck.text) : ""
 
+  // Their CTA: checked (it must be their own, the placement words moderated)
+  // and turned into instructions the prompt writer follows. None sent: the
+  // prompt is as before.
+  let ctaBlock = ""
+  try {
+    const cta = await readRequestCta(user.id, rawCta, "image")
+    if (cta) ctaBlock = imageCtaBlock(cta.choice, cta.card)
+  } catch (err) {
+    if (err instanceof CtaError) return NextResponse.json({ error: err.message, code: "cta" }, { status: err.status })
+    throw err
+  }
+
   const idea = await db.idea.findUnique({
     where: { id: ideaId },
     include: { breakdowns: { orderBy: { createdAt: "desc" }, take: 1 } },
@@ -346,7 +364,7 @@ export async function POST(req: Request) {
   if (presentationStructure) {
     try {
       const sizeBlock = size === "1:1" ? "Square 1080x1080px" : "Portrait 1080x1350px"
-      const userInstructionBlock = [userInstruction ? `Special Instruction: ${userInstruction}` : "", styleBlock].filter(Boolean).join("\n\n")
+      const userInstructionBlock = [userInstruction ? `Special Instruction: ${userInstruction}` : "", styleBlock, ctaBlock].filter(Boolean).join("\n\n")
       const nicheBlock = niche ? `Niche: ${niche}` : ""
 
       const userMessage = buildOwnIdeaImagePromptUserMessage(
@@ -485,7 +503,7 @@ export async function POST(req: Request) {
       ? buildImageEditPrompt(currentImagePrompt, userInstruction)
       : `${CAPTION_GHOSTWRITER_INSTRUCTION}
 
-${buildImagePrompt(breakdown.refinedHook, breakdown.deepDive, caption, size, userInstruction, niche)}${styleBlock ? `\n\n${styleBlock}` : ""}`
+${buildImagePrompt(breakdown.refinedHook, breakdown.deepDive, caption, size, userInstruction, niche)}${styleBlock ? `\n\n${styleBlock}` : ""}${ctaBlock ? `\n\n${ctaBlock}` : ""}`
 
   console.log("[image-prompt] Full prompt sent to model:\n", prompt)
 

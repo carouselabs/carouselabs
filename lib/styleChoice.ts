@@ -25,10 +25,10 @@ export function cleanStyleDescription(raw: string): string {
   return raw.normalize("NFKC").replace(INVISIBLE, "").replace(CONTROL, " ").replace(MARKUP, " ").replace(/\s+/g, " ").trim()
 }
 
-const LINK = /\b(?:https?:\/\/|www\.)\S+|\b[a-z0-9-]+\.(?:com|net|org|io|ai|co|app|dev|me|ly|in|uk)\b(?:\/\S*)?/i
+export const LINK = /\b(?:https?:\/\/|www\.)\S+|\b[a-z0-9-]+\.(?:com|net|org|io|ai|co|app|dev|me|ly|in|uk)\b(?:\/\S*)?/i
 // Only clear attempts to talk to the AI instead of describing a look. The
 // prompt itself treats the description as data, so this needn't catch everything.
-const INSTRUCTIONS = [
+export const INSTRUCTIONS = [
   /\b(ignore|disregard|forget|override)\b[^.]{0,30}\b(previous|above|prior|earlier|all|system|your)\b[^.]{0,20}\b(instructions?|prompts?|rules?|messages?)\b/i,
   /\bsystem prompt\b|\bjailbreak\b|\bdeveloper mode\b|\bprompt injection\b/i,
   /\b(reveal|print|repeat|show|output)\b[^.]{0,30}\b(system|hidden|your)\s+(prompt|instructions)\b/i,

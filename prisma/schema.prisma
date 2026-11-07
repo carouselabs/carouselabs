@@ -1833,3 +1833,36 @@ model EmailEngagement {
   @@index([stepId])
   @@index([userId])
 }
+
+// ── My CTA (Settings → My CTA, lib/creatorCta.ts) ──
+// A creator's own call to action, drawn by the image AI into their images
+// and carousels: their photo, name, headline and a line like "Follow me for
+// more". scripts/my-cta.sql. Kept apart from Profile on purpose: every page
+// loads the whole Profile row, so a new Profile column would break the app
+// until the SQL ran.
+
+// One per user: their photo ("this is me"), used by every CTA they save.
+model CtaProfile {
+  userId    String   @id
+  photoUrl  String?
+  updatedAt DateTime @updatedAt
+}
+
+// Up to 3 per user (lib/creatorCta.ts MAX_CTAS); one is the default.
+model CtaCard {
+  id        String   @id @default(cuid())
+  userId    String
+  // What the creator calls it in the list: "Follow me", "Get the guide".
+  label     String
+  name      String
+  headline  String?
+  // The call to action itself, exactly as drawn.
+  line      String
+  // An optional small line under it, e.g. linkedin.com/in/maya.
+  extra     String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}

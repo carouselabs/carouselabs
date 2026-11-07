@@ -38,6 +38,7 @@ export const GROUPS: { id: GroupId; label: string; items: NavItem[] }[] = [
 export const SETTINGS_ITEMS: NavItem[] = [
   { label: "Profile", href: "/settings/profile" },
   { label: "Voice Presets", href: "/settings/voice-presets" },
+  { label: "My CTA", href: "/settings/cta" },
   { label: "Billing", href: "/settings/billing" },
   { label: "Referrals", href: "/settings/referrals" },
   { label: "Start Page", href: "/settings/start-page" },

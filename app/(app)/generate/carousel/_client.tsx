@@ -34,6 +34,8 @@ import { ReferenceUploader } from "@/components/generate/ReferenceUploader"
 import { StyleChooser } from "@/components/generate/StyleChooser"
 import { loadLookReference } from "@/lib/lookReference"
 import { parseStyleChoice, styleChoiceLabel, styleDescriptionOf, type StyleChoice } from "@/lib/styleChoice"
+import { CtaChooser } from "@/components/generate/CtaChooser"
+import { ctaChoiceLabel, readCtaChoice, saveCtaChoice, type CtaChoice } from "@/lib/creatorCta"
 import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { CarouselImageGrid, type SlideImage } from "@/components/generate/CarouselImageGrid"
 import { PostToLinkedInButton } from "@/components/generate/PostToLinkedInButton"
@@ -101,7 +103,7 @@ type StructureMode = "auto" | "custom" | "template"
 
 // Carousel structure selection — gates the "Generate Carousel" button on step
 // 4 until a slide structure is chosen. Shown for every idea.
-type CarouselStructureStep = "select" | "custom" | "template" | "ready"
+type CarouselStructureStep = "select" | "custom" | "template" | "cta" | "ready"
 type CarouselStructureMode = "auto" | "custom" | "template" | "reference-only"
 
 export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: CarouselClientProps) {
@@ -144,6 +146,10 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
   // Picked after "Skip, generate without reference" (StyleChooser): a look,
   // AI decides, or a described style. Kept per idea, so a reload keeps it.
   const [styleChoice, setStyleChoice] = useState<StyleChoice | null>(null)
+  // Their CTA for this carousel (components/generate/CtaChooser.tsx): which
+  // saved CTA, which slides carry it and what the last slide is. Kept per idea.
+  const [ctaChoice, setCtaChoice] = useState<CtaChoice | null>(null)
+  const [ctaLabel, setCtaLabel] = useState<string | null>(null)
   const [choosingStyle, setChoosingStyle] = useState(false)
 
   // Step 4
@@ -245,6 +251,11 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     try {
       const style = localStorage.getItem(`carouselStyle_${ideaId}`)
       if (style) setStyleChoice(parseStyleChoice(JSON.parse(style)))
+      const savedCta = readCtaChoice(`carouselCta_${ideaId}`, "carousel")
+      if (savedCta) {
+        setCtaChoice(savedCta.choice)
+        setCtaLabel(savedCta.label)
+      }
     } catch {
       // unreadable — no style choice
     }
@@ -495,6 +506,17 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
     setStep(4)
   }
 
+  // Their CTA was chosen: on to the Generate screen. A different CTA than the
+  // one the slides were made with clears them.
+  function handleCtaChoice(choice: CtaChoice, card: { label: string } | null) {
+    if (JSON.stringify(choice) !== JSON.stringify(ctaChoice)) invalidateGeneratedCarousel(null)
+    setCtaChoice(choice)
+    setCtaLabel(card?.label ?? null)
+    saveCtaChoice(`carouselCta_${ideaId}`, "carousel", choice, card?.label ?? null)
+    setCarouselStructureStep("ready")
+    setStep(4)
+  }
+
   // The style reference to send: the user's own upload, or the chosen look's
   // sample picture. Only the upload goes to the structure step: a look sets
   // the style, never the slide layout.
@@ -537,6 +559,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
           persist: false,
           referenceImage: styleRef?.data,
           referenceMediaType: styleRef?.mediaType,
+          cta: ctaChoice ?? undefined,
         }),
       })
       const imgData = await imgRes.json()
@@ -640,6 +663,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
           referenceImage: styleRef?.data,
           referenceMediaType: styleRef?.mediaType,
           styleDescription: styleRef ? undefined : styleDescriptionOf(styleChoice),
+          cta: ctaChoice ?? undefined,
           ...(structureDecision ? { isOwnIdea: true, carouselStructureDecision: structureDecision } : {}),
           expectedSlideCount,
         }),
@@ -832,6 +856,7 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
           userInstruction,
           referenceImage: styleRef?.data,
           referenceMediaType: styleRef?.mediaType,
+          cta: ctaChoice ?? undefined,
           isRegen: true, // server charges slide_regen (8) per slide
         }),
       })
@@ -977,7 +1002,8 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
       customCarouselStructure: custom,
       selectedCarouselTemplateId: templateId,
     })
-    setCarouselStructureStep("ready")
+    // Then their CTA (components/generate/CtaChooser.tsx), then Generate.
+    setCarouselStructureStep("cta")
   }
 
   function handleSelectCarouselAuto() {
@@ -1277,7 +1303,13 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
         )}
 
         {/* ── STEP 4: Carousel structure selection or Final Screen ── */}
-        {step === 4 && carouselStructureStep !== "ready" && (
+        {step === 4 && carouselStructureStep === "cta" && (
+          <StepColumn wide>
+            <CtaChooser format="carousel" choice={ctaChoice} onChoose={handleCtaChoice} onBack={() => setCarouselStructureStep("select")} />
+          </StepColumn>
+        )}
+
+        {step === 4 && carouselStructureStep !== "ready" && carouselStructureStep !== "cta" && (
           <StepColumn>
             {carouselStructureStep === "select" ? (
               <BackButton
@@ -1405,6 +1437,13 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
             )}
 
             <h1 className="sr-only">Caption + Slides</h1>
+
+            <p className="mb-4 text-label text-muted-foreground">
+              {ctaChoiceLabel(ctaChoice, ctaLabel ? { label: ctaLabel } : null, "carousel") ?? "CTA: not chosen"} ·{" "}
+              <button type="button" onClick={() => setCarouselStructureStep("cta")} className="font-medium text-foreground underline underline-offset-2">
+                Change
+              </button>
+            </p>
 
             {/* TEMPORARY DEBUG — prompts-only panel, see
                 DEBUG_SKIP_CAROUSEL_IMAGE_GENERATION above. */}

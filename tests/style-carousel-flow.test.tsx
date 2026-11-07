@@ -36,6 +36,8 @@ beforeEach(() => {
       calls.push({ url, body })
       if (url.startsWith("/images/looks/")) return { ok: true, status: 200, headers: new Headers(), blob: async () => new Blob([LOOK_BYTES], { type: "image/jpeg" }) }
       if (url.startsWith("/api/posts")) return answer({ post: null })
+      // No CTA saved yet (Settings → My CTA): the CTA step offers to set one up.
+      if (url === "/api/cta") return answer({ ready: true, photoUrl: null, cards: [], photoSources: { linkedin: false, startPage: false }, profile: { name: "", headline: "" } })
       if (url === "/api/own-idea/carousel-structure") return answer({ carouselStructureDecision: "1. Hook\n2. Body\n3. CTA", plannedSlideCount: 3 })
       if (url === "/api/generate/carousel-prompt") return answer({ caption: "My caption about focus", slides: SLIDES })
       if (url === "/api/generate/carousel-images") {
@@ -61,9 +63,16 @@ async function generateWith(choose: () => void) {
   await screen.findByRole("heading", { name: "How should your image look?" })
   choose()
   fireEvent.click(await screen.findByRole("button", { name: /Let AI Decide/ }))
+  // Then the CTA step: none on the slides, nothing extra at the end.
+  await screen.findByRole("heading", { name: "Add your CTA?" })
+  fireEvent.click(await screen.findByRole("radio", { name: /Not on the slides/ }))
+  fireEvent.click(screen.getByRole("radio", { name: /Nothing extra/ }))
+  fireEvent.click(screen.getByRole("button", { name: "Continue →" }))
   fireEvent.click(await screen.findByRole("button", { name: "Generate Carousel" }))
   fireEvent.click(await screen.findByRole("button", { name: "Yes, generate →" }))
   await waitFor(() => expect(sentTo("/api/generate/carousel-images")).toHaveLength(3), { timeout: 5000 })
+  expect(sentTo("/api/generate/carousel-prompt")[0]?.cta).toEqual({ ctaId: null, where: "none", last: "none" })
+  expect(sentTo("/api/generate/carousel-images").every((b) => JSON.stringify(b.cta) === JSON.stringify({ ctaId: null, where: "none", last: "none" }))).toBe(true)
 }
 
 describe("Carousel without a reference", () => {

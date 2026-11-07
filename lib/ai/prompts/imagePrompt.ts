@@ -69,7 +69,7 @@ The visual prompt must:
 - Be highly detailed and visually descriptive
 - Include composition, subject, lighting, mood, style, colors, typography placement, and visual hierarchy
 - Make the visual instantly understandable and scroll-stopping
-- Ensure the image visually communicates the hook, core message, and CTA clearly
+- Ensure the image visually communicates the hook and core message clearly. A call to action appears only as a CREATOR CTA section below says (with exactly the creator's words); without that section, a short CTA from the post may appear
 - If a reference is provided, reuse its EXACT palette (the exact hex codes identified above, including distinct shades) and exact illustration technique — but depict an ORIGINAL scene built from this post's content, not the reference's literal subject matter
 - Adapt the design direction according to the uploaded reference and user requirements
 - Be optimized for high CTR and stopping scroll across social media platforms (LinkedIn, Instagram, Twitter/X)

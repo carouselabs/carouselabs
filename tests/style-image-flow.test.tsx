@@ -43,6 +43,8 @@ beforeEach(() => {
       }
       if (url.includes("/breakdown")) return answer({ breakdown: { deepDive: "Deep dive" } })
       if (url.startsWith("/api/posts")) return answer({ post: null })
+      // No CTA saved yet (Settings → My CTA): the CTA step offers to set one up.
+      if (url === "/api/cta") return answer({ ready: true, photoUrl: null, cards: [], photoSources: { linkedin: false, startPage: false }, profile: { name: "", headline: "" } })
       if (url === "/api/own-idea/presentation-structure") return answer({ presentationStructure: "Big statement" })
       if (url === "/api/generate/image-prompt") return answer({ imagePrompt: "A slide" })
       if (url === "/api/generate/image") return answer({ imageUrl: "https://cdn.example/i.png", postId: "post-1" })
@@ -67,8 +69,14 @@ async function toStyleChooser() {
 
 async function pickStructureAndGenerate() {
   fireEvent.click(await screen.findByRole("button", { name: /Let AI Decide/ }))
+  // Then the CTA step: no CTA on this one.
+  await screen.findByRole("heading", { name: "Add your CTA?" })
+  fireEvent.click(await screen.findByRole("radio", { name: /No CTA/ }))
+  fireEvent.click(screen.getByRole("button", { name: "Continue →" }))
   fireEvent.click(await screen.findByRole("button", { name: "Generate Image" }))
   await waitFor(() => expect(sent("/api/generate/image")).not.toBeNull())
+  expect(sent("/api/generate/image-prompt")?.cta).toEqual({ ctaId: null, where: "none" })
+  expect(sent("/api/generate/image")?.cta).toEqual({ ctaId: null, where: "none" })
 }
 
 describe("Image + Caption without a reference", () => {

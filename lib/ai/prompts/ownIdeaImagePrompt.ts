@@ -72,7 +72,7 @@ The visual prompt must:
 - Be highly detailed and visually descriptive.
 - Describe the complete composition from the Presentation Structure Decision: section arrangement, reading flow, information hierarchy, grouping, spacing, alignment, visual balance, focal points, typography placement, subject, lighting, mood, rendering style, colors, illustration style, visual hierarchy.
 - Make the visual instantly understandable and scroll-stopping.
-- Ensure the image visually communicates the hook, core message, and CTA clearly.
+- Ensure the image visually communicates the hook and core message clearly. A call to action appears only as the CREATOR CTA section of the user message says (with exactly the creator's words, and nothing else of its kind); without that section, a short CTA from the post may appear.
 - If a reference is provided, reuse its EXACT palette (the exact hex codes identified above, including distinct shades) and exact illustration technique — but depict an ORIGINAL scene built from this post's content, not the reference's literal subject matter.
 
 IMPORTANT: This is a SINGLE standalone image post, NOT a carousel. Do NOT include: Swipe, Swipe to see, Continue, Next slide, Slide indicators, Carousel cues, Right arrows, Multi-slide references.

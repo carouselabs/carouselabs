@@ -134,7 +134,7 @@ The slide outline defines the purpose of each slide.
 
 A Hook slide should create curiosity and encourage the reader to continue.
 Each Tip slide should teach one distinct lesson from the deep dive without repeating previous slides.
-A CTA slide should conclude the carousel with a clear action or reflection.
+A CTA slide should conclude the carousel with a clear action or reflection. When the user message has a CREATOR CTA FOR THIS CAROUSEL section, it decides which slides carry a call to action and what the final slide is; follow it exactly, and write no call to action of your own anywhere else.
 
 For each slide, use the supplied slide type together with the post title, caption, and deep dive to determine the most appropriate headline and educational content.
 

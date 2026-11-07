@@ -35,6 +35,7 @@ import { StyleChooser } from "@/components/generate/StyleChooser"
 import { loadLookReference } from "@/lib/lookReference"
 import { parseStyleChoice, styleChoiceLabel, styleDescriptionOf, type StyleChoice } from "@/lib/styleChoice"
 import { CtaChooser } from "@/components/generate/CtaChooser"
+import { GeneratingPanel } from "@/components/generate/RepelField"
 import { ctaChoiceLabel, readCtaChoice, saveCtaChoice, type CtaChoice } from "@/lib/creatorCta"
 import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
 import { CarouselImageGrid, type SlideImage } from "@/components/generate/CarouselImageGrid"
@@ -1496,14 +1497,13 @@ export function CarouselClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: C
                         </div>
                       )}
 
+                      {/* Tall until the first slide arrives, then a band above the slides. */}
                       {(isGeneratingSlides || isGeneratingImages) && loadingMessage && (
-                        <p
-                          role="status"
-                          className="flex items-center gap-2.5 rounded-control border border-border bg-surface px-4 py-3 text-label font-medium text-foreground"
-                        >
-                          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-                          {loadingMessage}
-                        </p>
+                        <GeneratingPanel
+                          className={slideImages.length === 0 ? "min-h-[26rem] md:min-h-[32rem]" : "min-h-44"}
+                          title={loadingMessage}
+                          note={slideImages.length === 0 ? "(each slide takes about half a minute)" : undefined}
+                        />
                       )}
 
                       {/* Grid fills in one image at a time as each slide is generated */}

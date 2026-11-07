@@ -34,6 +34,7 @@ import { StyleChooser } from "@/components/generate/StyleChooser"
 import { loadLookReference } from "@/lib/lookReference"
 import { parseStyleChoice, styleChoiceLabel, styleDescriptionOf, type StyleChoice } from "@/lib/styleChoice"
 import { CtaChooser } from "@/components/generate/CtaChooser"
+import { GeneratingPanel } from "@/components/generate/RepelField"
 import { ctaChoiceLabel, readCtaChoice, saveCtaChoice, type CtaChoice } from "@/lib/creatorCta"
 import { InstructionBox } from "@/components/generate/InstructionBox"
 import { VoiceGuidelinesToggle } from "@/components/generate/VoiceGuidelinesToggle"
@@ -1360,21 +1361,17 @@ export function ImageClient({ ideaId, ideaHook, hasGuidelines, isOwnIdea }: Imag
                     )}
 
                     {isGeneratingImage && (
-                      <div
-                        role="status"
-                        className={cn(
-                          "flex flex-col items-center justify-center gap-4 rounded-card border border-border bg-surface px-6 text-center",
-                          size === "1:1" ? "aspect-square" : "aspect-[4/5]"
-                        )}
-                      >
-                        <Loader2 className="size-9 animate-spin text-foreground motion-reduce:animate-none" aria-hidden />
-                        <p className="text-label font-medium text-foreground">
-                          {imageGenStage === "structure" && "Deciding the best visual structure…"}
-                          {imageGenStage === "prompt" && "Writing your image prompt…"}
-                          {(imageGenStage === "image" || imageGenStage === null) && "Generating your image…"}
-                        </p>
-                        <p className="text-caption text-muted-foreground">(this can take up to a minute)</p>
-                      </div>
+                      <GeneratingPanel
+                        className={size === "1:1" ? "aspect-square" : "aspect-[4/5]"}
+                        title={
+                          imageGenStage === "structure"
+                            ? "Deciding the best visual structure…"
+                            : imageGenStage === "prompt"
+                              ? "Writing your image prompt…"
+                              : "Generating your image…"
+                        }
+                        note="(this can take up to a minute)"
+                      />
                     )}
 
                     {/* Single button — generates the prompt then the image in one go. No

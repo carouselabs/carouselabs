@@ -5,11 +5,12 @@
 // (lib/leads.ts stopLeadByEmail). The token is ours (lib/brevo.ts), set when
 // the Leads page connected the webhook, so nobody else can stop anyone.
 // Brevo sends one event per call; a list of them is read too. ?account=anant:
-// Anant Goyal's Brevo (lib/leadAccounts.ts), with its own token, stopping
-// only that account's lead.
+// Anant Goyal's Brevo (lib/leadAccounts.ts), with its own token. A campaign
+// can reach either account's leads through either Brevo, so the address is
+// stopped as a lead of every account (lib/leads.ts stopAddressEverywhere).
 import { NextResponse } from "next/server"
 import { BREVO_STOP_EVENTS, isBrevoWebhookToken } from "@/lib/brevo"
-import { stopLeadByEmail } from "@/lib/leads"
+import { stopAddressEverywhere } from "@/lib/leads"
 import { leadAccountOf } from "@/lib/leadAccounts"
 
 export async function POST(req: Request) {
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
   let stopped = 0
   for (const e of events) {
     const reason = typeof e.event === "string" ? BREVO_STOP_EVENTS[e.event] : undefined
-    if (reason && typeof e.email === "string") stopped += await stopLeadByEmail(e.email, reason, new Date(), account)
+    if (reason && typeof e.email === "string") stopped += await stopAddressEverywhere(e.email, reason)
   }
   return NextResponse.json({ ok: true, stopped })
 }

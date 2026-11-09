@@ -64,7 +64,7 @@ export function LeadAudienceOptions({ leads, account = DEFAULT_ACCOUNT }: { lead
   if (!leads) return null
   const subscribed = leads.totals.total - leads.totals.unsubscribed
   const label =
-    account === DEFAULT_ACCOUNT ? "My leads (people who don't use CarouseLabs yet)" : `${ACCOUNTS[account].label}'s leads (sent from ${ACCOUNTS[account].domain})`
+    account === DEFAULT_ACCOUNT ? "My leads (people who don't use CarouseLabs yet)" : `${ACCOUNTS[account].label}'s leads`
   const prefix = account === DEFAULT_ACCOUNT ? "" : `${ACCOUNTS[account].label}: `
   return (
     <optgroup label={label}>
@@ -134,7 +134,7 @@ export function AudiencePicker({ value, onChange, id }: { value: Audience; onCha
       )}
       {account && account !== DEFAULT_ACCOUNT && (
         <p className="text-caption text-muted-foreground/80">
-          {ACCOUNTS[account].label}&apos;s leads: sent through the {ACCOUNTS[account].domain} Brevo account, from {ACCOUNTS[account].domain}. Each email gets an
+          {ACCOUNTS[account].label}&apos;s leads: it starts from his sender ({ACCOUNTS[account].sender.email}), and any sender can be picked. Each email gets an
           Unsubscribe link, and anyone who unsubscribed is left out.
         </p>
       )}

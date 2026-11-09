@@ -61,7 +61,7 @@ function respond(url: string, init?: RequestInit): Response {
   }
   if (url === "/api/admin/post-email/test") return Response.json({ ok: true, sentTo: "admin@carouselabs.com", built: {} })
   if (url.startsWith("/api/admin/leads")) return Response.json({ lists: [] })
-  if (url === "/api/admin/senders") return Response.json({ senders: [] })
+  if (url.startsWith("/api/admin/senders")) return Response.json({ senders: [] })
   return Response.json({ error: `unexpected ${url}` }, { status: 404 })
 }
 

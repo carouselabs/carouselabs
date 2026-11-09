@@ -763,21 +763,30 @@ export async function resolveLeadAudience(audience: LeadAudience): Promise<{ use
     .map((l) => ({ userId: null, email: l.email, name: l.name || [l.firstName, l.lastName].filter(Boolean).join(" ") || null }))
 }
 
-export type LeadSendInfo = { id: string; values: Record<string, string>; unsubscribed: boolean }
+export type LeadSendInfo = { id: string; values: Record<string, string>; unsubscribed: boolean; account: LeadAccount }
 
 /**
  * The leads among people a campaign is about to email (by address): their
  * merge-field values, and whether they unsubscribed. Empty before
  * scripts/leads.sql has been run, so campaigns send as they always did.
  */
-export async function leadSendInfo(emails: string[], account: LeadAccount = DEFAULT_ACCOUNT): Promise<Map<string, LeadSendInfo>> {
+export async function leadSendInfo(emails: string[], preferred: LeadAccount = DEFAULT_ACCOUNT): Promise<Map<string, LeadSendInfo>> {
   if (emails.length === 0) return new Map()
   try {
+    // A campaign can reach either account's leads (lib/leadAccounts.ts): an
+    // address that's a lead of both is the campaign's own account's lead.
     const leads = await db.lead.findMany({
-      where: { account, email: { in: emails.map((e) => e.toLowerCase()) } },
-      select: { id: true, email: true, firstName: true, lastName: true, name: true, fields: true, unsubscribedAt: true },
+      where: { email: { in: emails.map((e) => e.toLowerCase()) } },
+      select: { id: true, account: true, email: true, firstName: true, lastName: true, name: true, fields: true, unsubscribedAt: true },
     })
-    return new Map(leads.map((l) => [l.email, { id: l.id, values: leadValues(l), unsubscribed: !!l.unsubscribedAt }]))
+    const found = new Map<string, LeadSendInfo>()
+    for (const l of leads) {
+      const account = leadAccountOf(l.account)
+      const before = found.get(l.email)
+      if (before && (before.account === preferred || account !== preferred)) continue
+      found.set(l.email, { id: l.id, values: leadValues(l), unsubscribed: !!l.unsubscribedAt, account })
+    }
+    return found
   } catch (err) {
     if (leadsTableMissing(err)) return new Map()
     throw err
@@ -823,6 +832,16 @@ export async function unsubscribeLead(id: string, at: Date = new Date()): Promis
 export async function stopLeadByEmail(email: string, reason: StopReason, at: Date = new Date(), account: LeadAccount = DEFAULT_ACCOUNT): Promise<number> {
   const clean = cleanEmail(email)
   return clean ? stopLeads({ account, email: clean }, reason, at) : 0
+}
+
+/**
+ * A Brevo account stopped this address (its webhook, lib/brevo.ts): it's
+ * stopped as a lead of every account, since a campaign of either can reach
+ * it. Returns how many leads that was.
+ */
+export async function stopAddressEverywhere(email: string, reason: StopReason, at: Date = new Date()): Promise<number> {
+  const clean = cleanEmail(email)
+  return clean ? stopLeads({ email: clean }, reason, at) : 0
 }
 
 /** Stops these addresses of an account at once (lib/brevoSync.ts: contacts Brevo has on its blocklist). */

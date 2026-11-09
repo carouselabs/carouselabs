@@ -43,6 +43,16 @@ export const ACCOUNTS: Record<LeadAccount, AccountInfo> = {
 
 export const isLeadAccount = (value: unknown): value is LeadAccount => typeof value === "string" && (LEAD_ACCOUNTS as readonly string[]).includes(value)
 
+/**
+ * Whose sender an address is, by its domain (hello@anantgoyal.in → Anant
+ * Goyal's): that account's Brevo sends what comes from it. CarouseLabs' for
+ * anything else.
+ */
+export function accountOfEmail(email: string): LeadAccount {
+  const address = email.trim().toLowerCase()
+  return LEAD_ACCOUNTS.find((a) => a !== DEFAULT_ACCOUNT && address.endsWith(`@${ACCOUNTS[a].domain}`)) ?? DEFAULT_ACCOUNT
+}
+
 /** The account a request or stored value names; CarouseLabs' when it names none (or one that isn't there). */
 export const leadAccountOf = (value: unknown): LeadAccount => (isLeadAccount(value) ? value : DEFAULT_ACCOUNT)
 

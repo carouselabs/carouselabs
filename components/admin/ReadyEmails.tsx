@@ -77,7 +77,7 @@ export function ReadyEmails() {
                   <>
                     <dt className="text-muted-foreground">To</dt>
                     <dd className="min-w-0 text-foreground">
-                      {ACCOUNTS[readyAccount(email)].label}&apos;s leads, through the {ACCOUNTS[readyAccount(email)].domain} Brevo account
+                      {ACCOUNTS[readyAccount(email)].label}&apos;s leads to start with (any leads can be picked)
                     </dd>
                   </>
                 )}

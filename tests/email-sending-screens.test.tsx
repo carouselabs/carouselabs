@@ -59,7 +59,7 @@ const options = (label: string) => within(screen.getByLabelText(label)).getAllBy
 
 describe("the sending picker", () => {
   it("offers automatic, Resend or Brevo, and the senders on the list", async () => {
-    server({ "/api/admin/senders": () => SENDERS })
+    server({ "/api/admin/senders?account=all": () => SENDERS })
     const onChange = vi.fn()
     render(<Picker onChange={onChange} />)
     await waitFor(() => expect(options("From")).toHaveLength(3))
@@ -84,7 +84,7 @@ describe("the sending picker", () => {
   })
 
   it("says when Brevo would send from an address it doesn't have", async () => {
-    server({ "/api/admin/senders": () => SENDERS })
+    server({ "/api/admin/senders?account=all": () => SENDERS })
     render(<Picker initial={{ via: "brevo", fromEmail: "hello@carouselabs.com", replyTo: null }} />)
     expect(await screen.findByText(/hello@carouselabs.com isn't a sender in Brevo yet/)).toBeTruthy()
     fireEvent.change(screen.getByLabelText("Sent through"), { target: { value: "resend" } })
@@ -92,7 +92,7 @@ describe("the sending picker", () => {
   })
 
   it("warns when leads would go through Resend", async () => {
-    server({ "/api/admin/senders": () => SENDERS })
+    server({ "/api/admin/senders?account=all": () => SENDERS })
     render(<Picker forLeads />)
     await waitFor(() => expect(options("From")).toHaveLength(3))
     expect(screen.queryByText(/sending leads through Resend can get the account closed/)).toBeNull()
@@ -103,7 +103,7 @@ describe("the sending picker", () => {
 
 describe("a campaign's Sending line", () => {
   it("says what sends it, and Change saves a new choice for the rest of it", async () => {
-    const calls = server({ "/api/admin/senders": () => SENDERS, "PATCH /api/admin/campaigns/c1": () => ({ ok: true }) })
+    const calls = server({ "/api/admin/senders?account=all": () => SENDERS, "PATCH /api/admin/campaigns/c1": () => ({ ok: true }) })
     const onSaved = vi.fn()
     render(
       <ToastProvider>
@@ -133,30 +133,66 @@ describe("a campaign's Sending line", () => {
   })
 })
 
-describe("the sending picker for Anant Goyal's leads", () => {
-  it("only his senders, always through his Brevo; a CarouseLabs choice switches to his own", async () => {
-    server({ "/api/admin/senders?account=anant": () => ({ brevoKnown: true, senders: [{ name: "Anant Goyal", email: "hello@anantgoyal.in", inBrevo: true }] }) })
+describe("senders of both accounts (lib/leadAccounts.ts)", () => {
+  const BOTH = {
+    brevoKnown: true,
+    senders: [
+      { name: "CarouseLabs", email: "support@carouselabs.com", inBrevo: true, account: "carouselabs" },
+      { name: "Anant Goyal", email: "hello@anantgoyal.in", inBrevo: true, account: "anant" },
+    ],
+  }
+  function Both({ account, onChange }: { account: "carouselabs" | "anant"; onChange: (c: SendingChoice) => void }) {
+    const [value, setValue] = useState(DEFAULT_SENDING_CHOICE)
+    return (
+      <SendingPicker
+        idPrefix="both"
+        value={value}
+        forLeads
+        account={account}
+        onChange={(next) => {
+          setValue(next)
+          onChange(next)
+        }}
+      />
+    )
+  }
+
+  it("any lead can get any sender's email; one of Anant Goyal's always goes through his Brevo", async () => {
+    server({ "/api/admin/senders?account=all": () => BOTH })
     const onChange = vi.fn()
-    function His() {
-      const [value, setValue] = useState(DEFAULT_SENDING_CHOICE)
-      return (
-        <SendingPicker
-          idPrefix="his"
-          value={value}
-          forLeads
-          account="anant"
-          onChange={(next) => {
-            setValue(next)
-            onChange(next)
-          }}
-        />
-      )
-    }
-    render(<His />)
-    await waitFor(() => expect(onChange).toHaveBeenCalledWith({ via: "brevo", fromEmail: "hello@anantgoyal.in", replyTo: null }))
-    await waitFor(() => expect(options("From")).toEqual(["Anant Goyal <hello@anantgoyal.in>"]))
+    render(<Both account="carouselabs" onChange={onChange} />)
+    await waitFor(() => expect(options("From")).toEqual(["CarouseLabs <support@carouselabs.com>", "Anant Goyal <hello@anantgoyal.in>"]))
+    // Grouped by account.
+    expect([...screen.getByLabelText("From").querySelectorAll("optgroup")].map((g) => g.getAttribute("label"))).toEqual([
+      "CarouseLabs (carouselabs.com)",
+      "Anant Goyal (anantgoyal.in)",
+    ])
+    fireEvent.change(screen.getByLabelText("From"), { target: { value: "hello@anantgoyal.in" } })
+    expect(onChange).toHaveBeenLastCalledWith({ via: "brevo", fromEmail: "hello@anantgoyal.in", replyTo: null })
     expect(options("Sent through")).toEqual(["Brevo (anantgoyal.in), for everyone"])
     expect(screen.getByLabelText<HTMLSelectElement>("Sent through").disabled).toBe(true)
-    expect(screen.queryByText(/Resend's rules/)).toBeNull()
+    // And back: CarouseLabs' services again.
+    fireEvent.change(screen.getByLabelText("From"), { target: { value: "support@carouselabs.com" } })
+    expect(onChange).toHaveBeenLastCalledWith({ via: "auto", fromEmail: "support@carouselabs.com", replyTo: null })
+    expect(options("Sent through")).toHaveLength(3)
+  })
+
+  it("picking Anant Goyal's leads starts from his sender, and another can still be picked", async () => {
+    server({ "/api/admin/senders?account=all": () => BOTH })
+    const onChange = vi.fn()
+    const { rerender } = render(<Both account="carouselabs" onChange={onChange} />)
+    await waitFor(() => expect(options("From")).toHaveLength(2))
+    rerender(<Both account="anant" onChange={onChange} />)
+    expect(onChange).toHaveBeenLastCalledWith({ via: "brevo", fromEmail: "hello@anantgoyal.in", replyTo: null })
+    fireEvent.change(screen.getByLabelText("From"), { target: { value: "support@carouselabs.com" } })
+    expect(onChange).toHaveBeenLastCalledWith({ via: "auto", fromEmail: "support@carouselabs.com", replyTo: null })
+    expect((screen.getByLabelText("From") as HTMLSelectElement).value).toBe("support@carouselabs.com")
+  })
+
+  it("a personal email keeps to CarouseLabs' senders", async () => {
+    const calls = server({ "/api/admin/senders": () => SENDERS })
+    render(<Picker personal />)
+    await waitFor(() => expect(options("From")).toHaveLength(3))
+    expect(calls.map((c) => c.url)).toEqual(["/api/admin/senders"])
   })
 })

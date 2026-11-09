@@ -36,8 +36,8 @@ import { trackingToken } from "@/lib/emailTracking"
 import { isLeadAudience, leadAudienceAccount, mergeFieldProblem, parseLeadAudience } from "@/lib/leadRules"
 import { LEADS_SQL_MISSING, leadFieldKeys, leadListName, leadSendInfo, markLeadsEmailed } from "@/lib/leads"
 import { unsubscribeToken, unsubscribeUrl } from "@/lib/leadUnsubscribe"
-import { ACCOUNTS, DEFAULT_ACCOUNT, brevoProvider, type LeadAccount } from "@/lib/leadAccounts"
-import { DEFAULT_SENDING, VIA_CHOICES, defaultSendingFor, usesBrevo, type Sending, type SendingChoice, type Via } from "@/lib/sendingRules"
+import { ACCOUNTS, DEFAULT_ACCOUNT, accountOfEmail, brevoProvider, type LeadAccount } from "@/lib/leadAccounts"
+import { DEFAULT_SENDING, VIA_CHOICES, defaultSendingFor, fromEmailOf, usesBrevo, type Sending, type SendingChoice, type Via } from "@/lib/sendingRules"
 import { resolveSending } from "@/lib/senders"
 import { sendTestCopy, testOnFirstSend, type PlacementVia } from "@/lib/placement/tests"
 
@@ -86,24 +86,16 @@ async function audienceShown(recipients: BroadcastRecipients, audienceValue: str
 export const SENDING_SQL_MISSING = "Run scripts/email-sending.sql in Supabase first: choosing the service or sender needs it."
 
 /**
- * Whose campaign it is (lib/leadAccounts.ts), from who it went to: another
- * account's leads ("leads:anant:…") make it that account's, sent entirely
- * through its own Brevo; everything else is CarouseLabs'.
+ * Whose leads a campaign was made for (lib/leadAccounts.ts), from who it went
+ * to first: another account's leads ("leads:anant:…") start it from that
+ * account's sender, and an address that's a lead of both accounts is this
+ * account's lead. Anyone's leads can still be added to any campaign.
  */
 export const campaignAccount = (audience: BroadcastRecipients | string | null | undefined): LeadAccount =>
   (typeof audience === "string" ? leadAudienceAccount(audience) : null) ?? DEFAULT_ACCOUNT
 
-// People of one account can't be added to another's campaign.
-function sameAccount(campaignAudience: string, recipients: BroadcastRecipients) {
-  const from = campaignAccount(campaignAudience)
-  const to = campaignAccount(recipients)
-  if (from === to) return
-  throw new CampaignError(
-    from === DEFAULT_ACCOUNT
-      ? `This campaign is CarouseLabs'. ${ACCOUNTS[to].label}'s leads go in a campaign of their own.`
-      : `This campaign is ${ACCOUNTS[from].label}'s: only ${ACCOUNTS[from].label}'s leads can be added to it.`,
-  )
-}
+/** Whose Brevo sends a campaign: the sender's account (hello@anantgoyal.in → Anant Goyal's). */
+export const sendingAccount = (sending: Sending): LeadAccount => accountOfEmail(fromEmailOf(sending.from))
 
 // A campaign's stored choice; empty columns are the defaults.
 function sendingOf(row: { sendVia: string | null; sendFrom: string | null; replyTo: string | null } | null): Sending {
@@ -212,7 +204,6 @@ export async function addCampaignRecipients(input: {
   })
   if (!campaign) throw new CampaignError("Campaign not found", 404)
   if (campaign.status === "archived") throw new CampaignError("This campaign is archived. Restore it to add people.")
-  sameAccount(campaign.audience, input.recipients)
   await checkMergeFields(emailText(campaign), input.recipients)
 
   const rows = await audienceRows(input.recipients, input.audienceValue)
@@ -295,12 +286,12 @@ export async function campaignAllowances(now: Date = new Date(), account: LeadAc
 
 /**
  * The allowance a campaign's page shows: Brevo's when Brevo sends it
- * (lib/sendingRules.ts usesBrevo), Resend's otherwise; another account's
- * campaign always shows its own Brevo's. `account` asks for that account's
- * Brevo directly (the Leads page's Brevo card).
+ * (lib/sendingRules.ts usesBrevo), Resend's otherwise; from another
+ * account's sender, always that account's Brevo's. `account`: whose Brevo
+ * sends it (sendingAccount), or the Leads page's Brevo card asking directly.
  */
 export async function campaignAllowance(of: { audience?: string | null; via?: Via; account?: LeadAccount }, now: Date = new Date()): Promise<Allowance> {
-  const account = of.account ?? campaignAccount(of.audience)
+  const account = of.account ?? DEFAULT_ACCOUNT
   const all = await campaignAllowances(now, account)
   if (account !== DEFAULT_ACCOUNT) return all.brevo
   return usesBrevo(of.via ?? "auto", !!of.audience && isLeadAudience(of.audience)) ? all.brevo : all.resend
@@ -398,7 +389,10 @@ export async function getCampaign(id: string) {
   const scanners = await scannerColumns(id)
   const recipients = campaign.recipients.map((r) => ({ ...r, ...scanners.get(r.id) }))
   const sending = await campaignSending(id)
-  const [counts, allowance] = await Promise.all([statusCounts({ campaignId: id }), campaignAllowance({ audience: campaign.audience, via: sending.via }, now)])
+  const [counts, allowance] = await Promise.all([
+    statusCounts({ campaignId: id }),
+    campaignAllowance({ audience: campaign.audience, via: sending.via, account: sendingAccount(sending) }, now),
+  ])
   return { ...campaign, recipients, sending, progress: campaignProgress(counts), allowance }
 }
 
@@ -419,7 +413,7 @@ async function scannerColumns(campaignId: string) {
 
 /** Checks a choice of service and sender for these people (lib/senders.ts), or says what's wrong. */
 export async function checkSending(choice: SendingChoice, recipients: BroadcastRecipients | string): Promise<Sending> {
-  const checked = await resolveSending(choice, usesBrevo(choice.via, isLeadAudience(recipients)), undefined, campaignAccount(recipients))
+  const checked = await resolveSending(choice, usesBrevo(choice.via, isLeadAudience(recipients)), undefined, "any")
   if ("problem" in checked) throw new CampaignError(checked.problem)
   return checked.sending
 }
@@ -496,15 +490,14 @@ export async function sendCampaignBatch(input: {
   const ready = fixedHtmlOf(campaign.design)
   const design = ready ? null : campaignDesign(campaign.design)
 
-  // Another account's campaign (lib/leadAccounts.ts) goes entirely through its
-  // own Brevo, from its own sender, to its own leads.
-  const account = campaignAccount(campaign.audience)
-  const other = account !== DEFAULT_ACCOUNT
-  const brevo = other ? (input.brevoFor?.(account) ?? null) : (input.brevo ?? null)
-
   await releaseStuckSends(campaign.id, now)
   const choice = await campaignSending(campaign.id)
-  const from = choice.from === DEFAULT_SENDING.from ? (other ? defaultSendingFor(account).from : input.from) : choice.from
+  // From another account's sender (lib/leadAccounts.ts), it goes entirely
+  // through that account's Brevo, to whoever's leads it was sent to.
+  const account = sendingAccount(choice)
+  const other = account !== DEFAULT_ACCOUNT
+  const brevo = other ? (input.brevoFor?.(account) ?? null) : (input.brevo ?? null)
+  const from = choice.from === DEFAULT_SENDING.from ? input.from : choice.from
 
   // Who's going out, and through what: Brevo or Resend as the campaign says
   // (automatic: leads, lib/leads.ts, through Brevo and everyone else through
@@ -513,7 +506,7 @@ export async function sendCampaignBatch(input: {
   const candidates = await db.emailCampaignRecipient.findMany({ where: { id: { in: ids }, ...open }, select: { id: true, userId: true, email: true } })
   const leads = await leadSendInfo(
     candidates.flatMap((r) => (r.userId ? [] : [r.email])),
-    account,
+    campaignAccount(campaign.audience),
   )
   const leadOf = (r: { userId: string | null; email: string }) => (r.userId ? undefined : leads.get(r.email.toLowerCase()))
   const byBrevo = (r: { userId: string | null; email: string }) => other || usesBrevo(choice.via, !!leadOf(r))
@@ -644,11 +637,11 @@ export async function sendPlacementTests(input: {
   if (!campaign) throw new CampaignError("Campaign not found", 404)
   const ready = fixedHtmlOf(campaign.design)
   const email: CampaignEmail = { ready, design: ready ? null : campaignDesign(campaign.design), subject: campaign.subject, body: campaign.body }
-  const account = campaignAccount(campaign.audience)
+  const choice = await campaignSending(campaign.id)
+  const account = sendingAccount(choice)
   const other = account !== DEFAULT_ACCOUNT
   const brevo = other ? (input.brevoFor?.(account) ?? null) : (input.brevo ?? null)
-  const choice = await campaignSending(campaign.id)
-  const from = choice.from === DEFAULT_SENDING.from ? (other ? defaultSendingFor(account).from : input.from) : choice.from
+  const from = choice.from === DEFAULT_SENDING.from ? input.from : choice.from
 
   // One row per service its people went through.
   const ways = await db.emailCampaignRecipient.findMany({ where: { campaignId: campaign.id, status: "sent" }, select: { provider: true }, distinct: ["provider"] })

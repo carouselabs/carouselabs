@@ -442,7 +442,7 @@ describe("Ready-made emails", () => {
     expect(preview).toContain('href="mailto:support@carouselabs.com?subject=Re%3A%20Quick%20question%20about%20your%20Entra%20tenant"')
     // Anant Goyal's: from his address, to his leads, the designed email as it is.
     expect(screen.getByText("Anant Goyal <hello@anantgoyal.in>")).toBeTruthy()
-    expect(screen.getByText(/Anant Goyal's leads, through the anantgoyal\.in Brevo account/)).toBeTruthy()
+    expect(screen.getByText(/Anant Goyal's leads to start with \(any leads can be picked\)/)).toBeTruthy()
     const his = screen.getByTitle("Anant Goyal · Cold outreach preview").getAttribute("srcdoc")!
     expect(his).toContain("Hi Priya,")
     expect(his).toContain("Explore My Work")

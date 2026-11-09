@@ -6,11 +6,13 @@
 //   → { senders: [{ name, email, inBrevo }], brevoKnown }
 import { NextResponse } from "next/server"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
-import { senderChoices } from "@/lib/senders"
+//   ?account=all: every account's, each with its account (campaigns can use any)
+import { allSenderChoices, senderChoices } from "@/lib/senders"
 import { leadAccountOf } from "@/lib/leadAccounts"
 
 export async function GET(req: Request) {
   const admin = await getAdminUser()
   if (!admin) return adminForbidden()
-  return NextResponse.json(await senderChoices(undefined, leadAccountOf(new URL(req.url).searchParams.get("account"))))
+  const account = new URL(req.url).searchParams.get("account")
+  return NextResponse.json(account === "all" ? await allSenderChoices() : await senderChoices(undefined, leadAccountOf(account)))
 }

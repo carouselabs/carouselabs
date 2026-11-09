@@ -1,27 +1,30 @@
 "use client"
 
 // What sends an email and who it's from (lib/sendingRules.ts): the service
-// (automatic, Resend or Brevo), the sender, picked from the list
-// (support@carouselabs.com and every carouselabs.com sender added in Brevo,
-// /api/admin/senders), and where replies go. Used when making a campaign (AI
-// writer, composer, Use again), on a campaign's page, and for a personal email.
-// Another account's leads (lib/leadAccounts.ts: Anant Goyal's) always go
-// through its own Brevo, from its own senders: the picker shows only those.
-import { useEffect, useState } from "react"
+// (automatic, Resend or Brevo), the sender, picked from the list, and where
+// replies go. Used when making a campaign (AI writer, composer, Use again),
+// on a campaign's page, and for a personal email.
+// A campaign can go to anyone's leads from any account's sender
+// (lib/leadAccounts.ts): CarouseLabs' (support@carouselabs.com and every
+// carouselabs.com sender in its Brevo) and Anant Goyal's (hello@anantgoyal.in
+// and anantgoyal.in senders in his). The sender decides which Brevo sends:
+// one of his always goes through his. Picking another account's leads starts
+// from that account's own sender; any other can still be picked. A personal
+// email (to a user) stays on CarouseLabs' senders.
+import { useEffect, useRef, useState } from "react"
 import { AdminSelect } from "@/components/admin/ui"
 import { VIA_LABELS, defaultChoiceFor, usesBrevo, type SendingChoice, type Via } from "@/lib/sendingRules"
 import type { SenderChoice } from "@/lib/senders"
-import { ACCOUNTS, DEFAULT_ACCOUNT, type LeadAccount } from "@/lib/leadAccounts"
-import { withAccount } from "./leadAccountContext"
+import { ACCOUNTS, DEFAULT_ACCOUNT, LEAD_ACCOUNTS, accountOfEmail, type LeadAccount } from "@/lib/leadAccounts"
 
 type Senders = { senders: SenderChoice[]; brevoKnown: boolean }
 
-/** One account's senders to pick from; null while loading. */
-export function useSenders(account: LeadAccount = DEFAULT_ACCOUNT): Senders | null {
+/** The senders to pick from (every account's, or only CarouseLabs'); null while loading. */
+export function useSenders(all = true): Senders | null {
   const [senders, setSenders] = useState<Senders | null>(null)
   useEffect(() => {
     let live = true
-    fetch(withAccount("/api/admin/senders", account))
+    fetch(all ? "/api/admin/senders?account=all" : "/api/admin/senders")
       .then((res) => (res.ok ? res.json() : null))
       .then((data: Senders | null) => {
         if (live) setSenders(data ?? { senders: [], brevoKnown: false })
@@ -30,7 +33,7 @@ export function useSenders(account: LeadAccount = DEFAULT_ACCOUNT): Senders | nu
     return () => {
       live = false
     }
-  }, [account])
+  }, [all])
   return senders
 }
 
@@ -53,24 +56,37 @@ export function SendingPicker({
   value: SendingChoice
   onChange: (next: SendingChoice) => void
   idPrefix: string
-  // One user (a personal email): Resend or Brevo, no "automatic".
+  // One user (a personal email): Resend or Brevo, no "automatic", CarouseLabs' senders.
   personal?: boolean
   // The audience is leads (lib/leadRules.ts).
   forLeads?: boolean
-  // Whose leads (lib/leadAccounts.ts): another account's go through its own Brevo, from its own senders.
+  // Whose leads were picked (lib/leadAccounts.ts): picking another account's starts from its own sender.
   account?: LeadAccount
 }) {
-  const info = ACCOUNTS[account]
-  const other = account !== DEFAULT_ACCOUNT
-  const list = useSenders(account)
-  // Switching to another account's leads (or back): start from that account's own sender.
-  const onDomain = value.fromEmail.endsWith(`@${info.domain}`)
+  const list = useSenders(!personal)
+
+  // Another account's leads picked (or back again): start from that account's own sender.
+  const lastAccount = useRef(account)
   useEffect(() => {
-    if (!onDomain || (other && value.via !== "brevo")) onChange(defaultChoiceFor(account))
-  }, [account, onDomain, other, value.via, onChange])
+    if (lastAccount.current === account) return
+    lastAccount.current = account
+    onChange(defaultChoiceFor(account))
+  }, [account, onChange])
+
+  // Whose Brevo sends it: the picked sender's account.
+  const senderAccount = accountOfEmail(value.fromEmail)
+  const other = senderAccount !== DEFAULT_ACCOUNT
+  const info = ACCOUNTS[senderAccount]
+  // From another account's sender, it always goes through that account's Brevo.
+  useEffect(() => {
+    if (other && value.via !== "brevo") onChange({ ...value, via: "brevo" })
+  }, [other, value, onChange])
+
   // The picked one stays listed even if it's no longer a sender (the server then says so).
-  const listed = list?.senders ?? []
-  const senders = listed.some((s) => s.email === value.fromEmail) ? listed : [...listed, { name: info.sender.name, email: value.fromEmail, inBrevo: false }]
+  const listed = (list?.senders ?? []).map((s) => ({ ...s, account: s.account ?? accountOfEmail(s.email) }))
+  const senders = listed.some((s) => s.email === value.fromEmail)
+    ? listed
+    : [...listed, { name: info.sender.name, email: value.fromEmail, inBrevo: false, account: senderAccount }]
   const sender = senders.find((s) => s.email === value.fromEmail)
   const byBrevo = other || usesBrevo(value.via, forLeads)
   const missingInBrevo = byBrevo && !!list?.brevoKnown && !!sender && !sender.inBrevo
@@ -79,6 +95,8 @@ export function SendingPicker({
     : personal
       ? PERSONAL_VIAS
       : (Object.keys(VIA_LABELS) as Via[]).map((via) => ({ via, label: VIA_LABELS[via] }))
+  const groups = LEAD_ACCOUNTS.map((a) => ({ account: a, senders: senders.filter((s) => s.account === a) })).filter((g) => g.senders.length > 0)
+  const grouped = groups.length > 1
 
   return (
     <div className="flex flex-col gap-3">
@@ -105,12 +123,32 @@ export function SendingPicker({
           <label htmlFor={`${idPrefix}-from`} className={label}>
             From
           </label>
-          <AdminSelect id={`${idPrefix}-from`} value={value.fromEmail} onChange={(e) => onChange({ ...value, fromEmail: e.target.value })} className="w-full">
-            {senders.map((s) => (
-              <option key={s.email} value={s.email}>
-                {s.name} &lt;{s.email}&gt;
-              </option>
-            ))}
+          <AdminSelect
+            id={`${idPrefix}-from`}
+            value={value.fromEmail}
+            onChange={(e) => {
+              const fromEmail = e.target.value
+              const next = accountOfEmail(fromEmail)
+              // Changing account: replies go to the new sender unless picked again.
+              onChange(next === senderAccount ? { ...value, fromEmail } : { via: next === DEFAULT_ACCOUNT ? "auto" : "brevo", fromEmail, replyTo: null })
+            }}
+            className="w-full"
+          >
+            {grouped
+              ? groups.map((g) => (
+                  <optgroup key={g.account} label={`${ACCOUNTS[g.account].label} (${ACCOUNTS[g.account].domain})`}>
+                    {g.senders.map((s) => (
+                      <option key={s.email} value={s.email}>
+                        {s.name} &lt;{s.email}&gt;
+                      </option>
+                    ))}
+                  </optgroup>
+                ))
+              : senders.map((s) => (
+                  <option key={s.email} value={s.email}>
+                    {s.name} &lt;{s.email}&gt;
+                  </option>
+                ))}
           </AdminSelect>
         </div>
         <div className="space-y-1.5">
@@ -125,7 +163,7 @@ export function SendingPicker({
           >
             <option value="">The sender</option>
             {senders
-              .filter((s) => s.email !== value.fromEmail)
+              .filter((s) => s.email !== value.fromEmail && s.account === senderAccount)
               .map((s) => (
                 <option key={s.email} value={s.email}>
                   {s.email}
@@ -142,6 +180,11 @@ export function SendingPicker({
       {!other && forLeads && value.via === "resend" && (
         <p className="text-caption text-warning">
           Resend&apos;s rules don&apos;t allow emailing people who didn&apos;t sign up: sending leads through Resend can get the account closed.
+        </p>
+      )}
+      {other && (
+        <p className="text-caption text-muted-foreground/80">
+          From {info.domain}: it goes through the {info.domain} Brevo account, with its own daily limit, to whichever leads you picked.
         </p>
       )}
       <p className="text-caption text-muted-foreground/80">

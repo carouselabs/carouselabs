@@ -278,6 +278,16 @@ vi.mock("@/lib/db", () => ({
       }),
     },
     emailCampaignRecipient: {
+      // Add people: one row per address on a campaign (campaignId + email is unique).
+      createMany: vi.fn(async ({ data }: { data: Partial<RecipientRow>[] }) => {
+        let count = 0
+        for (const d of data) {
+          if (store.recipients.some((r) => r.campaignId === d.campaignId && r.email === d.email)) continue
+          store.recipients.push(recipient(d))
+          count++
+        }
+        return { count }
+      }),
       updateMany: vi.fn(async ({ where, data }: { where: Record<string, unknown>; data: Partial<RecipientRow> }) => {
         const hit = store.recipients.filter((r) => matches(r, where))
         for (const r of hit) Object.assign(r, data, { updatedAt: new Date() })
@@ -1989,7 +1999,7 @@ describe("two lead accounts, kept apart", () => {
     expect((await resolveLeadAudience(`leads:anant:list:${listId}`)).map((p) => p.email)).toEqual(["a@example.test"])
   })
 
-  it("Brevo stopping someone stops only that account's lead, with that account's own webhook token", async () => {
+  it("Brevo stopping an address stops it as a lead of every account (either can reach it), each Brevo with its own webhook token", async () => {
     await importLeads({ adminEmail: ADMIN, listName: "Mine", columns: [], leads: [lead("x@example.test")] })
     await importLeads({ adminEmail: ADMIN, account: "anant", listName: "His", columns: [], leads: [lead("x@example.test")] })
     expect(brevoWebhookToken("anant")).not.toBe(brevoWebhookToken())
@@ -1999,9 +2009,9 @@ describe("two lead accounts, kept apart", () => {
     // CarouseLabs' token isn't Anant Goyal's.
     expect((await call(`account=anant&token=${brevoWebhookToken()}`)).status).toBe(401)
     const res = await call(`account=anant&token=${brevoWebhookToken("anant")}`)
-    expect(await res.json()).toEqual({ ok: true, stopped: 1 })
+    expect(await res.json()).toEqual({ ok: true, stopped: 2 })
     expect(of("anant", "x@example.test")).toMatchObject({ unsubscribedAt: expect.any(Date), stopReason: "bounced" })
-    expect(of("carouselabs", "x@example.test").unsubscribedAt).toBeNull()
+    expect(of("carouselabs", "x@example.test")).toMatchObject({ unsubscribedAt: expect.any(Date), stopReason: "bounced" })
   })
 
   it("his campaign goes entirely through his own Brevo, from hello@anantgoyal.in, counted against its own daily limit", async () => {
@@ -2032,21 +2042,53 @@ describe("two lead accounts, kept apart", () => {
     expect(of("anant", "ana@example.test").emailCount).toBe(1)
 
     // His Brevo's limit counts his sends only; CarouseLabs' Brevo is untouched.
-    expect(await campaignAllowance({ audience: "leads:anant:all" })).toMatchObject({ via: "brevo", account: "anant", sentToday: 1 })
+    expect(await campaignAllowance({ audience: "leads:anant:all", account: "anant" })).toMatchObject({ via: "brevo", account: "anant", sentToday: 1 })
     expect(await campaignAllowance({ audience: "leads:all" })).toMatchObject({ via: "brevo", sentToday: 0 })
   })
 
-  it("his campaign won't send without his Brevo, and CarouseLabs' people can't be added to it (nor his to CarouseLabs')", async () => {
+  it("his campaign won't send without his Brevo; anyone's leads can be added to any campaign", async () => {
     await importLeads({ adminEmail: ADMIN, account: "anant", listName: "His", columns: [], leads: [lead("ana@example.test")] })
     await importLeads({ adminEmail: ADMIN, listName: "Mine", columns: [], leads: [lead("cara@example.test")] })
     const his = await createCampaign({ adminEmail: ADMIN, subject: "Hi", body: "Hello.", recipients: "leads:anant:all", audienceValue: null })
     await expect(
       sendCampaignBatch({ campaignId: his.id, recipientIds: [store.recipients[0].id], adminEmail: ADMIN, resend, brevo, brevoFor: () => null, from: "x" }),
     ).rejects.toThrow(/BREVO_API_KEY_ANANTGOYAL/)
-    await expect(addCampaignRecipients({ campaignId: his.id, adminEmail: ADMIN, recipients: "leads:all", audienceValue: null })).rejects.toThrow(/only Anant Goyal's leads/)
-    await expect(addCampaignRecipients({ campaignId: his.id, adminEmail: ADMIN, recipients: ["someone@example.test"], audienceValue: null })).rejects.toBeInstanceOf(CampaignError)
+    expect(await addCampaignRecipients({ campaignId: his.id, adminEmail: ADMIN, recipients: "leads:all", audienceValue: null })).toEqual({ added: 1, already: 0 })
     const mine = await createCampaign({ adminEmail: ADMIN, subject: "Hi", body: "Hello.", recipients: "leads:all", audienceValue: null })
-    await expect(addCampaignRecipients({ campaignId: mine.id, adminEmail: ADMIN, recipients: "leads:anant:all", audienceValue: null })).rejects.toThrow(/campaign of their own/)
+    expect(await addCampaignRecipients({ campaignId: mine.id, adminEmail: ADMIN, recipients: "leads:anant:all", audienceValue: null })).toEqual({ added: 1, already: 0 })
+  })
+
+  it("CarouseLabs' leads can get his email from hello@anantgoyal.in: through his Brevo, each with their own Unsubscribe link", async () => {
+    await importLeads({ adminEmail: ADMIN, listName: "Mine", columns: [], leads: [lead("cara@example.test", { firstName: "Cara" })] })
+    const made = await createCampaign({
+      adminEmail: ADMIN,
+      subject: "Hi {{firstName}}",
+      body: "Hello {{firstName}}.",
+      recipients: "leads:all",
+      audienceValue: null,
+      sending: { via: "brevo", from: "Anant Goyal <hello@anantgoyal.in>", replyTo: null },
+    })
+    const [r] = store.recipients
+    const result = await sendCampaignBatch({ campaignId: made.id, recipientIds: [r.id], adminEmail: ADMIN, resend, brevo, brevoFor: (a) => (a === "anant" ? anantMailer : null), from: "x" })
+    expect(result).toMatchObject({ sent: 1, failed: 0 })
+    expect(viaBrevo).toEqual([])
+    const [email] = viaAnant.flat()
+    expect(email).toMatchObject({ to: "cara@example.test", subject: "Hi Cara", from: "Anant Goyal <hello@anantgoyal.in>" })
+    const link = /href="([^"]+\/api\/unsubscribe\/[^"]+)"/.exec(email.html)?.[1]
+    expect(readUnsubscribeToken(link!.split("/").pop()!)).toBe(of("carouselabs", "cara@example.test").id)
+    expect(store.recipients[0]).toMatchObject({ status: "sent", provider: "brevo:anant" })
+    expect(await getCampaign(made.id)).toMatchObject({ allowance: { via: "brevo", account: "anant", sentToday: 1 } })
+  })
+
+  it("his leads can get an email from support@carouselabs.com, through CarouseLabs' Brevo", async () => {
+    await importLeads({ adminEmail: ADMIN, account: "anant", listName: "His", columns: [], leads: [lead("ana@example.test", { firstName: "Ana" })] })
+    const made = await createCampaign({ adminEmail: ADMIN, subject: "Hi {{firstName}}", body: "Hello.", recipients: "leads:anant:all", audienceValue: null, sending: DEFAULT_SENDING })
+    const [r] = store.recipients
+    const result = await sendCampaignBatch({ campaignId: made.id, recipientIds: [r.id], adminEmail: ADMIN, resend, brevo, brevoFor: () => anantMailer, from: "CarouseLabs <support@carouselabs.com>" })
+    expect(result).toMatchObject({ sent: 1 })
+    expect(viaAnant).toEqual([])
+    expect(viaBrevo.flat()[0]).toMatchObject({ to: "ana@example.test", subject: "Hi Ana", from: "CarouseLabs <support@carouselabs.com>" })
+    expect(store.recipients[0]).toMatchObject({ provider: "brevo" })
   })
 
   it("his senders are anantgoyal.in's, and his emails always go through his Brevo", async () => {
@@ -2066,7 +2108,11 @@ describe("two lead accounts, kept apart", () => {
     expect(choices.senders.map((s) => `${s.name} <${s.email}>`)).toEqual(["Anant Goyal <hello@anantgoyal.in>", "Team <team@anantgoyal.in>"])
     expect(calls[0].init.headers).toMatchObject({ "api-key": "his-key" })
     expect(await resolveSending({ via: "auto", fromEmail: "support@carouselabs.com" }, false, fetchFn, "anant")).toEqual({
-      problem: expect.stringMatching(/come from anantgoyal\.in/),
+      problem: expect.stringMatching(/sends through CarouseLabs' Brevo: pick one of Anant Goyal's senders/),
+    })
+    // A campaign can use any account's sender: his always through his Brevo.
+    expect(await resolveSending({ via: "auto", fromEmail: "hello@anantgoyal.in" }, false, fetchFn, "any")).toEqual({
+      sending: { via: "brevo", from: "Anant Goyal <hello@anantgoyal.in>", replyTo: null },
     })
     expect(await resolveSending({ via: "resend", fromEmail: "team@anantgoyal.in" }, false, fetchFn, "anant")).toEqual({
       sending: { via: "brevo", from: "Team <team@anantgoyal.in>", replyTo: null },

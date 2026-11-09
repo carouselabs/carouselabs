@@ -8,7 +8,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, Send } from "lucide-react"
 import { AdminButton, AdminCard } from "@/components/admin/ui"
-import { personalizePreview, READY_EMAILS, readyAccount, readyEmailHtml, withReplyLink, type ReadyEmail } from "@/lib/readyEmails"
+import { personalizePreview, READY_EMAILS, REPLY_LINK, readyAccount, readyEmailHtml, withReplyLink, type ReadyEmail } from "@/lib/readyEmails"
 import { fromHeader } from "@/lib/sendingRules"
 import { ACCOUNTS, DEFAULT_ACCOUNT } from "@/lib/leadAccounts"
 import { UseAgainDialog } from "./UseAgainDialog"
@@ -17,7 +17,7 @@ const EXAMPLE_NAME = "Priya"
 
 function Preview({ email }: { email: ReadyEmail }) {
   const [height, setHeight] = useState(900)
-  const html = personalizePreview(withReplyLink(readyEmailHtml(email), ACCOUNTS[readyAccount(email)].sender.email, email.subject), EXAMPLE_NAME)
+  const html = personalizePreview(withReplyLink(readyEmailHtml(email), ACCOUNTS[readyAccount(email)].sender.email, email.subject, email.replyBody), EXAMPLE_NAME)
   return (
     <iframe
       title={`${email.name} preview`}
@@ -84,7 +84,12 @@ export function ReadyEmails() {
               </dl>
               <Preview email={email} />
               <p className="text-caption text-muted-foreground">
-                Shown with the example name {EXAMPLE_NAME}.{email.letter ? " The button opens a reply to the sender." : ""}
+                Shown with the example name {EXAMPLE_NAME}.
+                {readyEmailHtml(email).includes(REPLY_LINK)
+                  ? email.replyBody
+                    ? " Its button opens a reply to the sender with a short message already written."
+                    : " The button opens a reply to the sender."
+                  : ""}
               </p>
             </div>
           </AdminCard>

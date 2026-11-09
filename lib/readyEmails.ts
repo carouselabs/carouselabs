@@ -14,7 +14,7 @@
 import { z } from "zod"
 import { EMAIL_IMAGES } from "@/emails/theme"
 import { DEFAULT_ACCOUNT, type LeadAccount } from "@/lib/leadAccounts"
-import { ANANT_COLD_HTML, ANANT_COLD_TEXT } from "@/lib/readyEmailsAnant"
+import { ANANT_COLD_HTML, ANANT_COLD_REPLY, ANANT_COLD_TEXT } from "@/lib/readyEmailsAnant"
 
 /** Where the button's reply link goes: filled in when sent, with the address replies go to. */
 export const REPLY_LINK = "__REPLY_LINK__"
@@ -33,9 +33,10 @@ export type ReadyEmail = {
   // Whose leads it's for (lib/leadAccounts.ts); CarouseLabs' unless said.
   account?: LeadAccount
 } & (
-  | { letter: Letter; html?: undefined; text?: undefined }
+  | { letter: Letter; html?: undefined; text?: undefined; replyBody?: undefined }
   // A whole designed email ({{firstName}} filled in when sent), and its words.
-  | { html: string; text: string; letter?: undefined }
+  // replyBody: what its Reply button's reply starts with (REPLY_LINK).
+  | { html: string; text: string; letter?: undefined; replyBody?: string }
 )
 
 /** Whose leads a ready-made email goes to. */
@@ -109,6 +110,7 @@ READY_EMAILS.push({
   account: "anant",
   html: ANANT_COLD_HTML,
   text: ANANT_COLD_TEXT,
+  replyBody: ANANT_COLD_REPLY,
 })
 
 export const readyEmailById = (id: string): ReadyEmail | null => READY_EMAILS.find((e) => e.id === id) ?? null
@@ -202,12 +204,21 @@ export const readyDesignSchema = z.object({
   subject: z.string().min(1).max(300),
   fromName: z.string().min(1).max(100),
   html: z.string().min(1).max(200_000),
+  // What the Reply button's reply starts with (a designed email's).
+  replyBody: z.string().max(2000).optional(),
 })
 export type ReadyDesign = z.infer<typeof readyDesignSchema>
 
 /** The copy a campaign keeps of a ready-made email. */
 export function readySnapshot(email: ReadyEmail): ReadyDesign {
-  return { kind: "ready", id: email.id, subject: email.subject, fromName: email.fromName, html: readyEmailHtml(email) }
+  return {
+    kind: "ready",
+    id: email.id,
+    subject: email.subject,
+    fromName: email.fromName,
+    html: readyEmailHtml(email),
+    ...(email.replyBody ? { replyBody: email.replyBody } : {}),
+  }
 }
 
 /** A campaign's (or template's) ready-made email, or null for any other kind. */
@@ -221,8 +232,10 @@ export function personalizePreview(html: string, firstName: string): string {
   return html.split("{{firstName}}").join(esc(firstName))
 }
 
-/** The button opens a reply to this address, with the subject filled in. */
-export function withReplyLink(html: string, address: string, subject: string): string {
-  const link = `mailto:${address}?subject=${encodeURIComponent(`Re: ${subject}`)}`
+/** The button opens a reply to this address, with the subject (and the email's reply message) filled in. */
+export function withReplyLink(html: string, address: string, subject: string, body?: string | null): string {
+  // Line breaks as CRLF (RFC 6068), so every mail app keeps them.
+  const message = body ? `&body=${encodeURIComponent(body.replace(/\r?\n/g, "\r\n"))}` : ""
+  const link = `mailto:${address}?subject=${encodeURIComponent(`Re: ${subject}`)}${message}`
   return html.split(REPLY_LINK).join(esc(link))
 }

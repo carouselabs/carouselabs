@@ -2,21 +2,26 @@
 // lib/readyEmails.ts can list as a ready-made email (Admin → Broadcasts →
 // Ready-made emails), sent exactly as built.
 //
-//   node scripts/ready-email-from-html.mjs <email.html> <email.txt> <out.ts> <NAME>
+//   node scripts/ready-email-from-html.mjs <email.html> <email.txt> <out.ts> <NAME> [reply.txt]
+//
+// A Reply button in the email links to "__REPLY_LINK__" (lib/readyEmails.ts
+// REPLY_LINK): when sent it opens a reply to the campaign's reply address,
+// with reply.txt (if given) already written for them to fill in.
 //
 // Anant Goyal's cold-outreach email is built in C:\Users\anant\email-studio
 // (outreach/build.mjs → outreach/dist/cold-outreach.html/.txt); its pictures
 // are hosted on anantgoyal.in. After changing it there, run:
-//   node scripts/ready-email-from-html.mjs ../email-studio/outreach/dist/cold-outreach.html ../email-studio/outreach/dist/cold-outreach.txt lib/readyEmailsAnant.ts ANANT_COLD
+//   node scripts/ready-email-from-html.mjs ../email-studio/outreach/dist/cold-outreach.carouselabs.html ../email-studio/outreach/dist/cold-outreach.txt lib/readyEmailsAnant.ts ANANT_COLD ../email-studio/outreach/dist/cold-outreach.reply.txt
 import { readFileSync, writeFileSync } from "node:fs"
 
-const [htmlPath, textPath, outPath, name] = process.argv.slice(2)
+const [htmlPath, textPath, outPath, name, replyPath] = process.argv.slice(2)
 if (!htmlPath || !textPath || !outPath || !/^[A-Z][A-Z0-9_]*$/.test(name ?? "")) {
   console.error("usage: node scripts/ready-email-from-html.mjs <email.html> <email.txt> <out.ts> <NAME>")
   process.exit(1)
 }
 const html = readFileSync(htmlPath, "utf8")
 const text = readFileSync(textPath, "utf8").trim()
+const reply = replyPath ? readFileSync(replyPath, "utf8") : null
 if (/<script/i.test(html)) throw new Error("The email has a <script>: emails can't")
 if (Buffer.byteLength(html) > 100_000) throw new Error("The email is over 100 KB: Gmail would clip it")
 
@@ -28,6 +33,6 @@ writeFileSync(
 export const ${name}_HTML = ${JSON.stringify(html)}
 
 export const ${name}_TEXT = ${JSON.stringify(text)}
-`,
+${reply === null ? "" : `\n// What the Reply button's reply starts with.\nexport const ${name}_REPLY = ${JSON.stringify(reply)}\n`}`,
 )
 console.log(`wrote ${outPath} (${(Buffer.byteLength(html) / 1024).toFixed(1)} KB of HTML)`)

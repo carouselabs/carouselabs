@@ -21,7 +21,7 @@ export function readyFrom(ready: ReadyDesign, from: string): string {
 
 /** The email as it's sent, before each person's name: its button replying to replyTo, or the sender. */
 export function readyHtml(ready: ReadyDesign, from: string, replyTo: string | null): string {
-  return withReplyLink(ready.html, replyTo ?? parseFrom(from).email, ready.subject)
+  return withReplyLink(ready.html, replyTo ?? parseFrom(from).email, ready.subject, ready.replyBody)
 }
 
 export async function sendReadyEmails(

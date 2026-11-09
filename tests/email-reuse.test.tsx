@@ -446,6 +446,10 @@ describe("Ready-made emails", () => {
     const his = screen.getByTitle("Anant Goyal · Cold outreach preview").getAttribute("srcdoc")!
     expect(his).toContain("Hi Priya,")
     expect(his).toContain("Explore My Work")
+    // Connect: a reply to him, the subject and a short message already written.
+    expect(his).toContain("Connect &rarr;")
+    expect(his).toContain('href="mailto:hello@anantgoyal.in?subject=Re%3A%20Still%20sending%20plain-text%20emails%3F&amp;body=Hey%20Anant%2C%0D%0A%0D%0A')
+    expect(screen.getByText(/Its button opens a reply to the sender with a short message already written/)).toBeTruthy()
   })
 
   it("Use this email makes a campaign of it as it is: it can't be edited or sent to one person", async () => {

@@ -426,7 +426,7 @@ import { leadAudience, leadListAudience } from "@/lib/leadRules"
 import { addCampaignRecipients } from "@/lib/campaigns"
 import { ALL_CONTACTS, BREVO_SYNC_PAGE, contactToLead, stoppedInBrevo, syncBrevoPage } from "@/lib/brevoSync"
 import { POST as brevoSyncPost } from "@/app/api/admin/leads/brevo-sync/route"
-import { readyAccount } from "@/lib/readyEmails"
+import { readyAccount, withReplyLink } from "@/lib/readyEmails"
 
 // Users' emails go through Resend, leads' through Brevo: each fake keeps what it was given.
 type Sent = { from: string; to: string; subject: string; html: string; headers?: Record<string, string>; replyTo?: string }
@@ -2181,7 +2181,13 @@ describe("two lead accounts, kept apart", () => {
     expect(readyAccount(email)).toBe("anant")
     const html = readyEmailHtml(email)
     expect(html).toBe(email.html)
-    for (const words of ["Stop sending", "boring emails.", "Hi {{firstName}},", "Explore My Work", "https://anantgoyal.in", "impossible to ignore."]) expect(html).toContain(words)
+    for (const words of ["Stop sending", "boring emails.", "Hi {{firstName}},", "Explore My Work", "https://anantgoyal.in", "impossible to ignore.", "Connect &rarr;"]) expect(html).toContain(words)
+    // Its Reply button replies to whoever the campaign's replies go to.
+    expect(html.split(REPLY_LINK)).toHaveLength(3)
+    // A reply anyone can send, website or not: how to reach them and a time to connect.
+    expect(email.replyBody).toMatch(/^Hey Anant,\n\nLet's make my emails impossible to ignore\.\n\nMy brand: \n/)
+    expect(email.replyBody).toContain("Where to find me (website, Instagram, phone or WhatsApp): ")
+    expect(email.replyBody).toContain("A good time to connect: ")
     expect(readyEmailText(email)).toContain("Explore My Work: https://anantgoyal.in")
     expect(personalizePreview(html, "Priya")).toContain("Hi Priya,")
 
@@ -2195,6 +2201,26 @@ describe("two lead accounts, kept apart", () => {
     )
     expect(res.status).toBe(201)
     expect(store.campaigns[0]).toMatchObject({ subject: "Still sending plain-text emails?", sendFrom: "Anant Goyal <hello@anantgoyal.in>", sendVia: "brevo" })
-    expect(readyDesignOf(store.campaigns[0].design)).toMatchObject({ id: "anant-cold-1", fromName: "Anant Goyal", html })
+    expect(readyDesignOf(store.campaigns[0].design)).toMatchObject({ id: "anant-cold-1", fromName: "Anant Goyal", html, replyBody: email.replyBody })
+  })
+
+  it("his Connect button opens a reply to the campaign's address, the subject and a short message already written", () => {
+    const email = READY_EMAILS.find((e) => e.id === "anant-cold-1")!
+    const design = readySnapshot(email)
+    const replyTo = (sent: string) => {
+      const href = /href="(mailto:[^"]+)"/.exec(sent)?.[1].replace(/&amp;/g, "&")
+      return new URL(href!)
+    }
+    const fromHim = readyHtml(design, "Anant Goyal <hello@anantgoyal.in>", null)
+    expect(fromHim).not.toContain(REPLY_LINK)
+    const link = replyTo(fromHim)
+    expect(link.pathname).toBe("hello@anantgoyal.in")
+    expect(link.searchParams.get("subject")).toBe("Re: Still sending plain-text emails?")
+    expect(link.searchParams.get("body")).toBe(email.replyBody!.replace(/\n/g, "\r\n"))
+    // Replies set to go elsewhere (or another sender): the button follows.
+    expect(replyTo(readyHtml(design, "Anant Goyal <hello@anantgoyal.in>", "team@anantgoyal.in")).pathname).toBe("team@anantgoyal.in")
+    expect(replyTo(readyHtml(design, "CarouseLabs <support@carouselabs.com>", null)).pathname).toBe("support@carouselabs.com")
+    // Dharma's (no message): just the subject, as before.
+    expect(withReplyLink(`<a href="${REPLY_LINK}">x</a>`, "a@b.test", "Hi")).toBe('<a href="mailto:a@b.test?subject=Re%3A%20Hi">x</a>')
   })
 })

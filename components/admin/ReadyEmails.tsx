@@ -8,15 +8,16 @@ import { useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, Send } from "lucide-react"
 import { AdminButton, AdminCard } from "@/components/admin/ui"
-import { personalizePreview, READY_EMAILS, readyEmailHtml, withReplyLink, type ReadyEmail } from "@/lib/readyEmails"
-import { DEFAULT_SENDER, fromHeader } from "@/lib/sendingRules"
+import { personalizePreview, READY_EMAILS, readyAccount, readyEmailHtml, withReplyLink, type ReadyEmail } from "@/lib/readyEmails"
+import { fromHeader } from "@/lib/sendingRules"
+import { ACCOUNTS, DEFAULT_ACCOUNT } from "@/lib/leadAccounts"
 import { UseAgainDialog } from "./UseAgainDialog"
 
 const EXAMPLE_NAME = "Priya"
 
 function Preview({ email }: { email: ReadyEmail }) {
   const [height, setHeight] = useState(900)
-  const html = personalizePreview(withReplyLink(readyEmailHtml(email), DEFAULT_SENDER.email, email.subject), EXAMPLE_NAME)
+  const html = personalizePreview(withReplyLink(readyEmailHtml(email), ACCOUNTS[readyAccount(email)].sender.email, email.subject), EXAMPLE_NAME)
   return (
     <iframe
       title={`${email.name} preview`}
@@ -69,18 +70,30 @@ export function ReadyEmails() {
                 <dd className="min-w-0 font-semibold text-foreground">{email.subject}</dd>
                 <dt className="text-muted-foreground">From</dt>
                 <dd className="min-w-0 break-words text-foreground">
-                  {fromHeader({ name: email.fromName, email: DEFAULT_SENDER.email })}
+                  {fromHeader({ name: email.fromName, email: ACCOUNTS[readyAccount(email)].sender.email })}
                   <span className="text-muted-foreground"> (or the address you pick)</span>
                 </dd>
+                {readyAccount(email) !== DEFAULT_ACCOUNT && (
+                  <>
+                    <dt className="text-muted-foreground">To</dt>
+                    <dd className="min-w-0 text-foreground">
+                      {ACCOUNTS[readyAccount(email)].label}&apos;s leads, through the {ACCOUNTS[readyAccount(email)].domain} Brevo account
+                    </dd>
+                  </>
+                )}
               </dl>
               <Preview email={email} />
-              <p className="text-caption text-muted-foreground">Shown with the example name {EXAMPLE_NAME}. The button opens a reply to the sender.</p>
+              <p className="text-caption text-muted-foreground">
+                Shown with the example name {EXAMPLE_NAME}.{email.letter ? " The button opens a reply to the sender." : ""}
+              </p>
             </div>
           </AdminCard>
         ))}
       </div>
 
-      {using && <UseAgainDialog source={`ready:${using.id}`} subject={using.subject} title="Send this email" onClose={() => setUsing(null)} />}
+      {using && (
+        <UseAgainDialog source={`ready:${using.id}`} subject={using.subject} title="Send this email" account={readyAccount(using)} onClose={() => setUsing(null)} />
+      )}
     </div>
   )
 }

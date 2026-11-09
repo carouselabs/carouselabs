@@ -428,7 +428,11 @@ describe("Ready-made emails", () => {
   it("shows each one as people get it, with an example name and the button replying to the sender", () => {
     server({})
     render(<ReadyEmails />)
-    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(["Dharma Ramasamy · Email 1", "Dharma Ramasamy · Email 2"])
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+      "Dharma Ramasamy · Email 1",
+      "Dharma Ramasamy · Email 2",
+      "Anant Goyal · Cold outreach",
+    ])
     expect(screen.getByText("App registrations in your Entra tenant")).toBeTruthy()
     expect(screen.getByText("Quick question about your Entra tenant")).toBeTruthy()
     expect(screen.getAllByText("Dharma Ramasamy <support@carouselabs.com>")).toHaveLength(2)
@@ -436,6 +440,12 @@ describe("Ready-made emails", () => {
     expect(preview).toContain("Hello Priya,")
     expect(preview).not.toContain("{{firstName}}")
     expect(preview).toContain('href="mailto:support@carouselabs.com?subject=Re%3A%20Quick%20question%20about%20your%20Entra%20tenant"')
+    // Anant Goyal's: from his address, to his leads, the designed email as it is.
+    expect(screen.getByText("Anant Goyal <hello@anantgoyal.in>")).toBeTruthy()
+    expect(screen.getByText(/Anant Goyal's leads, through the anantgoyal\.in Brevo account/)).toBeTruthy()
+    const his = screen.getByTitle("Anant Goyal · Cold outreach preview").getAttribute("srcdoc")!
+    expect(his).toContain("Hi Priya,")
+    expect(his).toContain("Explore My Work")
   })
 
   it("Use this email makes a campaign of it as it is: it can't be edited or sent to one person", async () => {

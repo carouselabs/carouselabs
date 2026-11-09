@@ -8,6 +8,7 @@
 import { useRef, useState } from "react"
 import Link from "next/link"
 import { FileUp, Sparkles, X } from "lucide-react"
+import { bodyWithAccount, useLeadAccount } from "./leadAccountContext"
 import { AdminButton, AdminCard, AdminInput, AdminSelect, tableCls } from "@/components/admin/ui"
 import {
   LEAD_IMPORT_CHUNK,
@@ -36,6 +37,7 @@ const count = (n: number) => n.toLocaleString("en-US")
 const plural = (n: number, one: string, many = `${one}s`) => `${count(n)} ${n === 1 ? one : many}`
 
 export function LeadsUpload({ onSaved }: { onSaved: () => void }) {
+  const account = useLeadAccount()
   const input = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<FileRead | null>(null)
   const [mapping, setMapping] = useState<ColumnMapping[]>([])
@@ -102,7 +104,7 @@ export function LeadsUpload({ onSaved }: { onSaved: () => void }) {
         const res = await fetch("/api/admin/leads", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ listId, listName: listName.trim(), fileName: file.name, columns, leads: part }),
+          body: JSON.stringify(bodyWithAccount({ listId, listName: listName.trim(), fileName: file.name, columns, leads: part }, account)),
         })
         const data = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(data.error ?? "Couldn't save these leads")

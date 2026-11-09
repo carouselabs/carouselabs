@@ -11,7 +11,7 @@
 // Pure rules (daily allowance, next 10, progress) live in lib/campaignRules.ts.
 import { randomUUID } from "node:crypto"
 import type { BatchMailer, BatchSendResult } from "@/lib/emailBatchSend"
-import { BREVO_DAILY_LIMIT, BREVO_MISSING } from "@/lib/brevo"
+import { BREVO_DAILY_LIMIT, brevoMissing } from "@/lib/brevo"
 import { isEngageSchemaMissing } from "@/lib/engage/schemaMissing"
 import { db } from "@/lib/db"
 import { logAdminAction } from "@/lib/auditLog"
@@ -33,10 +33,11 @@ import {
   type CampaignRecipientStatus,
 } from "@/lib/campaignRules"
 import { trackingToken } from "@/lib/emailTracking"
-import { isLeadAudience, mergeFieldProblem, parseLeadAudience } from "@/lib/leadRules"
+import { isLeadAudience, leadAudienceAccount, mergeFieldProblem, parseLeadAudience } from "@/lib/leadRules"
 import { LEADS_SQL_MISSING, leadFieldKeys, leadListName, leadSendInfo, markLeadsEmailed } from "@/lib/leads"
 import { unsubscribeToken, unsubscribeUrl } from "@/lib/leadUnsubscribe"
-import { DEFAULT_SENDING, VIA_CHOICES, usesBrevo, type Sending, type SendingChoice, type Via } from "@/lib/sendingRules"
+import { ACCOUNTS, DEFAULT_ACCOUNT, brevoProvider, type LeadAccount } from "@/lib/leadAccounts"
+import { DEFAULT_SENDING, VIA_CHOICES, defaultSendingFor, usesBrevo, type Sending, type SendingChoice, type Via } from "@/lib/sendingRules"
 import { resolveSending } from "@/lib/senders"
 import { sendTestCopy, testOnFirstSend, type PlacementVia } from "@/lib/placement/tests"
 
@@ -70,7 +71,7 @@ const emailText = (email: { subject: string; body: string; design?: unknown }) =
 export async function checkMergeFields(text: string, recipients: BroadcastRecipients) {
   const forLeads = isLeadAudience(recipients)
   const audience = forLeads ? parseLeadAudience(recipients) : null
-  const keys = forLeads ? (await leadFieldKeys(audience?.kind === "list" ? audience.listId : null)).map((c) => c.key) : []
+  const keys = forLeads ? (await leadFieldKeys(audience?.kind === "list" ? audience.listId : null, audience?.account)).map((c) => c.key) : []
   const problem = mergeFieldProblem(text, forLeads, keys)
   if (problem) throw new CampaignError(problem)
 }
@@ -83,6 +84,26 @@ async function audienceShown(recipients: BroadcastRecipients, audienceValue: str
 }
 
 export const SENDING_SQL_MISSING = "Run scripts/email-sending.sql in Supabase first: choosing the service or sender needs it."
+
+/**
+ * Whose campaign it is (lib/leadAccounts.ts), from who it went to: another
+ * account's leads ("leads:anant:…") make it that account's, sent entirely
+ * through its own Brevo; everything else is CarouseLabs'.
+ */
+export const campaignAccount = (audience: BroadcastRecipients | string | null | undefined): LeadAccount =>
+  (typeof audience === "string" ? leadAudienceAccount(audience) : null) ?? DEFAULT_ACCOUNT
+
+// People of one account can't be added to another's campaign.
+function sameAccount(campaignAudience: string, recipients: BroadcastRecipients) {
+  const from = campaignAccount(campaignAudience)
+  const to = campaignAccount(recipients)
+  if (from === to) return
+  throw new CampaignError(
+    from === DEFAULT_ACCOUNT
+      ? `This campaign is CarouseLabs'. ${ACCOUNTS[to].label}'s leads go in a campaign of their own.`
+      : `This campaign is ${ACCOUNTS[from].label}'s: only ${ACCOUNTS[from].label}'s leads can be added to it.`,
+  )
+}
 
 // A campaign's stored choice; empty columns are the defaults.
 function sendingOf(row: { sendVia: string | null; sendFrom: string | null; replyTo: string | null } | null): Sending {
@@ -118,7 +139,8 @@ export async function createCampaign(input: {
   // What sends it and who it's from, already checked (lib/senders.ts resolveSending).
   sending?: Sending
 }) {
-  const sending = input.sending ?? DEFAULT_SENDING
+  const account = campaignAccount(input.recipients)
+  const sending = input.sending ?? defaultSendingFor(account)
   await checkMergeFields(emailText(input), input.recipients)
   const rows = await audienceRows(input.recipients, input.audienceValue)
   if (rows.length === 0) throw new CampaignError("No one matches that selection")
@@ -186,10 +208,11 @@ export async function addCampaignRecipients(input: {
 }): Promise<{ added: number; already: number }> {
   const campaign = await db.emailCampaign.findUnique({
     where: { id: input.campaignId },
-    select: { subject: true, body: true, design: true, status: true },
+    select: { subject: true, body: true, design: true, status: true, audience: true },
   })
   if (!campaign) throw new CampaignError("Campaign not found", 404)
   if (campaign.status === "archived") throw new CampaignError("This campaign is archived. Restore it to add people.")
+  sameAccount(campaign.audience, input.recipients)
   await checkMergeFields(emailText(campaign), input.recipients)
 
   const rows = await audienceRows(input.recipients, input.audienceValue)
@@ -220,7 +243,14 @@ async function statusCounts(where: { campaignId?: string }) {
   return Object.fromEntries(groups.map((g) => [g.status, g._count._all])) as Partial<Record<CampaignRecipientStatus, number>>
 }
 
-export type Allowance = { via: "resend" | "brevo"; limit: number; sentToday: number; left: number }
+export type Allowance = {
+  via: "resend" | "brevo"
+  limit: number
+  sentToday: number
+  left: number
+  // Whose Brevo account (lib/leadAccounts.ts): CarouseLabs' unless said.
+  account?: LeadAccount
+}
 
 /**
  * Each sender's campaign emails today (the UTC day, as Resend counts) plus
@@ -229,7 +259,7 @@ export type Allowance = { via: "resend" | "brevo"; limit: number; sentToday: num
  * scripts/leads.sql's Brevo part has been run: every email is Resend's then,
  * as before, and leads can't be sent.
  */
-export async function campaignAllowances(now: Date = new Date()): Promise<{ split: boolean; resend: Allowance; brevo: Allowance }> {
+export async function campaignAllowances(now: Date = new Date(), account: LeadAccount = DEFAULT_ACCOUNT): Promise<{ split: boolean; resend: Allowance; brevo: Allowance }> {
   const day = campaignDayStart(now)
   const count = (where: Record<string, unknown>) => db.emailCampaignRecipient.count({ where })
   const pool = (via: Allowance["via"], limit: number, sentToday: number, sendingNow: number): Allowance => ({
@@ -237,12 +267,15 @@ export async function campaignAllowances(now: Date = new Date()): Promise<{ spli
     limit,
     sentToday,
     left: allowanceLeft(sentToday, sendingNow, limit),
+    ...(via === "brevo" && account !== DEFAULT_ACCOUNT ? { account } : {}),
   })
   try {
+    // Each Brevo account has its own daily limit: only its own sends count.
+    const provider = brevoProvider(account)
     const resendSent = await count({ status: "sent", sentAt: { gte: day }, provider: null })
     const resendSending = await count({ status: "sending", provider: null })
-    const brevoSent = await count({ status: "sent", sentAt: { gte: day }, provider: "brevo" })
-    const brevoSending = await count({ status: "sending", provider: "brevo" })
+    const brevoSent = await count({ status: "sent", sentAt: { gte: day }, provider })
+    const brevoSending = await count({ status: "sending", provider })
     return {
       split: true,
       resend: pool("resend", CAMPAIGN_DAILY_LIMIT, resendSent, resendSending),
@@ -260,18 +293,26 @@ export async function campaignAllowances(now: Date = new Date()): Promise<{ spli
   }
 }
 
-/** The allowance a campaign's page shows: Brevo's when Brevo sends it (lib/sendingRules.ts usesBrevo), Resend's otherwise. */
-export async function campaignAllowance(of: { audience?: string | null; via?: Via }, now: Date = new Date()): Promise<Allowance> {
-  const all = await campaignAllowances(now)
+/**
+ * The allowance a campaign's page shows: Brevo's when Brevo sends it
+ * (lib/sendingRules.ts usesBrevo), Resend's otherwise; another account's
+ * campaign always shows its own Brevo's. `account` asks for that account's
+ * Brevo directly (the Leads page's Brevo card).
+ */
+export async function campaignAllowance(of: { audience?: string | null; via?: Via; account?: LeadAccount }, now: Date = new Date()): Promise<Allowance> {
+  const account = of.account ?? campaignAccount(of.audience)
+  const all = await campaignAllowances(now, account)
+  if (account !== DEFAULT_ACCOUNT) return all.brevo
   return usesBrevo(of.via ?? "auto", !!of.audience && isLeadAudience(of.audience)) ? all.brevo : all.resend
 }
 
 // "You can send 5 more today", or that the day's limit is used up.
 function overLimitMessage(pool: Allowance): string {
-  const what = pool.via === "brevo" ? `${BREVO_DAILY_LIMIT} emails a day through Brevo's free plan` : `${CAMPAIGN_DAILY_LIMIT} campaign emails a day on Resend's free plan`
+  const brevo = pool.account ? `Brevo (${ACCOUNTS[pool.account].domain})` : "Brevo"
+  const what = pool.via === "brevo" ? `${BREVO_DAILY_LIMIT} emails a day through ${brevo}'s free plan` : `${CAMPAIGN_DAILY_LIMIT} campaign emails a day on Resend's free plan`
   return pool.left === 0
-    ? `Today's ${pool.via === "brevo" ? "Brevo " : ""}limit is used up (${what}). It resets at ${DAY_RESETS_AT}.`
-    : `You can send ${pool.left} more${pool.via === "brevo" ? " through Brevo" : ""} today (${what}). Pick ${pool.left} or fewer.`
+    ? `Today's ${pool.via === "brevo" ? `${brevo} ` : ""}limit is used up (${what}). It resets at ${DAY_RESETS_AT}.`
+    : `You can send ${pool.left} more${pool.via === "brevo" ? ` through ${brevo}` : ""} today (${what}). Pick ${pool.left} or fewer.`
 }
 
 // A send cut off mid-way leaves people "sending" forever; after a while they
@@ -378,7 +419,7 @@ async function scannerColumns(campaignId: string) {
 
 /** Checks a choice of service and sender for these people (lib/senders.ts), or says what's wrong. */
 export async function checkSending(choice: SendingChoice, recipients: BroadcastRecipients | string): Promise<Sending> {
-  const checked = await resolveSending(choice, usesBrevo(choice.via, isLeadAudience(recipients)))
+  const checked = await resolveSending(choice, usesBrevo(choice.via, isLeadAudience(recipients)), undefined, campaignAccount(recipients))
   if ("problem" in checked) throw new CampaignError(checked.problem)
   return checked.sending
 }
@@ -435,6 +476,9 @@ export async function sendCampaignBatch(input: {
   // Brevo (lib/brevo.ts brevoMailer): leads, or everyone when the campaign is
   // set to Brevo; null when it isn't set up.
   brevo?: BatchMailer | null
+  // Another account's Brevo (lib/leadAccounts.ts): its campaigns go entirely
+  // through it. Null when that account's isn't set up.
+  brevoFor?: (account: LeadAccount) => BatchMailer | null
   // Who it's from unless the campaign has its own sender.
   from: string
   ipAddress?: string | null
@@ -445,37 +489,46 @@ export async function sendCampaignBatch(input: {
 
   const campaign = await db.emailCampaign.findUnique({
     where: { id: input.campaignId },
-    select: { id: true, subject: true, body: true, status: true, design: true },
+    select: { id: true, subject: true, body: true, status: true, design: true, audience: true },
   })
   if (!campaign) throw new CampaignError("Campaign not found", 404)
   if (campaign.status === "archived") throw new CampaignError("This campaign is archived. Restore it to send.")
   const ready = fixedHtmlOf(campaign.design)
   const design = ready ? null : campaignDesign(campaign.design)
 
+  // Another account's campaign (lib/leadAccounts.ts) goes entirely through its
+  // own Brevo, from its own sender, to its own leads.
+  const account = campaignAccount(campaign.audience)
+  const other = account !== DEFAULT_ACCOUNT
+  const brevo = other ? (input.brevoFor?.(account) ?? null) : (input.brevo ?? null)
+
   await releaseStuckSends(campaign.id, now)
   const choice = await campaignSending(campaign.id)
-  const from = choice.from === DEFAULT_SENDING.from ? input.from : choice.from
+  const from = choice.from === DEFAULT_SENDING.from ? (other ? defaultSendingFor(account).from : input.from) : choice.from
 
   // Who's going out, and through what: Brevo or Resend as the campaign says
   // (automatic: leads, lib/leads.ts, through Brevo and everyone else through
   // Resend), each within its own daily limit.
   const open = { campaignId: campaign.id, status: { in: ["pending", "failed"] } }
   const candidates = await db.emailCampaignRecipient.findMany({ where: { id: { in: ids }, ...open }, select: { id: true, userId: true, email: true } })
-  const leads = await leadSendInfo(candidates.flatMap((r) => (r.userId ? [] : [r.email])))
+  const leads = await leadSendInfo(
+    candidates.flatMap((r) => (r.userId ? [] : [r.email])),
+    account,
+  )
   const leadOf = (r: { userId: string | null; email: string }) => (r.userId ? undefined : leads.get(r.email.toLowerCase()))
-  const byBrevo = (r: { userId: string | null; email: string }) => usesBrevo(choice.via, !!leadOf(r))
+  const byBrevo = (r: { userId: string | null; email: string }) => other || usesBrevo(choice.via, !!leadOf(r))
   const toBrevo = candidates.filter(byBrevo).map((r) => r.id)
   const toResend = candidates.filter((r) => !byBrevo(r)).map((r) => r.id)
-  const allowance = await campaignAllowances(now)
+  const allowance = await campaignAllowances(now, account)
   if (toBrevo.length > 0 && !allowance.split) throw new CampaignError(LEADS_SQL_MISSING, 503)
-  if (toBrevo.length > 0 && !input.brevo) throw new CampaignError(BREVO_MISSING, 503)
+  if (toBrevo.length > 0 && !brevo) throw new CampaignError(brevoMissing(account), 503)
   for (const [wanted, pool] of [[toResend.length, allowance.resend], [toBrevo.length, allowance.brevo]] as const) {
     if (wanted > pool.left) throw new CampaignError(overLimitMessage(pool), 429)
   }
 
   // Claim: only people not sent yet (or failed) and not taken by another click.
   const batchId = randomUUID()
-  for (const [group, provider] of [[toResend, null], [toBrevo, "brevo"]] as const) {
+  for (const [group, provider] of [[toResend, null], [toBrevo, brevoProvider(account)]] as const) {
     if (group.length === 0) continue
     await db.emailCampaignRecipient.updateMany({
       where: { id: { in: group }, ...open },
@@ -523,7 +576,7 @@ export async function sendCampaignBatch(input: {
   const email: CampaignEmail = { ready, design, subject: campaign.subject, body: campaign.body }
   const sendThrough = (mailer: BatchMailer, group: typeof people, prefix: string) => sendCampaignEmails(mailer, from, group, email, prefix, choice.replyTo)
   const viaResend = await sendThrough(input.resend, people.filter((p) => !p.byBrevo), idempotencyPrefix)
-  const viaBrevo = input.brevo ? await sendThrough(input.brevo, people.filter((p) => p.byBrevo), `${idempotencyPrefix}-brevo`) : null
+  const viaBrevo = brevo ? await sendThrough(brevo, people.filter((p) => p.byBrevo), `${idempotencyPrefix}-brevo`) : null
   const result = {
     failedTo: [...viaResend.failedTo, ...(viaBrevo?.failedTo ?? [])],
     error: viaResend.error ?? viaBrevo?.error,
@@ -554,7 +607,7 @@ export async function sendCampaignBatch(input: {
   // that send's people (lib/placement/tests.ts; never throws).
   for (const [via, mailer, sentHere, group] of [
     ["resend", input.resend, viaResend.sent, people.filter((p) => !p.byBrevo)],
-    ["brevo", input.brevo, viaBrevo?.sent ?? 0, people.filter((p) => p.byBrevo)],
+    ["brevo", brevo, viaBrevo?.sent ?? 0, people.filter((p) => p.byBrevo)],
   ] as const) {
     if (!mailer || sentHere === 0) continue
     await testOnFirstSend({ campaignId: campaign.id, via, asLead: group.some((p) => !!p.unsubscribeUrl), send: (person, prefix) => sendThrough(mailer, [{ ...person, trackingToken: person.trackingToken ?? null, byBrevo: via === "brevo" }], prefix) })
@@ -580,24 +633,33 @@ export async function sendCampaignBatch(input: {
  * its people were sent by (before anyone is, the one it would use), as a
  * lead's copy when the people sent that way were leads.
  */
-export async function sendPlacementTests(input: { campaignId: string; resend: BatchMailer; brevo?: BatchMailer | null; from: string }) {
+export async function sendPlacementTests(input: {
+  campaignId: string
+  resend: BatchMailer
+  brevo?: BatchMailer | null
+  brevoFor?: (account: LeadAccount) => BatchMailer | null
+  from: string
+}) {
   const campaign = await db.emailCampaign.findUnique({ where: { id: input.campaignId }, select: { id: true, subject: true, body: true, design: true, audience: true } })
   if (!campaign) throw new CampaignError("Campaign not found", 404)
   const ready = fixedHtmlOf(campaign.design)
   const email: CampaignEmail = { ready, design: ready ? null : campaignDesign(campaign.design), subject: campaign.subject, body: campaign.body }
+  const account = campaignAccount(campaign.audience)
+  const other = account !== DEFAULT_ACCOUNT
+  const brevo = other ? (input.brevoFor?.(account) ?? null) : (input.brevo ?? null)
   const choice = await campaignSending(campaign.id)
-  const from = choice.from === DEFAULT_SENDING.from ? input.from : choice.from
+  const from = choice.from === DEFAULT_SENDING.from ? (other ? defaultSendingFor(account).from : input.from) : choice.from
 
   // One row per service its people went through.
   const ways = await db.emailCampaignRecipient.findMany({ where: { campaignId: campaign.id, status: "sent" }, select: { provider: true }, distinct: ["provider"] })
-  const vias = new Set<PlacementVia>(ways.map((r) => (r.provider === "brevo" ? "brevo" : "resend")))
-  if (vias.size === 0) vias.add(usesBrevo(choice.via, isLeadAudience(campaign.audience)) ? "brevo" : "resend")
+  const vias = new Set<PlacementVia>(ways.map((r) => (r.provider?.startsWith("brevo") ? "brevo" : "resend")))
+  if (vias.size === 0) vias.add(other || usesBrevo(choice.via, isLeadAudience(campaign.audience)) ? "brevo" : "resend")
   const tests = []
   for (const via of vias) {
-    const mailer = via === "brevo" ? input.brevo : input.resend
-    if (!mailer) throw new CampaignError(BREVO_MISSING, 503)
+    const mailer = via === "brevo" ? brevo : input.resend
+    if (!mailer) throw new CampaignError(brevoMissing(account), 503)
     // Leads are the people with no account; their copies carry an Unsubscribe link.
-    const leadsThisWay = await db.emailCampaignRecipient.count({ where: { campaignId: campaign.id, status: "sent", provider: via === "brevo" ? "brevo" : null, userId: null } })
+    const leadsThisWay = await db.emailCampaignRecipient.count({ where: { campaignId: campaign.id, status: "sent", provider: via === "brevo" ? brevoProvider(account) : null, userId: null } })
     const asLead = leadsThisWay > 0 || (ways.length === 0 && isLeadAudience(campaign.audience))
     tests.push(await sendTestCopy({ campaignId: campaign.id, via, asLead, send: (person, prefix) => sendCampaignEmails(mailer, from, [person], email, prefix, choice.replyTo) }))
   }

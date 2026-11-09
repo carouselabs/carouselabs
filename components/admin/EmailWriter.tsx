@@ -24,7 +24,7 @@ import { UseAgainDialog } from "@/components/admin/UseAgainDialog"
 import { AudiencePicker, EMPTY_AUDIENCE, audienceRequest, type Audience } from "@/components/admin/AudiencePicker"
 import { SendingPicker } from "@/components/admin/SendingPicker"
 import { DEFAULT_SENDING_CHOICE, type SendingChoice } from "@/lib/sendingRules"
-import { isLeadAudience } from "@/lib/leadRules"
+import { isLeadAudience, leadAudienceAccount } from "@/lib/leadRules"
 import type { WriterTurn } from "@/lib/ai/emailWriter"
 
 const STORAGE_KEY = "email-writer-draft-v1"
@@ -676,7 +676,13 @@ export function EmailWriter({ recipient, reuse }: { recipient?: EmailRecipient; 
             <AdminCard title="Send it">
               <div className="flex flex-col gap-4">
                 <AudiencePicker id="writer-audience" value={audience} onChange={setAudience} />
-                <SendingPicker idPrefix="writer-sending" value={sendingChoice} onChange={setSendingChoice} forLeads={isLeadAudience(audience.audience)} />
+                <SendingPicker
+                  idPrefix="writer-sending"
+                  value={sendingChoice}
+                  onChange={setSendingChoice}
+                  forLeads={isLeadAudience(audience.audience)}
+                  account={leadAudienceAccount(audience.audience) ?? undefined}
+                />
                 {!painted && <p className="text-caption text-warning">Paint the picture and stickers before testing or sending.</p>}
                 <div className="flex flex-wrap gap-2">
                   <AdminButton variant="secondary" onClick={() => void sendTest()} loading={testing} disabled={!painted}>

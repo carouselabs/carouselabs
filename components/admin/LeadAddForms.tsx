@@ -11,6 +11,8 @@ import { AdminButton, AdminCard, AdminInput, AdminSelect } from "@/components/ad
 import { LEAD_IMPORT_CHUNK, parsePastedLeads, type LeadColumn, type LeadInput } from "@/lib/leadRules"
 import { LeadsUpload } from "./LeadsUpload"
 import { isSmart, type LeadListInfo } from "./leadTypes"
+import { bodyWithAccount, useLeadAccount } from "./leadAccountContext"
+import type { LeadAccount } from "@/lib/leadAccounts"
 
 type ListOption = Pick<LeadListInfo, "id" | "name" | "kind" | "count">
 type Saved = { added: number; alreadySaved: number; alreadyUsers: number; unsubscribed: number; invalid: number }
@@ -41,14 +43,14 @@ function ListChoice({ lists, value, onChange, name, onName, id }: { lists: ListO
   )
 }
 
-async function save(leads: LeadInput[], columns: LeadColumn[], list: { id: string | null; name: string }): Promise<Saved & { listId: string }> {
+async function save(leads: LeadInput[], columns: LeadColumn[], list: { id: string | null; name: string }, account: LeadAccount): Promise<Saved & { listId: string }> {
   const totals: Saved = { added: 0, alreadySaved: 0, alreadyUsers: 0, unsubscribed: 0, invalid: 0 }
   let listId = list.id ?? undefined
   for (let i = 0; i < leads.length; i += LEAD_IMPORT_CHUNK) {
     const res = await fetch("/api/admin/leads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ listId, listName: list.name, columns, leads: leads.slice(i, i + LEAD_IMPORT_CHUNK) }),
+      body: JSON.stringify(bodyWithAccount({ listId, listName: list.name, columns, leads: leads.slice(i, i + LEAD_IMPORT_CHUNK) }, account)),
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data.error ?? "Couldn't save them")
@@ -68,6 +70,7 @@ export function savedMessage(s: Saved): string {
 }
 
 export function LeadAddForms({ lists, columns, onSaved }: { lists: ListOption[]; columns: LeadColumn[]; onSaved: () => void }) {
+  const account = useLeadAccount()
   // One lead.
   const [email, setEmail] = useState("")
   const [firstName, setFirstName] = useState("")
@@ -98,7 +101,7 @@ export function LeadAddForms({ lists, columns, onSaved }: { lists: ListOption[];
         name: null,
         fields: Object.fromEntries(used.map((c) => [c.key, fields[c.key].trim()])),
       }
-      const saved = await save([lead], used, listOf(oneList, oneListName))
+      const saved = await save([lead], used, listOf(oneList, oneListName), account)
       setOneResult({ ok: saved.added + saved.alreadySaved > 0, text: saved.added ? `Added ${email.trim()}.` : savedMessage(saved) })
       if (saved.added + saved.alreadySaved > 0) {
         setEmail("")
@@ -120,7 +123,7 @@ export function LeadAddForms({ lists, columns, onSaved }: { lists: ListOption[];
     setManyBusy(true)
     setManyResult(null)
     try {
-      const saved = await save(parsed.leads, [], listOf(manyList, manyListName))
+      const saved = await save(parsed.leads, [], listOf(manyList, manyListName), account)
       setManyResult({ ok: true, text: savedMessage({ ...saved, invalid: saved.invalid + parsed.invalid }) })
       setPasted("")
       setManyList(saved.listId)

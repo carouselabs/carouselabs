@@ -5,7 +5,10 @@
 // smart lists: AllLeads), Lists (fixed and smart: LeadLists), Add & upload
 // (one by hand, pasted, or a CSV: LeadAddForms) and Brevo setup (what sends
 // their emails: BrevoSetup). Emailing them is a campaign: in the AI writer or
-// the composer, "Who it's for" → My leads.
+// the composer, "Who it's for" → My leads. Two accounts' leads, kept apart
+// (lib/leadAccounts.ts): CarouseLabs' and Anant Goyal's (synced from the
+// anantgoyal.in Brevo account: BrevoSetup → BrevoSync). The switch at the top
+// picks whose; every part of the page then works on that account's alone.
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, MailX, Sparkles, Users } from "lucide-react"
@@ -17,6 +20,8 @@ import { LeadLists } from "./LeadLists"
 import { LeadAddForms } from "./LeadAddForms"
 import { BrevoSetup } from "./BrevoSetup"
 import { count, type LeadListInfo, type LeadsOverview } from "./leadTypes"
+import { LeadAccountContext, withAccount } from "./leadAccountContext"
+import { ACCOUNTS, DEFAULT_ACCOUNT, LEAD_ACCOUNTS, type LeadAccount } from "@/lib/leadAccounts"
 
 const TABS = [
   { key: "all", label: "All leads" },
@@ -28,6 +33,7 @@ type Tab = (typeof TABS)[number]["key"]
 
 export function LeadsManager() {
   const { toast } = useToast()
+  const [account, setAccount] = useState<LeadAccount>(DEFAULT_ACCOUNT)
   const [data, setData] = useState<LeadsOverview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>("all")
@@ -39,7 +45,7 @@ export function LeadsManager() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/leads?only=lists", { cache: "no-store" })
+      const res = await fetch(withAccount("/api/admin/leads?only=lists", account), { cache: "no-store" })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error ?? "Couldn't load the leads")
       setData({ totals: body.totals, lists: body.lists ?? [], columns: body.columns ?? [] })
@@ -47,7 +53,7 @@ export function LeadsManager() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't load the leads")
     }
-  }, [])
+  }, [account])
   // eslint-disable-next-line react-hooks/set-state-in-effect -- load() sets state after its fetch
   useEffect(() => void load(), [load])
 
@@ -55,6 +61,38 @@ export function LeadsManager() {
     setVersion((v) => v + 1)
     void load()
   }
+
+  // Another account's leads: nothing picked or filtered carries over.
+  function switchAccount(next: LeadAccount) {
+    if (next === account) return
+    setAccount(next)
+    setData(null)
+    setError(null)
+    setFilter({})
+    setEditing(null)
+  }
+
+  const accountSwitch = (
+    <div className="flex flex-col gap-2">
+      <div role="radiogroup" aria-label="Whose leads" className="inline-flex w-fit gap-1 rounded-control-sm border border-border bg-muted/40 p-1">
+        {LEAD_ACCOUNTS.map((a) => (
+          <button
+            key={a}
+            type="button"
+            role="radio"
+            aria-checked={account === a}
+            onClick={() => switchAccount(a)}
+            className={`rounded-control-sm px-3 py-1.5 text-caption font-semibold transition-colors duration-(--motion-fast) ${
+              account === a ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {ACCOUNTS[a].label}
+          </button>
+        ))}
+      </div>
+      <p className="text-caption text-muted-foreground">{ACCOUNTS[account].about}</p>
+    </div>
+  )
 
   const header = (
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -76,17 +114,29 @@ export function LeadsManager() {
     return (
       <div className="flex flex-col gap-6">
         {header}
+        {accountSwitch}
         <AdminCard>
           <p className="text-label text-danger">{error}</p>
         </AdminCard>
       </div>
     )
   }
-  if (!data) return <Spinner label="Loading leads…" />
+  if (!data) {
+    return (
+      <div className="flex flex-col gap-6">
+        {header}
+        {accountSwitch}
+        <Spinner label="Loading leads…" />
+      </div>
+    )
+  }
 
+  const brevoTab = account === DEFAULT_ACCOUNT ? "Brevo setup" : "Brevo sync & setup"
   return (
-    <div className="flex flex-col gap-6">
+    <LeadAccountContext.Provider value={account}>
+    <div key={account} className="flex flex-col gap-6">
       {header}
+      {accountSwitch}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Leads saved" value={count(data.totals.total)} icon={<Users />} />
@@ -110,7 +160,7 @@ export function LeadsManager() {
                 tab === t.key ? "border-brand text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              {t.label}
+              {t.key === "brevo" ? brevoTab : t.label}
             </button>
           ))}
         </div>
@@ -153,9 +203,10 @@ export function LeadsManager() {
             />
           )}
           {tab === "add" && <LeadAddForms lists={data.lists} columns={data.columns} onSaved={changed} />}
-          {tab === "brevo" && <BrevoSetup />}
+          {tab === "brevo" && <BrevoSetup onSynced={changed} />}
         </div>
       </div>
     </div>
+    </LeadAccountContext.Provider>
   )
 }

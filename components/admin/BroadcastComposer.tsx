@@ -22,7 +22,7 @@ import { useToast } from "@/components/admin/Toast"
 import { TemplatePicker } from "@/components/admin/TemplatePicker"
 import { SEGMENT_TYPES } from "@/lib/segments"
 import { CAMPAIGN_DAILY_LIMIT } from "@/lib/campaignRules"
-import { isLeadAudience, type LeadAudience } from "@/lib/leadRules"
+import { isLeadAudience, leadAudienceAccount, type LeadAudience } from "@/lib/leadRules"
 import { LeadAudienceOptions, useLeadLists } from "@/components/admin/AudiencePicker"
 import { SendingPicker } from "@/components/admin/SendingPicker"
 import { EmailReportStrip } from "@/components/admin/EmailReportStrip"
@@ -72,6 +72,7 @@ export function BroadcastComposer() {
   const [resolvingRecipients, setResolvingRecipients] = useState(false)
   const [confirmCount, setConfirmCount] = useState<number | null>(null)
   const leads = useLeadLists()
+  const anantLeads = useLeadLists("anant")
   // A campaign's service and sender (lib/sendingRules.ts).
   const [sendingChoice, setSendingChoice] = useState<SendingChoice>(DEFAULT_SENDING_CHOICE)
 
@@ -413,6 +414,7 @@ export function BroadcastComposer() {
                 ))}
                 <option value="custom">Custom List</option>
                 {sendMode === "campaign" && <LeadAudienceOptions leads={leads} />}
+                {sendMode === "campaign" && <LeadAudienceOptions leads={anantLeads} account="anant" />}
               </AdminSelect>
               {selectedSegment?.needsValue && (
                 <AdminInput
@@ -431,7 +433,13 @@ export function BroadcastComposer() {
           </div>
 
           {sendMode === "campaign" && (
-            <SendingPicker idPrefix="composer-sending" value={sendingChoice} onChange={setSendingChoice} forLeads={isLeadAudience(audience)} />
+            <SendingPicker
+              idPrefix="composer-sending"
+              value={sendingChoice}
+              onChange={setSendingChoice}
+              forLeads={isLeadAudience(audience)}
+              account={leadAudienceAccount(audience) ?? undefined}
+            />
           )}
 
           {audience === "custom" && (

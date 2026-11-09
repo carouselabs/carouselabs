@@ -5,6 +5,7 @@
 // reads the file in the browser with this, and lib/leads.ts checks what it
 // sends with the same rules.
 import { AVAILABLE_VARIABLES } from "@/lib/broadcastRender"
+import { ACCOUNTS, DEFAULT_ACCOUNT, LEAD_ACCOUNTS, leadAccountOf, type LeadAccount } from "@/lib/leadAccounts"
 
 export const LEAD_IMPORT_MAX_ROWS = 20_000
 // Rows per request while uploading, so a big file never times out.
@@ -257,29 +258,55 @@ export function leadValues(lead: Pick<LeadInput, "email" | "firstName" | "lastNa
 
 // ── Lead audiences ──────────────────────────────────────────────────────
 // What a campaign goes to: every lead, the ones no campaign has reached yet,
-// or one uploaded list. Leads who unsubscribed, and anyone who has since
-// signed up to CarouseLabs, are never in any of them.
+// or one uploaded list, of one account (lib/leadAccounts.ts). CarouseLabs'
+// keep their old names ("leads:all", "leads:list:<id>"); another account's
+// say whose they are ("leads:anant:all", "leads:anant:list:<id>"). Leads who
+// unsubscribed, and (for CarouseLabs) anyone who has since signed up, are
+// never in any of them.
 
-export type LeadAudience = "leads:all" | "leads:new" | `leads:list:${string}`
-export const LEAD_AUDIENCE_RE = /^leads:(all|new|list:[\w-]{1,64})$/
+export type LeadAudience = `leads:${string}`
+const OTHER_ACCOUNTS = LEAD_ACCOUNTS.filter((a) => a !== DEFAULT_ACCOUNT).join("|")
+export const LEAD_AUDIENCE_RE = new RegExp(`^leads:(?:(${OTHER_ACCOUNTS}):)?(all|new|list:[\\w-]{1,64})$`)
 
 export function isLeadAudience(value: unknown): value is LeadAudience {
   return typeof value === "string" && LEAD_AUDIENCE_RE.test(value)
 }
 
-export function parseLeadAudience(value: string): { kind: "all" } | { kind: "new" } | { kind: "list"; listId: string } | null {
-  if (!isLeadAudience(value)) return null
-  if (value === "leads:all") return { kind: "all" }
-  if (value === "leads:new") return { kind: "new" }
-  return { kind: "list", listId: value.slice("leads:list:".length) }
+export type ParsedLeadAudience = ({ kind: "all" } | { kind: "new" } | { kind: "list"; listId: string }) & { account: LeadAccount }
+
+export function parseLeadAudience(value: string): ParsedLeadAudience | null {
+  const match = typeof value === "string" ? LEAD_AUDIENCE_RE.exec(value) : null
+  if (!match) return null
+  const account = leadAccountOf(match[1])
+  const rest = match[2]
+  if (rest === "all") return { kind: "all", account }
+  if (rest === "new") return { kind: "new", account }
+  return { kind: "list", listId: rest.slice("list:".length), account }
 }
 
-export const leadListAudience = (listId: string): LeadAudience => `leads:list:${listId}`
+const audiencePrefix = (account: LeadAccount) => (account === DEFAULT_ACCOUNT ? "leads:" : `leads:${account}:`)
 
-/** "All my leads", "Leads never emailed", "Leads: Delhi founders" (listName: what the campaign saved). */
+/** "leads:all" / "leads:new", or "leads:anant:all" for another account. */
+export const leadAudience = (kind: "all" | "new", account: LeadAccount = DEFAULT_ACCOUNT): LeadAudience => `${audiencePrefix(account)}${kind}` as LeadAudience
+
+export const leadListAudience = (listId: string, account: LeadAccount = DEFAULT_ACCOUNT): LeadAudience => `${audiencePrefix(account)}list:${listId}` as LeadAudience
+
+/** Whose leads an audience is; null when it isn't a lead audience (users, typed addresses). */
+export const leadAudienceAccount = (value: unknown): LeadAccount | null => (typeof value === "string" ? (parseLeadAudience(value)?.account ?? null) : null)
+
+/**
+ * "All my leads", "Leads never emailed", "Leads: Delhi founders" (listName:
+ * what the campaign saved); another account's say whose: "Anant Goyal: all leads".
+ */
 export function leadAudienceLabel(value: string, listName?: string | null): string {
   const parsed = parseLeadAudience(value)
   if (!parsed) return value
+  if (parsed.account !== DEFAULT_ACCOUNT) {
+    const who = ACCOUNTS[parsed.account].label
+    if (parsed.kind === "all") return `${who}: all leads`
+    if (parsed.kind === "new") return `${who}: leads never emailed`
+    return `${who}: ${listName || "a list"}`
+  }
   if (parsed.kind === "all") return "All my leads"
   if (parsed.kind === "new") return "Leads never emailed"
   return `Leads: ${listName || "a list"}`

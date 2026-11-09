@@ -9,6 +9,7 @@ import { AdminButton } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
 import { SendingPicker } from "./SendingPicker"
 import { fromEmailOf, type Sending, type SendingChoice } from "@/lib/sendingRules"
+import { DEFAULT_ACCOUNT, type LeadAccount } from "@/lib/leadAccounts"
 
 const VIA_SHORT: Record<Sending["via"], string> = {
   auto: "Brevo for leads, Resend for everyone else",
@@ -20,12 +21,15 @@ export function CampaignSending({
   campaignId,
   sending,
   forLeads,
+  account = DEFAULT_ACCOUNT,
   disabled,
   onSaved,
 }: {
   campaignId: string
   sending: Sending
   forLeads: boolean
+  // Whose campaign (lib/leadAccounts.ts): another account's sends through its own Brevo.
+  account?: LeadAccount
   disabled?: boolean
   onSaved: () => void
 }) {
@@ -57,7 +61,7 @@ export function CampaignSending({
   if (editing) {
     return (
       <div className="flex flex-col gap-3 rounded-control-sm border border-border p-3">
-        <SendingPicker idPrefix="campaign-sending" value={editing} onChange={setEditing} forLeads={forLeads} />
+        <SendingPicker idPrefix="campaign-sending" value={editing} onChange={setEditing} forLeads={forLeads} account={account} />
         <div className="flex justify-end gap-2">
           <AdminButton variant="ghost" onClick={() => setEditing(null)}>
             Cancel

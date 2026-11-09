@@ -32,6 +32,7 @@ export type AdminAuditAction =
   | "RENAME_EMAIL_TEMPLATE"
   // Leads (lib/leads.ts): a CSV uploaded, a list deleted.
   | "IMPORT_LEADS"
+  | "SYNC_BREVO_LEADS"
   | "DELETE_LEAD_LIST"
   // Your own lists and leads (lib/leads.ts): lists made, renamed or refiltered,
   // leads put on or taken off a list, deleted, or edited.

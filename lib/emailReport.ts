@@ -57,7 +57,8 @@ async function campaignRows(from: Date, to: Date): Promise<SentRow[]> {
     kind: "campaign" as const,
     campaignId: r.campaignId,
     user: !!r.userId,
-    via: r.provider === "brevo" ? ("brevo" as const) : ("resend" as const),
+    // "brevo" or another account's "brevo:anant" (lib/leadAccounts.ts): both Brevo.
+    via: r.provider?.startsWith("brevo") ? ("brevo" as const) : ("resend" as const),
     status: r.status === "failed" ? ("failed" as const) : ("sent" as const),
     sentAt: r.sentAt ?? r.updatedAt,
     openedAt: r.openedAt,

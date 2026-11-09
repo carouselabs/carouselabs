@@ -3,6 +3,7 @@
 // of senders and the checks are in lib/senders.ts. No server-only imports:
 // the admin screens use these too.
 import { z } from "zod"
+import { ACCOUNTS, DEFAULT_ACCOUNT, type LeadAccount } from "@/lib/leadAccounts"
 
 // "auto": leads through Brevo, everyone else through Resend (lib/campaigns.ts).
 export const VIA_CHOICES = ["auto", "resend", "brevo"] as const
@@ -43,6 +44,18 @@ export function isDefaultChoice(choice: SendingChoice): boolean {
 
 /** Whether Brevo sends these emails: always with "brevo", and for leads with "auto". */
 export const usesBrevo = (via: Via, forLeads: boolean) => via === "brevo" || (via === "auto" && forLeads)
+
+/**
+ * What a lead account's emails go with unless something else is picked
+ * (lib/leadAccounts.ts): CarouseLabs' as always; another account's through
+ * its own Brevo, from its own sender.
+ */
+export const defaultSendingFor = (account: LeadAccount): Sending =>
+  account === DEFAULT_ACCOUNT ? DEFAULT_SENDING : { via: "brevo", from: fromHeader(ACCOUNTS[account].sender), replyTo: null }
+
+/** The same, as the picker starts it. */
+export const defaultChoiceFor = (account: LeadAccount): SendingChoice =>
+  account === DEFAULT_ACCOUNT ? DEFAULT_SENDING_CHOICE : { via: "brevo", fromEmail: ACCOUNTS[account].sender.email, replyTo: null }
 
 /** "support@carouselabs.com" out of "CarouseLabs <support@carouselabs.com>". */
 export function fromEmailOf(from: string): string {

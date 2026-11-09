@@ -1,17 +1,20 @@
 // POST /api/admin/leads/lists — a new list (lib/leads.ts createLeadList):
 //   { name, kind: "static" }                     an empty list, filled by ticking leads
 //   { name, kind: "smart", filter: <lib/leadFilters.ts> }  whoever matches the filter now
+//   account?: whose list (lib/leadAccounts.ts), CarouseLabs' when not given
 //   → { id }
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { createLeadList, leadsProblem } from "@/lib/leads"
 import { leadFilterSchema } from "@/lib/leadFilters"
+import { LEAD_ACCOUNTS } from "@/lib/leadAccounts"
 
 const body = z.object({
   name: z.string().trim().min(1, "Name the list").max(120),
   kind: z.enum(["static", "smart"]),
   filter: leadFilterSchema.optional(),
+  account: z.enum(LEAD_ACCOUNTS).optional(),
 })
 
 export async function POST(req: Request) {

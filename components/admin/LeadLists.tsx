@@ -13,6 +13,7 @@ import { describeFilter } from "@/lib/leadFilters"
 import type { LeadColumn } from "@/lib/leadRules"
 import { filterColumns } from "./LeadFilterBar"
 import { count, isSmart, type LeadListInfo } from "./leadTypes"
+import { bodyWithAccount, useLeadAccount } from "./leadAccountContext"
 
 export function LeadLists({
   lists,
@@ -31,6 +32,7 @@ export function LeadLists({
   onChanged: () => void
 }) {
   const { toast } = useToast()
+  const account = useLeadAccount()
   const [making, setMaking] = useState(false)
   const [renaming, setRenaming] = useState<LeadListInfo | null>(null)
   const [deleting, setDeleting] = useState<LeadListInfo | null>(null)
@@ -52,7 +54,7 @@ export function LeadLists({
   async function make() {
     setBusy(true)
     try {
-      await call("/api/admin/leads/lists", { method: "POST", body: JSON.stringify({ name: name.trim(), kind: "static" }) }, "Couldn't make the list")
+      await call("/api/admin/leads/lists", { method: "POST", body: JSON.stringify(bodyWithAccount({ name: name.trim(), kind: "static" }, account)) }, "Couldn't make the list")
       toast(`Made "${name.trim()}". Fill it from All leads: tick people, then Add to list.`, "success")
       setMaking(false)
       onChanged()

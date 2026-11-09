@@ -16,6 +16,7 @@ import { BroadcastComposer } from "@/components/admin/BroadcastComposer"
 import { ToastProvider } from "@/components/admin/Toast"
 import { LEAD_IMPORT_CHUNK } from "@/lib/leadRules"
 import { BrevoSetup } from "@/components/admin/BrevoSetup"
+import { LeadAccountContext } from "@/components/admin/leadAccountContext"
 
 afterEach(() => {
   cleanup()
@@ -475,8 +476,10 @@ describe("My leads in the pickers", () => {
   it("shows no leads group before any are uploaded (or before the SQL is run)", async () => {
     const calls = server({ "/api/admin/leads?only=lists": () => ({ totals: { total: 0, unsubscribed: 0, neverEmailed: 0 }, lists: [] }) })
     render(<Picker onChange={() => {}} />)
-    await waitFor(() => expect(calls).toHaveLength(1))
+    // Each account's lists are asked for: CarouseLabs' and Anant Goyal's.
+    await waitFor(() => expect(calls).toHaveLength(2))
     expect(screen.queryByRole("option", { name: /my leads/i })).toBeNull()
+    expect(screen.queryByRole("option", { name: /anant goyal/i })).toBeNull()
   })
 
   it("a lead audience is sent as itself", () => {
@@ -496,5 +499,85 @@ describe("My leads in the pickers", () => {
     fireEvent.change(to(), { target: { value: "leads:all" } })
     fireEvent.click(screen.getByRole("button", { name: "Send Now" }))
     expect(to().value).toBe("all")
+  })
+})
+
+describe("Anant Goyal's leads (lib/leadAccounts.ts)", () => {
+  const overview = (name: string) => ({
+    totals: { total: 1, unsubscribed: 0, neverEmailed: 1 },
+    lists: [{ id: `${name}-list`, name: `${name} list`, fileName: null, columns: [], createdBy: "a", createdAt: "2026-11-09T00:00:00Z", kind: "static", count: 1 }],
+    columns: [],
+  })
+  const pageOf = (email: string) => ({
+    page: 1,
+    pageSize: 50,
+    total: 1,
+    leads: [{ id: email, email, name: null, fields: {}, lists: [], createdAt: "2026-11-09T00:00:00Z", lastEmailedAt: null, emailCount: 0, lastSeenAt: null, lastClickedAt: null, unsubscribedAt: null }],
+  })
+  const his = (url: string) => url.includes("account=anant")
+
+  it("the switch shows his leads, and every request then names his account", async () => {
+    const calls = server({
+      "/api/admin/leads?only=lists": (url) => (his(url) ? overview("His") : overview("Mine")),
+      "/api/admin/leads?only=leads": (url) => (his(url) ? pageOf("ana@anant.test") : pageOf("cara@carouselabs.test")),
+    })
+    render(withToasts(<LeadsManager />))
+    expect(await screen.findByText("cara@carouselabs.test")).toBeTruthy()
+    expect(screen.getByRole("radio", { name: "CarouseLabs" }).getAttribute("aria-checked")).toBe("true")
+    expect(calls.every((c) => !his(c.url))).toBe(true)
+
+    fireEvent.click(screen.getByRole("radio", { name: "Anant Goyal" }))
+    expect(await screen.findByText("ana@anant.test")).toBeTruthy()
+    expect(screen.queryByText("cara@carouselabs.test")).toBeNull()
+    expect(screen.getByText(/synced from the anantgoyal\.in Brevo account/)).toBeTruthy()
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["All leads", "Lists", "Add & upload", "Brevo sync & setup"])
+    const after = calls.slice(calls.findIndex((c) => his(c.url)))
+    expect(after.length).toBeGreaterThan(1)
+    expect(after.every((c) => his(c.url))).toBe(true)
+  })
+
+  it("the audience picker offers his leads in their own group", async () => {
+    server({ "/api/admin/leads?only=lists": (url) => (his(url) ? overview("His") : overview("Mine")) })
+    render(<AudiencePicker id="who" value={EMPTY_AUDIENCE} onChange={() => {}} />)
+    const select = screen.getByLabelText<HTMLSelectElement>("Who it's for")
+    await waitFor(() => expect(within(select).getByRole("option", { name: "Anant Goyal: All leads (1)" })).toHaveProperty("value", "leads:anant:all"))
+    expect(within(select).getByRole("option", { name: "Anant Goyal: List: His list (1)" })).toHaveProperty("value", "leads:anant:list:His-list")
+    expect(within(select).getByRole("option", { name: "All my leads (1)" })).toHaveProperty("value", "leads:all")
+  })
+
+  it("Sync from Brevo lists his Brevo lists and copies one a page at a time", async () => {
+    const lists = [
+      { brevoListId: 0, name: "All Brevo contacts", contacts: 600, blocklisted: 0, synced: null },
+      { brevoListId: 2, name: "Your first list", contacts: 600, blocklisted: 1, synced: null },
+    ]
+    const calls = server({
+      "GET /api/admin/leads/brevo-sync": () => ({ lists }),
+      "POST /api/admin/leads/brevo-sync": (_url, init) => {
+        const { offset } = JSON.parse(String(init?.body))
+        return offset === 0
+          ? { added: 500, alreadySaved: 0, stopped: 1, invalid: 0, nextOffset: 500, total: 600, listName: "Your first list" }
+          : { added: 99, alreadySaved: 0, stopped: 0, invalid: 0, nextOffset: null, total: 600, listName: "Your first list" }
+      },
+      "/api/admin/brevo": () => ({ status: { key: false }, from: "hello@anantgoyal.in", today: { via: "brevo", limit: 280, sentToday: 0, left: 280 } }),
+    })
+    const onSynced = vi.fn()
+    render(
+      withToasts(
+        <LeadAccountContext.Provider value="anant">
+          <BrevoSetup onSynced={onSynced} />
+        </LeadAccountContext.Provider>,
+      ),
+    )
+    expect(await screen.findByText(/Add BREVO_API_KEY_ANANTGOYAL in Vercel/)).toBeTruthy()
+    const row = (await screen.findByText("Your first list")).closest("tr")!
+    expect(within(row).getByText(/1 blocklisted/)).toBeTruthy()
+    fireEvent.click(within(row).getByRole("button", { name: "Sync" }))
+    expect(await screen.findByText(/Synced: 599 new leads, 0 already here, 1 stopped/)).toBeTruthy()
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.body)).toEqual([
+      { account: "anant", brevoListId: 2, offset: 0 },
+      { account: "anant", brevoListId: 2, offset: 500 },
+    ])
+    expect(onSynced).toHaveBeenCalled()
+    expect(calls.some((c) => c.url === "/api/admin/brevo?account=anant")).toBe(true)
   })
 })

@@ -5,19 +5,23 @@
 // (support@carouselabs.com and every carouselabs.com sender added in Brevo,
 // /api/admin/senders), and where replies go. Used when making a campaign (AI
 // writer, composer, Use again), on a campaign's page, and for a personal email.
+// Another account's leads (lib/leadAccounts.ts: Anant Goyal's) always go
+// through its own Brevo, from its own senders: the picker shows only those.
 import { useEffect, useState } from "react"
 import { AdminSelect } from "@/components/admin/ui"
-import { VIA_LABELS, usesBrevo, type SendingChoice, type Via } from "@/lib/sendingRules"
+import { VIA_LABELS, defaultChoiceFor, usesBrevo, type SendingChoice, type Via } from "@/lib/sendingRules"
 import type { SenderChoice } from "@/lib/senders"
+import { ACCOUNTS, DEFAULT_ACCOUNT, type LeadAccount } from "@/lib/leadAccounts"
+import { withAccount } from "./leadAccountContext"
 
 type Senders = { senders: SenderChoice[]; brevoKnown: boolean }
 
-/** The senders to pick from; null while loading. */
-export function useSenders(): Senders | null {
+/** One account's senders to pick from; null while loading. */
+export function useSenders(account: LeadAccount = DEFAULT_ACCOUNT): Senders | null {
   const [senders, setSenders] = useState<Senders | null>(null)
   useEffect(() => {
     let live = true
-    fetch("/api/admin/senders")
+    fetch(withAccount("/api/admin/senders", account))
       .then((res) => (res.ok ? res.json() : null))
       .then((data: Senders | null) => {
         if (live) setSenders(data ?? { senders: [], brevoKnown: false })
@@ -26,7 +30,7 @@ export function useSenders(): Senders | null {
     return () => {
       live = false
     }
-  }, [])
+  }, [account])
   return senders
 }
 
@@ -44,6 +48,7 @@ export function SendingPicker({
   idPrefix,
   personal = false,
   forLeads = false,
+  account = DEFAULT_ACCOUNT,
 }: {
   value: SendingChoice
   onChange: (next: SendingChoice) => void
@@ -52,15 +57,28 @@ export function SendingPicker({
   personal?: boolean
   // The audience is leads (lib/leadRules.ts).
   forLeads?: boolean
+  // Whose leads (lib/leadAccounts.ts): another account's go through its own Brevo, from its own senders.
+  account?: LeadAccount
 }) {
-  const list = useSenders()
+  const info = ACCOUNTS[account]
+  const other = account !== DEFAULT_ACCOUNT
+  const list = useSenders(account)
+  // Switching to another account's leads (or back): start from that account's own sender.
+  const onDomain = value.fromEmail.endsWith(`@${info.domain}`)
+  useEffect(() => {
+    if (!onDomain || (other && value.via !== "brevo")) onChange(defaultChoiceFor(account))
+  }, [account, onDomain, other, value.via, onChange])
   // The picked one stays listed even if it's no longer a sender (the server then says so).
   const listed = list?.senders ?? []
-  const senders = listed.some((s) => s.email === value.fromEmail) ? listed : [...listed, { name: "CarouseLabs", email: value.fromEmail, inBrevo: false }]
+  const senders = listed.some((s) => s.email === value.fromEmail) ? listed : [...listed, { name: info.sender.name, email: value.fromEmail, inBrevo: false }]
   const sender = senders.find((s) => s.email === value.fromEmail)
-  const byBrevo = usesBrevo(value.via, forLeads)
+  const byBrevo = other || usesBrevo(value.via, forLeads)
   const missingInBrevo = byBrevo && !!list?.brevoKnown && !!sender && !sender.inBrevo
-  const vias = personal ? PERSONAL_VIAS : (Object.keys(VIA_LABELS) as Via[]).map((via) => ({ via, label: VIA_LABELS[via] }))
+  const vias = other
+    ? [{ via: "brevo" as Via, label: `Brevo (${info.domain}), for everyone` }]
+    : personal
+      ? PERSONAL_VIAS
+      : (Object.keys(VIA_LABELS) as Via[]).map((via) => ({ via, label: VIA_LABELS[via] }))
 
   return (
     <div className="flex flex-col gap-3">
@@ -69,7 +87,13 @@ export function SendingPicker({
           <label htmlFor={`${idPrefix}-via`} className={label}>
             Sent through
           </label>
-          <AdminSelect id={`${idPrefix}-via`} value={value.via} onChange={(e) => onChange({ ...value, via: e.target.value as Via })} className="w-full">
+          <AdminSelect
+            id={`${idPrefix}-via`}
+            value={other ? "brevo" : value.via}
+            disabled={other}
+            onChange={(e) => onChange({ ...value, via: e.target.value as Via })}
+            className="w-full"
+          >
             {vias.map((v) => (
               <option key={v.via} value={v.via}>
                 {v.label}
@@ -115,13 +139,13 @@ export function SendingPicker({
           Brevo sends this, and {value.fromEmail} isn&apos;t a sender in Brevo yet. Add it in Brevo → Senders, or pick another.
         </p>
       )}
-      {forLeads && value.via === "resend" && (
+      {!other && forLeads && value.via === "resend" && (
         <p className="text-caption text-warning">
           Resend&apos;s rules don&apos;t allow emailing people who didn&apos;t sign up: sending leads through Resend can get the account closed.
         </p>
       )}
       <p className="text-caption text-muted-foreground/80">
-        To send from another address, add it as a sender in Brevo (on carouselabs.com) and it shows up here.
+        To send from another address, add it as a sender in {other ? `the ${info.domain} Brevo account` : "Brevo"} (on {info.domain}) and it shows up here.
       </p>
     </div>
   )

@@ -1603,9 +1603,14 @@ model EmailArt {
 // if a later file has them; stopReason says why when it wasn't our link
 // ("unsubscribed" | "bounced" | "spam" | "blocked", from Brevo's webhook,
 // lib/brevo.ts). lastEmailedAt: a campaign last reached them.
+// account (scripts/lead-accounts.sql, lib/leadAccounts.ts): whose leads they
+// are, "carouselabs" or "anant" (Anant Goyal's, sent through anantgoyal.in's
+// Brevo). The two are kept apart: the same address can be a lead of each,
+// with its own lists, emails and unsubscribe.
 model Lead {
   id             String           @id @default(cuid())
-  email          String           @unique
+  account        String           @default("carouselabs")
+  email          String
   firstName      String?
   lastName       String?
   name           String?
@@ -1618,6 +1623,7 @@ model Lead {
   updatedAt      DateTime         @updatedAt
   lists          LeadListMember[]
 
+  @@unique([account, email])
   @@index([createdAt])
 }
 
@@ -1626,17 +1632,23 @@ model Lead {
 // kind (scripts/lead-lists.sql): "static", the people put on it (an upload,
 // or ticked by hand), or "smart", whoever matches filter now
 // (lib/leadFilters.ts), with no members of its own.
+// account: whose list it is (like Lead.account). brevoListId: the Brevo list
+// it was copied from (lib/brevoSync.ts; 0 = all of Brevo's contacts), so
+// "Sync from Brevo" fills the same list again.
 model LeadList {
-  id        String           @id @default(cuid())
-  name      String
-  fileName  String?
-  columns   Json             @default("[]")
-  kind      String           @default("static")
-  filter    Json?
-  createdBy String
-  createdAt DateTime         @default(now())
-  members   LeadListMember[]
+  id          String           @id @default(cuid())
+  account     String           @default("carouselabs")
+  name        String
+  fileName    String?
+  columns     Json             @default("[]")
+  kind        String           @default("static")
+  filter      Json?
+  brevoListId Int?
+  createdBy   String
+  createdAt   DateTime         @default(now())
+  members     LeadListMember[]
 
+  @@unique([account, brevoListId])
   @@index([createdAt])
 }
 

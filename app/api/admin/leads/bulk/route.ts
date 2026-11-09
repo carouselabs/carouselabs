@@ -2,13 +2,15 @@
 //   { action: "add" | "remove" | "delete", ids?: string[] | filter?: <lib/leadFilters.ts>,
 //     listId?, newListName? }
 //   add: onto a static list, or a new one named newListName; remove: off a
-//   static list; delete: the leads (anyone who stopped is kept).
+//   static list; delete: the leads (anyone who stopped is kept). Only the
+//   account's own leads and lists (account?, lib/leadAccounts.ts).
 //   → { affected, kept, listId? }
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { bulkLeads, leadsProblem } from "@/lib/leads"
 import { leadFilterSchema } from "@/lib/leadFilters"
+import { LEAD_ACCOUNTS } from "@/lib/leadAccounts"
 
 const body = z
   .object({
@@ -17,6 +19,7 @@ const body = z
     filter: leadFilterSchema.optional(),
     listId: z.string().min(1).max(64).optional(),
     newListName: z.string().trim().max(120).optional(),
+    account: z.enum(LEAD_ACCOUNTS).optional(),
   })
   .refine((b) => b.ids || b.filter, { message: "Pick the leads" })
 

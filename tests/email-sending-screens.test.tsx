@@ -132,3 +132,31 @@ describe("a campaign's Sending line", () => {
     expect(screen.queryByRole("button", { name: /Change/ })).toBeNull()
   })
 })
+
+describe("the sending picker for Anant Goyal's leads", () => {
+  it("only his senders, always through his Brevo; a CarouseLabs choice switches to his own", async () => {
+    server({ "/api/admin/senders?account=anant": () => ({ brevoKnown: true, senders: [{ name: "Anant Goyal", email: "hello@anantgoyal.in", inBrevo: true }] }) })
+    const onChange = vi.fn()
+    function His() {
+      const [value, setValue] = useState(DEFAULT_SENDING_CHOICE)
+      return (
+        <SendingPicker
+          idPrefix="his"
+          value={value}
+          forLeads
+          account="anant"
+          onChange={(next) => {
+            setValue(next)
+            onChange(next)
+          }}
+        />
+      )
+    }
+    render(<His />)
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith({ via: "brevo", fromEmail: "hello@anantgoyal.in", replyTo: null }))
+    await waitFor(() => expect(options("From")).toEqual(["Anant Goyal <hello@anantgoyal.in>"]))
+    expect(options("Sent through")).toEqual(["Brevo (anantgoyal.in), for everyone"])
+    expect(screen.getByLabelText<HTMLSelectElement>("Sent through").disabled).toBe(true)
+    expect(screen.queryByText(/Resend's rules/)).toBeNull()
+  })
+})

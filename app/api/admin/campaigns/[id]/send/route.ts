@@ -1,6 +1,7 @@
 // POST /api/admin/campaigns/[id]/send { recipientIds } — sends the campaign's
 // email to the ticked people who haven't had it yet (lib/campaigns.ts):
-// users through Resend, leads through Brevo (lib/brevo.ts).
+// users through Resend, leads through Brevo (lib/brevo.ts); Anant Goyal's
+// campaigns through anantgoyal.in's Brevo (lib/leadAccounts.ts).
 // Answers { sent, failed, skipped, error?, left }: skipped = already sent or
 // being sent by another click; left = how many more can go today.
 import { NextResponse } from "next/server"
@@ -39,6 +40,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       adminEmail: admin.email,
       resend,
       brevo: brevoMailer(),
+      brevoFor: (account) => brevoMailer(fetch, account),
       from: FROM,
       ipAddress: getRequestIp(req),
     })

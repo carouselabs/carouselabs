@@ -5,9 +5,16 @@
 // link), from its own name at the campaign's address. The campaign keeps a
 // copy of the email as it was made (a ReadyDesign in EmailCampaign.design),
 // so changing one here never changes what a campaign already sends.
+// Two kinds: a letter in the template below (Dharma's), or a whole designed
+// email made elsewhere (Anant Goyal's, built in his email-studio and turned
+// into lib/readyEmailsAnant.ts by scripts/ready-email-from-html.mjs). Each is
+// one lead account's (lib/leadAccounts.ts): it goes to that account's leads,
+// from its sender.
 // No server-only imports: the admin's page shows them with this too.
 import { z } from "zod"
 import { EMAIL_IMAGES } from "@/emails/theme"
+import { DEFAULT_ACCOUNT, type LeadAccount } from "@/lib/leadAccounts"
+import { ANANT_COLD_HTML, ANANT_COLD_TEXT } from "@/lib/readyEmailsAnant"
 
 /** Where the button's reply link goes: filled in when sent, with the address replies go to. */
 export const REPLY_LINK = "__REPLY_LINK__"
@@ -23,8 +30,16 @@ export type ReadyEmail = {
   preview: string
   // Who it's from: this name, at the campaign's address.
   fromName: string
-  letter: Letter
-}
+  // Whose leads it's for (lib/leadAccounts.ts); CarouseLabs' unless said.
+  account?: LeadAccount
+} & (
+  | { letter: Letter; html?: undefined; text?: undefined }
+  // A whole designed email ({{firstName}} filled in when sent), and its words.
+  | { html: string; text: string; letter?: undefined }
+)
+
+/** Whose leads a ready-made email goes to. */
+export const readyAccount = (email: ReadyEmail): LeadAccount => email.account ?? DEFAULT_ACCOUNT
 
 // ── Dharma Ramasamy's outreach emails ───────────────────────────────────
 
@@ -81,6 +96,21 @@ export const READY_EMAILS: ReadyEmail[] = [
   },
 ]
 
+// ── Anant Goyal's outreach email ────────────────────────────────────────
+// Built in C:\Users\anant\email-studio (outreach/), its pictures on anantgoyal.in;
+// sent to his leads through the anantgoyal.in Brevo, from hello@anantgoyal.in.
+
+READY_EMAILS.push({
+  id: "anant-cold-1",
+  name: "Anant Goyal · Cold outreach",
+  subject: "Still sending plain-text emails?",
+  preview: "I design and develop beautiful, responsive HTML emails that make your brand stand out in the inbox.",
+  fromName: "Anant Goyal",
+  account: "anant",
+  html: ANANT_COLD_HTML,
+  text: ANANT_COLD_TEXT,
+})
+
 export const readyEmailById = (id: string): ReadyEmail | null => READY_EMAILS.find((e) => e.id === id) ?? null
 
 // ── The look (the template approved 2026-10-24) ─────────────────────────
@@ -118,6 +148,7 @@ function linkPill(href: string, icon: string, label: string, first: boolean): st
 
 /** The whole email, with {{firstName}} and the reply link still to fill in. */
 export function readyEmailHtml(email: ReadyEmail): string {
+  if (email.html !== undefined) return email.html
   const d = DHARMA
   const tiles = d.logos
     .map(
@@ -158,6 +189,7 @@ ${linkPill(d.website, `${d.images}/website.png`, "DharmaRamasamy.com", false)}
 
 /** The email in plain words: the campaign's text, for lists and search. */
 export function readyEmailText(email: ReadyEmail): string {
+  if (email.text !== undefined) return email.text
   const words = email.letter.map((part) => (part.type === "code" ? part.text : part.html.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&")))
   return [...words, email.fromName].join("\n\n")
 }

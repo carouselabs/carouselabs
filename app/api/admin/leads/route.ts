@@ -1,4 +1,6 @@
 // /api/admin/leads — leads, uploaded from CSV files or added by hand (lib/leads.ts).
+// Every call is one account's leads (lib/leadAccounts.ts): ?account=anant (or
+// "account" in the POST body); CarouseLabs' when none is given.
 //   GET ?filter=<JSON, lib/leadFilters.ts>&page=<n>
 //        → { totals, lists, columns, page, pageSize, total, leads }
 //   GET ?only=lists                    → { totals, lists, columns } (for the audience pickers)
@@ -15,10 +17,12 @@ import { getAdminUser, adminForbidden } from "@/lib/adminAuth"
 import { FIELD_KEY_RE, LEAD_IMPORT_CHUNK } from "@/lib/leadRules"
 import { importLeads, leadsOverview, leadsProblem, listLeads } from "@/lib/leads"
 import { leadFilterSchema } from "@/lib/leadFilters"
+import { LEAD_ACCOUNTS, leadAccountOf } from "@/lib/leadAccounts"
 
 const nullableText = (max: number) => z.string().trim().max(max).nullable()
 
 const importBody = z.object({
+  account: z.enum(LEAD_ACCOUNTS).optional(),
   listId: z.string().min(1).max(64).optional(),
   listName: z.string().trim().min(1, "Name the list").max(120),
   fileName: z.string().trim().max(200).nullish(),
@@ -47,9 +51,10 @@ export async function GET(req: Request) {
   const admin = await getAdminUser()
   if (!admin) return adminForbidden()
   const params = new URL(req.url).searchParams
+  const account = leadAccountOf(params.get("account"))
   try {
     const only = params.get("only")
-    if (only === "lists") return NextResponse.json(await leadsOverview())
+    if (only === "lists") return NextResponse.json(await leadsOverview(account))
     let raw: unknown = {}
     try {
       raw = JSON.parse(params.get("filter") || "{}")
@@ -58,9 +63,9 @@ export async function GET(req: Request) {
     }
     const filter = leadFilterSchema.safeParse(raw)
     if (!filter.success) return NextResponse.json({ error: "Couldn't read the filters" }, { status: 400 })
-    const page = await listLeads({ filter: filter.data, page: Number(params.get("page")) || 1 })
+    const page = await listLeads({ filter: filter.data, page: Number(params.get("page")) || 1, account })
     if (only === "leads") return NextResponse.json(page)
-    return NextResponse.json({ ...(await leadsOverview()), ...page })
+    return NextResponse.json({ ...(await leadsOverview(account)), ...page })
   } catch (err) {
     return problemResponse(err)
   }

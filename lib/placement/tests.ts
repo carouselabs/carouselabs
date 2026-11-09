@@ -198,7 +198,7 @@ export async function placementReport(campaignId: string, opts: { now?: Date; co
       inbox,
       tests,
       people: Object.fromEntries(
-        rows.map((r) => [r.id, { mailbox: (r.mailbox as Mailbox | null) ?? null, via: r.provider === "brevo" ? "brevo" : "resend", stop: stopOf.get(r.email.toLowerCase()) ?? null }]),
+        rows.map((r) => [r.id, { mailbox: (r.mailbox as Mailbox | null) ?? null, via: r.provider?.startsWith("brevo") ? "brevo" : "resend", stop: stopOf.get(r.email.toLowerCase()) ?? null }]),
       ),
     }
   } catch (err) {

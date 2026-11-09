@@ -16,8 +16,9 @@ import { AdminButton, AdminInput, Modal } from "@/components/admin/ui"
 import { useToast } from "@/components/admin/Toast"
 import { AudiencePicker, EMPTY_AUDIENCE, audienceRequest, type Audience } from "./AudiencePicker"
 import { SendingPicker } from "./SendingPicker"
-import { DEFAULT_SENDING_CHOICE, type SendingChoice } from "@/lib/sendingRules"
-import { isLeadAudience } from "@/lib/leadRules"
+import { defaultChoiceFor, type SendingChoice } from "@/lib/sendingRules"
+import { isLeadAudience, leadAudience, leadAudienceAccount } from "@/lib/leadRules"
+import { DEFAULT_ACCOUNT, type LeadAccount } from "@/lib/leadAccounts"
 
 export type UseAgainContent = { subject: string; body: string; design: unknown; readyEmail?: string | null; post?: unknown; mentionsName: string | null }
 type Content = UseAgainContent
@@ -36,6 +37,7 @@ export function UseAgainDialog({
   onClose,
   title = "Use this email again",
   content: given,
+  account = DEFAULT_ACCOUNT,
 }: {
   // "campaign:<id>" and so on (lib/sentEmails.ts); "" with `content`.
   source: string
@@ -44,14 +46,16 @@ export function UseAgainDialog({
   title?: string
   // The email itself, when it isn't a saved one: only "send to new people".
   content?: Content
+  // Whose email it is (lib/leadAccounts.ts): Anant Goyal's starts on his leads, from his address.
+  account?: LeadAccount
 }) {
   const router = useRouter()
   const { toast } = useToast()
   const [content, setContent] = useState<Content | null>(given ?? null)
   const [error, setError] = useState<string | null>(null)
   const [choice, setChoice] = useState<Choice>("people")
-  const [audience, setAudience] = useState<Audience>(EMPTY_AUDIENCE)
-  const [sendingChoice, setSendingChoice] = useState<SendingChoice>(DEFAULT_SENDING_CHOICE)
+  const [audience, setAudience] = useState<Audience>(account === DEFAULT_ACCOUNT ? EMPTY_AUDIENCE : { ...EMPTY_AUDIENCE, audience: leadAudience("all", account) })
+  const [sendingChoice, setSendingChoice] = useState<SendingChoice>(defaultChoiceFor(account))
   const [count, setCount] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [anyway, setAnyway] = useState(false)
@@ -196,7 +200,13 @@ export function UseAgainDialog({
             {choice === "people" && (
               <div className="flex flex-col gap-3">
                 <AudiencePicker id="use-again-audience" value={audience} onChange={changeAudience} />
-                <SendingPicker idPrefix="use-again-sending" value={sendingChoice} onChange={setSendingChoice} forLeads={isLeadAudience(audience.audience)} />
+                <SendingPicker
+                  idPrefix="use-again-sending"
+                  value={sendingChoice}
+                  onChange={setSendingChoice}
+                  forLeads={isLeadAudience(audience.audience)}
+                  account={leadAudienceAccount(audience.audience) ?? undefined}
+                />
                 <p className="text-caption text-muted-foreground">
                   It becomes a new campaign with {ready ? "this email, exactly as it is" : post ? "this shared post, its pictures included" : designed ? "the same picture and stickers (nothing painted again)" : "the same words"}.
                   Nothing is sent until you pick who gets it.

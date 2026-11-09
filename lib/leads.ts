@@ -28,6 +28,7 @@ import {
   type Engagement,
   type LeadFilter,
 } from "@/lib/leadFilters"
+import { ACCOUNTS, DEFAULT_ACCOUNT, brevoProvider, leadAccountOf, type LeadAccount } from "@/lib/leadAccounts"
 
 export class LeadsError extends Error {
   constructor(
@@ -38,7 +39,20 @@ export class LeadsError extends Error {
   }
 }
 
-export const LEADS_SQL_MISSING = "Run scripts/leads.sql in Supabase first: what leads need in the database isn't there yet."
+export const LEADS_SQL_MISSING =
+  "Run scripts/leads.sql (and scripts/lead-accounts.sql) in Supabase first: what leads need in the database isn't there yet."
+
+// Campaign emails sent to an account's leads: CarouseLabs' went through
+// Resend (no provider) or its Brevo; another account's through its own Brevo
+// (lib/leadAccounts.ts brevoProvider). What one account's leads did with
+// their emails never shows on the other's.
+const sentByAccount = (account: LeadAccount): Prisma.EmailCampaignRecipientWhereInput =>
+  account === DEFAULT_ACCOUNT ? { OR: [{ provider: null }, { provider: brevoProvider(account) }] } : { provider: brevoProvider(account) }
+
+// A list another account owns is treated as not there.
+function ownList(list: { account: LeadAccount }, account: LeadAccount) {
+  if (list.account !== account) throw new LeadsError("That list isn't there any more", 404)
+}
 
 // The tables aren't there yet (scripts/leads.sql not run).
 export const leadsTableMissing = isEngageSchemaMissing
@@ -87,12 +101,15 @@ export type ImportResult = {
  */
 export async function importLeads(input: {
   adminEmail: string
+  // Whose leads (lib/leadAccounts.ts); CarouseLabs' unless said.
+  account?: LeadAccount
   listId?: string
   listName: string
   fileName?: string | null
   columns: LeadColumn[]
   leads: LeadInput[]
 }): Promise<ImportResult> {
+  const account = input.account ?? DEFAULT_ACCOUNT
   // Checked again here: the browser read the file, but the server decides.
   const byEmail = new Map<string, LeadInput>()
   let invalid = 0
@@ -106,32 +123,33 @@ export async function importLeads(input: {
   let listId = input.listId
   if (listId) {
     const list = await findList(listId).catch(() => null)
-    if (!list) throw new LeadsError("That list isn't there any more. Upload the file again.", 404)
+    if (!list || list.account !== account) throw new LeadsError("That list isn't there any more. Upload the file again.", 404)
     if (list.kind === "smart") throw new LeadsError("A smart list fills itself from its filter: pick another list")
     const known = list.columns
     const added = columns.filter((c) => !known.some((k) => k.key === c.key))
     if (added.length) await db.leadList.update({ where: { id: listId }, data: { columns: [...known, ...added] } })
   } else {
     const list = await db.leadList.create({
-      data: { name: input.listName, fileName: input.fileName ?? null, columns, createdBy: input.adminEmail },
+      data: { account, name: input.listName, fileName: input.fileName ?? null, columns, createdBy: input.adminEmail },
       select: { id: true },
     })
     listId = list.id
   }
 
-  const users = await userEmails([...byEmail.keys()])
+  // CarouseLabs' leads are people who don't use it yet; another account's are its own contacts.
+  const users = account === DEFAULT_ACCOUNT ? await userEmails([...byEmail.keys()]) : new Set<string>()
   const leads = [...byEmail.values()].filter((l) => !users.has(l.email))
   const emails = leads.map((l) => l.email)
 
   const existing = emails.length
-    ? await db.lead.findMany({ where: { email: { in: emails } }, select: { id: true, email: true, firstName: true, lastName: true, name: true, fields: true } })
+    ? await db.lead.findMany({ where: { account, email: { in: emails } }, select: { id: true, email: true, firstName: true, lastName: true, name: true, fields: true } })
     : []
   const existingBy = new Map(existing.map((l) => [l.email, l]))
   const fresh = leads.filter((l) => !existingBy.has(l.email))
   if (fresh.length) {
     // skipDuplicates: the same address arriving from another upload meanwhile is kept once.
     await db.lead.createMany({
-      data: fresh.map((l) => ({ email: l.email, firstName: l.firstName, lastName: l.lastName, name: l.name, fields: l.fields })),
+      data: fresh.map((l) => ({ account, email: l.email, firstName: l.firstName, lastName: l.lastName, name: l.name, fields: l.fields })),
       skipDuplicates: true,
     })
   }
@@ -157,7 +175,7 @@ export async function importLeads(input: {
   }
   if (updates.length) await db.$transaction(updates)
 
-  const saved = emails.length ? await db.lead.findMany({ where: { email: { in: emails } }, select: { id: true, unsubscribedAt: true } }) : []
+  const saved = emails.length ? await db.lead.findMany({ where: { account, email: { in: emails } }, select: { id: true, unsubscribedAt: true } }) : []
   if (saved.length) {
     await db.leadListMember.createMany({ data: saved.map((l) => ({ listId: listId!, leadId: l.id })), skipDuplicates: true })
   }
@@ -173,7 +191,7 @@ export async function importLeads(input: {
   await logAdminAction({
     adminEmail: input.adminEmail,
     action: "IMPORT_LEADS",
-    details: `"${input.listName}": ${result.added} new leads, ${result.alreadySaved} already saved, ${result.alreadyUsers} skipped (CarouseLabs users), ${invalid} bad addresses`,
+    details: `${account === DEFAULT_ACCOUNT ? "" : `${ACCOUNTS[account].label}: `}"${input.listName}": ${result.added} new leads, ${result.alreadySaved} already saved, ${result.alreadyUsers} skipped (CarouseLabs users), ${invalid} bad addresses`,
   })
   return result
 }
@@ -183,6 +201,7 @@ export async function importLeads(input: {
 export type ListKind = "static" | "smart"
 export type LeadListRow = {
   id: string
+  account: LeadAccount
   name: string
   fileName: string | null
   columns: LeadColumn[]
@@ -190,6 +209,8 @@ export type LeadListRow = {
   createdAt: Date
   kind: ListKind
   filter: LeadFilter | null
+  // The Brevo list it was copied from (lib/brevoSync.ts), or null.
+  brevoListId: number | null
   members: number
 }
 
@@ -198,11 +219,33 @@ const parseFilter = (stored: unknown): LeadFilter | null => {
   return parsed.success ? parsed.data : null
 }
 
-const LIST_FIELDS = { id: true, name: true, fileName: true, columns: true, createdBy: true, createdAt: true, _count: { select: { members: true } } } as const
+const LIST_FIELDS = {
+  id: true,
+  account: true,
+  name: true,
+  fileName: true,
+  columns: true,
+  brevoListId: true,
+  createdBy: true,
+  createdAt: true,
+  _count: { select: { members: true } },
+} as const
 
 /** Lists, newest first; all static before scripts/lead-lists.sql is run. */
 async function loadLists(where: Prisma.LeadListWhereInput = {}): Promise<LeadListRow[]> {
-  type Row = { id: string; name: string; fileName: string | null; columns: unknown; createdBy: string; createdAt: Date; _count: { members: number }; kind?: string; filter?: unknown }
+  type Row = {
+    id: string
+    account?: string
+    name: string
+    fileName: string | null
+    columns: unknown
+    brevoListId?: number | null
+    createdBy: string
+    createdAt: Date
+    _count: { members: number }
+    kind?: string
+    filter?: unknown
+  }
   let rows: Row[]
   try {
     rows = await db.leadList.findMany({ where, orderBy: { createdAt: "desc" }, take: 200, select: { ...LIST_FIELDS, kind: true, filter: true } })
@@ -212,6 +255,7 @@ async function loadLists(where: Prisma.LeadListWhereInput = {}): Promise<LeadLis
   }
   return rows.map((l) => ({
     id: l.id,
+    account: leadAccountOf(l.account),
     name: l.name,
     fileName: l.fileName,
     columns: columnsOf(l.columns),
@@ -219,6 +263,7 @@ async function loadLists(where: Prisma.LeadListWhereInput = {}): Promise<LeadLis
     createdAt: l.createdAt,
     kind: l.kind === "smart" ? "smart" : "static",
     filter: l.kind === "smart" ? parseFilter(l.filter) : null,
+    brevoListId: typeof l.brevoListId === "number" ? l.brevoListId : null,
     members: l._count.members,
   }))
 }
@@ -256,14 +301,14 @@ async function leadRows(args: { where: Prisma.LeadWhereInput; skip?: number; tak
   }
 }
 
-/** What each address did with the campaign emails it was sent (people only: lib/emailScanners.ts). */
-export async function engagementByEmail(emails: string[]): Promise<Map<string, Engagement>> {
+/** What each address did with the campaign emails this account sent it (people only: lib/emailScanners.ts). */
+export async function engagementByEmail(emails: string[], account: LeadAccount = DEFAULT_ACCOUNT): Promise<Map<string, Engagement>> {
   const map = new Map<string, Engagement>()
   const unique = [...new Set(emails.map((e) => e.toLowerCase()))]
   for (let i = 0; i < unique.length; i += 5000) {
     const groups = await db.emailCampaignRecipient.groupBy({
       by: ["email"],
-      where: { email: { in: unique.slice(i, i + 5000) }, status: "sent" },
+      where: { email: { in: unique.slice(i, i + 5000) }, status: "sent", ...sentByAccount(account) },
       _count: { _all: true },
       _max: { sentAt: true, openedAt: true, clickedAt: true },
     })
@@ -275,9 +320,10 @@ export async function engagementByEmail(emails: string[]): Promise<Map<string, E
 }
 
 // A smart list's people are its filter's, plus whatever else is asked now.
-async function resolveFilter(filter: LeadFilter): Promise<{ filter: LeadFilter; staticListId: string | null }> {
+async function resolveFilter(filter: LeadFilter, account: LeadAccount): Promise<{ filter: LeadFilter; staticListId: string | null }> {
   if (!filter.listId) return { filter, staticListId: null }
   const list = await findList(filter.listId)
+  ownList(list, account)
   if (list.kind === "static") return { filter, staticListId: list.id }
   const rest: LeadFilter = { ...filter }
   delete rest.listId
@@ -285,8 +331,8 @@ async function resolveFilter(filter: LeadFilter): Promise<{ filter: LeadFilter; 
   return { filter: merged, staticListId: merged.listId ?? null }
 }
 
-function whereOf(f: LeadFilter, staticListId: string | null, now: Date): Prisma.LeadWhereInput {
-  const and: Prisma.LeadWhereInput[] = []
+function whereOf(f: LeadFilter, staticListId: string | null, now: Date, account: LeadAccount): Prisma.LeadWhereInput {
+  const and: Prisma.LeadWhereInput[] = [{ account }]
   if (staticListId) and.push({ lists: { some: { listId: staticListId } } })
   if (f.status === "active") and.push({ unsubscribedAt: null })
   if (f.status === "stopped") and.push({ unsubscribedAt: { not: null } })
@@ -305,28 +351,29 @@ function whereOf(f: LeadFilter, staticListId: string | null, now: Date): Prisma.
       ],
     })
   }
-  return and.length ? { AND: and } : {}
+  return { AND: and }
 }
 
-/** Every lead a filter finds (a smart list's filter included), newest first. */
-export async function matchingLeads(filter: LeadFilter, now: Date = new Date()): Promise<LeadRow[]> {
-  const { filter: f, staticListId } = await resolveFilter(filter)
-  const rows = await leadRows({ where: whereOf(f, staticListId, now) })
+/** Every lead of this account a filter finds (a smart list's filter included), newest first. */
+export async function matchingLeads(filter: LeadFilter, now: Date = new Date(), account: LeadAccount = DEFAULT_ACCOUNT): Promise<LeadRow[]> {
+  const { filter: f, staticListId } = await resolveFilter(filter, account)
+  const rows = await leadRows({ where: whereOf(f, staticListId, now, account) })
   if (!f.field && !f.activity) return rows
-  const engagement = f.activity ? await engagementByEmail(rows.map((r) => r.email)) : new Map<string, Engagement>()
+  const engagement = f.activity ? await engagementByEmail(rows.map((r) => r.email), account) : new Map<string, Engagement>()
   return rows.filter((r) => matchesInMemory(r, engagement.get(r.email) ?? NO_ENGAGEMENT, f, now))
 }
 
-/** The page's numbers and every list (a smart list's count is whoever matches it now), newest first. */
-export async function leadsOverview() {
-  const lists = await loadLists()
-  const total = await db.lead.count()
-  const unsubscribed = await db.lead.count({ where: { unsubscribedAt: { not: null } } })
-  const neverEmailed = await db.lead.count({ where: { unsubscribedAt: null, lastEmailedAt: null } })
+/** One account's numbers and every list of its (a smart list's count is whoever matches it now), newest first. */
+export async function leadsOverview(account: LeadAccount = DEFAULT_ACCOUNT) {
+  const lists = await loadLists({ account })
+  const total = await db.lead.count({ where: { account } })
+  const unsubscribed = await db.lead.count({ where: { account, unsubscribedAt: { not: null } } })
+  const neverEmailed = await db.lead.count({ where: { account, unsubscribedAt: null, lastEmailedAt: null } })
   const counted = []
   for (const l of lists) {
     counted.push({
       id: l.id,
+      account: l.account,
       name: l.name,
       fileName: l.fileName,
       columns: l.kind === "smart" ? [] : l.columns,
@@ -334,7 +381,8 @@ export async function leadsOverview() {
       createdAt: l.createdAt,
       kind: l.kind,
       filter: l.filter,
-      count: l.kind === "smart" ? (l.filter ? (await matchingLeads(l.filter)).length : 0) : l.members,
+      brevoListId: l.brevoListId,
+      count: l.kind === "smart" ? (l.filter ? (await matchingLeads(l.filter, new Date(), account)).length : 0) : l.members,
     })
   }
   // Every column any lead has: for the column filter and the table.
@@ -345,26 +393,27 @@ export async function leadsOverview() {
 
 export const LEADS_PAGE_SIZE = 50
 
-/** One page of the leads a filter finds, newest first, with their lists and what they did with the emails. */
-export async function listLeads(input: { filter: LeadFilter; page?: number }) {
+/** One page of the leads a filter finds in this account, newest first, with their lists and what they did with the emails. */
+export async function listLeads(input: { filter: LeadFilter; page?: number; account?: LeadAccount }) {
   const now = new Date()
+  const account = input.account ?? DEFAULT_ACCOUNT
   const page = Math.max(1, Math.floor(input.page ?? 1))
-  const { filter: f, staticListId } = await resolveFilter(input.filter)
+  const { filter: f, staticListId } = await resolveFilter(input.filter, account)
   let rows: LeadRow[]
   let total: number
   if (!f.field && !f.activity) {
     // All in the database: just this page.
-    const where = whereOf(f, staticListId, now)
+    const where = whereOf(f, staticListId, now, account)
     rows = await leadRows({ where, skip: (page - 1) * LEADS_PAGE_SIZE, take: LEADS_PAGE_SIZE })
     total = await db.lead.count({ where })
   } else {
-    const all = await matchingLeads(input.filter, now)
+    const all = await matchingLeads(input.filter, now, account)
     total = all.length
     rows = all.slice((page - 1) * LEADS_PAGE_SIZE, page * LEADS_PAGE_SIZE)
   }
   const ids = rows.map((r) => r.id)
   const [engagement, memberships] = [
-    await engagementByEmail(rows.map((r) => r.email)),
+    await engagementByEmail(rows.map((r) => r.email), account),
     ids.length ? await db.leadListMember.findMany({ where: { leadId: { in: ids } }, select: { leadId: true, list: { select: { id: true, name: true } } } }) : [],
   ]
   return {
@@ -395,18 +444,19 @@ export async function listLeads(input: { filter: LeadFilter; page?: number }) {
 
 export const SMART_LISTS_SQL_MISSING = "Run scripts/lead-lists.sql in Supabase first: smart lists need it."
 
-/** A new list: static (empty, filled by ticking leads) or smart (a saved filter). */
-export async function createLeadList(input: { admin: string; name: string; kind: ListKind; filter?: LeadFilter | null }): Promise<{ id: string }> {
+/** A new list of this account's: static (empty, filled by ticking leads) or smart (a saved filter). */
+export async function createLeadList(input: { admin: string; name: string; kind: ListKind; filter?: LeadFilter | null; account?: LeadAccount }): Promise<{ id: string }> {
+  const account = input.account ?? DEFAULT_ACCOUNT
   const name = input.name.trim()
   if (!name) throw new LeadsError("Name the list")
   if (input.kind === "smart") {
     if (!input.filter || isEmptyFilter(input.filter)) throw new LeadsError("Pick at least one filter for a smart list")
-    await checkSmartFilter(input.filter)
+    await checkSmartFilter(input.filter, account)
   }
   let list: { id: string }
   try {
     list = await db.leadList.create({
-      data: { name, createdBy: input.admin, ...(input.kind === "smart" ? { kind: "smart", filter: input.filter! } : {}) },
+      data: { account, name, createdBy: input.admin, ...(input.kind === "smart" ? { kind: "smart", filter: input.filter! } : {}) },
       select: { id: true },
     })
   } catch (err) {
@@ -417,9 +467,12 @@ export async function createLeadList(input: { admin: string; name: string; kind:
   return list
 }
 
-// A smart list can build on a static list, not on another smart one.
-async function checkSmartFilter(filter: LeadFilter) {
-  if (filter.listId && (await findList(filter.listId)).kind === "smart") throw new LeadsError("A smart list can't be built on another smart list")
+// A smart list can build on a static list of the same account, not on another smart one.
+async function checkSmartFilter(filter: LeadFilter, account: LeadAccount) {
+  if (!filter.listId) return
+  const base = await findList(filter.listId)
+  ownList(base, account)
+  if (base.kind === "smart") throw new LeadsError("A smart list can't be built on another smart list")
 }
 
 /** Renames a list, or changes a smart list's filter. */
@@ -431,7 +484,7 @@ export async function updateLeadList(id: string, input: { admin: string; name?: 
     if (list.kind !== "smart") throw new LeadsError("Only a smart list has a filter")
     if (isEmptyFilter(input.filter)) throw new LeadsError("Pick at least one filter for a smart list")
     if (input.filter.listId === id) throw new LeadsError("A smart list can't be built on itself")
-    await checkSmartFilter(input.filter)
+    await checkSmartFilter(input.filter, list.account)
   }
   await db.leadList.update({ where: { id }, data: { ...(name ? { name } : {}), ...(input.filter ? { filter: input.filter } : {}) }, select: { id: true } })
   await logAdminAction({
@@ -482,8 +535,13 @@ export async function bulkLeads(input: {
   filter?: LeadFilter
   listId?: string
   newListName?: string
+  account?: LeadAccount
 }): Promise<{ affected: number; kept: number; listId?: string }> {
-  const ids = input.ids ?? (await matchingLeads(input.filter ?? {})).map((l) => l.id)
+  const account = input.account ?? DEFAULT_ACCOUNT
+  // Only this account's leads, whichever way they were picked.
+  const ids = input.ids
+    ? (await db.lead.findMany({ where: { account, id: { in: input.ids } }, select: { id: true } })).map((l) => l.id)
+    : (await matchingLeads(input.filter ?? {}, new Date(), account)).map((l) => l.id)
   if (ids.length === 0) throw new LeadsError("Pick at least one lead")
 
   if (input.action === "delete") {
@@ -499,19 +557,20 @@ export async function bulkLeads(input: {
   let listName: string
   if (listId) {
     const list = await findList(listId)
+    ownList(list, account)
     if (list.kind === "smart") throw new LeadsError("A smart list fills itself from its filter: people can't be added or taken off by hand")
     listName = list.name
   } else {
     if (input.action === "remove") throw new LeadsError("Which list?")
     listName = input.newListName?.trim() ?? ""
     if (!listName) throw new LeadsError("Name the new list")
-    listId = (await db.leadList.create({ data: { name: listName, createdBy: input.admin }, select: { id: true } })).id
+    listId = (await db.leadList.create({ data: { account, name: listName, createdBy: input.admin }, select: { id: true } })).id
   }
 
   let affected = 0
   if (input.action === "add") {
     // The list learns the columns its new people have.
-    const all = await loadLists()
+    const all = await loadLists({ account })
     const known = new Map(all.flatMap((l) => l.columns).map((c) => [c.key, c]))
     const leads = await db.lead.findMany({ where: { id: { in: ids } }, select: { fields: true } })
     const keys = new Set(leads.flatMap((l) => Object.keys(fieldsOf(l.fields))))
@@ -539,8 +598,9 @@ export async function bulkLeads(input: {
 export async function leadDetail(id: string) {
   const [lead] = await leadRows({ where: { id } })
   if (!lead) throw new LeadsError("That lead isn't there any more", 404)
+  const account = leadAccountOf((await db.lead.findUnique({ where: { id }, select: { account: true } }))?.account)
   const lists = await db.leadListMember.findMany({ where: { leadId: id }, select: { list: { select: { id: true, name: true } } } })
-  const where = { email: lead.email }
+  const where = { email: lead.email, ...sentByAccount(account) }
   const sent = await db.emailCampaignRecipient.findMany({
     where,
     orderBy: { createdAt: "desc" },
@@ -570,7 +630,7 @@ export async function leadDetail(id: string) {
   }
   const emails = sent.map((r) => ({ ...r, ...scanners.get(r.id) }))
   const columns = new Map<string, LeadColumn>()
-  for (const l of await loadLists()) for (const c of l.columns) if (!columns.has(c.key)) columns.set(c.key, c)
+  for (const l of await loadLists({ account })) for (const c of l.columns) if (!columns.has(c.key)) columns.set(c.key, c)
   return {
     lead: {
       id: lead.id,
@@ -608,11 +668,11 @@ export async function updateLead(
   await logAdminAction({ adminEmail: input.admin, action: "UPDATE_LEAD", details: `${lead.email}` })
 }
 
-// Every column of these lists, once each; null when there are no lists
-// (or no tables yet).
-async function listColumns(listId?: string | null): Promise<LeadColumn[] | null> {
+// Every column of these lists (one list, an account's, or everyone's), once
+// each; null when there are no lists (or no tables yet).
+async function listColumns(listId?: string | null, account?: LeadAccount): Promise<LeadColumn[] | null> {
   try {
-    const lists = await db.leadList.findMany({ where: listId ? { id: listId } : {}, select: { columns: true } })
+    const lists = await db.leadList.findMany({ where: listId ? { id: listId } : account ? { account } : {}, select: { columns: true } })
     if (lists.length === 0) return null
     const all = new Map<string, LeadColumn>()
     for (const l of lists) for (const c of columnsOf(l.columns)) if (!all.has(c.key)) all.set(c.key, c)
@@ -623,8 +683,11 @@ async function listColumns(listId?: string | null): Promise<LeadColumn[] | null>
   }
 }
 
-/** The merge fields these leads have beyond their name and email (a list's columns, or every list's: a smart list's people can have any). */
-export async function leadFieldKeys(listId?: string | null): Promise<LeadColumn[]> {
+/**
+ * The merge fields these leads have beyond their name and email: a list's
+ * columns, or every list's of the account (a smart list's people can have any).
+ */
+export async function leadFieldKeys(listId?: string | null, account: LeadAccount = DEFAULT_ACCOUNT): Promise<LeadColumn[]> {
   let id = listId ?? null
   if (id) {
     const [list] = await loadLists({ id }).catch((err) => {
@@ -633,11 +696,33 @@ export async function leadFieldKeys(listId?: string | null): Promise<LeadColumn[
     })
     if (list?.kind === "smart") id = null
   }
-  return (await listColumns(id)) ?? []
+  return (await listColumns(id, account)) ?? []
 }
 
 /** For the AI writer: every lead column, or null when no leads are saved (it's then told nothing about leads). */
 export const writerLeadFields = () => listColumns()
+
+/**
+ * The lead list a Brevo list is copied into (lib/brevoSync.ts): found by its
+ * Brevo id, made the first time (named like the Brevo list). Two syncs at
+ * once still make one: the database allows one per Brevo list.
+ */
+export async function listForBrevo(input: { account: LeadAccount; brevoListId: number; name: string; admin: string }): Promise<{ id: string; name: string }> {
+  const where = { account: input.account, brevoListId: input.brevoListId }
+  const found = await db.leadList.findFirst({ where, select: { id: true, name: true } })
+  if (found) return found
+  try {
+    const made = await db.leadList.create({
+      data: { ...where, name: input.name, fileName: null, columns: [], createdBy: input.admin },
+      select: { id: true },
+    })
+    return { id: made.id, name: input.name }
+  } catch (err) {
+    const again = await db.leadList.findFirst({ where, select: { id: true, name: true } })
+    if (again) return again
+    throw err
+  }
+}
 
 /** The list's name, for the campaign to show. */
 export async function leadListName(listId: string): Promise<string | null> {
@@ -646,23 +731,25 @@ export async function leadListName(listId: string): Promise<string | null> {
 }
 
 /**
- * Who a lead audience is: leads still subscribed (and, for "new", that no
- * campaign has reached yet), oldest first, leaving out anyone who has since
- * made a CarouseLabs account.
+ * Who a lead audience is: its account's leads still subscribed (and, for
+ * "new", that no campaign has reached yet), oldest first; for CarouseLabs,
+ * leaving out anyone who has since made a CarouseLabs account.
  */
 export async function resolveLeadAudience(audience: LeadAudience): Promise<{ userId: null; email: string; name: string | null }[]> {
   const parsed = parseLeadAudience(audience)
   if (!parsed) return []
+  const { account } = parsed
   const list = parsed.kind === "list" ? await findList(parsed.listId).catch(() => null) : null
-  if (parsed.kind === "list" && !list) throw new LeadsError("That leads list isn't there any more", 404)
+  if (parsed.kind === "list" && (!list || list.account !== account)) throw new LeadsError("That leads list isn't there any more", 404)
   const leads =
     list?.kind === "smart"
       ? // Whoever matches its filter now (none if it has lost its filter), oldest first.
         list.filter
-        ? (await matchingLeads(list.filter)).filter((l) => !l.unsubscribedAt).reverse()
+        ? (await matchingLeads(list.filter, new Date(), account)).filter((l) => !l.unsubscribedAt).reverse()
         : []
       : await db.lead.findMany({
           where: {
+            account,
             unsubscribedAt: null,
             ...(parsed.kind === "new" ? { lastEmailedAt: null } : {}),
             ...(parsed.kind === "list" ? { lists: { some: { listId: parsed.listId } } } : {}),
@@ -670,7 +757,7 @@ export async function resolveLeadAudience(audience: LeadAudience): Promise<{ use
           orderBy: [{ createdAt: "asc" }, { email: "asc" }],
           select: { email: true, firstName: true, lastName: true, name: true },
         })
-  const users = await userEmails(leads.map((l) => l.email))
+  const users = account === DEFAULT_ACCOUNT ? await userEmails(leads.map((l) => l.email)) : new Set<string>()
   return leads
     .filter((l) => !users.has(l.email))
     .map((l) => ({ userId: null, email: l.email, name: l.name || [l.firstName, l.lastName].filter(Boolean).join(" ") || null }))
@@ -683,11 +770,11 @@ export type LeadSendInfo = { id: string; values: Record<string, string>; unsubsc
  * merge-field values, and whether they unsubscribed. Empty before
  * scripts/leads.sql has been run, so campaigns send as they always did.
  */
-export async function leadSendInfo(emails: string[]): Promise<Map<string, LeadSendInfo>> {
+export async function leadSendInfo(emails: string[], account: LeadAccount = DEFAULT_ACCOUNT): Promise<Map<string, LeadSendInfo>> {
   if (emails.length === 0) return new Map()
   try {
     const leads = await db.lead.findMany({
-      where: { email: { in: emails.map((e) => e.toLowerCase()) } },
+      where: { account, email: { in: emails.map((e) => e.toLowerCase()) } },
       select: { id: true, email: true, firstName: true, lastName: true, name: true, fields: true, unsubscribedAt: true },
     })
     return new Map(leads.map((l) => [l.email, { id: l.id, values: leadValues(l), unsubscribed: !!l.unsubscribedAt }]))
@@ -728,8 +815,20 @@ export async function unsubscribeLead(id: string, at: Date = new Date()): Promis
   return true
 }
 
-/** Brevo stopped this address (lib/brevo.ts): its lead isn't emailed again. Returns how many leads that was (0 or 1). */
-export async function stopLeadByEmail(email: string, reason: StopReason, at: Date = new Date()): Promise<number> {
+/**
+ * That account's Brevo stopped this address (lib/brevo.ts): its lead in that
+ * account isn't emailed again (the other account's is untouched). Returns how
+ * many leads that was (0 or 1).
+ */
+export async function stopLeadByEmail(email: string, reason: StopReason, at: Date = new Date(), account: LeadAccount = DEFAULT_ACCOUNT): Promise<number> {
   const clean = cleanEmail(email)
-  return clean ? stopLeads({ email: clean }, reason, at) : 0
+  return clean ? stopLeads({ account, email: clean }, reason, at) : 0
+}
+
+/** Stops these addresses of an account at once (lib/brevoSync.ts: contacts Brevo has on its blocklist). */
+export async function stopLeadsByEmail(emails: string[], reason: StopReason, account: LeadAccount, at: Date = new Date()): Promise<number> {
+  const clean = [...new Set(emails.flatMap((e) => cleanEmail(e) ?? []))]
+  let stopped = 0
+  for (let i = 0; i < clean.length; i += 5000) stopped += await stopLeads({ account, email: { in: clean.slice(i, i + 5000) } }, reason, at)
+  return stopped
 }

@@ -15,6 +15,7 @@ import type { LeadColumn } from "@/lib/leadRules"
 import { LeadFilterBar, filterColumns } from "./LeadFilterBar"
 import { LeadPanel } from "./LeadPanel"
 import { STOPPED, count, isSmart, type LeadListInfo, type LeadRowInfo } from "./leadTypes"
+import { bodyWithAccount, useLeadAccount, withAccount } from "./leadAccountContext"
 
 type Page = { page: number; pageSize: number; total: number; leads: LeadRowInfo[] }
 const NEW = "__new__"
@@ -52,6 +53,7 @@ export function AllLeads({
   onAdd: () => void
 }) {
   const { toast } = useToast()
+  const account = useLeadAccount()
   const [data, setData] = useState<Page | null>(null)
   const [error, setError] = useState<string | null>(null)
   const key = JSON.stringify(filter)
@@ -78,7 +80,7 @@ export function AllLeads({
   useEffect(() => {
     let live = true
     const params = new URLSearchParams({ only: "leads", page: String(page), filter: key })
-    fetch(`/api/admin/leads?${params}`, { cache: "no-store" })
+    fetch(withAccount(`/api/admin/leads?${params}`, account), { cache: "no-store" })
       .then(async (res) => {
         const body = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(body.error ?? "Couldn't load the leads")
@@ -90,7 +92,7 @@ export function AllLeads({
     return () => {
       live = false
     }
-  }, [page, key, reloads])
+  }, [page, key, reloads, account])
 
   const shownList = filter.listId ? lists.find((l) => l.id === filter.listId) : undefined
   const fixedShown = shownList && !isSmart(shownList) ? shownList : undefined
@@ -126,7 +128,7 @@ export function AllLeads({
     const res = await fetch("/api/admin/leads/bulk", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...body, ...(allMatching ? { filter } : { ids: [...ticked] }) }),
+      body: JSON.stringify(bodyWithAccount({ ...body, ...(allMatching ? { filter } : { ids: [...ticked] }) }, account)),
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data.error ?? "Couldn't do that")
@@ -166,7 +168,7 @@ export function AllLeads({
       const res = await fetch("/api/admin/leads/lists", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim(), kind: "smart", filter: savable(filter, lists) }),
+        body: JSON.stringify(bodyWithAccount({ name: newName.trim(), kind: "smart", filter: savable(filter, lists) }, account)),
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error ?? "Couldn't save the smart list")

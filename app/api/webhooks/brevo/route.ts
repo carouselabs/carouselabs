@@ -4,14 +4,19 @@
 // spam, or Brevo blocked the send. That lead is never emailed again
 // (lib/leads.ts stopLeadByEmail). The token is ours (lib/brevo.ts), set when
 // the Leads page connected the webhook, so nobody else can stop anyone.
-// Brevo sends one event per call; a list of them is read too.
+// Brevo sends one event per call; a list of them is read too. ?account=anant:
+// Anant Goyal's Brevo (lib/leadAccounts.ts), with its own token, stopping
+// only that account's lead.
 import { NextResponse } from "next/server"
 import { BREVO_STOP_EVENTS, isBrevoWebhookToken } from "@/lib/brevo"
 import { stopLeadByEmail } from "@/lib/leads"
+import { leadAccountOf } from "@/lib/leadAccounts"
 
 export async function POST(req: Request) {
+  const params = new URL(req.url).searchParams
+  const account = leadAccountOf(params.get("account"))
   const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
-  if (!isBrevoWebhookToken(new URL(req.url).searchParams.get("token") ?? bearer)) {
+  if (!isBrevoWebhookToken(params.get("token") ?? bearer, account)) {
     return NextResponse.json({ error: "Not allowed" }, { status: 401 })
   }
   const body: unknown = await req.json().catch(() => null)
@@ -19,7 +24,7 @@ export async function POST(req: Request) {
   let stopped = 0
   for (const e of events) {
     const reason = typeof e.event === "string" ? BREVO_STOP_EVENTS[e.event] : undefined
-    if (reason && typeof e.email === "string") stopped += await stopLeadByEmail(e.email, reason)
+    if (reason && typeof e.email === "string") stopped += await stopLeadByEmail(e.email, reason, new Date(), account)
   }
   return NextResponse.json({ ok: true, stopped })
 }

@@ -32,7 +32,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params
   if (!placementInbox()) return NextResponse.json({ error: "There's no test inbox yet: set PLACEMENT_GMAIL_USER and PLACEMENT_GMAIL_APP_PASSWORD." }, { status: 503 })
   try {
-    const tests = await sendPlacementTests({ campaignId: id, resend, brevo: brevoMailer(), from: FROM })
+    const tests = await sendPlacementTests({ campaignId: id, resend, brevo: brevoMailer(), brevoFor: (account) => brevoMailer(fetch, account), from: FROM })
     const failed = tests.find((t) => t?.status === "failed")
     await logAdminAction({ adminEmail: admin.email, action: "SEND_PLACEMENT_TEST", details: `campaign ${id}: ${tests.length} test ${tests.length === 1 ? "copy" : "copies"}${failed ? `, failed: ${failed.error}` : " sent"}` })
     if (failed) return NextResponse.json({ error: failed.error ?? "The test copy wasn't sent" }, { status: 502 })

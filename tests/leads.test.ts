@@ -89,7 +89,8 @@ function matches(row: Record<string, unknown>, where: Record<string, unknown> = 
     }
     if (key === "OR") return (cond as Record<string, unknown>[]).some((w) => matches(row, w))
     if (key === "AND") return (cond as Record<string, unknown>[]).every((w) => matches(row, w))
-    const value = row[key]
+    // Lead.account and LeadList.account default to CarouseLabs' (scripts/lead-accounts.sql).
+    const value = key === "account" && (row.email !== undefined || row.columns !== undefined) ? (row.account ?? "carouselabs") : row[key]
     if (cond === null) return value === null || value === undefined
     if (cond && typeof cond === "object" && !(cond instanceof Date)) {
       const c = cond as { in?: unknown[]; not?: unknown; lt?: Date; gte?: Date; mode?: string; contains?: string }
@@ -157,7 +158,8 @@ vi.mock("@/lib/db", () => ({
       createMany: vi.fn(async ({ data, skipDuplicates }: { data: Partial<LeadRow>[]; skipDuplicates?: boolean }) => {
         let count = 0
         for (const d of data) {
-          if (store.leads.some((l) => l.email === d.email)) {
+          // One per address in each account (Lead_account_email_key).
+          if (store.leads.some((l) => l.email === d.email && ((l as { account?: string }).account ?? "carouselabs") === ((d as { account?: string }).account ?? "carouselabs"))) {
             if (!skipDuplicates) throw new Error("Unique constraint failed on email")
             continue
           }
@@ -199,6 +201,10 @@ vi.mock("@/lib/db", () => ({
     leadList: {
       findUnique: vi.fn(async ({ where, select }: { where: { id: string }; select?: Record<string, unknown> }) => {
         const list = store.lists.find((l) => l.id === where.id)
+        return list ? pick(list, select) : null
+      }),
+      findFirst: vi.fn(async ({ where, select }: { where: Record<string, unknown>; select?: Record<string, unknown> }) => {
+        const list = store.lists.find((l) => matches(l, where))
         return list ? pick(list, select) : null
       }),
       findMany: vi.fn(async ({ where, select }: { where?: Record<string, unknown>; select?: Record<string, unknown> } = {}) => {
@@ -406,6 +412,11 @@ import { readyFrom, readyHtml } from "@/lib/readyEmailSend"
 import { TemplateError, emailContent, parseSource, saveTemplate } from "@/lib/sentEmails"
 import type { EmailDesign } from "@/lib/emailDesign"
 import type { BatchMailer } from "@/lib/emailBatchSend"
+import { leadAudience, leadListAudience } from "@/lib/leadRules"
+import { addCampaignRecipients } from "@/lib/campaigns"
+import { ALL_CONTACTS, BREVO_SYNC_PAGE, contactToLead, stoppedInBrevo, syncBrevoPage } from "@/lib/brevoSync"
+import { POST as brevoSyncPost } from "@/app/api/admin/leads/brevo-sync/route"
+import { readyAccount } from "@/lib/readyEmails"
 
 // Users' emails go through Resend, leads' through Brevo: each fake keeps what it was given.
 type Sent = { from: string; to: string; subject: string; html: string; headers?: Record<string, string>; replyTo?: string }
@@ -551,9 +562,9 @@ describe("reading the file", () => {
 
 describe("lead audiences and merge fields", () => {
   it("knows the three audiences and nothing else", () => {
-    expect(parseLeadAudience("leads:all")).toEqual({ kind: "all" })
-    expect(parseLeadAudience("leads:new")).toEqual({ kind: "new" })
-    expect(parseLeadAudience("leads:list:abc_123")).toEqual({ kind: "list", listId: "abc_123" })
+    expect(parseLeadAudience("leads:all")).toEqual({ kind: "all", account: "carouselabs" })
+    expect(parseLeadAudience("leads:new")).toEqual({ kind: "new", account: "carouselabs" })
+    expect(parseLeadAudience("leads:list:abc_123")).toEqual({ kind: "list", listId: "abc_123", account: "carouselabs" })
     for (const bad of ["leads", "leads:", "leads:list:", "leads:list:a b", "all", "leads:everyone"]) expect(isLeadAudience(bad)).toBe(false)
     expect(leadAudienceLabel("leads:list:abc", "Delhi founders")).toBe("Leads: Delhi founders")
     expect(audienceLabel("leads:new", null)).toBe("Leads never emailed")
@@ -1172,10 +1183,10 @@ describe("Brevo setup on the Leads page", () => {
 
   it("the admin route answers with the checks and today's lead emails, for admins only", async () => {
     vi.stubEnv("BREVO_API_KEY", "")
-    const res = await brevoGet()
+    const res = await brevoGet(new Request("https://carouselabs.test/api/admin/brevo"))
     expect(await res.json()).toEqual({ status: { key: false }, from: "support@carouselabs.com", today: { via: "brevo", limit: BREVO_DAILY_LIMIT, sentToday: 0, left: BREVO_DAILY_LIMIT } })
     store.admin = null
-    expect((await brevoGet()).status).toBe(403)
+    expect((await brevoGet(new Request("https://carouselabs.test/api/admin/brevo"))).status).toBe(403)
   })
 })
 
@@ -1695,6 +1706,7 @@ describe("ready-made emails", () => {
     expect(READY_EMAILS.map((e) => [e.id, e.subject, e.fromName])).toEqual([
       ["dharma-1", "App registrations in your Entra tenant", "Dharma Ramasamy"],
       ["dharma-2", "Quick question about your Entra tenant", "Dharma Ramasamy"],
+      ["anant-cold-1", "Still sending plain-text emails?", "Anant Goyal"],
     ])
     const html = readyEmailHtml(one)
     for (const words of [
@@ -1917,5 +1929,226 @@ describe("shared LinkedIn posts", () => {
     expect(readTrackingToken(/email-track\/open\/([^"]+)"/.exec(asha.html)![1])).toEqual({ kind: "campaign", id: ids[0] })
     expect(asha.html).toContain(unsubscribeUrl(unsubscribeToken(leadByEmail("asha@example.test").id)!))
     expect(store.recipients.map((r) => r.status)).toEqual(["sent", "sent"])
+  })
+})
+
+// ── Two lead accounts (lib/leadAccounts.ts): CarouseLabs' and Anant Goyal's ──
+
+describe("two lead accounts, kept apart", () => {
+  const viaAnant: Sent[][] = []
+  const anantMailer = fakeMailer(viaAnant)
+  const of = (account: string, email: string) => store.leads.find((l) => l.email === email && ((l as { account?: string }).account ?? "carouselabs") === account)!
+
+  beforeEach(() => {
+    viaResend.length = 0
+    viaBrevo.length = 0
+    viaAnant.length = 0
+  })
+
+  it("audiences say whose leads they are; CarouseLabs' keep their old names", () => {
+    expect(parseLeadAudience("leads:anant:all")).toEqual({ kind: "all", account: "anant" })
+    expect(parseLeadAudience("leads:anant:new")).toEqual({ kind: "new", account: "anant" })
+    expect(parseLeadAudience("leads:anant:list:abc")).toEqual({ kind: "list", listId: "abc", account: "anant" })
+    expect(leadAudience("all")).toBe("leads:all")
+    expect(leadAudience("new", "anant")).toBe("leads:anant:new")
+    expect(leadListAudience("x1", "anant")).toBe("leads:anant:list:x1")
+    for (const bad of ["leads:someone:all", "leads:carouselabs:all", "leads:anant:", "leads:anant:list:"]) expect(isLeadAudience(bad)).toBe(false)
+    expect(leadAudienceLabel("leads:anant:all")).toBe("Anant Goyal: all leads")
+    expect(leadAudienceLabel("leads:anant:list:x1", "Founders")).toBe("Anant Goyal: Founders")
+  })
+
+  it("the same address can be a lead of each, with its own name, lists and numbers", async () => {
+    await importLeads({ adminEmail: ADMIN, listName: "CarouseLabs list", columns: [], leads: [lead("same@example.test", { firstName: "Cara" })] })
+    await importLeads({ adminEmail: ADMIN, account: "anant", listName: "Anant list", columns: [], leads: [lead("same@example.test", { firstName: "Ana" }), lead("only@example.test")] })
+    expect(of("carouselabs", "same@example.test").firstName).toBe("Cara")
+    expect(of("anant", "same@example.test").firstName).toBe("Ana")
+
+    const mine = await leadsOverview()
+    const his = await leadsOverview("anant")
+    expect(mine.totals.total).toBe(1)
+    expect(his.totals.total).toBe(2)
+    expect(mine.lists.map((l) => l.name)).toEqual(["CarouseLabs list"])
+    expect(his.lists.map((l) => l.name)).toEqual(["Anant list"])
+    expect((await listLeads({ filter: {}, account: "anant" })).leads.map((l) => l.email).sort()).toEqual(["only@example.test", "same@example.test"])
+    expect((await listLeads({ filter: {} })).leads.map((l) => l.email)).toEqual(["same@example.test"])
+  })
+
+  it("his leads can be CarouseLabs users; CarouseLabs' never are", async () => {
+    const his = await importLeads({ adminEmail: ADMIN, account: "anant", listName: "His", columns: [], leads: [lead("taken@example.test")] })
+    expect(his).toMatchObject({ added: 1, alreadyUsers: 0 })
+    const mine = await importLeads({ adminEmail: ADMIN, listName: "Mine", columns: [], leads: [lead("taken@example.test")] })
+    expect(mine).toMatchObject({ added: 0, alreadyUsers: 1 })
+    expect((await resolveLeadAudience("leads:anant:all")).map((p) => p.email)).toEqual(["taken@example.test"])
+  })
+
+  it("one account's list can't be used from the other", async () => {
+    const { listId } = await importLeads({ adminEmail: ADMIN, account: "anant", listName: "His", columns: [], leads: [lead("a@example.test")] })
+    await expect(importLeads({ adminEmail: ADMIN, listId, listName: "His", columns: [], leads: [lead("b@example.test")] })).rejects.toBeInstanceOf(LeadsError)
+    await expect(resolveLeadAudience(`leads:list:${listId}`)).rejects.toBeInstanceOf(LeadsError)
+    await expect(bulkLeads({ admin: ADMIN, action: "add", ids: [of("anant", "a@example.test").id], listId })).rejects.toBeInstanceOf(LeadsError)
+    expect((await resolveLeadAudience(`leads:anant:list:${listId}`)).map((p) => p.email)).toEqual(["a@example.test"])
+  })
+
+  it("Brevo stopping someone stops only that account's lead, with that account's own webhook token", async () => {
+    await importLeads({ adminEmail: ADMIN, listName: "Mine", columns: [], leads: [lead("x@example.test")] })
+    await importLeads({ adminEmail: ADMIN, account: "anant", listName: "His", columns: [], leads: [lead("x@example.test")] })
+    expect(brevoWebhookToken("anant")).not.toBe(brevoWebhookToken())
+
+    const call = (query: string) =>
+      brevoWebhook(new Request(`https://carouselabs.test/api/webhooks/brevo?${query}`, { method: "POST", body: JSON.stringify({ event: "hard_bounce", email: "x@example.test" }) }))
+    // CarouseLabs' token isn't Anant Goyal's.
+    expect((await call(`account=anant&token=${brevoWebhookToken()}`)).status).toBe(401)
+    const res = await call(`account=anant&token=${brevoWebhookToken("anant")}`)
+    expect(await res.json()).toEqual({ ok: true, stopped: 1 })
+    expect(of("anant", "x@example.test")).toMatchObject({ unsubscribedAt: expect.any(Date), stopReason: "bounced" })
+    expect(of("carouselabs", "x@example.test").unsubscribedAt).toBeNull()
+  })
+
+  it("his campaign goes entirely through his own Brevo, from hello@anantgoyal.in, counted against its own daily limit", async () => {
+    await importLeads({ adminEmail: ADMIN, account: "anant", listName: "His", columns: [], leads: [lead("ana@example.test", { firstName: "Ana" })] })
+    // CarouseLabs has a lead with the same address: it isn't the one emailed.
+    await importLeads({ adminEmail: ADMIN, listName: "Mine", columns: [], leads: [lead("ana@example.test", { firstName: "Cara" })] })
+    of("carouselabs", "ana@example.test").unsubscribedAt = new Date()
+
+    const made = await createCampaign({ adminEmail: ADMIN, subject: "Hi {{firstName}}", body: "Hello {{firstName}}.", recipients: "leads:anant:all", audienceValue: null })
+    expect(store.campaigns[0]).toMatchObject({ audience: "leads:anant:all", sendVia: "brevo", sendFrom: "Anant Goyal <hello@anantgoyal.in>" })
+    const [r] = store.recipients
+    const result = await sendCampaignBatch({
+      campaignId: made.id,
+      recipientIds: [r.id],
+      adminEmail: ADMIN,
+      resend,
+      brevo,
+      brevoFor: (account) => (account === "anant" ? anantMailer : null),
+      from: "CarouseLabs <support@carouselabs.com>",
+    })
+    expect(result).toMatchObject({ sent: 1, failed: 0 })
+    expect(viaResend).toEqual([])
+    expect(viaBrevo).toEqual([])
+    const [email] = viaAnant.flat()
+    expect(email).toMatchObject({ to: "ana@example.test", subject: "Hi Ana", from: "Anant Goyal <hello@anantgoyal.in>" })
+    expect(email.html).toMatch(/\/api\/unsubscribe\//)
+    expect(store.recipients[0]).toMatchObject({ status: "sent", provider: "brevo:anant" })
+    expect(of("anant", "ana@example.test").emailCount).toBe(1)
+
+    // His Brevo's limit counts his sends only; CarouseLabs' Brevo is untouched.
+    expect(await campaignAllowance({ audience: "leads:anant:all" })).toMatchObject({ via: "brevo", account: "anant", sentToday: 1 })
+    expect(await campaignAllowance({ audience: "leads:all" })).toMatchObject({ via: "brevo", sentToday: 0 })
+  })
+
+  it("his campaign won't send without his Brevo, and CarouseLabs' people can't be added to it (nor his to CarouseLabs')", async () => {
+    await importLeads({ adminEmail: ADMIN, account: "anant", listName: "His", columns: [], leads: [lead("ana@example.test")] })
+    await importLeads({ adminEmail: ADMIN, listName: "Mine", columns: [], leads: [lead("cara@example.test")] })
+    const his = await createCampaign({ adminEmail: ADMIN, subject: "Hi", body: "Hello.", recipients: "leads:anant:all", audienceValue: null })
+    await expect(
+      sendCampaignBatch({ campaignId: his.id, recipientIds: [store.recipients[0].id], adminEmail: ADMIN, resend, brevo, brevoFor: () => null, from: "x" }),
+    ).rejects.toThrow(/BREVO_API_KEY_ANANTGOYAL/)
+    await expect(addCampaignRecipients({ campaignId: his.id, adminEmail: ADMIN, recipients: "leads:all", audienceValue: null })).rejects.toThrow(/only Anant Goyal's leads/)
+    await expect(addCampaignRecipients({ campaignId: his.id, adminEmail: ADMIN, recipients: ["someone@example.test"], audienceValue: null })).rejects.toBeInstanceOf(CampaignError)
+    const mine = await createCampaign({ adminEmail: ADMIN, subject: "Hi", body: "Hello.", recipients: "leads:all", audienceValue: null })
+    await expect(addCampaignRecipients({ campaignId: mine.id, adminEmail: ADMIN, recipients: "leads:anant:all", audienceValue: null })).rejects.toThrow(/campaign of their own/)
+  })
+
+  it("his senders are anantgoyal.in's, and his emails always go through his Brevo", async () => {
+    vi.stubEnv("BREVO_API_KEY_ANANTGOYAL", "his-key")
+    const { fetchFn, calls } = fakeBrevo({
+      "/senders": {
+        body: {
+          senders: [
+            { email: "hello@anantgoyal.in", name: "anantgoyal", active: true },
+            { email: "team@anantgoyal.in", name: "Team", active: true },
+            { email: "support@carouselabs.com", name: "CarouseLabs", active: true },
+          ],
+        },
+      },
+    })
+    const choices = await senderChoices(fetchFn, "anant")
+    expect(choices.senders.map((s) => `${s.name} <${s.email}>`)).toEqual(["Anant Goyal <hello@anantgoyal.in>", "Team <team@anantgoyal.in>"])
+    expect(calls[0].init.headers).toMatchObject({ "api-key": "his-key" })
+    expect(await resolveSending({ via: "auto", fromEmail: "support@carouselabs.com" }, false, fetchFn, "anant")).toEqual({
+      problem: expect.stringMatching(/come from anantgoyal\.in/),
+    })
+    expect(await resolveSending({ via: "resend", fromEmail: "team@anantgoyal.in" }, false, fetchFn, "anant")).toEqual({
+      sending: { via: "brevo", from: "Team <team@anantgoyal.in>", replyTo: null },
+    })
+  })
+
+  it("a Brevo contact becomes a lead: names, other details as merge fields, Brevo's own guesses and phone numbers left out", () => {
+    expect(
+      contactToLead({
+        email: " Ana@Example.test ",
+        attributes: { FIRSTNAME: "Ana", LASTNAME: "Lee", JOB_TITLE: "Founder", LINKEDIN: "https://linkedin.com/in/ana", _DETECTED_CITY: "Pune", SMS: "+911234", OPT_IN: true, EMPTY: "" },
+      }),
+    ).toEqual({ email: "ana@example.test", firstName: "Ana", lastName: "Lee", name: null, fields: { jobTitle: "Founder", linkedin: "https://linkedin.com/in/ana" } })
+    expect(contactToLead({ email: "not-an-email" })).toBeNull()
+    expect(stoppedInBrevo({ emailBlacklisted: true }, 7)).toBe(true)
+    expect(stoppedInBrevo({ listUnsubscribed: [7] }, 7)).toBe(true)
+    expect(stoppedInBrevo({ listUnsubscribed: [7] }, ALL_CONTACTS)).toBe(false)
+    expect(stoppedInBrevo({ listUnsubscribed: [3] }, 7)).toBe(false)
+  })
+
+  it("Sync from Brevo copies a list into his leads, a page at a time, stopping whoever Brevo stopped; syncing again fills the same list", async () => {
+    vi.stubEnv("BREVO_API_KEY_ANANTGOYAL", "his-key")
+    const contacts = [
+      { email: "Ana@Example.test", attributes: { FIRSTNAME: "Ana", JOB_TITLE: "Founder" } },
+      { email: "gone@example.test", emailBlacklisted: true },
+      { email: "left@example.test", listUnsubscribed: [7] },
+      { email: "bad" },
+    ]
+    const { fetchFn, calls } = fakeBrevo({ "/contacts/lists/7/contacts": { body: { contacts, count: 4 } }, "/contacts/lists/7": { body: { name: "Founders" } } })
+    const first = await syncBrevoPage({ account: "anant", brevoListId: 7, offset: 0, admin: ADMIN, fetchFn })
+    expect(first).toMatchObject({ listName: "Founders", added: 3, stopped: 2, nextOffset: null, total: 4 })
+    expect(calls.map((c) => c.url)).toContain(`https://api.brevo.com/v3/contacts/lists/7/contacts?limit=${BREVO_SYNC_PAGE}&offset=0&sort=asc`)
+    expect(store.lists).toEqual([expect.objectContaining({ account: "anant", name: "Founders", brevoListId: 7 })])
+    expect(of("anant", "ana@example.test")).toMatchObject({ firstName: "Ana", fields: { jobTitle: "Founder" }, unsubscribedAt: null })
+    expect(of("anant", "gone@example.test").unsubscribedAt).toEqual(expect.any(Date))
+    expect(of("anant", "left@example.test").unsubscribedAt).toEqual(expect.any(Date))
+    // Nothing of CarouseLabs' was touched.
+    expect(store.leads.every((l) => (l as { account?: string }).account === "anant")).toBe(true)
+
+    const again = await syncBrevoPage({ account: "anant", brevoListId: 7, offset: 0, admin: ADMIN, fetchFn })
+    expect(again).toMatchObject({ added: 0, alreadySaved: 3 })
+    expect(store.lists).toHaveLength(1)
+  })
+
+  it("a long list comes in pages", async () => {
+    vi.stubEnv("BREVO_API_KEY_ANANTGOYAL", "his-key")
+    const page = Array.from({ length: BREVO_SYNC_PAGE }, (_, i) => ({ email: `p${i}@example.test` }))
+    const { fetchFn } = fakeBrevo({ "/contacts?limit": { body: { contacts: page, count: 1200 } } })
+    const first = await syncBrevoPage({ account: "anant", brevoListId: ALL_CONTACTS, offset: 0, admin: ADMIN, fetchFn })
+    expect(first).toMatchObject({ listName: "All Brevo contacts", added: BREVO_SYNC_PAGE, nextOffset: BREVO_SYNC_PAGE, total: 1200 })
+  })
+
+  it("the sync route says what's missing without his key, and is for admins only", async () => {
+    vi.stubEnv("BREVO_API_KEY_ANANTGOYAL", "")
+    const post = (body: unknown) => brevoSyncPost(new Request("https://carouselabs.test/api/admin/leads/brevo-sync", { method: "POST", body: JSON.stringify(body) }))
+    const res = await post({ account: "anant", brevoListId: 7, offset: 0 })
+    expect(res.status).toBe(503)
+    expect((await res.json()).error).toMatch(/BREVO_API_KEY_ANANTGOYAL/)
+    expect((await post({ account: "someone", brevoListId: 7, offset: 0 })).status).toBe(400)
+    store.admin = null
+    expect((await post({ account: "anant", brevoListId: 7, offset: 0 })).status).toBe(403)
+  })
+
+  it("his ready-made email is the designed one, for his leads, sent as it is", async () => {
+    const email = READY_EMAILS.find((e) => e.id === "anant-cold-1")!
+    expect(readyAccount(email)).toBe("anant")
+    const html = readyEmailHtml(email)
+    expect(html).toBe(email.html)
+    for (const words of ["Stop sending", "boring emails.", "Hi {{firstName}},", "Explore My Work", "https://anantgoyal.in", "impossible to ignore."]) expect(html).toContain(words)
+    expect(readyEmailText(email)).toContain("Explore My Work: https://anantgoyal.in")
+    expect(personalizePreview(html, "Priya")).toContain("Hi Priya,")
+
+    await importLeads({ adminEmail: ADMIN, account: "anant", listName: "His", columns: [], leads: [lead("ana@example.test", { firstName: "Ana" })] })
+    const res = await campaignsPost(
+      new Request("https://carouselabs.test/api/admin/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ readyEmail: "anant-cold-1", recipients: "leads:anant:all" }),
+      }),
+    )
+    expect(res.status).toBe(201)
+    expect(store.campaigns[0]).toMatchObject({ subject: "Still sending plain-text emails?", sendFrom: "Anant Goyal <hello@anantgoyal.in>", sendVia: "brevo" })
+    expect(readyDesignOf(store.campaigns[0].design)).toMatchObject({ id: "anant-cold-1", fromName: "Anant Goyal", html })
   })
 })

@@ -30,7 +30,8 @@ import { CampaignSending } from "./CampaignSending"
 import { CampaignActivity } from "./CampaignActivity"
 import { LandingBadge, PlacementSummary, landingFor, usePlacement } from "./WhereItLanded"
 import { DEFAULT_SENDING, type Sending } from "@/lib/sendingRules"
-import { isLeadAudience } from "@/lib/leadRules"
+import { isLeadAudience, leadAudienceAccount } from "@/lib/leadRules"
+import { ACCOUNTS, type LeadAccount } from "@/lib/leadAccounts"
 import { readyDesignOf } from "@/lib/readyEmails"
 import { postDesignOf } from "@/lib/postEmail"
 
@@ -69,7 +70,7 @@ type Campaign = {
   // What sends it and who it's from (lib/sendingRules.ts).
   sending?: Sending
   // The daily limit of whichever sends it (lib/campaigns.ts).
-  allowance: { via?: "resend" | "brevo"; limit: number; sentToday: number; left: number }
+  allowance: { via?: "resend" | "brevo"; limit: number; sentToday: number; left: number; account?: LeadAccount }
 }
 
 type Filter = "all" | "pending" | "sent" | "failed" | "seen" | "unseen"
@@ -317,7 +318,9 @@ export function CampaignView({ id }: { id: string }) {
               )}
               <span className="text-caption text-muted-foreground">
                 Today: <span className="font-medium text-foreground">{allowance.left}</span> of {allowance.limit}{" "}
-                {allowance.via === "brevo" ? "emails left through Brevo" : "campaign emails left"}
+                {allowance.via === "brevo"
+                  ? `emails left through Brevo${allowance.account ? ` (${ACCOUNTS[allowance.account].domain})` : ""}`
+                  : "campaign emails left"}
               </span>
             </div>
             <ProgressBar progress={progress} className="h-2" />
@@ -348,6 +351,7 @@ export function CampaignView({ id }: { id: string }) {
               campaignId={campaign.id}
               sending={campaign.sending ?? DEFAULT_SENDING}
               forLeads={isLeadAudience(campaign.audience)}
+              account={leadAudienceAccount(campaign.audience) ?? undefined}
               disabled={archived}
               onSaved={() => void load()}
             />

@@ -2,7 +2,7 @@
 // bar, each with its own pages as sub-tabs, plus the account menu. Labels are
 // the existing ones from the old sidebar, Toolkit, Settings and the
 // extension tabs. Routes are unchanged.
-import { ENGAGE_EXTENSIONS, ENGAGE_PLATFORMS, extensionTabs, platformOfPath } from "@/components/extension/engageExtensions"
+import { ENGAGE_EXTENSIONS, ENGAGE_PLATFORMS, extensionTabs } from "@/components/extension/engageExtensions"
 
 export type NavItem = { label: string; href: string }
 export type GroupId = "create" | "content" | "engage"
@@ -30,7 +30,7 @@ export const GROUPS: { id: GroupId; label: string; items: NavItem[] }[] = [
   {
     id: "engage",
     label: "Engage",
-    // The sub-tabs are the current extension's own pages — see subNavItems.
+    // Its extensions and their sections are in Engage's own menu (EngageRail).
     items: [{ label: "Extension", href: "/extension" }],
   },
 ]
@@ -76,14 +76,15 @@ export function showsSubNav(pathname: string): boolean {
 }
 
 /**
- * The second header row for a page: its activity's pages, the current Engage
- * extension's tabs (LinkedIn's or X's — the page title switches extensions),
- * or the Settings tabs. Null when there's nothing to choose between.
+ * The second header row for a page: its activity's pages or the Settings
+ * tabs. Null when there's nothing to choose between, and for Engage, whose
+ * extensions and sections are in its own menu beside the page
+ * (components/extension/EngageRail.tsx).
  */
 export function subNavItems(pathname: string): NavItem[] | null {
   if (!showsSubNav(pathname)) return null
   const group = groupOf(pathname)
-  if (group === "engage") return extensionTabs(platformOfPath(pathname)).map(({ label, href }) => ({ label, href }))
+  if (group === "engage") return null
   if (group === "settings") return SETTINGS_ITEMS
   const items = GROUPS.find((g) => g.id === group)?.items
   return items && items.length > 1 ? items : null

@@ -15,6 +15,8 @@
 // Everything is decided server-side from the database; nothing the extension
 // sends or stores can unlock a feature or lift a limit.
 import { NextResponse } from "next/server"
+import { Ratelimit } from "@upstash/ratelimit"
+import { Redis } from "@upstash/redis"
 import { extDailyLimitResponse } from "@/lib/extDailyLimit"
 import { onlyOnce, reserveExtGeneration, reserveFreeGeneration, type ExtGenerationGate } from "@/lib/extAccess"
 import { isEngageSchemaMissing, loadEngageAccess } from "@/lib/engage/access"
@@ -119,4 +121,39 @@ export async function reserveEngageGeneration(
       await Promise.all([free.release(), usage.release()])
     }),
   }
+}
+
+// Watching a post's video (app/api/ext/video) isn't a generation and uses
+// none up, but it pays for a transcription. So: the same blocks as a comment
+// (version, suspension, Comments off), nothing for an account with no
+// comments left to write, and a daily cap of its own.
+export const VIDEO_DAILY_CAP = 60
+let videoLimiter: Ratelimit | null = null
+
+export async function engageVideoCheck(userId: string, req: Request): Promise<NextResponse | null> {
+  const outdated = await outdatedExtensionResponse(req)
+  if (outdated) return outdated
+
+  const loaded = await load(userId)
+  if (loaded instanceof NextResponse) return loaded
+  const access = loaded.access
+  if (access) {
+    const blocked = blockedReason(access, "comments")
+    if (blocked) return NextResponse.json({ error: blocked.error, code: blocked.code }, { status: blocked.status })
+    const paywall = access.platforms.linkedin
+    if (paywall.access === "free" && (paywall.freeRemaining ?? 0) <= 0) {
+      return NextResponse.json({ error: "No free comments left.", code: "no_free_left" }, { status: 403 })
+    }
+  }
+
+  videoLimiter ??= new Ratelimit({
+    redis: Redis.fromEnv(),
+    limiter: Ratelimit.slidingWindow(VIDEO_DAILY_CAP, "1 d"),
+    prefix: "ext-video",
+    analytics: false,
+  })
+  const { success } = await videoLimiter.limit(`user:${userId}`)
+  return success
+    ? null
+    : NextResponse.json({ error: "That's a lot of videos today. Comments use their text and cover for now.", code: "video_limit" }, { status: 429 })
 }

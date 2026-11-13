@@ -109,10 +109,17 @@ afterEach(() => {
 
 const fetched = () => fetchMock.mock.calls.map(([path]) => String(path))
 
+// The page is the Voices heading and then the manager: the manager, with the
+// data the server loaded for it.
+function child<P>(page: unknown, type: unknown): ReactElement<P> {
+  const kids = ((page as ReactElement<{ children: ReactElement[] }>).props.children ?? []) as ReactElement[]
+  const found = [kids].flat().find((k) => k?.type === type)
+  expect(found, "the page renders the manager").toBeTruthy()
+  return found as ReactElement<P>
+}
+
 async function pageInitial(): Promise<ProfilesInitial> {
-  const element = (await ProfilesPage()) as ReactElement<{ initial: ProfilesInitial }>
-  expect(element.type).toBe(ProfilesManager)
-  return element.props.initial
+  return child<{ initial: ProfilesInitial }>(await ProfilesPage(), ProfilesManager).props.initial
 }
 
 describe("the routes and the pages read the same lists", () => {
@@ -222,8 +229,7 @@ describe("Custom tones in the browser", () => {
 
 describe("Engage for X → Reply profiles", () => {
   it("loads X's settings and list on the server, with the default from X's settings", async () => {
-    const element = (await XProfilesPage()) as ReactElement<{ initial: XProfilesInitial }>
-    expect(element.type).toBe(XReplyProfiles)
+    const element = child<{ initial: XProfilesInitial }>(await XProfilesPage(), XReplyProfiles)
     expect(element.props.initial.list.defaultProfileId).toBe("x-mine")
     expect(element.props.initial.settings.maxReplyLength).toBe(280)
 

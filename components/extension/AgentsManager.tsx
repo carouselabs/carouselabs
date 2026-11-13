@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Bot, Copy, Loader2, Pencil, Plus, Star, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import {
   AGENT_LENGTHS,
   AGENT_LIMITS,
@@ -22,8 +23,9 @@ import {
   type AgentPurpose,
 } from "@/lib/engageAgents"
 import { errorMessage, extApi, ExtApiError, LANGUAGES } from "./api"
+import { EngagePageHead } from "./EngagePageHead"
 
-interface Agent {
+export interface Agent {
   id: string
   name: string
   description: string
@@ -313,20 +315,38 @@ function AgentEditor({ existing, seed, onDone, onCancel }: { existing: Agent | n
 }
 
 /** One block of the briefing: its title in the margin, its content beside it. */
-function BriefSection({ title, children }: { title: string; children: ReactNode }) {
+// One of the briefing's four numbered cards (01 Your business … 04 What it
+// knows). `night`: the dark card, for what the agent knows.
+function StepCard({ n, title, night, children }: { n: string; title: string; night?: boolean; children: ReactNode }) {
   return (
-    <section aria-label={title} className="grid gap-3 border-t border-border pt-6 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-8">
-      <h3 className="text-label font-semibold text-foreground">{title}</h3>
-      <div className="flex min-w-0 flex-col gap-5">{children}</div>
+    <section
+      aria-label={title}
+      className={cn(
+        "flex min-w-0 flex-col gap-3.5 rounded-card p-6",
+        night ? "engage-night" : "bg-surface-raised shadow-card"
+      )}
+    >
+      <h3 className="flex items-baseline gap-2.5">
+        <span className={cn("engage-serif text-[1.9rem] leading-none", night ? "text-[#D4FF5C]" : "text-brand")}>{n}</span>
+        <span
+          className={cn(
+            "text-caption font-semibold tracking-[0.1em] uppercase",
+            night ? "text-white/75" : "text-muted-foreground"
+          )}
+        >
+          {title}
+        </span>
+      </h3>
+      <div className="flex min-w-0 flex-col gap-3">{children}</div>
     </section>
   )
 }
 
-function BriefItem({ label, children }: { label: string; children: ReactNode }) {
+function BriefItem({ label, night, children }: { label: string; night?: boolean; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-1">
-      <p className="text-caption text-muted-foreground">{label}</p>
-      <div className="text-label whitespace-pre-line text-foreground">{children}</div>
+    <div className="flex flex-col gap-0.5">
+      <p className={cn("text-caption", night ? "text-white/65" : "text-muted-foreground")}>{label}</p>
+      <div className={cn("text-label whitespace-pre-line", night ? "text-white" : "text-foreground")}>{children}</div>
     </div>
   )
 }
@@ -363,61 +383,84 @@ function AgentBrief({
   const has = (...v: string[]) => v.some((x) => x.trim())
 
   return (
-    <article aria-label={agent.name} className="flex flex-col gap-6 rounded-showcase border border-border bg-surface-raised p-6 shadow-card sm:p-8 lg:p-10">
-      <header className="flex flex-col gap-4">
-        <div className="flex flex-wrap gap-1.5">
+    <article aria-label={agent.name} className="flex flex-col gap-4">
+      {/* Who it is, and how it replies (its own example replies) */}
+      <section className="engage-canvas relative flex flex-col gap-4 overflow-hidden rounded-showcase p-6 sm:p-8">
+        <span aria-hidden className="engage-orb engage-orb-blue -right-6 -bottom-8 size-24" />
+        <div className="relative flex flex-wrap gap-1.5">
           {agent.isDefault && (
-            <span className="rounded-full bg-success-soft px-2 py-0.5 text-[11px] leading-4 font-semibold text-success">Default</span>
+            <span className="rounded-full bg-[#D4FF5C] px-2.5 py-0.5 text-[11px] leading-4 font-semibold text-[#100C33]">Default</span>
           )}
-          <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] leading-4 font-semibold text-muted-foreground">
+          <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] leading-4 font-semibold text-white">
             {AGENT_PURPOSE_LABELS[agent.purpose]}
           </span>
         </div>
-        <h2 className="font-display text-[2.5rem] leading-[1.02] font-normal tracking-[-0.01em] text-balance text-foreground sm:text-[3.25rem]">
-          {agent.name}
-        </h2>
+        <h2 className="engage-serif relative text-[2.5rem] leading-[1.02] text-balance sm:text-[3.25rem]">{agent.name}</h2>
         {(agent.description || c.goals) && (
-          <p className="max-w-[62ch] text-body-lg text-foreground/80">{agent.description || c.goals}</p>
+          <p className="relative max-w-[62ch] text-body-lg text-white/85">{agent.description || c.goals}</p>
         )}
-      </header>
+        {examples.length > 0 && (
+          <div className="relative flex flex-col gap-2">
+            <p className="text-caption font-semibold tracking-[0.08em] text-white/75 uppercase">Sounds like</p>
+            <ul className="flex flex-col gap-2" aria-label="Replies that sound like you">
+              {examples.map((e, i) => (
+                <li
+                  key={i}
+                  className="max-w-[60ch] self-end rounded-[18px_18px_4px_18px] bg-white px-4 py-3 text-label whitespace-pre-line text-[#100C33]"
+                >
+                  {e}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
 
-      {has(c.business, c.offer, c.audience) && (
-        <BriefSection title="Your business">
-          {c.business.trim() && <BriefItem label="Who you are, what you do">{c.business}</BriefItem>}
-          {c.offer.trim() && <BriefItem label="What you offer">{c.offer}</BriefItem>}
-          {c.audience.trim() && <BriefItem label="Who you talk to">{c.audience}</BriefItem>}
-        </BriefSection>
-      )}
+      {/* What it knows, in four steps */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <StepCard n="01" title="Your business">
+          {has(c.business, c.offer, c.audience) ? (
+            <>
+              {c.business.trim() && <BriefItem label="Who you are, what you do">{c.business}</BriefItem>}
+              {c.offer.trim() && <BriefItem label="What you offer">{c.offer}</BriefItem>}
+              {c.audience.trim() && <BriefItem label="Who you talk to">{c.audience}</BriefItem>}
+            </>
+          ) : (
+            <p className="text-label text-muted-foreground">Not filled in yet. Edit the agent to add it.</p>
+          )}
+        </StepCard>
 
-      <BriefSection title="Goals">
-        <BriefItem label="What these conversations are for">{c.goals}</BriefItem>
-        {c.nextStep.trim() && <BriefItem label="Next step to aim for">{c.nextStep}</BriefItem>}
-        {c.strategy.trim() && <BriefItem label="How to move the conversation">{c.strategy}</BriefItem>}
-      </BriefSection>
+        <StepCard n="02" title="The goal">
+          <BriefItem label="What these conversations are for">{c.goals}</BriefItem>
+          {c.nextStep.trim() && <BriefItem label="Next step to aim for">{c.nextStep}</BriefItem>}
+          {c.strategy.trim() && <BriefItem label="How to move the conversation">{c.strategy}</BriefItem>}
+        </StepCard>
 
-      <BriefSection title="Style">
-        <dl className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-3">
-          {[
-            ["Tone", c.tone],
-            ["Reply length", LENGTH_LABELS[c.length]],
-            ["Language", c.language],
-          ].map(([label, value]) => (
-            <div key={label} className="flex min-w-0 flex-col gap-1">
-              <dt className="text-caption text-muted-foreground">{label}</dt>
-              <dd className="text-label font-medium text-foreground">{value}</dd>
-            </div>
-          ))}
-        </dl>
-      </BriefSection>
+        <StepCard n="03" title="Style">
+          <ul className="flex flex-wrap gap-2" aria-label="Style">
+            {[
+              ["Tone", c.tone],
+              ["Reply length", LENGTH_LABELS[c.length]],
+              ["Language", c.language],
+            ].map(([label, value]) => (
+              <li key={label} className="rounded-full bg-surface-muted px-3.5 py-2 text-label text-foreground">
+                <span className="sr-only">{label}: </span>
+                {value}
+              </li>
+            ))}
+          </ul>
+        </StepCard>
 
-      {(facts.length > 0 || objections.length > 0) && (
-        <BriefSection title="Knowledge">
+        <StepCard n="04" title="What it knows" night>
+          {facts.length === 0 && objections.length === 0 && (
+            <p className="text-label text-white/70">Nothing added yet: facts it can rely on, and situations to be ready for.</p>
+          )}
           {facts.length > 0 && (
-            <BriefItem label="Verified facts">
+            <BriefItem label="Verified facts" night>
               <ul className="flex flex-col gap-1.5">
                 {facts.map((f, i) => (
                   <li key={i} className="flex gap-2.5">
-                    <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-success" />
+                    <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-[#D4FF5C]" />
                     {f}
                   </li>
                 ))}
@@ -425,42 +468,36 @@ function AgentBrief({
             </BriefItem>
           )}
           {objections.length > 0 && (
-            <BriefItem label="Objections and situations">
+            <BriefItem label="Objections and situations" night>
               <ul className="flex flex-col gap-1.5">
                 {objections.map((o, i) => (
                   <li key={i} className="flex gap-2.5">
-                    <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-warning" />
+                    <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-[#FF9BE0]" />
                     {o}
                   </li>
                 ))}
               </ul>
             </BriefItem>
           )}
-        </BriefSection>
-      )}
+        </StepCard>
+      </div>
 
       {has(c.alwaysDo, c.neverDo) && (
-        <BriefSection title="Rules">
-          <div className="grid gap-5 sm:grid-cols-2">
-            {c.alwaysDo.trim() && <BriefItem label="Always">{c.alwaysDo}</BriefItem>}
-            {c.neverDo.trim() && <BriefItem label="Never">{c.neverDo}</BriefItem>}
-          </div>
-        </BriefSection>
+        <section aria-label="Rules" className="grid gap-4 sm:grid-cols-2">
+          {c.alwaysDo.trim() && (
+            <div className="rounded-card bg-success-soft p-5">
+              <BriefItem label="Always">{c.alwaysDo}</BriefItem>
+            </div>
+          )}
+          {c.neverDo.trim() && (
+            <div className="rounded-card bg-danger-soft p-5">
+              <BriefItem label="Never">{c.neverDo}</BriefItem>
+            </div>
+          )}
+        </section>
       )}
 
-      {examples.length > 0 && (
-        <BriefSection title="Examples">
-          <ul className="flex flex-col gap-2.5" aria-label="Replies that sound like you">
-            {examples.map((e, i) => (
-              <li key={i} className="max-w-[60ch] self-end rounded-[1.25rem] rounded-br-md bg-brand-soft px-4 py-3 text-label whitespace-pre-line text-foreground">
-                {e}
-              </li>
-            ))}
-          </ul>
-        </BriefSection>
-      )}
-
-      <footer className="flex flex-wrap items-center gap-2 border-t border-border pt-5">
+      <footer className="flex flex-wrap items-center gap-2 rounded-card bg-surface-raised p-3 shadow-card">
         {confirming ? (
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label={`Delete ${agent.name}?`}>
             <span className="text-label font-medium text-danger">Delete this agent?</span>
@@ -500,8 +537,10 @@ function AgentBrief({
   )
 }
 
-export function AgentsManager() {
-  const [agents, setAgents] = useState<Agent[] | null>(null)
+// `initial`: the list already loaded (the design preview's example agents);
+// without it the list is fetched as the page opens.
+export function AgentsManager({ initial }: { initial?: Agent[] } = {}) {
+  const [agents, setAgents] = useState<Agent[] | null>(initial ?? null)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<{ existing: Agent | null; seed: Draft } | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
@@ -520,8 +559,9 @@ export function AgentsManager() {
   }, [])
 
   useEffect(() => {
+    if (initial) return
     void load()
-  }, [load])
+  }, [load, initial])
 
   async function act(id: string, action: () => Promise<unknown>) {
     setPendingId(id)
@@ -561,18 +601,16 @@ export function AgentsManager() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex max-w-2xl flex-col gap-1.5">
-          <h2 className="text-title-sm font-semibold text-foreground">AI agents</h2>
-          <p className="text-body text-muted-foreground">
-            An agent knows your business, who you talk to and what your conversations are for, and writes your replies on the
-            Messages screen of both extensions (LinkedIn and X). You review every reply before sending.
-          </p>
-        </div>
-        <Button onClick={() => edit({ existing: null, seed: draftOf(null) })} disabled={atLimit}>
-          <Plus aria-hidden /> New agent
-        </Button>
-      </div>
+      <EngagePageHead
+        title="Agents"
+        accent="that know your business."
+        lead="An agent writes your replies in chats, using what it knows about you, who you talk to and what the chat is for. Every Engage extension shares the same agents, and you review every reply before it's sent."
+        action={
+          <Button size="lg" onClick={() => edit({ existing: null, seed: draftOf(null) })} disabled={atLimit}>
+            <Plus aria-hidden /> New agent
+          </Button>
+        }
+      />
 
       {error && (
         <p className="rounded-control border border-danger/25 bg-danger-soft px-4 py-3 text-label text-danger" role="alert">
@@ -593,7 +631,7 @@ export function AgentsManager() {
       ) : (
         <div className="grid gap-8 lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-10">
           <nav aria-label="Agents" className="min-w-0 lg:sticky lg:top-6 lg:self-start">
-            <ul className="flex flex-col gap-0.5">
+            <ul className="flex flex-col gap-2.5">
               {agents.map((agent) => {
                 const current = !editing && agent.id === selected?.id
                 return (
@@ -607,17 +645,30 @@ export function AgentsManager() {
                         setSelectedId(agent.id)
                         reveal()
                       }}
-                      className="relative flex w-full flex-col gap-0.5 rounded-control px-3 py-2.5 text-left transition-colors duration-(--motion-fast) hover:bg-surface-muted aria-[current=true]:bg-surface-raised aria-[current=true]:shadow-card aria-[current=true]:before:absolute aria-[current=true]:before:inset-y-2.5 aria-[current=true]:before:left-0 aria-[current=true]:before:w-0.5 aria-[current=true]:before:rounded-full aria-[current=true]:before:bg-brand"
+                      className="flex w-full flex-col gap-2 rounded-[22px] bg-surface-raised p-4.5 text-left shadow-card transition-[box-shadow,transform] duration-(--motion-fast) ease-(--ease-entry) hover:-translate-y-0.5 aria-[current=true]:shadow-[0_0_0_2px_var(--brand),0_18px_40px_-22px_rgb(32_16_110/0.45)]"
                     >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="truncate text-label font-semibold text-foreground">{agent.name}</span>
+                      <span className="text-body font-semibold break-words text-foreground">{agent.name}</span>
+                      {agent.description && (
+                        <span className="line-clamp-2 text-label text-muted-foreground">{agent.description}</span>
+                      )}
+                      <span className="flex flex-wrap gap-1.5">
                         {agent.isDefault && (
-                          <span className="shrink-0 rounded-full bg-success-soft px-2 py-0.5 text-[11px] leading-4 font-semibold text-success">
+                          <span className="rounded-full bg-brand-soft px-2.5 py-0.5 text-[11px] leading-4 font-semibold text-brand">
                             Default
                           </span>
                         )}
+                        <span className="rounded-full bg-surface-muted px-2.5 py-0.5 text-[11px] leading-4 font-semibold text-muted-foreground">
+                          {AGENT_PURPOSE_LABELS[agent.purpose]}
+                        </span>
+                        <span
+                          className={cn(
+                            "rounded-full px-2.5 py-0.5 text-[11px] leading-4 font-semibold",
+                            agent.status === "active" ? "bg-success-soft text-success" : "bg-warning-soft text-warning"
+                          )}
+                        >
+                          {agent.status === "active" ? "Active" : "Draft"}
+                        </span>
                       </span>
-                      <span className="truncate text-caption text-muted-foreground">{AGENT_PURPOSE_LABELS[agent.purpose]}</span>
                     </button>
                   </li>
                 )

@@ -6,7 +6,8 @@
 // can't: X's Chat and Reddit's comment box, which sit in shadow roots
 // (including closed ones, via chrome.dom) or frames.
 
-// Attributes worth keeping for layout. Their values are scrubbed too.
+// Pictures and videos stay as elements (where they sit matters), with their
+// src scrubbed like any other value. Attributes worth keeping for layout. Their values are scrubbed too.
 // Reddit's components name their parts in attributes of their own (thingid,
 // parent-id, bundlename, noun...).
 const KEEP =
@@ -39,7 +40,7 @@ function serialize(node: Node, depth = 0): string {
   const tag = el.tagName.toLowerCase();
   // Dropped, but as a closed pair: "<style/>" isn't self-closing in HTML, so
   // the parser would read the rest of the page as CSS.
-  if (tag === "script" || tag === "style" || tag === "svg" || tag === "img" || tag === "video" || tag === "link") return `<${tag}></${tag}>`;
+  if (tag === "script" || tag === "style" || tag === "svg" || tag === "link") return `<${tag}></${tag}>`;
   const attrs = [...el.attributes]
     .filter((a) => KEEP.test(a.name))
     .map((a) => ` ${a.name}="${scrubAttr(a.name, a.value).replace(/"/g, "&quot;")}"`)
@@ -60,17 +61,22 @@ function serialize(node: Node, depth = 0): string {
 }
 
 // Which site's layout it is, for the file's name and the log line.
-export type LayoutSite = "x" | "reddit";
+export type LayoutSite = "x" | "reddit" | "linkedin";
 
 // What kind of page it is: a chat (X's DMs, Reddit's chat) or any other.
 function pageKind(site: LayoutSite): string {
   const path = location.pathname;
+  if (site === "linkedin") {
+    if (path.startsWith("/sales")) return "sales-navigator";
+    if (path.startsWith("/messaging")) return "messaging";
+    return path.startsWith("/feed/update") || path.startsWith("/posts") ? "post" : "feed";
+  }
   if (site === "x") return path.startsWith("/messages") || path.startsWith("/i/chat") ? "dm" : "page";
   return path.startsWith("/chat") ? "chat" : "page";
 }
 
 function download(site: LayoutSite) {
-  const html = `<!doctype html><!-- ${site === "x" ? "X" : "Reddit"} page layout, text scrubbed. Saved from ${location.pathname.replace(/[^/]+/g, (s) => (/^\d+$/.test(s) ? "0" : s.length > 2 ? "x" : s))} -->\n${serialize(document.documentElement)}`;
+  const html = `<!doctype html><!-- ${site === "x" ? "X" : site === "reddit" ? "Reddit" : "LinkedIn"} page layout, text scrubbed. Saved from ${location.pathname.replace(/[^/]+/g, (s) => (/^\d+$/.test(s) ? "0" : s.length > 2 ? "x" : s))} -->\n${serialize(document.documentElement)}`;
   const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
   const a = document.createElement("a");
   a.href = url;

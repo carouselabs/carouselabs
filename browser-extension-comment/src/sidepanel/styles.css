@@ -1,3 +1,9 @@
+/* Engage's faces (bundled, no network): Instrument Sans for everything,
+   Instrument Serif italic for a few large words. */
+@import "@fontsource-variable/instrument-sans/index.css";
+@import "@fontsource/instrument-serif/latin-400.css";
+@import "@fontsource/instrument-serif/latin-400-italic.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -6,6 +12,11 @@
  * Design tokens. Components use these names only (bg-card, text-muted-foreground,
  * border-border…), never raw colours, so light and dark are one switch here.
  * Dark follows the operating system (LinkedIn users run both).
+ *
+ * The look is Engage's (the website's Engage pages share it): ink on a
+ * lavender mist, an indigo accent, a blue → violet "canvas" for the card
+ * that holds what was written, night cards with a lime accent. X and Reddit
+ * re-set the colours in their own theme files.
  *
  * Type scale (Tailwind): screen title text-base semibold · section title
  * text-sm semibold · body text-sm · label/helper/meta text-xs · badge 11px.
@@ -18,34 +29,33 @@
   :root {
     color-scheme: light;
 
-    --background: 0 0% 100%;
-    --foreground: 240 10% 12%;
+    --background: 247 60% 97%; /* #F4F3FC mist */
+    --foreground: 246 62% 12%; /* #100C33 ink */
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 12%;
+    --card-foreground: 246 62% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 12%;
+    --popover-foreground: 246 62% 12%;
 
-    --primary: 262 83% 58%; /* CarouseLabs purple #7C3AED */
+    --primary: 249 85% 56%; /* #4B30EE indigo */
     --primary-foreground: 0 0% 100%;
-    /* Purple for text and links on the page (text-primary-text), not on a
-       purple fill: the brand purple itself is too dark to read on the dark
-       theme's surfaces. */
-    --primary-text: 262 75% 52%;
+    /* Indigo for text and links on the page (text-primary-text), not on an
+       indigo fill: dark mode needs a lighter one. */
+    --primary-text: 249 85% 56%;
 
-    --secondary: 240 5% 95%;
-    --secondary-foreground: 240 10% 12%;
+    --secondary: 251 52% 96%;
+    --secondary-foreground: 246 62% 12%;
 
-    --muted: 240 5% 96%;
-    --muted-foreground: 240 4% 44%;
+    --muted: 250 50% 96%;
+    --muted-foreground: 245 20% 43%; /* #5C5884 */
 
-    --accent: 262 83% 96%;
-    --accent-foreground: 262 70% 42%;
+    --accent: 254 100% 96%; /* #EFEAFF */
+    --accent-foreground: 248 73% 49%;
 
-    --border: 240 6% 90%;
-    --input: 240 6% 87%;
-    --ring: 262 83% 58%;
+    --border: 250 45% 92%; /* #E5E2F4 */
+    --input: 250 30% 82%;
+    --ring: 249 85% 56%;
 
     --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
@@ -57,7 +67,33 @@
     --warning: 30 95% 31%;
     --warning-soft: 40 95% 94%;
 
-    --radius: 0.5rem;
+    /* The card that holds what was written, and its main action. */
+    --canvas: radial-gradient(70% 55% at 8% 0%, #5a78ff 0%, rgb(90 120 255 / 0) 62%),
+      radial-gradient(60% 60% at 100% 12%, #9a44ea 0%, rgb(154 68 234 / 0) 62%),
+      radial-gradient(80% 60% at 50% 115%, #6a2be8 0%, rgb(106 43 232 / 0) 65%),
+      linear-gradient(160deg, #2c3cf0 0%, #4a2ee6 50%, #6e2fe6 100%);
+    --canvas-foreground: 0 0% 100%;
+    --canvas-action: 76 100% 68%; /* #D4FF5C lime */
+    --canvas-action-foreground: 246 62% 12%;
+    /* Night: the dark cards (the dock's current tab, plan pill). */
+    --night: 245 56% 8%; /* #0B0920 */
+    --night-foreground: 0 0% 100%;
+    --lime: 76 100% 68%;
+
+    /* "Comments per day" (Profile): five shades, none → most, and the
+       date's colour on each. */
+    --heat-0: #ebe8f7;
+    --heat-1: #cfc6fb;
+    --heat-2: #a28ff6;
+    --heat-3: #6d4cf0;
+    --heat-4: #3a1ec2;
+    --heat-ink-0: #5c5884;
+    --heat-ink-1: #100c33;
+    --heat-ink-2: #100c33;
+    --heat-ink-3: #ffffff;
+    --heat-ink-4: #ffffff;
+
+    --radius: 0.875rem;
 
     --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
     --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
@@ -67,32 +103,32 @@
     :root {
       color-scheme: dark;
 
-      --background: 240 6% 9%;
-      --foreground: 240 5% 93%;
+      --background: 245 56% 8%; /* #0B0920 night */
+      --foreground: 248 60% 95%;
 
-      --card: 240 5% 12%;
-      --card-foreground: 240 5% 93%;
+      --card: 246 45% 13%; /* #15122F */
+      --card-foreground: 248 60% 95%;
 
-      --popover: 240 5% 13%;
-      --popover-foreground: 240 5% 93%;
+      --popover: 247 44% 15%;
+      --popover-foreground: 248 60% 95%;
 
-      /* Same brand purple: white on it stays above 5:1. */
-      --primary: 262 83% 58%;
-      --primary-foreground: 0 0% 100%;
-      --primary-text: 262 90% 78%;
+      /* A lighter violet with dark text on it: white on it would fail. */
+      --primary: 248 100% 74%; /* #8D7BFF */
+      --primary-foreground: 245 56% 8%;
+      --primary-text: 249 100% 80%;
 
-      --secondary: 240 4% 17%;
-      --secondary-foreground: 240 5% 93%;
+      --secondary: 246 42% 18%;
+      --secondary-foreground: 248 60% 95%;
 
-      --muted: 240 4% 15%;
-      --muted-foreground: 240 5% 66%;
+      --muted: 246 40% 16%;
+      --muted-foreground: 246 25% 71%;
 
-      --accent: 262 45% 20%;
-      --accent-foreground: 262 90% 84%;
+      --accent: 248 47% 26%;
+      --accent-foreground: 250 100% 90%;
 
-      --border: 240 4% 20%;
-      --input: 240 4% 25%;
-      --ring: 262 83% 68%;
+      --border: 246 36% 23%;
+      --input: 246 32% 32%;
+      --ring: 248 100% 74%;
 
       --destructive: 0 75% 62%;
       /* Dark text on the lighter dark-theme red; white on it fails contrast. */
@@ -104,6 +140,21 @@
 
       --warning: 38 92% 60%;
       --warning-soft: 38 50% 14%;
+
+      --night: 248 47% 20%;
+      --night-foreground: 0 0% 100%;
+
+      /* Brighter for more, on the dark ground. */
+      --heat-0: #1e1a40;
+      --heat-1: #34297a;
+      --heat-2: #5340c2;
+      --heat-3: #8d7bff;
+      --heat-4: #cfc6ff;
+      --heat-ink-0: #a6a1c9;
+      --heat-ink-1: #edebfa;
+      --heat-ink-2: #edebfa;
+      --heat-ink-3: #0b0920;
+      --heat-ink-4: #0b0920;
     }
   }
 }
@@ -123,6 +174,7 @@
     @apply bg-background text-foreground antialiased;
     margin: 0;
     font-family:
+      "Instrument Sans Variable",
       "Inter",
       ui-sans-serif,
       system-ui,
@@ -161,5 +213,24 @@
     animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* The canvas card (what was written, the first-run card) and the night
+   card. Colours come from the tokens above, so X and Reddit get theirs. */
+@layer components {
+  .panel-canvas {
+    background: var(--canvas);
+    color: hsl(var(--canvas-foreground));
+  }
+  .panel-night {
+    background: hsl(var(--night));
+    color: hsl(var(--night-foreground));
+  }
+  .font-serif-display {
+    font-family: "Instrument Serif", Georgia, "Times New Roman", serif;
+    font-style: italic;
+    font-weight: 400;
+    letter-spacing: -0.01em;
   }
 }

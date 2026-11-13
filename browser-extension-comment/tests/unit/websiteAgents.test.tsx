@@ -2,11 +2,11 @@
 // the same agents and routes as the panel. Lists them, creates and edits
 // them (sending the version the edit started from), loads the newer version
 // when the panel changed the agent meanwhile, deletes after a check, and the
-// Extension tabs link to it.
+// Engage menu links to it.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AgentsManager } from "../../../components/extension/AgentsManager";
-import { ExtensionTabs } from "../../../components/extension/ExtensionTabs";
+import { EngageRail } from "../../../components/extension/EngageRail";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/extension/agents" }));
 vi.mock("next/link", () => ({
@@ -128,8 +128,10 @@ describe("Extension → AI agents on the website", () => {
     await waitFor(() => expect(lastCall("DELETE")!.url).toBe("/api/ext/agents/ag1"));
   });
 
-  it("has its own tab in the Extension section", () => {
-    render(<ExtensionTabs />);
-    expect(screen.getByRole("link", { name: "AI agents" }).getAttribute("href")).toBe("/extension/agents");
+  it("has its own section in Engage's menu", () => {
+    render(<EngageRail statuses={{}} />);
+    const agents = screen.getByRole("link", { name: "Agents" });
+    expect(agents.getAttribute("href")).toBe("/extension/agents");
+    expect(agents.getAttribute("aria-current")).toBe("page");
   });
 });

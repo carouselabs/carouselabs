@@ -1,7 +1,8 @@
-// app/(app)/extension/x/settings/page.tsx — Extension → Engage for X →
-// Settings: X Premium, the default X profile and the Insert button.
-import { XSettingsPanel } from "@/components/extension/XExtensionViews"
+// app/(app)/extension/x/settings/page.tsx — the old Settings address. Its settings now
+// live in Plan & setup → Preferences; links from older extension builds and
+// bookmarks land there.
+import { redirect } from "next/navigation"
 
 export default function ExtensionXSettingsPage() {
-  return <XSettingsPanel />
+  redirect("/extension/x/billing#preferences")
 }

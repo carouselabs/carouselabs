@@ -78,7 +78,7 @@ describe("Home screen: cached profiles", () => {
 
     render(<HomeScreen onCreateProfile={() => {}} />);
 
-    await waitFor(() => expect(screen.getByRole("combobox").textContent).toContain("Cached voice"));
+    await waitFor(() => expect(screen.getByRole("radio", { checked: true }).textContent).toContain("Cached voice"));
     expect(screen.queryByText("Loading profiles…")).toBeNull();
   });
 
@@ -88,10 +88,10 @@ describe("Home screen: cached profiles", () => {
     const { release } = server();
 
     render(<HomeScreen onCreateProfile={() => {}} />);
-    await waitFor(() => expect(screen.getByRole("combobox").textContent).toContain("Cached voice"));
+    await waitFor(() => expect(screen.getByRole("radio", { checked: true }).textContent).toContain("Cached voice"));
 
     release();
-    await waitFor(() => expect(screen.getByRole("combobox").textContent).toContain("Server voice"));
+    await waitFor(() => expect(screen.getByRole("radio", { checked: true }).textContent).toContain("Server voice"));
     await waitFor(() =>
       expect(chromeMock().__store[COMMENT_PROFILES_CACHE_KEY]).toMatchObject({
         profiles: [{ id: "p-server", name: "Server voice" }],
@@ -108,7 +108,7 @@ describe("Home screen: cached profiles", () => {
     expect(screen.queryByText("Loading profiles…")).not.toBeNull();
 
     release();
-    await waitFor(() => expect(screen.getByRole("combobox").textContent).toContain("Server voice"));
+    await waitFor(() => expect(screen.getByRole("radio", { checked: true }).textContent).toContain("Server voice"));
   });
 });
 

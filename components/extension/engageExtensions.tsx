@@ -101,37 +101,57 @@ export function otherPlatforms(platform: EngagePlatform): EngagePlatform[] {
   return ENGAGE_PLATFORMS.filter((p) => p !== platform)
 }
 
-// The same tabs for both, by their path under the extension's base.
-const TAB_PATHS = ["", "/profiles", "/agents", "/history", "/settings", "/billing"] as const
+// Each extension's sections, by their path under its base (the Engage menu,
+// components/extension/EngageRail.tsx). The addresses are the old tabs' so
+// links from the extensions keep working: Voices is /profiles, Activity
+// /history, Plan & setup /billing. The old Settings (/settings) now lives in
+// Plan & setup and redirects there. Saved comments is LinkedIn's alone.
+const TAB_PATHS = ["", "/profiles", "/saved", "/agents", "/history", "/billing"] as const
 export type ExtensionTabPath = (typeof TAB_PATHS)[number]
+
+export const SECTION_LABELS: Record<ExtensionTabPath, string> = {
+  "": "Home",
+  "/profiles": "Voices",
+  "/saved": "Saved comments",
+  "/agents": "Agents",
+  "/history": "Activity",
+  "/billing": "Plan & setup",
+}
+
+const ONLY_ON: Partial<Record<ExtensionTabPath, EngagePlatform>> = { "/saved": "linkedin" }
+
+// Whether an extension has a section (switching extensions keeps the one
+// you're on only when the other has it too).
+export function hasSection(platform: EngagePlatform, path: ExtensionTabPath): boolean {
+  const only = ONLY_ON[path]
+  return !only || only === platform
+}
 
 export function extensionTabs(platform: EngagePlatform): { path: ExtensionTabPath; href: string; label: string }[] {
   const ext = ENGAGE_EXTENSIONS[platform]
-  const labels: Record<ExtensionTabPath, string> = {
-    "": "Overview",
-    "/profiles": ext.profilesLabel,
-    "/agents": "AI agents",
-    "/history": "History",
-    "/settings": "Settings",
-    "/billing": "Plan & payments",
-  }
-  return TAB_PATHS.map((path) => ({ path, href: `${ext.base}${path}`, label: labels[path] }))
+  return TAB_PATHS.filter((path) => hasSection(platform, path)).map((path) => ({
+    path,
+    href: `${ext.base}${path}`,
+    label: SECTION_LABELS[path],
+  }))
 }
 
 // LinkedIn's pages are /extension/*; every other extension's are below its
-// own base (/extension/x/*).
+// own base (/extension/x/*), launched or not.
 export function platformOfPath(pathname: string): EngagePlatform {
   return (
-    ENGAGE_PLATFORMS.find((p) => {
+    PLATFORMS.find((p) => {
       const base = ENGAGE_EXTENSIONS[p].base
       return p !== "linkedin" && (pathname === base || pathname.startsWith(`${base}/`))
     }) ?? "linkedin"
   )
 }
 
-// Which tab a path is, so switching extensions keeps it ("" for anything else).
+// Which section a path is, so switching extensions keeps it ("" for anything
+// else). The old Settings address belongs to Plan & setup.
 export function tabPathOf(pathname: string): ExtensionTabPath {
   const rest = pathname.slice(ENGAGE_EXTENSIONS[platformOfPath(pathname)].base.length)
+  if (rest === "/settings") return "/billing"
   return TAB_PATHS.find((path) => path === rest) ?? ""
 }
 

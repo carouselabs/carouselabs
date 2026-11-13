@@ -122,7 +122,7 @@ describe("X Reply screen", () => {
     expect(screen.getByText("Image")).toBeTruthy();
     expect(screen.getByText("Quotes @growthweekly")).toBeTruthy();
     expect(screen.getByText("In a conversation with 1 post above it")).toBeTruthy();
-    await waitFor(() => expect(screen.getByRole("combobox", { name: "X profile" }).textContent).toContain("X Thoughtful Reply"));
+    await waitFor(() => expect(screen.getByRole("radio", { checked: true }).textContent).toContain("X Thoughtful Reply"));
 
     await writeReply();
     await waitFor(() => expect(replyBox().value).toBe(REPLY));
@@ -205,10 +205,8 @@ describe("X Reply screen", () => {
     await writeReply();
     await waitFor(() => expect(replyBox().value).toBe(`Reply by ${THOUGHTFUL.id}`));
 
-    const trigger = screen.getByRole("combobox", { name: "X profile" });
-    trigger.focus();
-    fireEvent.keyDown(trigger, { key: "Enter" });
-    fireEvent.keyDown(await screen.findByRole("option", { name: /X Quick Reply/ }), { key: "Enter" });
+    // The voices are one row of buttons (VoiceChips).
+    fireEvent.click(screen.getByRole("radio", { name: /X Quick Reply/ }));
     const rewrite = await screen.findByRole("button", { name: "Rewrite with CarouseLabs — X Quick Reply" });
     expect(screen.getByText("Current reply: CarouseLabs — X Thoughtful Reply")).toBeTruthy();
     fireEvent.click(rewrite);

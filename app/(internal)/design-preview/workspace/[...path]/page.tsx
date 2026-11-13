@@ -4,15 +4,21 @@ import type { ReactNode } from "react"
 
 import { AppChrome } from "@/components/shell/AppChrome"
 import { AppFrame } from "@/components/shell/AppFrame"
-import { ExtensionHeader } from "@/components/extension/ExtensionHeader"
-import { ExtensionOverviewView } from "@/components/extension/ExtensionOverview"
+import { EngageRail } from "@/components/extension/EngageRail"
+import { ExtensionOverviewView, SPARK_DAYS, type LatestEntry } from "@/components/extension/ExtensionOverview"
 import { ENGAGE_EXTENSIONS, otherPlatforms } from "@/components/extension/engageExtensions"
-import { ExtensionBillingView } from "@/components/extension/ExtensionBillingView"
-import { ProfilesManager } from "@/components/extension/ProfilesManager"
-import { AgentsManager } from "@/components/extension/AgentsManager"
+import { PlanAndSetupView } from "@/components/extension/PlanAndSetup"
+import { ActivityHead, VoicesHead } from "@/components/extension/EngagePageHead"
+import { ActivityHeatmap } from "@/components/extension/ActivityHeatmap"
+import { planStatus } from "@/components/extension/engageStatus"
+import { ProfilesManager, type ProfilesInitial } from "@/components/extension/ProfilesManager"
+import { AgentsManager, type Agent } from "@/components/extension/AgentsManager"
 import { HistoryList } from "@/components/extension/HistoryList"
-import { ExtensionSettingsForm } from "@/components/extension/ExtensionSettingsForm"
-import { XReplyProfiles, XSettingsPanel } from "@/components/extension/XExtensionViews"
+import { XReplyProfiles } from "@/components/extension/XExtensionViews"
+import { instrumentSans } from "@/lib/fonts"
+import { localDayKey } from "@/lib/engage/heatmap"
+import { MAIN_HISTORY_KIND } from "@/lib/extensionHistory"
+import type { EngagePlatform } from "@/lib/engage/features"
 import { BillingView } from "@/components/settings/BillingView"
 import ProfileSettingsPage from "@/app/(app)/settings/profile/page"
 import VoicePresetsPage from "@/app/(app)/settings/voice-presets/page"
@@ -36,8 +42,9 @@ import { parseDollars, priceFor, standardPrice } from "@/lib/engage/priceRules"
 // example data); the two server-loaded pages render their display component
 // with example props. Signed in they would read and change the real account,
 // so the preview refuses to run then.
-//   /design-preview/workspace/engage[/profiles|agents|history|settings|billing]
-//   /design-preview/workspace/engage-x[/…]
+//   /design-preview/workspace/engage[/profiles|agents|history|billing]
+//   /design-preview/workspace/engage-x[/…] · engage-reddit[/…]
+//   ?setup=1               Engage: not installed yet, nothing written
 //   /design-preview/workspace/settings/[profile|voice-presets|cta|billing|referrals|start-page|account]
 //   /design-preview/workspace/content-hub[/ideas] · toolkit · thumbnail · intern
 //   ?access=unlimited      the extension plan is paid (default: free); also Toolkit
@@ -71,32 +78,218 @@ function exampleAccess(access: string | undefined, price?: string): ExtAccessSum
   }
 }
 
-function Engage({ platform, tab, access, price }: { platform: "linkedin" | "x"; tab: string; access?: string; price?: string }) {
+// Example rows for Home's Latest list, newest first.
+function exampleLatest(platform: EngagePlatform, now: Date): LatestEntry[] {
+  const at = (minutes: number) => new Date(now.getTime() - minutes * 60_000).toISOString()
+  const rows: Record<EngagePlatform, Omit<LatestEntry, "id" | "createdAt">[]> = {
+    linkedin: [
+      { kind: "comment", postAuthor: "Example Author", postSnippet: "Example post about hiring your first designer…", comment: "Example comment: the second point is the one most teams skip.", action: "INSERTED", profileName: "Example: Studio founder" },
+      { kind: "reply", postAuthor: "Example Person", postSnippet: "Example launch post", comment: "Example reply: thank you, the checklist is in the comments.", action: "COPIED", profileName: null },
+      { kind: "connection_note", postAuthor: "Example Lead", postSnippet: "", comment: "Example note: liked your thread on onboarding.", action: "INSERTED", profileName: null },
+      { kind: "message", postAuthor: "Example Contact", postSnippet: "", comment: "Example reply: happy to share the checklist.", action: "NONE", profileName: null },
+    ],
+    x: [
+      { kind: "x_reply", postAuthor: "@example", postSnippet: "Example post about shipping on Fridays", comment: "Example X reply.", action: "INSERTED", profileName: null },
+      { kind: "x_message", postAuthor: "@example", postSnippet: "", comment: "Example X message.", action: "COPIED", profileName: null },
+    ],
+    reddit: [
+      { kind: "reddit_comment", postAuthor: "u/example", postSnippet: "Example question in r/example", comment: "Example Reddit comment.", action: "COPIED", profileName: null },
+    ],
+  }
+  return rows[platform].map((r, i) => ({ ...r, id: `e${i}`, createdAt: at([2, 18, 64, 190][i] ?? 300) }))
+}
+
+// Example voices for the LinkedIn Voices page, so it renders filled in on
+// the server (the page itself loads them on the server too).
+function exampleVoices(): ProfilesInitial {
+  const voice = (id: string, name: string, over: Record<string, unknown> = {}) => ({
+    id,
+    userId: "example-user",
+    name,
+    whoIAm: "Example: founder of a small design studio",
+    goal: "Start conversations with potential clients",
+    tone: "Warm",
+    length: "medium",
+    emoji: "none",
+    language: "English",
+    alwaysDo: "Ask one genuine question",
+    neverDo: "Pitch in the first comment",
+    samples: [] as string[],
+    isSystem: false,
+    isRecommended: false,
+    ...over,
+  })
+  const note = (id: string, name: string) => ({ id, name, angle: "", goal: "Get the invite accepted", tone: "Warm", length: "90-180 characters", alwaysDo: null, neverDo: null, samples: [], isSystem: true, isRecommended: false })
+  return {
+    settings: {
+      defaultCommentProfileId: "v1",
+      defaultConnectionProfileId: null,
+      defaultMessageProfileId: null,
+      defaultLanguage: "English",
+      connectNoteContext: null,
+      connectNoteLength: null,
+      linkedinProfile: null,
+      insertButtonHidden: false,
+    },
+    lists: {
+      comment: {
+        profiles: [
+          voice("v1", "Example: Studio founder", { samples: ["Example: the second point is the one most teams skip."] }),
+          voice("v2", "Example: Short and punchy", { length: "short", samples: ["Example: hiring late costs more than hiring wrong."] }),
+          voice("s1", "Thoughtful peer", { userId: null, isSystem: true, isRecommended: true, samples: ["Example: curious how you decided it was time?"] }),
+          voice("s2", "Supportive peer", { userId: null, isSystem: true }),
+        ],
+      },
+      connection: { profiles: [note("c1", "Warm intro")] },
+      message: { profiles: [] },
+    },
+    contacts: [],
+  } as unknown as ProfilesInitial
+}
+
+// Example agents for the Agents page.
+function exampleAgents(now: Date): Agent[] {
+  const base = { status: "active" as const, version: 1, updatedAt: now.toISOString() }
+  return [
+    {
+      ...base,
+      id: "a1",
+      name: "Example: Discovery calls",
+      description: "Example: books short discovery calls with founders",
+      purpose: "sales",
+      isDefault: true,
+      config: {
+        business: "Example studio",
+        offer: "Example: one-week design audits",
+        audience: "Example: seed-stage founders",
+        goals: "Book a call",
+        nextStep: "A 15-minute call",
+        strategy: "Ask about their launch first",
+        tone: "Warm",
+        length: "short",
+        language: "Match the conversation",
+        facts: ["Example: audits take one week"],
+        objections: ["Example: “we have no budget yet”"],
+        alwaysDo: "Ask one genuine question",
+        neverDo: "Pitch in the first message",
+        examples: ["Example: we run one-week audits. What are you launching next?"],
+      },
+    },
+    {
+      ...base,
+      id: "a2",
+      name: "Example: Partner intros",
+      description: "",
+      purpose: "partnerships",
+      status: "draft",
+      isDefault: false,
+      config: {
+        business: "",
+        offer: "",
+        audience: "",
+        goals: "Find a fit with agencies",
+        nextStep: "",
+        strategy: "",
+        tone: "Natural",
+        length: "auto",
+        language: "English",
+        facts: [],
+        objections: [],
+        alwaysDo: "",
+        neverDo: "",
+        examples: [],
+      },
+    },
+  ] as unknown as Agent[]
+}
+
+// Example "comments per day" for the grid: weekdays busier, a few days off.
+function exampleActivity(platform: EngagePlatform, now: Date) {
+  const days: { day: string; count: number }[] = []
+  for (let i = 90; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
+    const weekend = d.getDay() === 0 || d.getDay() === 6
+    const n = (i * 7 + 3) % 17
+    const count = weekend ? (n % 3 === 0 ? n % 5 : 0) : n % 6 === 0 ? 0 : n
+    if (count > 0) days.push({ day: localDayKey(d), count })
+  }
+  return { timeZone: "UTC", ...MAIN_HISTORY_KIND[platform], days }
+}
+
+function Engage({
+  platform,
+  tab,
+  access,
+  price,
+  setup,
+}: {
+  platform: EngagePlatform
+  tab: string
+  access?: string
+  price?: string
+  setup?: boolean
+}) {
   const base = ENGAGE_EXTENSIONS[platform].base
-  const ext = exampleAccess(access, price)
+  const ext = exampleAccess(setup ? undefined : access, price)
+  if (setup) ext.freeUsed = 0
+  const now = PREVIEW_NOW
+  const others = otherPlatforms(platform).map((p) => ({ platform: p, ext: exampleAccess(access === "unlimited" ? undefined : "unlimited") }))
+  const counts: Record<EngagePlatform, Record<string, number>> = {
+    linkedin: { comment: 128, reply: 37, connection_note: 14, message: 9 },
+    x: { x_reply: 41, x_message: 6 },
+    reddit: { reddit_comment: 12, reddit_message: 2 },
+  }
+  const spark = Object.fromEntries(
+    Object.keys(counts[platform]).map((k, j) => [
+      k,
+      Array.from({ length: SPARK_DAYS }, (_, i) => (setup ? 0 : ((i * 5 + j * 3) % 9) + (i % 4 === 0 ? 0 : 2))),
+    ]),
+  )
+  const otherExt = others[0]?.ext ?? ext
   const pages: Record<string, ReactNode> = {
     "": (
       <ExtensionOverviewView
         platform={platform}
-        email="example@example.com"
         ext={ext}
-        others={otherPlatforms(platform).map((p) => ({ platform: p, ext: exampleAccess(access === "unlimited" ? undefined : "unlimited") }))}
-        counts={platform === "x" ? { x_reply: 41, x_message: 6 } : { comment: 128, reply: 37, connection_note: 14, message: 9 }}
-        signedInBrowsers={1}
+        others={others}
+        counts={setup ? {} : counts[platform]}
+        spark={spark}
+        latest={setup ? [] : exampleLatest(platform, now)}
+        signedInBrowsers={setup ? 0 : 1}
+        now={now}
       />
     ),
-    profiles: platform === "x" ? <XReplyProfiles /> : <ProfilesManager />,
-    agents: <AgentsManager />,
-    history: <HistoryList platform={platform} />,
-    settings: platform === "x" ? <XSettingsPanel /> : <ExtensionSettingsForm />,
-    billing: <ExtensionBillingView ext={ext} platform={platform} />,
+    profiles: (
+      <>
+        <VoicesHead platform={platform} />
+        {platform === "x" ? <XReplyProfiles /> : <ProfilesManager initial={exampleVoices()} />}
+      </>
+    ),
+    agents: <AgentsManager initial={exampleAgents(now)} />,
+    history: (
+      <>
+        <ActivityHead platform={platform} />
+        <ActivityHeatmap platform={platform} initial={exampleActivity(platform, now)} today={now} />
+        <HistoryList platform={platform} />
+      </>
+    ),
+    billing: <PlanAndSetupView platform={platform} email="example@example.com" ext={ext} signedInBrowsers={setup ? 0 : 1} />,
   }
   if (!(tab in pages)) notFound()
   // Same wrapper as app/(app)/extension/layout.tsx
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-8">
-      <ExtensionHeader pathname={tab ? `${base}/${tab}` : base} />
-      {pages[tab]}
+    <div className={`engage-root ${instrumentSans.variable}`}>
+      <div className="mx-auto flex max-w-[88rem] flex-col gap-5 lg:flex-row lg:items-start">
+        <EngageRail
+          pathname={tab ? `${base}/${tab}` : base}
+          statuses={{
+            linkedin: planStatus(platform === "linkedin" ? ext : otherExt),
+            x: planStatus(platform === "x" ? ext : otherExt),
+            reddit: planStatus(platform === "reddit" ? ext : otherExt),
+          }}
+        />
+        <div className="flex min-w-0 flex-1 flex-col gap-6">{pages[tab]}</div>
+      </div>
     </div>
   )
 }
@@ -202,7 +395,7 @@ export default async function WorkspacePreview({
   searchParams,
 }: {
   params: Promise<{ path: string[] }>
-  searchParams: Promise<{ access?: string; plan?: string; ended?: string; price?: string }>
+  searchParams: Promise<{ access?: string; plan?: string; ended?: string; price?: string; setup?: string }>
 }) {
   if (process.env.NODE_ENV !== "development") notFound()
   const { userId } = await auth()
@@ -214,15 +407,15 @@ export default async function WorkspacePreview({
     )
   }
   const { path } = await params
-  const { access, plan, ended, price } = await searchParams
+  const { access, plan, ended, price, setup } = await searchParams
   const [area, sub = ""] = path
 
   let pathname: string
   let content: ReactNode
-  if (area === "engage" || area === "engage-x") {
-    const platform = area === "engage-x" ? "x" : "linkedin"
-    pathname = `${platform === "x" ? "/extension/x" : "/extension"}${sub ? `/${sub}` : ""}`
-    content = <Engage platform={platform} tab={sub} access={access} price={price} />
+  if (area === "engage" || area === "engage-x" || area === "engage-reddit") {
+    const platform: EngagePlatform = area === "engage-x" ? "x" : area === "engage-reddit" ? "reddit" : "linkedin"
+    pathname = `${ENGAGE_EXTENSIONS[platform].base}${sub ? `/${sub}` : ""}`
+    content = <Engage platform={platform} tab={sub} access={access} price={price} setup={setup === "1"} />
   } else if (area === "settings") {
     pathname = `/settings/${sub}`
     content = <Settings page={sub} plan={plan} />

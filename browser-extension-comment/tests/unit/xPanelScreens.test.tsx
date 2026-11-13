@@ -230,22 +230,17 @@ describe("X panel", () => {
   it("opens the X profile builder from Home's + Create custom profile", async () => {
     (chromeMock().tabs.query as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 4, url: "https://x.com/home" }]);
     render(<App />);
-    const trigger = await screen.findByRole("combobox", { name: "X profile" });
-    await waitFor(() => expect(trigger.textContent).toContain("X Thoughtful Reply"));
-    trigger.focus();
-    fireEvent.keyDown(trigger, { key: "Enter" });
-    fireEvent.keyDown(await screen.findByRole("option", { name: "+ Create custom profile" }), { key: "Enter" });
+    await waitFor(() => expect(screen.getByRole("radio", { checked: true }).textContent).toContain("X Thoughtful Reply"));
+    fireEvent.click(screen.getByRole("button", { name: "Create custom profile" }));
     expect(await screen.findByRole("heading", { name: "New X profile" })).toBeTruthy();
   });
 
-  it("names itself in the header, with the same mark as the LinkedIn extension", async () => {
+  it("names itself for screen readers, with no bar of its own above the screen", async () => {
     render(<App />);
-    await screen.findByRole("combobox", { name: "X profile" });
-    const header = screen.getByRole("banner");
-    expect(within(header).getByRole("heading", { name: "CarouseLabs Engage for X" })).toBeTruthy();
-    // The shared chat-bubble mark, with no letter in it.
-    expect(header.querySelector("svg.lucide-message-circle")).toBeTruthy();
-    expect(header.querySelector("svg text")).toBeNull();
+    await screen.findByRole("radiogroup", { name: "Voice" });
+    // Chrome's own bar names the panel; the title is there for screen readers.
+    expect(screen.getByRole("heading", { level: 1, name: "CarouseLabs Engage for X" }).className).toContain("sr-only");
+    expect(screen.queryByRole("banner")).toBeNull();
   });
 
   it("marks an open X chat with a black badge, not LinkedIn's purple", async () => {
@@ -254,9 +249,10 @@ describe("X panel", () => {
     expect(chromeMock().action.setBadgeBackgroundColor).toHaveBeenCalledWith({ color: "#000000" });
   });
 
-  it("has History and Settings, with nothing left as a placeholder", async () => {
+  it("has History and Settings (inside Profile), with nothing left as a placeholder", async () => {
     render(<App />);
-    await screen.findByRole("combobox", { name: "X profile" });
+    await screen.findByRole("radiogroup", { name: "Voice" });
+    fireEvent.click(screen.getByRole("button", { name: "Profile" }));
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("switch", { name: "I have X Premium" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "History" }));

@@ -8,7 +8,7 @@ import { ProfilesManager } from "../../../components/extension/ProfilesManager";
 import { HistoryList } from "../../../components/extension/HistoryList";
 import { ExtensionSettingsForm } from "../../../components/extension/ExtensionSettingsForm";
 import { XReplyProfiles, XSettingsPanel } from "../../../components/extension/XExtensionViews";
-import { ExtensionTabs } from "../../../components/extension/ExtensionTabs";
+import { EngageRail } from "../../../components/extension/EngageRail";
 import { DevicesList } from "../../../components/extension/DevicesList";
 import { InstallSteps } from "../../../components/extension/InstallSteps";
 import { ExtensionPlanSection } from "../../../components/extension/ExtensionPlanSection";
@@ -431,93 +431,80 @@ describe("website — X extension", () => {
   });
 });
 
-describe("website — Extension header: two separate extensions", () => {
-  const tabHrefs = () => screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+describe("website — Engage's menu: extensions and sections", () => {
+  const STATUSES = {
+    linkedin: { line: "7 of 10 free left", tone: "free" as const },
+    x: { line: "Unlimited", tone: "unlimited" as const },
+  };
+  const sections = () => within(screen.getByRole("navigation", { name: "Engage sections" })).getAllByRole("link");
+  const extensions = () => within(screen.getByRole("complementary", { name: "Engage" })).getAllByRole("link").slice(0, 2);
 
-  it("LinkedIn's pages are titled for LinkedIn, with LinkedIn's tabs only", () => {
+  it("LinkedIn's pages: six sections under /extension, the one you're on marked", () => {
     nav.pathname = "/extension/history";
-    render(<ExtensionTabs />);
-    expect(screen.getByRole("heading", { name: "CarouseLabs Engage for LinkedIn" })).toBeTruthy();
-    expect(tabHrefs()).toEqual([
-      "/extension",
-      "/extension/profiles",
-      "/extension/agents",
-      "/extension/history",
-      "/extension/settings",
-      "/extension/billing",
+    render(<EngageRail statuses={STATUSES} />);
+    expect(sections().map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
+      ["Home", "/extension"],
+      ["Voices", "/extension/profiles"],
+      ["Saved comments", "/extension/saved"],
+      ["Agents", "/extension/agents"],
+      ["Activity", "/extension/history"],
+      ["Plan & setup", "/extension/billing"],
     ]);
-    expect(screen.getByRole("link", { name: "Custom tones" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Activity" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Home" }).getAttribute("aria-current")).toBeNull();
   });
 
-  it("X's pages are titled for X, with X's own tabs under /extension/x", () => {
-    nav.pathname = "/extension/x/settings";
-    render(<ExtensionTabs />);
-    expect(screen.getByRole("heading", { name: "CarouseLabs Engage for X" })).toBeTruthy();
-    expect(screen.getByText(/separate extension from LinkedIn's, with its own plan/)).toBeTruthy();
-    expect(tabHrefs()).toEqual([
+  it("each extension with its plan; switching keeps the section", () => {
+    nav.pathname = "/extension/history";
+    render(<EngageRail statuses={STATUSES} />);
+    const [linkedin, x] = extensions();
+    expect(linkedin.textContent).toContain("LinkedIn");
+    expect(linkedin.textContent).toContain("7 of 10 free left");
+    expect(linkedin.getAttribute("aria-current")).toBe("true");
+    expect(x.textContent).toContain("Unlimited");
+    expect(x.getAttribute("href")).toBe("/extension/x/history");
+    expect(x.getAttribute("aria-current")).toBeNull();
+  });
+
+  it("Saved comments is LinkedIn's alone: switching to X from it lands on X's Home", () => {
+    nav.pathname = "/extension/saved";
+    render(<EngageRail statuses={STATUSES} />);
+    const [, x] = extensions();
+    expect(x.getAttribute("href")).toBe("/extension/x");
+    expect(screen.getByRole("link", { name: "Saved comments" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("X's pages: X's sections under /extension/x, and the way back to LinkedIn's", () => {
+    nav.pathname = "/extension/x/profiles";
+    render(<EngageRail statuses={STATUSES} />);
+    expect(sections().map((a) => a.getAttribute("href"))).toEqual([
       "/extension/x",
       "/extension/x/profiles",
       "/extension/x/agents",
       "/extension/x/history",
-      "/extension/x/settings",
       "/extension/x/billing",
     ]);
-    expect(screen.getByRole("link", { name: "Reply profiles" }).getAttribute("href")).toBe("/extension/x/profiles");
+    const [linkedin, x] = extensions();
+    expect(x.getAttribute("aria-current")).toBe("true");
+    expect(linkedin.getAttribute("href")).toBe("/extension/profiles");
+    expect(screen.getByRole("link", { name: /Open X/ }).getAttribute("href")).toBe("https://x.com/home");
   });
 
-  it("the title is a dropdown that switches extension and stays on the same tab", () => {
-    nav.pathname = "/extension/history";
-    render(<ExtensionTabs />);
-    const toggle = screen.getByRole("button", { name: "CarouseLabs Engage for LinkedIn" });
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByRole("link", { name: /CarouseLabs Engage for X/ })).toBeNull();
-
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    const toX = screen.getByRole("link", { name: /CarouseLabs Engage for X/ });
-    expect(toX.getAttribute("href")).toBe("/extension/x/history");
-    const here = screen.getByRole("link", { name: /CarouseLabs Engage for LinkedIn/ });
-    expect(here.getAttribute("href")).toBe("/extension/history");
-    expect(here.getAttribute("aria-current")).toBe("page");
-    expect(toX.getAttribute("aria-current")).toBeNull();
-    expect(screen.getByText(/Two separate extensions/)).toBeTruthy();
-
-    // jsdom can't navigate; the menu closing is what this checks.
-    toX.addEventListener("click", (e) => e.preventDefault());
-    fireEvent.click(toX);
-    expect(screen.queryByRole("link", { name: /CarouseLabs Engage for X/ })).toBeNull();
+  it("the old Settings address belongs to Plan & setup", () => {
+    nav.pathname = "/extension/x/settings";
+    render(<EngageRail statuses={STATUSES} />);
+    expect(screen.getByRole("link", { name: "Plan & setup" }).getAttribute("aria-current")).toBe("page");
+    expect(extensions()[0].getAttribute("href")).toBe("/extension/billing");
   });
 
-  it("from X's overview it goes to LinkedIn's overview", () => {
-    nav.pathname = "/extension/x";
-    render(<ExtensionTabs />);
-    fireEvent.click(screen.getByRole("button", { name: "CarouseLabs Engage for X" }));
-    expect(screen.getByRole("link", { name: /CarouseLabs Engage for LinkedIn/ }).getAttribute("href")).toBe("/extension");
-  });
-
-  it("closes on Escape (back to the button) and on a click outside", () => {
-    nav.pathname = "/extension";
-    render(<ExtensionTabs />);
-    const toggle = screen.getByRole("button", { name: "CarouseLabs Engage for LinkedIn" });
-    fireEvent.click(toggle);
-    fireEvent.keyDown(document, { key: "Escape" });
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(document.activeElement).toBe(toggle);
-
-    fireEvent.click(toggle);
-    fireEvent.pointerDown(screen.getByRole("link", { name: /CarouseLabs Engage for X/ }));
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    fireEvent.pointerDown(document.body);
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-  });
-
-  it("knows which extension and tab a path is", () => {
+  it("knows which extension and section a path is", () => {
     expect(platformOfPath("/extension/x")).toBe("x");
     expect(platformOfPath("/extension/x/history")).toBe("x");
     expect(platformOfPath("/extension/xyz")).toBe("linkedin");
     expect(platformOfPath("/extension")).toBe("linkedin");
     expect(tabPathOf("/extension/x/billing")).toBe("/billing");
     expect(tabPathOf("/extension/profiles")).toBe("/profiles");
+    expect(tabPathOf("/extension/settings")).toBe("/billing");
     expect(tabPathOf("/extension/x/somewhere-else")).toBe("");
   });
 });

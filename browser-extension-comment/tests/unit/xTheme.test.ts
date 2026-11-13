@@ -27,8 +27,23 @@ describe("the X extension's colours", () => {
     expect(light).toMatch(/--primary-foreground: 0 0% 100%;/);
     expect(dark).toMatch(/--primary: 0 0% 96%;/);
     expect(dark).toMatch(/--primary-foreground: 0 0% 4%;/);
-    // Every colour it sets is a grey (no hue, no saturation).
-    for (const [, value] of css.matchAll(/--[\w-]+: ([^;]+);/g)) expect(value).toMatch(/^0 0% \d+%$/);
+    // Every colour it sets is a grey (no hue, no saturation): HSL tokens are
+    // "0 0% n%", and the gradients and day-grid shades use only hex or rgb()
+    // greys (all three channels equal).
+    const grey = (hex: string) => {
+      const h = hex.length === 4 ? [...hex.slice(1)].map((c) => c + c).join("") : hex.slice(1);
+      return h.slice(0, 2).toLowerCase() === h.slice(2, 4).toLowerCase() && h.slice(2, 4).toLowerCase() === h.slice(4, 6).toLowerCase();
+    };
+    for (const [, value] of css.matchAll(/--[\w-]+: ([^;]+);/g)) {
+      if (/^\d/.test(value)) {
+        expect(value).toMatch(/^0 0% \d+%$/);
+        continue;
+      }
+      const hexes = [...value.matchAll(/#[0-9a-f]{6}\b|#[0-9a-f]{3}\b/gi)].map((m) => m[0]);
+      for (const hex of hexes) expect(grey(hex), `${hex} is grey`).toBe(true);
+      for (const [, r, g, b] of value.matchAll(/rgb\((\d+) (\d+) (\d+)/g)) expect(r === g && g === b, `rgb(${r} ${g} ${b}) is grey`).toBe(true);
+      expect(hexes.length + [...value.matchAll(/rgb\(/g)].length, `${value} names a colour`).toBeGreaterThan(0);
+    }
     for (const token of ["--primary", "--primary-text", "--accent", "--accent-foreground", "--ring"]) {
       expect(light).toContain(`${token}:`);
       expect(dark).toContain(`${token}:`);

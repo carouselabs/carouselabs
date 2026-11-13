@@ -1,19 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ExternalLink, Image as ImageIcon, Minus, MousePointerClick, Plus, Quote, RotateCcw, Sparkles } from "lucide-react";
+import { Image as ImageIcon, Minus, Plus, Quote, RotateCcw, Sparkles } from "lucide-react";
+import { StartCard } from "@/sidepanel/components/StartCard";
+import { VoiceChips } from "@/sidepanel/components/VoiceChips";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingField } from "@/components/ui/loading-field";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { RecommendedBadge } from "@/sidepanel/components/RecommendedBadge";
 import { ResultCard } from "@/sidepanel/components/ResultCard";
 import { RewriteButton } from "@/sidepanel/components/RewriteButton";
 import { Initials } from "@/sidepanel/components/Initials";
@@ -373,52 +366,31 @@ export function XHomeScreen({ onCreateProfile }: Props) {
   const errorBox = generateError && <Alert>{generateError}</Alert>;
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="flex flex-col gap-3 p-3">
       {target && offX && (
         <GoToSiteCard body="Replies are written for posts on X. Go back to X to write one." homeUrl={X_HOME_URL} />
       )}
       <div className="space-y-1.5">
-        <label id="x-profile-label" className="text-xs font-medium text-muted-foreground">
-          X profile
-        </label>
-        {loadState === "loading" && <LoadingField>Loading profiles…</LoadingField>}
+        {loadState === "loading" && (
+          <>
+            <span className="text-xs font-semibold text-muted-foreground">Voice</span>
+            <LoadingField>Loading profiles…</LoadingField>
+          </>
+        )}
         {loadState === "error" && <Alert>{loadError}</Alert>}
         {loadState === "ready" && (
-          <Select value={selectedId} onValueChange={handleProfileChange}>
-            <SelectTrigger aria-labelledby="x-profile-label">
-              <SelectValue placeholder="Select a profile" />
-            </SelectTrigger>
-            <SelectContent>
-              {recommended.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
-                  {p.isDefault ? " (default)" : ""}
-                  <RecommendedBadge />
-                </SelectItem>
-              ))}
-              {recommended.length > 0 && builtIn.length > 0 && <SelectSeparator />}
-              {builtIn.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
-                  {p.isDefault ? " (default)" : ""}
-                </SelectItem>
-              ))}
-              {own.length > 0 && <SelectSeparator />}
-              {own.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
-                </SelectItem>
-              ))}
-              {onCreateProfile && (
-                <>
-                  <SelectSeparator />
-                  <SelectItem value={CREATE_CUSTOM_VALUE} className="font-medium text-primary-text">
-                    + Create custom profile
-                  </SelectItem>
-                </>
-              )}
-            </SelectContent>
-          </Select>
+          <VoiceChips
+            label="Voice"
+            options={[...recommended, ...builtIn, ...own].map((p) => ({
+              id: p.id,
+              name: p.name,
+              isDefault: p.isDefault,
+              isRecommended: p.isRecommended,
+            }))}
+            value={selectedId}
+            onChange={handleProfileChange}
+            onCreate={onCreateProfile ? () => onCreateProfile() : undefined}
+          />
         )}
         {rewriteProfile && (
           <RewriteButton
@@ -466,23 +438,14 @@ export function XHomeScreen({ onCreateProfile }: Props) {
           </div>
         </div>
       ) : (
-        <div className="flex animate-fade-in flex-col items-center gap-3 rounded-lg border border-dashed border-input px-4 py-6 text-center">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground">
-            <MousePointerClick aria-hidden className="h-5 w-5" />
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-semibold">{onX === false ? "Open X to start" : "Pick a post on X"}</p>
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Click <span className="font-medium text-foreground">Reply</span> under any post. It shows up here.
-            </p>
-          </div>
-          {onX === false && (
-            <Button size="sm" onClick={() => void goToSite(X_HOME_URL)}>
-              Open X
-              <ExternalLink aria-hidden />
-            </Button>
-          )}
-        </div>
+        <StartCard
+          title={onX === false ? "Open X to start" : "Pick a post on X"}
+          actions={["Reply", "Repost", "Like", "Share"]}
+          highlight="Reply"
+          goTo={onX === false ? { label: "Open X", onClick: () => void goToSite(X_HOME_URL) } : undefined}
+        >
+          Click <strong className="font-semibold">Reply</strong> under any post. It shows up here, ready to write.
+        </StartCard>
       )}
 
       {target && (

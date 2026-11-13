@@ -55,6 +55,11 @@ async function resolvePublicHost(url: URL) {
 }
 
 type ImageResponse = { bytes: Buffer; mediaType: string }
+
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"]
+// A post's video file (lib/engage/postVideo.ts). Some CDNs label mp4 files as
+// plain bytes; postVideo checks the file itself before anything reads it.
+export const VIDEO_TYPES = ["video/mp4", "video/quicktime", "application/octet-stream", "binary/octet-stream"]
 type HopResponse = ImageResponse | { redirect: string }
 
 // DNS resolution is checked for every redirect and the socket is pinned to
@@ -62,8 +67,10 @@ type HopResponse = ImageResponse | { redirect: string }
 // a second lookup could point the connection back into the private network.
 export async function fetchPublicImage(
   raw: string,
-  { maxBytes = 20 * 1024 * 1024, timeoutMs = 10_000, allowedOrigin }: {
+  { maxBytes = 20 * 1024 * 1024, timeoutMs = 10_000, allowedOrigin, mediaTypes = IMAGE_TYPES }: {
     maxBytes?: number; timeoutMs?: number; allowedOrigin?: string
+    // What the response may be: images unless the caller says otherwise.
+    mediaTypes?: string[]
   } = {},
 ): Promise<ImageResponse> {
   const controller = new AbortController()
@@ -86,7 +93,7 @@ export async function fetchPublicImage(
           signal: controller.signal,
           family: approved.family,
           lookup: (_host, _options, callback) => callback(null, approved.address, approved.family),
-          headers: { Accept: "image/png,image/jpeg,image/webp", "Accept-Encoding": "identity" },
+          headers: { Accept: mediaTypes.join(","), "Accept-Encoding": "identity" },
         }, (res) => {
           res.on("error", reject)
           const status = res.statusCode ?? 0
@@ -96,7 +103,7 @@ export async function fetchPublicImage(
             return
           }
           const mediaType = (res.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase()
-          if (status < 200 || status >= 300 || !["image/png", "image/jpeg", "image/webp"].includes(mediaType)) {
+          if (status < 200 || status >= 300 || !mediaTypes.includes(mediaType)) {
             reject(new Error("Couldn't fetch a supported image"))
             res.destroy()
             return
@@ -132,4 +139,13 @@ export async function fetchPublicImage(
   } finally {
     clearTimeout(timeout)
   }
+}
+
+// A video file, with every check above: public address, pinned socket, size
+// and time caps. The errors still say "image"; they're logged, never shown.
+export function fetchPublicVideo(
+  raw: string,
+  { maxBytes, timeoutMs }: { maxBytes: number; timeoutMs: number },
+): Promise<ImageResponse> {
+  return fetchPublicImage(raw, { maxBytes, timeoutMs, mediaTypes: VIDEO_TYPES })
 }

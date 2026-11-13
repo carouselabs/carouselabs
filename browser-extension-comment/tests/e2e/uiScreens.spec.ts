@@ -71,6 +71,15 @@ async function setup(
   });
   harness.apiResponses.set("/api/ext/contacts", { status: 200, body: { contacts: [] } });
   harness.apiResponses.set("/api/ext/history", { status: 200, body: HISTORY });
+  // Profile's comments per day: this month so far, a few days off.
+  const today = new Date();
+  const days = [];
+  for (let d = 1; d <= today.getDate(); d++) {
+    const n = (d * 7 + 3) % 17;
+    if (d % 6 === 0) continue;
+    days.push({ day: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`, count: n });
+  }
+  harness.apiResponses.set("/api/ext/activity", { status: 200, body: { one: "comment", many: "comments", days } });
   harness.apiResponses.set("/api/ext/connection-profiles", { status: 200, body: { profiles: [
     { id: "cp1", name: "Warm intro", angle: "shared interest", goal: "Get the invite accepted", tone: "friendly", length: "90-180 characters", alwaysDo: null, neverDo: null, samples: [], isDefault: true, isSystem: true, isRecommended: true },
   ] } });
@@ -86,6 +95,12 @@ async function setup(
 }
 
 async function openPanel(harness: Harness, width: number, opts: { linkedInTabActive?: boolean } = {}): Promise<Page> {
+  // Writing needs LinkedIn beside the panel (off it, Write says to go back):
+  // a LinkedIn feed tab, unless the test opened its own LinkedIn page.
+  if (opts.linkedInTabActive === undefined) {
+    await harness.open("/feed/", "feed.html");
+    opts = { ...opts, linkedInTabActive: true };
+  }
   const panel = await harness.context.newPage();
   // Opened as a tab here, the panel would itself be the "active tab"; in real
   // use that is the LinkedIn tab beside it. Point the panel's active-tab
@@ -170,9 +185,8 @@ for (const width of WIDTHS) {
       await expect(panel.getByRole("textbox", { name: "Your comment" })).toHaveValue(COMMENT);
       await shot(panel, width, "06-home-result");
 
-      // Another profile picked after the comment was written.
-      await panel.getByRole("combobox", { name: "Comment profile" }).click();
-      await panel.getByRole("option", { name: "Supportive Peer" }).click();
+      // Another voice picked after the comment was written.
+      await panel.getByRole("radio", { name: "Supportive Peer" }).click();
       await expect(panel.getByRole("button", { name: "Rewrite with Supportive Peer" })).toBeVisible();
       await shot(panel, width, "06b-home-rewrite-offer");
     });
@@ -274,7 +288,7 @@ for (const width of WIDTHS) {
     test("profiles: delete check, builder, notes", async ({ harness }) => {
       await setup(harness);
       const panel = await openPanel(harness, width);
-      await panel.getByRole("button", { name: "Profiles", exact: true }).click();
+      await panel.getByRole("button", { name: "Voices", exact: true }).click();
       const yours = panel.getByRole("region", { name: "Your profiles" });
       await yours.getByRole("button", { name: "Delete" }).click();
       await expect(panel.getByText("Delete this profile?")).toBeVisible();
@@ -296,10 +310,16 @@ for (const width of WIDTHS) {
       const panel = await openPanel(harness, width);
       for (const [label, name] of [
         ["Messages", "12-messages"],
-        ["Profiles", "13-profiles"],
+        ["Voices", "13-profiles"],
+        ["Profile", "16-profile"],
+      ] as const) {
+        await panel.getByRole("button", { name: label, exact: true }).click();
+        await shot(panel, width, name);
+      }
+      // History and Settings are Profile's tabs.
+      for (const [label, name] of [
         ["History", "14-history"],
         ["Settings", "15-settings"],
-        ["Account", "16-account"],
       ] as const) {
         await panel.getByRole("button", { name: label, exact: true }).click();
         await shot(panel, width, name);

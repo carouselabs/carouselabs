@@ -46,6 +46,22 @@ const PLAN_COPY: Record<EngagePlatform, { manage: string; buy: string; anchor: s
   },
 }
 
+// The plan's one action for this account, for Engage → Plan & setup: manage
+// a running subscription, buy (with this person's price), or a note when
+// checkout isn't set up. Null when there's nothing to do (testing).
+export function extensionPlanAction(
+  ext: ExtAccessSummary,
+  platform: EngagePlatform,
+): { kind: "manage"; href: string; label: string } | { kind: "buy"; href: string; label: string } | { kind: "note"; label: string } | null {
+  const copy = PLAN_COPY[platform]
+  if (ext.access === "unlimited") {
+    return { kind: "manage", href: ext.manageUrl ?? "https://app.lemonsqueezy.com/my-orders", label: copy.manage }
+  }
+  if (ext.access !== "free") return null
+  if (!copy.checkoutConfigured()) return { kind: "note", label: "Checkout isn't available right now. Please try again later." }
+  return { kind: "buy", href: ENGAGE_EXTENSIONS[platform].checkoutPath, label: "Get unlimited — " }
+}
+
 export function ExtensionPlanSection({ ext, platform = "linkedin" }: { ext: ExtAccessSummary; platform?: EngagePlatform }) {
   const copy = PLAN_COPY[platform]
   const info = ENGAGE_EXTENSIONS[platform]

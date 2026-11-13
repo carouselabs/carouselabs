@@ -10,6 +10,9 @@ const nextConfig: NextConfig = {
   // runtime (lib/emailArt.tsx): ship the fonts with that function.
   outputFileTracingIncludes: {
     "/api/admin/email-writer/paint": ["./assets/fonts/**/*"],
+    // Engage watches LinkedIn video posts with ffmpeg (lib/engage/postVideo.ts),
+    // the binary ffmpeg-static downloads at install: shipped with that route only.
+    "/api/ext/video": ["./node_modules/ffmpeg-static/ffmpeg"],
   },
   // Audit builds can coexist with a developer's running dev server.
   distDir: process.env.NEXT_BUILD_DIR || ".next",

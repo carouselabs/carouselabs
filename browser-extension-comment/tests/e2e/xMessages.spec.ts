@@ -104,7 +104,7 @@ test("a chat X opens in place (the address changes, no page load) gets the badge
       return chrome.action.getBadgeText({ tabId: tab.id! });
     });
   const panel = await openPanel(harness);
-  await expect(panel.getByRole("combobox", { name: "X profile" })).toBeVisible();
+  await expect(panel.getByRole("navigation", { name: "Screens" })).toBeVisible();
   // The inbox is not a chat.
   expect(await badge()).toBe("");
   await expect(panel.getByRole("button", { name: "Write a reply with AI" })).toHaveCount(0);

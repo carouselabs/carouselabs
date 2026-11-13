@@ -136,7 +136,7 @@ test("Test this agent in the agent form, at 320px", async ({ harness }) => {
   });
   await harness.open("/feed/", "feed.html");
   const panel = await openPanel(harness, 320);
-  await panel.getByRole("button", { name: "Profiles", exact: true }).click();
+  await panel.getByRole("button", { name: "Voices", exact: true }).click();
   await panel.getByRole("radio", { name: "Agents" }).click();
   await panel.getByRole("button", { name: "Edit" }).first().click();
   await panel.getByRole("textbox", { name: "Their message" }).fill("How much does it cost?");
@@ -172,7 +172,7 @@ test("Build with AI: describe, answer, build, review and save, all at 320px", as
   });
   await harness.open("/feed/", "feed.html");
   const panel = await openPanel(harness, 320);
-  await panel.getByRole("button", { name: "Profiles", exact: true }).click();
+  await panel.getByRole("button", { name: "Voices", exact: true }).click();
   await panel.getByRole("radio", { name: "Agents" }).click();
   await panel.getByRole("button", { name: "New agent" }).click();
   await panel.getByRole("button", { name: /Build with AI/ }).click();
@@ -198,7 +198,7 @@ test("the Agents tab and the agent builder fit a 320px panel", async ({ harness 
   await signedIn(harness);
   await harness.open("/feed/", "feed.html");
   const panel = await openPanel(harness, 320);
-  await panel.getByRole("button", { name: "Profiles", exact: true }).click();
+  await panel.getByRole("button", { name: "Voices", exact: true }).click();
   await panel.getByRole("radio", { name: "Agents" }).click();
   await expect(panel.getByText("Founder outreach")).toBeVisible();
   expect(await scrollsSideways(panel)).toBe(false);

@@ -537,34 +537,74 @@ function Badge({ tone, children }: { tone: "brand" | "warning" | "muted"; childr
   )
 }
 
-/** One profile in the list on the left. */
+/**
+ * One voice as a card in the grid: its name, a line it has written (its
+ * first sample), and how it comes across. The whole card selects it; the star
+ * beside it makes it the default the extension starts with.
+ */
 function ProfileRow({
   kind,
   profile,
   isDefault,
   selected,
   onSelect,
+  onMakeDefault,
 }: {
   kind: KindDef
   profile: Profile
   isDefault: boolean
   selected: boolean
   onSelect: () => void
+  onMakeDefault: () => void
 }) {
+  const samples = Array.isArray(profile.samples) ? (profile.samples as string[]).filter((x) => x.trim()) : []
+  const traits = kind
+    .summary(profile)
+    .split("·")
+    .map((t) => t.trim())
+    .filter(Boolean)
+
   return (
-    <li>
+    <li className="relative">
       <button
         type="button"
         onClick={onSelect}
         aria-current={selected ? "true" : undefined}
-        className="relative flex w-full flex-col gap-0.5 rounded-control px-3 py-2.5 text-left transition-colors duration-(--motion-fast) hover:bg-surface-muted aria-[current=true]:bg-surface-raised aria-[current=true]:shadow-card aria-[current=true]:before:absolute aria-[current=true]:before:inset-y-2.5 aria-[current=true]:before:left-0 aria-[current=true]:before:w-0.5 aria-[current=true]:before:rounded-full aria-[current=true]:before:bg-brand"
+        className="flex h-full w-full flex-col gap-3 rounded-card bg-surface-raised p-5 pr-14 text-left shadow-card transition-[box-shadow,transform] duration-(--motion-fast) ease-(--ease-entry) hover:-translate-y-0.5 aria-[current=true]:shadow-[0_0_0_2px_var(--brand),0_18px_40px_-22px_rgb(32_16_110/0.45)]"
       >
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-label font-semibold text-foreground">{profile.name}</span>
-          {isDefault && <Badge tone="brand">Default</Badge>}
-          {profile.isRecommended && <Badge tone="warning">Recommended</Badge>}
-        </span>
-        <span className="truncate text-caption text-muted-foreground">{kind.summary(profile)}</span>
+        <span className="text-body font-semibold break-words text-foreground">{profile.name}</span>
+        {(isDefault || profile.isRecommended || profile.isSystem) && (
+          <span className="-mt-1 flex flex-wrap gap-1.5">
+            {isDefault && <Badge tone="brand">Default</Badge>}
+            {profile.isRecommended && <Badge tone="warning">Recommended</Badge>}
+            {profile.isSystem && <Badge tone="muted">Built-in</Badge>}
+          </span>
+        )}
+        {samples[0] && (
+          <span className="line-clamp-3 rounded-[14px_14px_14px_4px] bg-surface-muted px-3.5 py-2.5 text-label text-foreground">
+            {samples[0]}
+          </span>
+        )}
+        {traits.length > 0 && (
+          <span className="mt-auto flex flex-wrap gap-1.5">
+            {traits.map((t) => (
+              <span key={t} className="rounded-full border border-border px-2.5 py-0.5 text-caption text-muted-foreground">
+                {t}
+              </span>
+            ))}
+          </span>
+        )}
+      </button>
+      <button
+        type="button"
+        onClick={onMakeDefault}
+        disabled={isDefault}
+        aria-pressed={isDefault}
+        aria-label={isDefault ? `Default: ${profile.name}` : `Make default: ${profile.name}`}
+        title={isDefault ? "The default" : "Make this the default"}
+        className="absolute top-2.5 right-2.5 flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors duration-(--motion-fast) hover:bg-surface-muted hover:text-brand disabled:cursor-default disabled:text-brand disabled:hover:bg-transparent"
+      >
+        <Star aria-hidden className={cn("size-5", isDefault && "fill-current")} />
       </button>
     </li>
   )
@@ -850,8 +890,8 @@ export function KindPanel({
     reveal()
   }
 
-  const rows = (list: Profile[]) => (
-    <ul className="flex flex-col gap-0.5">
+  const rows = (list: Profile[], extra?: ReactNode) => (
+    <ul className="grid gap-3 sm:grid-cols-2">
       {list.map((p) => (
         <ProfileRow
           key={p.id}
@@ -864,9 +904,27 @@ export function KindPanel({
             setSelectedId(p.id)
             reveal()
           }}
+          onMakeDefault={() => makeDefault(p.id)}
         />
       ))}
+      {extra}
     </ul>
+  )
+  const newCard = (
+    <li>
+      <button
+        type="button"
+        onClick={() => startNew(null)}
+        disabled={!profiles}
+        className="flex h-full min-h-40 w-full flex-col justify-center gap-2 rounded-card border-2 border-dashed border-[#CFC8EF] p-5 text-left transition-colors duration-(--motion-fast) hover:bg-surface-raised disabled:opacity-60"
+      >
+        <span className="flex size-11 items-center justify-center rounded-[14px] bg-brand-soft text-brand">
+          <Plus className="size-5" aria-hidden />
+        </span>
+        <span className="text-body font-semibold text-foreground">New voice</span>
+        <span className="text-label text-muted-foreground">Say how you write, and add a few lines you&apos;ve written yourself.</span>
+      </button>
+    </li>
   )
 
   return (
@@ -878,32 +936,34 @@ export function KindPanel({
         </div>
       )}
 
-      <div className="grid gap-8 lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-10">
-        <nav aria-label="Profiles" className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-6 lg:self-start">
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-2 pl-3">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] xl:gap-8">
+        <nav aria-label="Profiles" className="flex min-w-0 flex-col gap-6">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-2 px-1">
               <h2 className="text-label font-semibold text-foreground">
-                Your profiles{" "}
-                <span className="font-normal text-muted-foreground">({custom.length})</span>
+                Your voices <span className="font-normal text-muted-foreground">({custom.length})</span>
               </h2>
-              <Button size="xs" onClick={() => startNew(null)} disabled={!profiles}>
-                <Plus aria-hidden /> New profile
+              <Button size="sm" onClick={() => startNew(null)} disabled={!profiles}>
+                <Plus aria-hidden /> New voice
               </Button>
             </div>
             {!profiles ? (
-              <p className="px-3 text-label text-muted-foreground">Loading…</p>
-            ) : custom.length === 0 ? (
-              <p className="rounded-control border border-dashed border-border px-4 py-5 text-label text-muted-foreground">
-                No custom profiles yet. Create one, or customise a built-in one below.
-              </p>
+              <p className="px-1 text-label text-muted-foreground">Loading…</p>
             ) : (
-              rows(custom)
+              <>
+                {custom.length === 0 && (
+                  <p className="px-1 text-label text-muted-foreground">
+                    No voices of your own yet. Make one, or customise a built-in one below.
+                  </p>
+                )}
+                {rows(custom, newCard)}
+              </>
             )}
           </div>
 
           {builtIn.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <h2 className="pl-3 text-label font-semibold text-foreground">Built-in</h2>
+            <div className="flex flex-col gap-3">
+              <h2 className="px-1 text-label font-semibold text-foreground">Built-in</h2>
               {rows(builtIn)}
             </div>
           )}

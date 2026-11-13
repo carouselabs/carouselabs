@@ -26,6 +26,25 @@
   --border: 30 12% 90%;
   --input: 30 10% 85%;
   --ring: 21 90% 48%; /* #EA580C */
+
+  /* The written-text card in CarouseLabs orange, with a white main action. */
+  --canvas: radial-gradient(70% 55% at 8% 0%, #fb923c 0%, rgb(251 146 60 / 0) 62%), linear-gradient(160deg, #ea580c 0%, #c2410c 55%, #9a3412 100%);
+  --canvas-foreground: 0 0% 100%;
+  --canvas-action: 0 0% 100%;
+  --canvas-action-foreground: 20 14% 10%;
+  --night: 20 14% 10%;
+  --night-foreground: 0 0% 100%;
+
+  --heat-0: #f5ede6;
+  --heat-1: #fed7aa;
+  --heat-2: #fb923c;
+  --heat-3: #ea580c;
+  --heat-4: #9a3412;
+  --heat-ink-0: #78716c;
+  --heat-ink-1: #1c1917;
+  --heat-ink-2: #1c1917;
+  --heat-ink-3: #1c1917;
+  --heat-ink-4: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -51,5 +70,18 @@
     --border: 20 8% 20%;
     --input: 20 8% 28%;
     --ring: 25 95% 53%;
+
+    --night: 20 10% 18%;
+
+    --heat-0: #241c17;
+    --heat-1: #5a2a12;
+    --heat-2: #9a3412;
+    --heat-3: #ea580c;
+    --heat-4: #fdba74;
+    --heat-ink-0: #a8a29e;
+    --heat-ink-1: #f5f5f4;
+    --heat-ink-2: #ffffff;
+    --heat-ink-3: #1c1917;
+    --heat-ink-4: #1c1917;
   }
 }

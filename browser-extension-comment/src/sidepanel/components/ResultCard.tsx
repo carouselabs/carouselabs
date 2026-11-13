@@ -42,9 +42,10 @@ interface Props {
   sectionRef?: Ref<HTMLElement>;
 }
 
-// The finished text and what to do with it, in one card: the text (editable),
-// then Copy — the main action, since the user posts every comment themselves —
-// and Insert, then the quieter rewrite options. Shared by comments, replies,
+// The finished text and what to do with it, in one card on the extension's
+// canvas colours (blue → violet; X's black; Reddit's orange): the text
+// (editable) on a white bubble, the quieter rewrite options, then Insert —
+// the main action when it's on — and Copy. Shared by comments, replies,
 // connection notes and messages so all four behave the same.
 export function ResultCard({
   noun,
@@ -66,27 +67,48 @@ export function ResultCard({
   sectionRef,
 }: Props) {
   const label = `Your ${noun}`;
+  const onCanvas =
+    "text-[hsl(var(--canvas-foreground))] hover:bg-white/15 hover:text-[hsl(var(--canvas-foreground))] disabled:opacity-50";
   const regenerate = onRegenerate && (
-    <Tooltip label="Regenerate" side="top-end" className={tools ? "ml-auto" : undefined}>
-      <Button size="icon-sm" variant="ghost" aria-label="Regenerate" disabled={regenerateDisabled} onClick={onRegenerate}>
+    <Tooltip label="Regenerate" side="top-end" className="ml-auto">
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label="Regenerate"
+        disabled={regenerateDisabled}
+        onClick={onRegenerate}
+        className={cn("rounded-full", onCanvas)}
+      >
         <RefreshCw aria-hidden className={cn(generating && "animate-spin")} />
       </Button>
     </Tooltip>
   );
   const defaultMeta = generating ? "Writing…" : value.trim() ? `${value.length} character${value.length === 1 ? "" : "s"}` : "";
+  // The main action on the canvas: lime (white on X's and Reddit's).
+  const mainAction =
+    "h-9 flex-1 rounded-full bg-[hsl(var(--canvas-action))] text-sm font-bold text-[hsl(var(--canvas-action-foreground))] hover:bg-[hsl(var(--canvas-action))] hover:opacity-90";
+  const nightAction =
+    "h-9 rounded-full bg-[hsl(var(--night))] px-4 text-sm font-semibold text-[hsl(var(--night-foreground))] hover:bg-[hsl(var(--night))] hover:opacity-90";
+
+  const copyButton = (
+    <Button className={insert ? nightAction : mainAction} disabled={copyDisabled} onClick={onCopy}>
+      {copied ? <Check aria-hidden className="animate-pop" /> : <Copy aria-hidden />}
+      {copied ? "Copied" : "Copy"}
+    </Button>
+  );
 
   return (
     <section
       ref={sectionRef}
       aria-label={label}
-      className="animate-fade-in-up overflow-hidden rounded-lg border bg-card shadow-sm transition-[border-color,box-shadow] duration-fast ease-out has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-2 has-[textarea:focus-visible]:ring-ring/20"
+      className="panel-canvas animate-fade-in-up space-y-2.5 overflow-hidden rounded-2xl p-3 shadow-sm"
     >
-      <div className="flex items-center justify-between gap-2 px-3 pt-2.5">
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        <span className="flex items-center gap-2 text-xs tabular-nums text-muted-foreground">
+      <div className="flex items-center justify-between gap-2 px-0.5">
+        <span className="font-serif-display text-lg leading-none">{label}</span>
+        <span className="flex items-center gap-2 text-xs tabular-nums opacity-80">
           {meta ?? defaultMeta}
           {generating && onStop && (
-            <Button size="sm" variant="ghost" className="-my-1.5 h-7 px-2" onClick={onStop}>
+            <Button size="sm" variant="ghost" className={cn("-my-1.5 h-7 rounded-full px-2.5", onCanvas)} onClick={onStop}>
               <Square aria-hidden className="!size-3 fill-current" />
               Stop
             </Button>
@@ -94,61 +116,49 @@ export function ResultCard({
         </span>
       </div>
 
-      {generating && !value ? (
-        // Same height as the box that replaces it, so nothing jumps when the
-        // text lands.
-        <div role="status" aria-label={`Generating ${noun}`} className="min-h-[6rem] space-y-2.5 px-3 pb-3 pt-3">
-          <Skeleton className="w-11/12" />
-          <Skeleton className="w-full" />
-          <Skeleton className="w-3/5" />
+      <div className="overflow-hidden rounded-[18px_18px_18px_6px] bg-card text-card-foreground shadow-sm transition-shadow duration-fast ease-out has-[textarea:focus-visible]:ring-2 has-[textarea:focus-visible]:ring-[hsl(var(--lime))]">
+        {generating && !value ? (
+          // Same height as the box that replaces it, so nothing jumps when the
+          // text lands.
+          <div role="status" aria-label={`Generating ${noun}`} className="min-h-[5rem] space-y-2.5 px-3 pb-3 pt-3">
+            <Skeleton className="w-11/12" />
+            <Skeleton className="w-full" />
+            <Skeleton className="w-3/5" />
+          </div>
+        ) : (
+          <Textarea
+            autoGrow
+            aria-label={label}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            readOnly={busy}
+            aria-busy={busy || undefined}
+            placeholder="Write your own here, or regenerate."
+            className={cn(
+              "max-h-[24rem] min-h-[5rem] rounded-none border-0 bg-transparent px-3 pb-2.5 pt-2.5 text-sm leading-relaxed shadow-none focus-visible:ring-0",
+              stale && "text-muted-foreground",
+            )}
+          />
+        )}
+        {notice && <div className="px-3 pb-2.5">{notice}</div>}
+      </div>
+
+      {(tools || regenerate) && (
+        // Shorter / Longer come in as quiet buttons: white on the canvas.
+        <div className="flex items-center gap-0.5 [&_button]:rounded-full [&_button]:text-[hsl(var(--canvas-foreground))] [&_button:hover]:bg-white/15 [&_button:hover]:text-[hsl(var(--canvas-foreground))]">
+          {tools}
+          {regenerate}
         </div>
-      ) : (
-        <Textarea
-          autoGrow
-          aria-label={label}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          readOnly={busy}
-          aria-busy={busy || undefined}
-          placeholder="Write your own here, or regenerate."
-          className={cn(
-            "max-h-[24rem] min-h-[6rem] rounded-none border-0 bg-transparent px-3 pb-3 pt-1.5 shadow-none focus-visible:ring-0",
-            stale && "text-muted-foreground",
-          )}
-        />
       )}
 
-      {notice && <div className="px-3 pb-2.5">{notice}</div>}
-
-      <div className="space-y-1 border-t bg-muted/40 p-2">
-        <div className="flex gap-2">
-          <Button size="sm" className="flex-1" disabled={copyDisabled} onClick={onCopy}>
-            {copied ? <Check aria-hidden className="animate-pop" /> : <Copy aria-hidden />}
-            {copied ? "Copied" : "Copy"}
+      <div className="flex gap-2">
+        {insert && (
+          <Button className={mainAction} disabled={insert.disabled || insert.inserted} loading={insert.inserting} onClick={insert.onClick}>
+            {!insert.inserting && (insert.inserted ? <Check aria-hidden className="animate-pop" /> : <ArrowDownToLine aria-hidden />)}
+            {insert.inserting ? "Inserting…" : insert.inserted ? "Inserted" : "Insert"}
           </Button>
-          {insert && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="flex-1"
-              disabled={insert.disabled || insert.inserted}
-              loading={insert.inserting}
-              onClick={insert.onClick}
-            >
-              {!insert.inserting && (insert.inserted ? <Check aria-hidden className="animate-pop" /> : <ArrowDownToLine aria-hidden />)}
-              {insert.inserting ? "Inserting…" : insert.inserted ? "Inserted" : "Insert"}
-            </Button>
-          )}
-          {/* With no other tools, Regenerate sits beside Copy rather than
-              taking a row of its own. */}
-          {!tools && regenerate}
-        </div>
-        {tools && (
-          <div className="flex items-center gap-0.5">
-            {tools}
-            {regenerate}
-          </div>
         )}
+        {copyButton}
       </div>
 
       <p aria-live="polite" className="sr-only">

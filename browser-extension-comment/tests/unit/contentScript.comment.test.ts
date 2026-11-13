@@ -53,6 +53,47 @@ describe("capturing a post from its Comment button", () => {
   });
 });
 
+describe("a post's pictures and videos", () => {
+  const FEEDSHARE = "https://media.licdn.com/dms/image/v2/D4E22AQ/feedshare-shrink_800/0/1700000000000?e=1&v=beta&t=x";
+  const COVER = "https://media.licdn.com/dms/image/v2/D4E05AQ/videocover-high/0/1700000000000?e=1&v=beta&t=y";
+
+  it("sends the post's own pictures, never profile photos, logos or pictures in the comments", async () => {
+    await feed();
+    const post = byFixture("post-2");
+    post.querySelector(".update-components-image img")!.setAttribute("src", FEEDSHARE);
+    post.querySelector("[componentkey^='feed-header']")!.insertAdjacentHTML(
+      "afterbegin",
+      '<img src="https://media.licdn.com/dms/image/v2/C4D0BAQ/company-logo_100_100/0/1?e=1&t=z" alt="" />',
+    );
+    byFixture("comment-900").insertAdjacentHTML(
+      "afterbegin",
+      '<img src="https://media.licdn.com/dms/image/v2/D4E22AQ/feedshare-shrink_480/0/2?e=1&t=w" alt="" />',
+    );
+    await click(commentButton("post-2"));
+    expect(await storedPost()).toMatchObject({ type: "image", images: [FEEDSHARE], video: false });
+  });
+
+  it("a video post: its cover frame, flagged as a video", async () => {
+    await feed();
+    byFixture("post-3").querySelector(".update-components-image")!.innerHTML = `<video poster="${COVER}"></video>`;
+    await click(commentButton("post-3"));
+    expect(await storedPost()).toMatchObject({ type: "video", images: [COVER], video: true });
+  });
+
+  it("only LinkedIn's own image servers, and at most four", async () => {
+    await feed();
+    const box = byFixture("post-3").querySelector(".update-components-image")!;
+    box.innerHTML = [1, 2, 3, 4, 5, 6]
+      .map((n) => `<img src="https://media.licdn.com/dms/image/v2/X/feedshare-shrink_800/0/${n}" alt="" />`)
+      .concat(['<img src="https://evil.example/feedshare-shrink_800/0/9" alt="" />'])
+      .join("");
+    await click(commentButton("post-3"));
+    const post = await storedPost();
+    expect(post!.images).toHaveLength(4);
+    expect(post!.images.every((url: string) => url.startsWith("https://media.licdn.com/"))).toBe(true);
+  });
+});
+
 describe("capturing a reply from a comment's Reply button", () => {
   it("captures the whole thread, marks the target, and knows the post author", async () => {
     await feed();
@@ -63,6 +104,31 @@ describe("capturing a reply from a comment's Reply button", () => {
     expect(post?.reply.thread.map((e: { author: string }) => e.author)).toEqual(["Sam Lee", "Acme Corp"]);
     expect(post?.reply.thread.find((e: { isTarget: boolean }) => e.isTarget).text).toMatch(/±3h of CET/);
     expect(post?.reply.thread[1].isPostAuthor).toBe(true);
+  });
+});
+
+describe("Insert into a reply box", () => {
+  it("finds a reply box LinkedIn draws outside the comment, after it in the same post", async () => {
+    await feed();
+    await click(byFixture("comment-901").querySelector("button")!);
+    // Outside both comments' wrappers, before the post's own box.
+    byFixture("comment-900").insertAdjacentHTML(
+      "afterend",
+      '<div contenteditable="true" role="textbox" aria-label="Text editor for creating a reply" data-fixture="reply-box"><p><br /></p></div>',
+    );
+    const res = await sendToContentScript({ type: INSERT, text: "Thanks, that helps!", mode: "reply" });
+    expect(res).toEqual({ ok: true });
+    expect(byFixture("reply-box").textContent).toContain("Thanks, that helps!");
+    // Never the post's own box: that would publish it as a new comment.
+    expect(byFixture("post-2-comment-box").textContent).not.toContain("Thanks, that helps!");
+  });
+
+  it("with only the post's own box on the page, refuses rather than post a reply as a comment", async () => {
+    await feed();
+    await click(byFixture("comment-901").querySelector("button")!);
+    const res = (await sendToContentScript({ type: INSERT, text: "Thanks!", mode: "reply" })) as { ok: boolean; error?: string };
+    expect(res.ok).toBe(false);
+    expect(byFixture("post-2-comment-box").textContent).not.toContain("Thanks!");
   });
 });
 
@@ -285,5 +351,78 @@ describe("a Comment click whose post can't be found", () => {
     await click(stray);
     expect(await storedPost()).toBeUndefined();
     expect(chromeMock().__store.lastCaptureFailure).toEqual({ mode: "comment", at: expect.any(Number) });
+  });
+});
+
+// A video post's whole file, for the panel to have watched (src/lib/postVideo.ts).
+describe("a video post's file", () => {
+  const COVER = "https://media.licdn.com/dms/image/v2/D4E05AQabcdefghij/videocover-high/0/1700000000000?e=1&v=beta&t=y";
+  const MP4 = (p: number) => `https://dms.licdn.com/playlist/vid/v2/D4E05AQabcdefghij/mp4-${p}p-30fp-crf28/0/1700000000000?e=1&v=beta&t=z`;
+  async function capture(html: string) {
+    await feed();
+    byFixture("post-3").querySelector(".update-components-image")!.innerHTML = html;
+    await click(commentButton("post-3"));
+    return storedPost();
+  }
+
+  it("the smallest whole MP4 the player lists", async () => {
+    const sources = JSON.stringify([
+      { src: MP4(720), type: "video/mp4" },
+      { src: MP4(360), type: "video/mp4" },
+      { src: MP4(540), type: "video/mp4" },
+    ]).replace(/"/g, "&quot;");
+    expect(await capture(`<video poster="${COVER}" data-sources="${sources}"></video>`)).toMatchObject({
+      type: "video",
+      video: true,
+      images: [COVER],
+      videoUrl: MP4(360),
+    });
+  });
+
+  it("a file played straight from src", async () => {
+    expect(await capture(`<video poster="${COVER}" src="${MP4(720)}"></video>`)).toMatchObject({ videoUrl: MP4(720) });
+  });
+
+  it("a file in a <source>", async () => {
+    expect(await capture(`<video poster="${COVER}"><source src="${MP4(540)}" type="video/mp4" /></video>`)).toMatchObject({
+      videoUrl: MP4(540),
+    });
+  });
+
+  it.each([
+    ["streamed in pieces", `<video poster="${COVER}" src="blob:https://www.linkedin.com/1234"></video>`],
+    ["a playlist", `<video poster="${COVER}"><source src="https://dms.licdn.com/playlist/vid/v2/X/master.m3u8" /></video>`],
+    ["another site", `<video poster="${COVER}" src="https://evil.example/playlist/vid/v2/X/mp4-360p/0/1"></video>`],
+    ["a broken list", `<video poster="${COVER}" data-sources="[{oops"></video>`],
+  ])("none when there's no whole file to read: %s", async (_name, html) => {
+    const post = await capture(html);
+    expect(post).toMatchObject({ video: true, images: [COVER] });
+    expect(post!.videoUrl).toBeUndefined();
+  });
+
+  it("never a video inside the comments", async () => {
+    await feed();
+    byFixture("comment-900").insertAdjacentHTML("afterbegin", `<video src="${MP4(360)}"></video>`);
+    await click(commentButton("post-2"));
+    const post = await storedPost();
+    expect(post!.videoUrl).toBeUndefined();
+    expect(post).toMatchObject({ type: "image", video: false });
+  });
+});
+
+// Whether the post is the person's own, and its id: the panel offers a saved
+// comment the first time a post is opened (src/lib/savedComments.ts).
+describe("whose post it is", () => {
+  it("someone else's post, with its permalink id", async () => {
+    await feed();
+    await click(commentButton("post-1"));
+    expect(await storedPost()).toMatchObject({ authorName: "Jane Doe", isOwnPost: false, postUrn: "urn:li:activity:111" });
+  });
+
+  it("your own post when its author is the signed-in member", async () => {
+    await feed();
+    document.querySelector("#global-nav img")!.setAttribute("alt", "Jane Doe");
+    await click(commentButton("post-1"));
+    expect(await storedPost()).toMatchObject({ authorName: "Jane Doe", isOwnPost: true });
   });
 });

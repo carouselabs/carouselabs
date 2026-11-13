@@ -1,15 +1,17 @@
-// The website's Extension overviews (components/extension/ExtensionOverview,
-// a server component in the Next.js project): one per extension, each with
-// its own plan, install steps, activity and browsers. The database and the
-// access summary are stood in for.
+// The website's Engage → Home (components/extension/ExtensionOverview, a
+// server component in the Next.js project): one per extension, each with its
+// own plan, its own activity, setting up until it's done, and the other
+// extensions sold separately. The database and the access summary are stood
+// in for.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 
 const state = vi.hoisted(() => ({
   access: {} as Record<string, unknown>,
   tokens: [] as { device: string | null }[],
   kindsAsked: [] as string[][],
   counts: [] as { kind: string; _count: { _all: number } }[],
+  latest: [] as Record<string, unknown>[],
 }));
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/extension", useRouter: () => ({ refresh: () => {} }) }));
@@ -27,8 +29,10 @@ vi.mock("../../../lib/db", () => ({
         state.kindsAsked.push(args.where.kind.in);
         return state.counts.filter((c) => args.where.kind.in.includes(c.kind));
       }),
+      findMany: vi.fn(async () => state.latest),
     },
     extensionToken: { findMany: vi.fn(async () => state.tokens) },
+    $queryRaw: vi.fn(async () => []),
   },
 }));
 vi.mock("../../../lib/extAccess", () => ({
@@ -36,13 +40,10 @@ vi.mock("../../../lib/extAccess", () => ({
 }));
 
 import { ExtensionOverview } from "../../../components/extension/ExtensionOverview";
-import {
-  EXTENSION_CHECKOUT_PATH,
-  X_EXTENSION_CHECKOUT_PATH,
-  X_EXTENSION_STORE_URL,
-} from "../../../lib/plans";
+import { EXTENSION_CHECKOUT_PATH, EXTENSION_STORE_URL, X_EXTENSION_STORE_URL } from "../../../lib/plans";
 
-const FREE = { access: "free", freeUsed: 0, freeLimit: 10, status: null, renewsAt: null, endsAt: null, manageUrl: null, source: "free", grantEndsAt: null, suspended: false };
+const PRICE = { cents: 1500, standardCents: 1500, special: false, endsAt: null, introMonths: null };
+const FREE = { access: "free", freeUsed: 0, freeLimit: 10, status: null, renewsAt: null, endsAt: null, manageUrl: null, source: "free", grantEndsAt: null, suspended: false, price: PRICE };
 const PAID = { ...FREE, access: "unlimited", status: "active", renewsAt: "2026-11-10T10:34:27.000Z", source: "subscription" };
 
 const show = async (platform: "linkedin" | "x") =>
@@ -51,65 +52,61 @@ const show = async (platform: "linkedin" | "x") =>
 beforeEach(() => {
   state.kindsAsked = [];
   state.counts = [];
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          devices: state.tokens.map((t, i) => ({ id: `d${i}`, device: t.device, lastUsedAt: "2026-10-10T10:00:00Z", createdAt: "2026-10-10T10:00:00Z" })),
-        }),
-      ),
-    ),
-  );
+  state.latest = [];
 });
 afterEach(cleanup);
 
-describe("website — Engage for X overview", () => {
-  it("paid for X with only LinkedIn's extension installed: opens on X's install steps", async () => {
+describe("website — Engage for X home", () => {
+  it("paid for X with only LinkedIn's extension installed: starts with adding X's", async () => {
     state.access = { x: PAID, linkedin: FREE };
     state.tokens = [{ device: "Chrome on Windows" }];
     state.counts = [{ kind: "x_reply", _count: { _all: 37 } }, { kind: "comment", _count: { _all: 99 } }];
-    const { container } = await show("x");
+    await show("x");
 
-    expect(screen.getByText(/Active — renews/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Plan & payments/ }).getAttribute("href")).toBe("/extension/x/billing");
-
-    expect(container.querySelector("details")!.open).toBe(true);
-    expect(screen.getByText("Install CarouseLabs Engage for X")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Open in Chrome Web Store/ }).getAttribute("href")).toBe(X_EXTENSION_STORE_URL);
-    expect(screen.getByText(/plan is active/)).toBeTruthy();
+    expect(screen.getAllByText(/Active — renews/).length).toBeGreaterThan(0);
+    // Not signed in on X yet: the first thing is X's own store page.
+    expect(screen.getAllByRole("link", { name: /Add to Chrome/ })[0].getAttribute("href")).toBe(X_EXTENSION_STORE_URL);
+    expect(screen.getByText("Finish setting up")).toBeTruthy();
+    expect(screen.getByText("0 of 3 done")).toBeTruthy();
+    expect(screen.getAllByRole("link", { name: /Plan & setup/ })[0].getAttribute("href")).toBe("/extension/x/billing");
 
     // X's own activity only.
     expect(state.kindsAsked).toEqual([["x_reply", "x_message"]]);
-    expect(screen.getByRole("link", { name: /See history/ }).getAttribute("href")).toBe("/extension/x/history");
+    expect(screen.getAllByRole("link", { name: /See all activity/ })[0].getAttribute("href")).toBe("/extension/x/history");
     expect(screen.getByText("37")).toBeTruthy();
     expect(screen.queryByText("99")).toBeNull();
+    expect(screen.getByText("Nothing written yet.")).toBeTruthy();
 
     // LinkedIn's, sold separately.
-    const other = screen.getByText("CarouseLabs Engage for LinkedIn").closest("div.rounded-2xl") as HTMLElement;
-    expect(within(other).getByRole("link", { name: /Get unlimited — \$15\/month/ }).getAttribute("href")).toBe(EXTENSION_CHECKOUT_PATH);
-    expect(within(other).getByRole("link", { name: /Install & set up/ }).getAttribute("href")).toBe("/extension");
-
-    // LinkedIn's sign-in isn't X's.
-    expect(await screen.findByText(/Not signed in on any browser yet/)).toBeTruthy();
+    const more = screen.getByRole("region", { name: /More from Engage/ });
+    expect(within(more).getByText("Engage for LinkedIn")).toBeTruthy();
+    expect(within(more).getByRole("link", { name: "Go to LinkedIn" }).getAttribute("href")).toBe("/extension");
   });
 });
 
-describe("website — Engage for LinkedIn overview", () => {
-  it("installed: steps folded away; the X card offers X's own checkout", async () => {
-    state.access = { linkedin: PAID, x: FREE };
+describe("website — Engage for LinkedIn home", () => {
+  it("installed and writing: no setup card, the latest listed, the X card links to X", async () => {
+    state.access = { linkedin: { ...FREE, freeUsed: 3 }, x: FREE };
     state.tokens = [{ device: "Chrome on Windows" }, { device: "X extension · Chrome on Windows" }];
-    const { container } = await show("linkedin");
+    state.latest = [
+      { id: "h1", kind: "comment", postAuthor: "Maya", postSnippet: "A post", comment: "My comment", action: "INSERTED", profileName: "Founder", createdAt: new Date() },
+    ];
+    await show("linkedin");
 
-    expect(container.querySelector("details")!.open).toBe(false);
-    expect(screen.getByText("Signed in on 1 browser.")).toBeTruthy();
+    expect(screen.queryByText("Finish setting up")).toBeNull();
     expect(state.kindsAsked).toEqual([["comment", "reply", "connection_note", "message"]]);
+    expect(screen.getAllByRole("link", { name: /Open LinkedIn/ })[0].getAttribute("href")).toBe("https://www.linkedin.com/feed/");
+    expect(screen.getAllByRole("link", { name: /Get unlimited — \$15\/month/ })[0].getAttribute("href")).toBe(EXTENSION_CHECKOUT_PATH);
+    expect(screen.getByText("7 of 10 free generations left")).toBeTruthy();
 
-    const other = screen.getByText("CarouseLabs Engage for X").closest("div.rounded-2xl") as HTMLElement;
-    expect(within(other).getByRole("link", { name: /Get unlimited — \$15\/month/ }).getAttribute("href")).toBe(X_EXTENSION_CHECKOUT_PATH);
-    expect(within(other).getByRole("link", { name: /Install & set up/ }).getAttribute("href")).toBe("/extension/x");
+    // Their own latest comment in the hero, and in the Latest list.
+    expect(screen.getByText("Your latest comment")).toBeTruthy();
+    expect(screen.getByText("My comment")).toBeTruthy();
+    expect(screen.getByText("On Maya's post")).toBeTruthy();
+    expect(screen.getByText("Inserted")).toBeTruthy();
 
-    await waitFor(() => expect(screen.getByText("Chrome on Windows")).toBeTruthy());
-    expect(screen.queryByText(/X extension/)).toBeNull();
+    const more = screen.getByRole("region", { name: /More from Engage/ });
+    expect(within(more).getByRole("link", { name: "Go to X" }).getAttribute("href")).toBe("/extension/x");
+    expect(EXTENSION_STORE_URL).toBeTruthy();
   });
 });

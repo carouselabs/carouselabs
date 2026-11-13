@@ -7,7 +7,7 @@
 //
 // Moved here unchanged from app/api/ext/generate/route.ts, plus the log label
 // and the length measure, which differ for X.
-import { generationDeadline, GenerationTimeout, parseComment, sanitizeComment, streamCommentModel } from "@/lib/ai/commentModel"
+import { generationDeadline, GenerationTimeout, parseComment, sanitizeComment, streamCommentModel, type PostImage } from "@/lib/ai/commentModel"
 import type { AiCaller } from "@/lib/engage/aiUsage"
 import { extractPartialComment, visibleCommentText } from "@/lib/ai/commentText"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
@@ -96,6 +96,9 @@ export interface GenerationInput {
   // (copiedPhrase). Never the person's own instruction, whose wording they
   // may want used.
   copySource?: string
+  // The post's pictures (and a video's cover frame), shown to the model with
+  // the text (lib/engage/postImages.ts).
+  images?: PostImage[]
 }
 
 export interface GenerationHooks {
@@ -184,6 +187,7 @@ export async function generateComment(
         signal: controller.signal,
         deadline,
         engage: input.engage,
+        images: input.images,
         onReset: () => show(""),
         onRaw: (sofar) => {
           const partial = extractPartialComment(sofar)

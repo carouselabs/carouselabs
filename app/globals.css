@@ -355,6 +355,113 @@
 [data-reveal="pending"][data-reveal-direction="right"] { transform: translateX(40px); }
 [data-reveal="pending"][data-reveal-direction="scale"] { transform: scale(.9); }
 :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+
+/* ── Engage (the website's Extension section) ──────────────────────────
+   Its own look, after anantgoyal.in: ink on a lavender mist, a blue →
+   violet canvas, night cards with a lime accent, Instrument Sans with
+   Instrument Serif italics. Scoped to .engage-root (app/(app)/extension/
+   layout.tsx), so the rest of the app keeps its theme. The semantic tokens
+   are re-set here, so components built on them (profiles, agents, history)
+   take the look without being rewritten; the aliases are repeated because
+   a var() alias resolves where it is declared, not where it is used. */
+.engage-root {
+  --background:          #F4F3FC;
+  --foreground:          #100C33;
+  --surface:             #FFFFFF;
+  --surface-raised:      #FFFFFF;
+  --surface-muted:       #F1EFFA;
+  --muted-foreground:    #5C5884;
+  --border:              #E5E2F4;
+  --control-border:      #8D89A8;
+  --primary:             #100C33;
+  --primary-foreground:  #FFFFFF;
+  --primary-hover:       #231D55;
+  --brand:               #4B30EE;
+  --brand-hover:         #3A22D6;
+  --brand-soft:          #EFEAFF;
+  --brand-foreground:    #FFFFFF;
+  --focus-ring:          #4B30EE;
+  --selection:           #D9D2FF;
+  --skeleton:            #EBE8F7;
+  --elevation-1: 0 1px 2px rgb(16 12 51 / 0.04), 0 18px 40px -26px rgb(16 12 51 / 0.28);
+  --elevation-2: 0 4px 16px rgb(16 12 51 / 0.08), 0 1px 2px rgb(16 12 51 / 0.04);
+  --elevation-3: 0 28px 50px -24px rgb(32 16 110 / 0.4), 0 2px 6px rgb(16 12 51 / 0.05);
+
+  --card:                var(--surface);
+  --card-foreground:     var(--foreground);
+  --popover:             var(--surface-raised);
+  --popover-foreground:  var(--foreground);
+  --secondary:           var(--surface-muted);
+  --secondary-foreground:var(--foreground);
+  --muted:               var(--surface-muted);
+  --accent:              var(--surface-muted);
+  --accent-foreground:   var(--foreground);
+  --accent-light:        var(--muted-foreground);
+  --input:               var(--control-border);
+  --ring:                var(--focus-ring);
+  --sidebar:             var(--surface);
+  --sidebar-foreground:  var(--foreground);
+  --text-primary:        var(--foreground);
+  --text-secondary:      var(--muted-foreground);
+
+  --radius-control-sm: 10px;
+  --radius-control:    14px;
+  --radius-card:       24px;
+  --radius-showcase:   28px;
+
+  /* font-sans and font-ui read these, so both switch inside Engage. */
+  --font-inter: var(--font-instrument-sans);
+  --font-geist: var(--font-instrument-sans);
+  font-family: var(--font-instrument-sans), system-ui, sans-serif;
+  color: var(--foreground);
+}
+#main:has(.engage-root) { background-color: #F4F3FC; }
+
+/* The blue → violet ground (hero, plan). White text on it. */
+.engage-canvas {
+  color: #FFFFFF;
+  background:
+    radial-gradient(70% 55% at 8% 0%, #5A78FF 0%, rgb(90 120 255 / 0) 62%),
+    radial-gradient(60% 60% at 100% 12%, #9A44EA 0%, rgb(154 68 234 / 0) 62%),
+    radial-gradient(80% 60% at 50% 115%, #6A2BE8 0%, rgb(106 43 232 / 0) 65%),
+    linear-gradient(160deg, #2C3CF0 0%, #4A2EE6 50%, #6E2FE6 100%);
+}
+/* Night: the dark card for live things (latest activity). */
+.engage-night {
+  color: #FFFFFF;
+  background:
+    radial-gradient(50% 40% at 0% 0%, rgb(75 48 238 / 0.45) 0%, rgb(75 48 238 / 0) 70%),
+    radial-gradient(45% 40% at 100% 100%, rgb(164 69 240 / 0.35) 0%, rgb(164 69 240 / 0) 70%),
+    #0B0920;
+}
+/* A glossy sphere, drawn in CSS: highlight, bounce light, body. */
+.engage-orb {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 30% 25%, rgb(255 255 255 / 0.98) 0, rgb(255 255 255 / 0.6) 4%, rgb(255 255 255 / 0) 20%),
+    radial-gradient(circle at 74% 84%, rgb(255 255 255 / 0.32) 0, rgb(255 255 255 / 0) 30%),
+    radial-gradient(circle at 38% 34%, var(--o1) 0%, var(--o2) 40%, var(--o3) 76%, var(--o4) 100%);
+  box-shadow: inset -10px -14px 28px rgb(12 2 60 / 0.38), 0 26px 48px -18px rgb(28 8 110 / 0.5);
+}
+.engage-orb-violet { --o1: #EAD6FF; --o2: #A752F6; --o3: #6721D6; --o4: #2C0A77; }
+.engage-orb-pearl  { --o1: #FFFFFF; --o2: #EEEAFF; --o3: #BFB3F7; --o4: #6F60D2; }
+.engage-orb-blue   { --o1: #B4C4FF; --o2: #4766FF; --o3: #2328CC; --o4: #110D6B; }
+.engage-orb-lime   { --o1: #F6FFD6; --o2: #D4FF5C; --o3: #93C21D; --o4: #4B6A05; }
+.engage-serif {
+  font-family: var(--font-instrument-serif), Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+.engage-gradient-text {
+  background: linear-gradient(100deg, #2F4BFF 0%, #7B3AEE 55%, #A445F0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-reveal] { opacity: 1 !important; transform: none !important; transition: none !important; }
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }

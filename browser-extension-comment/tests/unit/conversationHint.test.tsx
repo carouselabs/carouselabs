@@ -199,7 +199,7 @@ describe("side panel", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Write a reply with AI" }));
     expect(await screen.findByText("Bharti")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    fireEvent.click(screen.getByRole("button", { name: "Write" }));
     await screen.findByRole("button", { name: "Write a reply with AI" });
     fireEvent.click(messagesButton());
     expect(await screen.findByRole("button", { name: "Read this conversation" })).toBeTruthy();

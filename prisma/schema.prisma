@@ -148,6 +148,7 @@ model User {
   insertButtonHidden         Boolean?
   contactContexts            ContactContext[]
   engageAgents               EngageAgent[]
+  engageSavedComments        EngageSavedComment[]
 
   // ── Engage admin (admin.carouselabs.com → Engage) ──
   engageControl EngageUserControl?
@@ -590,6 +591,31 @@ model EngageAgent {
   updatedAt   DateTime @updatedAt
 
   @@index([userId])
+}
+
+// A comment kept to use again (Engage → Saved comments: LinkedIn's side
+// panel and the website): a creator's usual pinned comment, a go-to reply.
+// No AI: inserted or copied exactly as written. Validated by
+// lib/engageSavedComments.ts; created by scripts/engage-saved-comments.sql.
+model EngageSavedComment {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Which extension it's for (only "linkedin" so far).
+  platform   String    @default("linkedin")
+  title      String
+  body       String
+  tags       String[]  @default([])
+  favorite   Boolean   @default(false)
+  // When the panel offers it the first time a post is opened: "own" (your
+  // own posts), "any" (every post) or "off".
+  remindOn   String    @default("own")
+  useCount   Int       @default(0)
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId, platform])
 }
 
 model CommentProfile {

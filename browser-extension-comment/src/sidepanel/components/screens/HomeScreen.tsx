@@ -1,12 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ExternalLink, Minus, MousePointerClick, Plus, RotateCcw, Sparkles, Timer, X } from "lucide-react";
+import { Bookmark, BookmarkCheck, MessagesSquare, Minus, Plus, Reply, RotateCcw, Sparkles, Timer, UserPlus, X } from "lucide-react";
 import { reportClientError, type ReportFeature } from "@/lib/errorReport";
 import { useInsert } from "../../useInsert";
 import { markHistoryAction } from "@/lib/history";
 import { loadCachedCommentProfiles, saveCachedCommentProfiles } from "@/lib/profileCache";
 import { loadShowInsert } from "@/lib/syncedSettings";
 import { ConnectionNotePanel } from "../ConnectionNotePanel";
-import { RecommendedBadge } from "../RecommendedBadge";
 import { RewriteButton } from "../RewriteButton";
 import { FreeGenerationsNote, UnlockCard } from "../UnlockCard";
 import { GoToSiteCard, goToSite } from "../GoToSiteCard";
@@ -25,6 +24,7 @@ import {
   isCancelled,
   ApiError,
   fetchExtConfig,
+  openWebsite,
   LINKEDIN_FEED_URL,
   DAILY_NUDGE_THRESHOLD,
   type CommentProfile,
@@ -33,6 +33,10 @@ import {
   type RewriteResponse,
   userFacingError,
 } from "@/lib/api";
+import { needsWatching, watchPostVideo, type WatchedVideo } from "@/lib/postVideo";
+import { markReminded, postKey as reminderKey, remindedPosts, remindersFor, type SavedComment } from "@/lib/savedComments";
+import { useSavedComments } from "../../useSavedComments";
+import { SavedCommentReminder, SavedCommentsSection } from "../SavedComments";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,19 +44,13 @@ import { LoadingField } from "@/components/ui/loading-field";
 import { Textarea } from "@/components/ui/textarea";
 import { Initials } from "../Initials";
 import { ResultCard } from "../ResultCard";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { VoiceChips } from "../VoiceChips";
+import { StartCard } from "../StartCard";
 import type { LinkedInProfileInfo } from "@/lib/connectionNote";
 
-// Sentinel option in the profile dropdown. Selecting it does not change the
-// selection — it hands off to the Profile Builder on the Profiles screen,
-// through the same App-level deep link onboarding uses.
+// Sentinel for "make a new one" (the + beside the voices). Choosing it does
+// not change the selection — it hands off to the Profile Builder on the
+// Voices screen, through the same App-level deep link onboarding uses.
 const CREATE_CUSTOM_VALUE = "__create_custom__";
 
 // The "Go to LinkedIn" card's words, while another site is the active tab.
@@ -106,9 +104,20 @@ interface SelectedPost {
   authorName: string;
   authorHeadline: string;
   text: string;
-  type: "text" | "image" | "article" | "poll" | "repost";
+  type: "text" | "image" | "video" | "article" | "poll" | "repost";
   url: string;
   capturedAt: number;
+  // The post's pictures (images, a video's cover, a link's preview), which the
+  // model looks at too; and whether it's a video. Absent from older captures.
+  images?: string[];
+  video?: boolean;
+  // A video's file, when the page showed one: watched before writing
+  // (src/lib/postVideo.ts).
+  videoUrl?: string;
+  // Comment mode: whether it's the person's own post, and its permalink id
+  // (the first-visit reminder of a saved comment, src/lib/savedComments.ts).
+  isOwnPost?: boolean | null;
+  postUrn?: string | null;
   reply?: ReplySelection;
   // Connection Note mode: the person whose Connect button was clicked.
   connect?: { target: LinkedInProfileInfo };
@@ -130,12 +139,32 @@ const INSERT_FEATURE: Record<InsertMode, ReportFeature> = {
 const POST_TYPE_LABEL: Record<SelectedPost["type"], string | null> = {
   text: null,
   image: "Image",
+  video: "Video",
   article: "Article",
   poll: "Poll",
   repost: "Repost",
 };
 
 type LoadState = "loading" | "ready" | "error";
+
+// Under the post: that its pictures are read too, and a video watched (or,
+// when its file can't be found, its cover and text read).
+function MediaNote({ images, video, watchable }: { images: number; video: boolean; watchable: boolean }) {
+  if (!images && !video) return null;
+  const text = video
+    ? watchable
+      ? "Video · watched and listened to"
+      : images
+        ? "Video · reads its cover and the text"
+        : "Video · reads the text (it can't watch the video)"
+    : `${images} ${images === 1 ? "picture" : "pictures"} · read too`;
+  return (
+    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-primary-text" />
+      {text}
+    </p>
+  );
+}
 
 
 interface Props {
@@ -161,6 +190,8 @@ export function HomeScreen({ onCreateProfile }: Props) {
   const [captureFailedAt, setCaptureFailedAt] = useState<number | null>(null);
   const [extraInstruction, setExtraInstruction] = useState("");
   const [generating, setGenerating] = useState(false);
+  // A video post being watched before its comment is written.
+  const [watchingVideo, setWatchingVideo] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
   // The output box is editable, so this holds whatever is currently in it,
@@ -207,6 +238,15 @@ export function HomeScreen({ onCreateProfile }: Props) {
   const [insertEnabled, setInsertEnabled] = useState(false);
   const [showInsertPref, setShowInsertPref] = useState(true);
   const insertion = useInsert();
+  // Saved comments: the list under the comment, the reminder the first time
+  // a post is opened, and the text last saved from the result card (its Save
+  // button then reads Saved until the text changes).
+  const saved = useSavedComments();
+  const [savedError, setSavedError] = useState<string | null>(null);
+  const [reminder, setReminder] = useState<{ capturedAt: number; candidates: SavedComment[] } | null>(null);
+  const reminderCheckedFor = useRef<number | null>(null);
+  const [savedText, setSavedText] = useState<string | null>(null);
+  const [savingResult, setSavingResult] = useState(false);
   // Insert failures in Connection Note mode, shown inside that panel; and,
   // when LinkedIn's note box already holds the person's own text, the note
   // waiting for them to choose to replace it.
@@ -250,6 +290,8 @@ export function HomeScreen({ onCreateProfile }: Props) {
       setGenerateError(null);
       setConnectInsertError(null);
       setConnectReplaceOffer(null);
+      setSavedError(null);
+      setSavedText(null);
     }
 
     // Instant path — only lands if the panel is open AND this screen is
@@ -398,8 +440,10 @@ export function HomeScreen({ onCreateProfile }: Props) {
   // In reply mode the comment being answered is what must have text; the post
   // itself may be image-only.
   const reply = selectedPost?.mode === "reply" ? (selectedPost.reply ?? null) : null;
+  // A post with pictures but no words can still be commented on.
   const postHasNoText =
-    !!selectedPost && (reply ? !reply.targetText.trim() : !selectedPost.text.trim());
+    !!selectedPost &&
+    (reply ? !reply.targetText.trim() : !selectedPost.text.trim() && !(selectedPost.images?.length ?? 0));
   const generateDisabled =
     !selectedPost || !selectedId || paywalled || postHasNoText || busy || offLinkedIn;
   // Copy / Shorter / Longer all need a comment to act on. Shorter / Longer
@@ -518,6 +562,80 @@ export function HomeScreen({ onCreateProfile }: Props) {
     tick();
   }
 
+  // The first time a post is opened (Comment, not Reply or Connect): offer
+  // the saved comments set to remind there, on the person's own posts or on
+  // any. Checked once per capture, once the list is known (this browser's
+  // copy when it already has one to offer, else the server's). A post that
+  // has had its reminder never gets it again, whatever was done with it.
+  useEffect(() => {
+    if (!selectedPost || saved.status !== "ready") return;
+    if (reminderCheckedFor.current === selectedPost.capturedAt) return;
+    if ((selectedPost.mode ?? "comment") !== "comment") return;
+    const key = reminderKey(selectedPost.postUrn ?? selectedPost.url);
+    const candidates = remindersFor(saved.list, selectedPost);
+    if (!candidates.length && !saved.fresh) return;
+    reminderCheckedFor.current = selectedPost.capturedAt;
+    if (!key || !candidates.length) return;
+    const capturedAt = selectedPost.capturedAt;
+    void remindedPosts().then((seen) => {
+      if (seen.has(key)) return;
+      void markReminded(key);
+      setReminder({ capturedAt, candidates });
+    });
+  }, [selectedPost, saved.status, saved.list, saved.fresh]);
+
+  // A saved comment into LinkedIn: the post's comment box, or in reply mode
+  // the reply box, exactly as written.
+  async function insertSaved(c: SavedComment) {
+    if (!selectedPost || selectedPost.mode === "connect") return;
+    const mode: InsertMode = reply ? "reply" : "comment";
+    setSavedError(null);
+    const outcome = await insertion.insert({
+      message: { type: INSERT_MESSAGE_TYPE, text: c.body, mode, target: selectedPost.target },
+      feature: INSERT_FEATURE[mode],
+      failed: "Couldn't insert into LinkedIn. Try Copy instead.",
+      notOnSite: "Open the LinkedIn post in the active tab, then try again.",
+    });
+    if (!outcome) return;
+    if (!outcome.ok) {
+      setSavedError(outcome.error);
+      return;
+    }
+    saved.markUsed(c.id);
+    setReminder(null);
+  }
+
+  async function copySaved(c: SavedComment): Promise<boolean> {
+    try {
+      await navigator.clipboard.writeText(c.body);
+    } catch {
+      setSavedError("Couldn't copy to clipboard");
+      return false;
+    }
+    setSavedError(null);
+    saved.markUsed(c.id);
+    return true;
+  }
+
+  // The result card's Save: the comment as it is in the box now, edits
+  // included. Saved on the person's own post, it's likely their usual comment,
+  // so it's offered on their posts from then on; saved elsewhere, it's kept
+  // without a reminder.
+  async function saveResult() {
+    const text = comment.trim();
+    if (!text) return;
+    setSavingResult(true);
+    setGenerateError(null);
+    try {
+      await saved.create({ body: text, remindOn: selectedPost?.isOwnPost === true ? "own" : "off" });
+      setSavedText(text);
+    } catch (err) {
+      setGenerateError(userFacingError(err));
+    } finally {
+      setSavingResult(false);
+    }
+  }
+
   // Regenerate is the same call as Generate: same post, same profile, same
   // cost. The only difference is that it replaces existing output.
   async function handleGenerate() {
@@ -533,7 +651,9 @@ export function HomeScreen({ onCreateProfile }: Props) {
     beforeGenerateRef.current = hasResult ? { comment, historyId } : null;
     const current = () => generationRef.current === controller;
     const usedProfileId = selectedId;
+    const videoUrl = selectedPost.video ? selectedPost.videoUrl : undefined;
     setGenerating(true);
+    setWatchingVideo(needsWatching(videoUrl));
     setGenerateError(null);
     setComment("");
     setHistoryId(null);
@@ -563,6 +683,15 @@ export function HomeScreen({ onCreateProfile }: Props) {
     };
 
     try {
+      // A video: watched first (once per video), so the comment can speak to
+      // what it shows and says. Not watched: written as before.
+      let watched: WatchedVideo | null = null;
+      if (videoUrl) {
+        watched = await watchPostVideo(videoUrl, controller.signal);
+        if (!current()) return;
+        setWatchingVideo(false);
+      }
+
       const res = await apiStream<GenerateResponse>("/api/ext/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -574,6 +703,9 @@ export function HomeScreen({ onCreateProfile }: Props) {
             text: selectedPost.text,
             type: selectedPost.type,
             url: selectedPost.url,
+            images: selectedPost.images,
+            video: selectedPost.video,
+            ...(watched ? { videoFrames: watched.frames, videoTranscript: watched.transcript } : {}),
           },
           extraInstruction: extraInstruction.trim() || undefined,
           // Present only in reply mode; its presence is what switches the
@@ -764,6 +896,8 @@ export function HomeScreen({ onCreateProfile }: Props) {
   // wait, the streaming text and the finished comment all happen in one place.
   const showResult = generating || hasResult;
   const showInsert = insertEnabled && showInsertPref && !offLinkedIn;
+  const resultSaved = savedText !== null && comment.trim() === savedText;
+  const showReminder = !!reminder && !!selectedPost && reminder.capturedAt === selectedPost.capturedAt && !reply;
   const postTypeLabel = selectedPost ? POST_TYPE_LABEL[selectedPost.type] : null;
 
   const errorBox = generateError && <Alert>{generateError}</Alert>;
@@ -780,7 +914,15 @@ export function HomeScreen({ onCreateProfile }: Props) {
       generating={generating}
       onStop={handleStop}
       busy={busy}
-      meta={rewriting === "shorter" ? "Shortening…" : rewriting === "longer" ? "Lengthening…" : undefined}
+      meta={
+        generating && watchingVideo
+          ? "Watching the video…"
+          : rewriting === "shorter"
+            ? "Shortening…"
+            : rewriting === "longer"
+              ? "Lengthening…"
+              : undefined
+      }
       copied={copied}
       copyDisabled={actionsDisabled}
       onCopy={handleCopy}
@@ -815,6 +957,18 @@ export function HomeScreen({ onCreateProfile }: Props) {
             {rewriting !== "longer" && <Plus aria-hidden />}
             Longer
           </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="px-2.5"
+            disabled={!hasComment || busy || resultSaved}
+            loading={savingResult}
+            onClick={() => void saveResult()}
+            aria-label={resultSaved ? "Saved to your saved comments" : "Save to your saved comments"}
+          >
+            {resultSaved ? <BookmarkCheck aria-hidden /> : !savingResult && <Bookmark aria-hidden />}
+            {resultSaved ? "Saved" : "Save"}
+          </Button>
         </>
       }
       onRegenerate={handleGenerate}
@@ -823,59 +977,32 @@ export function HomeScreen({ onCreateProfile }: Props) {
   );
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="flex flex-col gap-3 p-3">
       {selectedPost && offLinkedIn && <GoToSiteCard body={GO_TO_LINKEDIN} homeUrl={LINKEDIN_FEED_URL} />}
       <div className="space-y-1.5">
-        <label id="home-profile-label" className="text-xs font-medium text-muted-foreground">
-          Comment profile
-        </label>
-
-        {state === "loading" && <LoadingField>Loading profiles…</LoadingField>}
+        {state === "loading" && (
+          <>
+            <span className="text-xs font-semibold text-muted-foreground">Voice</span>
+            <LoadingField>Loading profiles…</LoadingField>
+          </>
+        )}
 
         {state === "error" && <Alert>{errorMessage}</Alert>}
 
         {state === "ready" && (
-          <Select value={selectedId} onValueChange={handleValueChange}>
-            <SelectTrigger aria-labelledby="home-profile-label">
-              <SelectValue placeholder="Select a profile" />
-            </SelectTrigger>
-            <SelectContent>
-              {recommendedProfiles.map((profile) => (
-                <SelectItem key={profile.id} value={profile.id}>
-                  {profile.name}
-                  {profile.isDefault ? " (default)" : ""}
-                  <RecommendedBadge />
-                </SelectItem>
-              ))}
-
-              {recommendedProfiles.length > 0 && systemProfiles.length > 0 && <SelectSeparator />}
-
-              {systemProfiles.map((profile) => (
-                <SelectItem key={profile.id} value={profile.id}>
-                  {profile.name}
-                  {profile.isDefault ? " (default)" : ""}
-                </SelectItem>
-              ))}
-
-              {customProfiles.length > 0 && (
-                <>
-                  <SelectSeparator />
-                  {customProfiles.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
-                      {profile.name}
-                    </SelectItem>
-                  ))}
-                </>
-              )}
-
-              <SelectSeparator />
-              <SelectItem value={CREATE_CUSTOM_VALUE} className="font-medium text-primary-text">
-                + Create custom profile
-              </SelectItem>
-            </SelectContent>
-          </Select>
+          <VoiceChips
+            label="Voice"
+            options={[...recommendedProfiles, ...systemProfiles, ...customProfiles].map((p) => ({
+              id: p.id,
+              name: p.name,
+              isDefault: p.isDefault,
+              isRecommended: p.isRecommended,
+            }))}
+            value={selectedId}
+            onChange={handleValueChange}
+            onCreate={() => onCreateProfile("comment")}
+          />
         )}
-
         {rewriteProfile && (
           <RewriteButton
             label={`Rewrite with ${rewriteProfile.name}`}
@@ -910,6 +1037,20 @@ export function HomeScreen({ onCreateProfile }: Props) {
           it keeps happening, LinkedIn has likely changed its layout: let us know.
           {selectedPost && " Below is the post you picked before."}
         </Alert>
+      )}
+
+      {showReminder && reminder && selectedPost && (
+        <SavedCommentReminder
+          key={reminder.capturedAt}
+          candidates={reminder.candidates}
+          isOwnPost={selectedPost.isOwnPost === true}
+          canInsert={showInsert}
+          inserting={insertion.inserting}
+          error={savedError}
+          onInsert={(c) => void insertSaved(c)}
+          onCopy={copySaved}
+          onDismiss={() => setReminder(null)}
+        />
       )}
 
       {selectedPost ? (
@@ -956,32 +1097,52 @@ export function HomeScreen({ onCreateProfile }: Props) {
               {selectedPost.text && (
                 <p className="line-clamp-3 text-sm leading-relaxed text-foreground/85">{selectedPost.text}</p>
               )}
+              <MediaNote
+                images={selectedPost.images?.length ?? 0}
+                video={!!selectedPost.video}
+                watchable={!!selectedPost.videoUrl}
+              />
             </div>
           )}
         </div>
       ) : (
         // Nothing to write about yet: one place that says what to do next,
         // and, off LinkedIn, the button to get there.
-        <div className="flex animate-fade-in flex-col items-center gap-3 rounded-lg border border-dashed border-input px-4 py-6 text-center">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground">
-            <MousePointerClick aria-hidden className="h-5 w-5" />
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-semibold">
-              {onLinkedIn === false ? "Open LinkedIn to start" : "Pick a post on LinkedIn"}
-            </p>
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Click <span className="font-medium text-foreground">Comment</span> under any post, or{" "}
-              <span className="font-medium text-foreground">Reply</span> under a comment. It shows up here.
-            </p>
-          </div>
-          {onLinkedIn === false && (
-            <Button size="sm" onClick={() => void goToSite(LINKEDIN_FEED_URL)}>
-              Open LinkedIn
-              <ExternalLink aria-hidden />
-            </Button>
-          )}
-        </div>
+        <>
+          <StartCard
+            title={onLinkedIn === false ? "Open LinkedIn to start" : "Pick a post on LinkedIn"}
+            actions={["Like", "Comment", "Repost", "Send"]}
+            highlight="Comment"
+            goTo={onLinkedIn === false ? { label: "Open LinkedIn", onClick: () => void goToSite(LINKEDIN_FEED_URL) } : undefined}
+          >
+            Click <strong className="font-semibold">Comment</strong> under any post, or{" "}
+            <strong className="font-semibold">Reply</strong> under a comment. It shows up here, ready to write.
+          </StartCard>
+          <section aria-labelledby="also-writes" className="space-y-2">
+            <h3 id="also-writes" className="px-0.5 text-xs font-semibold text-muted-foreground">
+              It also writes
+            </h3>
+            <ul className="grid grid-cols-2 gap-2">
+              <li className="space-y-1 rounded-2xl border bg-card p-3">
+                <Reply aria-hidden className="h-4 w-4 text-primary-text" />
+                <p className="text-sm font-semibold">Replies</p>
+                <p className="text-xs text-muted-foreground">Reply under any comment</p>
+              </li>
+              <li className="space-y-1 rounded-2xl border bg-card p-3">
+                <UserPlus aria-hidden className="h-4 w-4 text-primary-text" />
+                <p className="text-sm font-semibold">Connection notes</p>
+                <p className="text-xs text-muted-foreground">Connect on a profile</p>
+              </li>
+              <li className="panel-night col-span-2 flex items-center gap-3 rounded-2xl p-3">
+                <MessagesSquare aria-hidden className="h-4 w-4 shrink-0 text-[hsl(var(--lime))]" />
+                <span className="space-y-0.5">
+                  <span className="block text-sm font-semibold">Replies in your chats</span>
+                  <span className="block text-xs opacity-75">Open a conversation, then Messages below</span>
+                </span>
+              </li>
+            </ul>
+          </section>
+        </>
       )}
 
       {selectedPost && (
@@ -1029,6 +1190,21 @@ export function HomeScreen({ onCreateProfile }: Props) {
           )}
         </div>
       )}
+
+      <SavedCommentsSection
+        list={saved.list}
+        status={saved.status}
+        canInsert={showInsert && !!selectedPost}
+        inserting={insertion.inserting}
+        error={showReminder ? null : savedError}
+        onInsert={(c) => void insertSaved(c)}
+        onCopy={copySaved}
+        onCreate={saved.create}
+        onUpdate={saved.update}
+        onDelete={saved.remove}
+        onRetry={saved.retry}
+        onOpenWebsite={() => void openWebsite("/extension/saved")}
+      />
 
       {!paywalled && <FreeGenerationsNote />}
     </div>

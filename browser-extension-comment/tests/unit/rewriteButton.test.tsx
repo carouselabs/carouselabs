@@ -73,7 +73,9 @@ describe("Home", () => {
     });
   });
 
-  const trigger = () => screen.getByRole("combobox", { name: "Comment profile" });
+  // The voices are a row of buttons now (VoiceChips): the chosen one is checked.
+  const chosen = () => screen.getByRole("radio", { checked: true });
+  const choose = (name: RegExp) => fireEvent.click(screen.getByRole("radio", { name }));
   const box = () => screen.getByRole("textbox", { name: "Your comment" }) as HTMLTextAreaElement;
 
   async function generateFirst() {
@@ -86,17 +88,16 @@ describe("Home", () => {
 
   it("starts on the shared default, Simple & Human, and labels it", async () => {
     render(<HomeScreen onCreateProfile={() => {}} />);
-    await waitFor(() => expect(trigger().textContent).toContain("CarouseLabs — Simple & Human"));
-    trigger().focus();
-    fireEvent.keyDown(trigger(), { key: "Enter" });
-    expect((await screen.findByRole("option", { name: /Simple & Human/ })).textContent).toContain("(default)");
+    await waitFor(() => expect(chosen().textContent).toContain("CarouseLabs — Simple & Human"));
+    expect(chosen().textContent).toContain("(default)");
+    expect(screen.getByRole("radiogroup", { name: "Voice" })).toBeTruthy();
   });
 
   it("offers Rewrite with the newly picked profile, naming what wrote the current comment", async () => {
     await generateFirst();
     expect(rewriteButton()).toBeNull();
 
-    await pick(trigger(), /Thoughtful Expert/);
+    choose(/Thoughtful Expert/);
     expect(rewriteButton()?.textContent).toBe("Rewrite with Thoughtful Expert");
     expect(screen.getByText("Current comment: CarouseLabs — Simple & Human")).toBeTruthy();
 
@@ -108,9 +109,9 @@ describe("Home", () => {
 
   it("takes the offer back when the profile that wrote it is picked again", async () => {
     await generateFirst();
-    await pick(trigger(), /Thoughtful Expert/);
+    choose(/Thoughtful Expert/);
     expect(rewriteButton()).toBeTruthy();
-    await pick(trigger(), /Simple & Human/);
+    choose(/Simple & Human/);
     expect(rewriteButton()).toBeNull();
   });
 });

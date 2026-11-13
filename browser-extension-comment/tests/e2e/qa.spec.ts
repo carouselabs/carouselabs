@@ -28,11 +28,33 @@ async function openPanel(harness: Harness, width: number): Promise<Page> {
   harness.apiResponses.set("/api/ext/me", { status: 200, body: ME });
   harness.apiResponses.set("/api/ext/settings", { status: 200, body: { defaultCommentProfileId: "p1", defaultLanguage: null, insertWarningHidden: false } });
   harness.apiResponses.set("/api/ext/contacts", { status: 200, body: { contacts: [] } });
+  harness.apiResponses.set("/api/ext/activity", { status: 200, body: { one: "comment", many: "comments", days: [{ day: new Date().toISOString().slice(0, 10), count: 4 }] } });
   harness.apiResponses.set("/api/ext/history", {
     status: 200,
     body: { nextCursor: null, entries: [{ id: "h1", kind: "comment", postAuthor: POST.authorName, postUrl: POST.url, postSnippet: "x", comment: COMMENT, action: "COPIED", createdAt: stamp, profileName: PROFILE.name }] },
   });
   harness.apiResponses.set("/api/ext/generate", { status: 200, body: { comment: COMMENT, freeRemaining: 7, historyId: "h1" } });
+  // A saved comment with a long unbroken name and text, for the Write
+  // screen's Saved comments list.
+  harness.apiResponses.set("/api/ext/saved-comments", {
+    status: 200,
+    body: {
+      savedComments: [
+        {
+          id: "s1",
+          title: "Averyveryverylongsavedcommentnamewithoutanyspaces",
+          body: COMMENT,
+          tags: [],
+          favorite: true,
+          remindOn: "off",
+          useCount: 2,
+          lastUsedAt: stamp,
+          createdAt: stamp,
+          updatedAt: stamp,
+        },
+      ],
+    },
+  });
   await harness.worker.evaluate(
     (post) => chrome.storage.local.set({ extensionToken: "cl_cmt_qa", onboardingComplete: true, lastSelectedPost: post }),
     POST,
@@ -59,14 +81,36 @@ test("no screen scrolls sideways at 320px", async ({ harness }) => {
   await expect(panel.getByRole("textbox", { name: "Your comment" })).toHaveValue(COMMENT);
 
   const overflow: string[] = [];
-  for (const screen of ["Home", "Messages", "Profiles", "History", "Settings", "Account"]) {
+  // History and Settings are Profile's tabs, so they come after it.
+  for (const screen of ["Write", "Messages", "Voices", "Profile", "History", "Settings"]) {
     await panel.getByRole("button", { name: screen, exact: true }).click();
     await panel.waitForTimeout(200);
+    // Which element sticks out, so a failure says where to look.
     const wide = await panel.evaluate(() => {
       const main = document.querySelector("main")!;
-      return document.documentElement.scrollWidth > window.innerWidth || main.scrollWidth > main.clientWidth;
+      if (document.documentElement.scrollWidth <= window.innerWidth && main.scrollWidth <= main.clientWidth) return null;
+      const right = main.getBoundingClientRect().right;
+      // Not ones inside their own scroller (the voice row), which clips them.
+      const clipped = (el: HTMLElement) => {
+        for (let p = el.parentElement; p && p !== main; p = p.parentElement) {
+          if (/(auto|scroll|hidden|clip)/.test(getComputedStyle(p).overflowX)) return true;
+        }
+        return false;
+      };
+      const out = [...main.querySelectorAll<HTMLElement>("*")].find((el) => el.getBoundingClientRect().right > right + 1 && !clipped(el));
+      if (out) return `${out.tagName.toLowerCase()}.${String(out.className).slice(0, 60)}`;
+      const all = [...main.querySelectorAll<HTMLElement>("*")]
+        .map((el) => ({ el, r: el.getBoundingClientRect().right - right }))
+        .filter((x) => x.r > 0)
+        .slice(0, 4)
+        .map((x) => `${x.el.tagName.toLowerCase()}(${getComputedStyle(x.el).position}) +${x.r.toFixed(1)} ${String(x.el.className).slice(0, 40)}`);
+      const outside = [...document.body.querySelectorAll<HTMLElement>("*")]
+        .filter((el) => !main.contains(el) && el.getBoundingClientRect().right > window.innerWidth + 1)
+        .slice(0, 4)
+        .map((el) => `${el.tagName.toLowerCase()}(${getComputedStyle(el).position}) ${String(el.className).slice(0, 50)}`);
+      return `doc ${document.documentElement.scrollWidth}/${window.innerWidth} main ${main.scrollWidth}/${main.clientWidth} outside: ${outside.join(" | ")}`;
     });
-    if (wide) overflow.push(screen);
+    if (wide) overflow.push(`${screen}: ${wide}`);
   }
   expect(overflow).toEqual([]);
 });
@@ -96,7 +140,8 @@ test("every Tab stop shows where focus is", async ({ harness }) => {
   await expect(panel.getByRole("button", { name: "Copy", exact: true })).toBeEnabled();
 
   const invisible: string[] = [];
-  for (const screen of ["Home", "Settings", "Profiles", "Account"]) {
+  // Settings is one of Profile's tabs, so it comes after it.
+  for (const screen of ["Write", "Profile", "Settings", "Voices"]) {
     await panel.getByRole("button", { name: screen, exact: true }).click();
     await panel.waitForTimeout(200);
     await panel.locator("body").click({ position: { x: 1, y: 60 } });

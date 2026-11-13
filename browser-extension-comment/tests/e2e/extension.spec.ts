@@ -277,7 +277,7 @@ test("signed in: a Comment click on LinkedIn turns the panel's Generate button o
       info.active ? query({ url: "https://www.linkedin.com/*" }) : query(info)) as typeof chrome.tabs.query;
   });
   await panel.goto(`chrome-extension://${harness.extensionId}/src/sidepanel/index.html`);
-  await expect(panel.getByRole("combobox")).toContainText("Founder voice");
+  await expect(panel.getByRole("radio", { checked: true })).toContainText("Founder voice");
   const generate = panel.getByRole("button", { name: "Generate", exact: true });
   await expect(generate).toBeDisabled(); // no post yet
 

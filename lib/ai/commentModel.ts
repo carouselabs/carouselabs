@@ -133,7 +133,39 @@ async function limited<T>(
 // A comment is a few dozen words; this is a runaway guard, not a target.
 const MAX_OUTPUT_TOKENS = 1024
 
-function lunaRequest(systemMessage: string, userMessage: string) {
+// A post's picture, downloaded on the server (lib/engage/postImages.ts) and
+// sent inline, so neither model has to reach LinkedIn itself.
+export interface PostImage {
+  mediaType: string
+  // base64
+  data: string
+}
+
+// The user turn: text alone, or the text with the post's pictures. Low detail
+// on Luna: enough to read a slide or a chart, at a fraction of the tokens.
+function lunaUserContent(userMessage: string, images?: PostImage[]) {
+  if (!images?.length) return userMessage
+  return [
+    { type: "text" as const, text: userMessage },
+    ...images.map((image) => ({
+      type: "image_url" as const,
+      image_url: { url: `data:${image.mediaType};base64,${image.data}`, detail: "low" as const },
+    })),
+  ]
+}
+
+function haikuUserContent(userMessage: string, images?: PostImage[]) {
+  if (!images?.length) return userMessage
+  return [
+    ...images.map((image) => ({
+      type: "image" as const,
+      source: { type: "base64" as const, media_type: image.mediaType as "image/jpeg" | "image/png" | "image/webp", data: image.data },
+    })),
+    { type: "text" as const, text: userMessage },
+  ]
+}
+
+function lunaRequest(systemMessage: string, userMessage: string, images?: PostImage[]) {
   return {
     model: PRIMARY_MODEL,
     // Luna rejects `max_tokens` outright (400 "Unsupported parameter ... Use
@@ -147,17 +179,17 @@ function lunaRequest(systemMessage: string, userMessage: string) {
     reasoning_effort: "none" as const,
     messages: [
       { role: "system" as const, content: systemMessage },
-      { role: "user" as const, content: userMessage },
+      { role: "user" as const, content: lunaUserContent(userMessage, images) },
     ],
   }
 }
 
-function haikuRequest(systemMessage: string, userMessage: string) {
+function haikuRequest(systemMessage: string, userMessage: string, images?: PostImage[]) {
   return {
     model: FALLBACK_MODEL,
     max_tokens: MAX_OUTPUT_TOKENS,
     system: systemMessage,
-    messages: [{ role: "user" as const, content: userMessage }],
+    messages: [{ role: "user" as const, content: haikuUserContent(userMessage, images) }],
   }
 }
 
@@ -351,6 +383,8 @@ export interface ModelStreamOptions extends ModelCallOptions {
   onReset?: () => void
   // Aborting stops generation mid-response; the call then rejects.
   signal?: AbortSignal
+  // The post's pictures (and a video's cover frame), shown with the text.
+  images?: PostImage[]
 }
 
 // One model's streamed answer: each piece of text to `onText`, the tokens it
@@ -364,10 +398,11 @@ async function streamOne(
   alive: () => void,
   onText: (text: string) => void,
   usage: { input: number | null; output: number | null },
+  images?: PostImage[],
 ): Promise<void> {
   if (key === "luna") {
     const stream = await openai.chat.completions.create(
-      { ...lunaRequest(systemMessage, userMessage), stream: true, stream_options: { include_usage: true } },
+      { ...lunaRequest(systemMessage, userMessage, images), stream: true, stream_options: { include_usage: true } },
       { signal, maxRetries: 0 },
     )
     for await (const chunk of stream) {
@@ -381,7 +416,7 @@ async function streamOne(
     }
     return
   }
-  const stream = await anthropic.messages.create({ ...haikuRequest(systemMessage, userMessage), stream: true }, { signal, maxRetries: 0 })
+  const stream = await anthropic.messages.create({ ...haikuRequest(systemMessage, userMessage, images), stream: true }, { signal, maxRetries: 0 })
   for await (const event of stream) {
     alive()
     if (event.type === "message_start") usage.input = event.message?.usage?.input_tokens ?? null
@@ -397,12 +432,15 @@ export async function streamCommentModel(
   systemMessage: string,
   userMessage: string,
   label: string,
-  { onRaw, onReset, signal, deadline, engage }: ModelStreamOptions = {},
+  { onRaw, onReset, signal, deadline, engage, images }: ModelStreamOptions = {},
 ): Promise<ModelStreamResult> {
   const start = performance.now()
   const order = await modelOrder(engage)
   let raw = ""
   let ttftMs: number | null = null
+  // Dropped after a model turns a picture down, so the comment is still
+  // written from the text rather than failing.
+  let pictures = images?.length ? images : undefined
 
   for (let i = 0; i < order.length; i += 1) {
     const key = order[i]
@@ -441,7 +479,7 @@ export async function streamCommentModel(
             ttftMs ??= performance.now() - start
             raw += text
             onRaw?.(raw)
-          }, usage),
+          }, usage, pictures),
         // A slow start hands over to the backup while one is left.
         last ? undefined : firstTextMs(),
       )
@@ -451,7 +489,19 @@ export async function streamCommentModel(
       console.warn(`[${label}] ${AI_MODELS[key].label} refused or returned empty, falling back to ${AI_MODELS[order[i + 1]].label}`)
     } catch (err) {
       note(failureOutcome(err, signal))
-      if (signal?.aborted || last) throw err
+      if (signal?.aborted) throw err
+      // The request itself refused (a picture it can't take): the same
+      // model again, with the text alone.
+      if (pictures && (err as { status?: number })?.status === 400) {
+        console.warn(`[${label}] ${AI_MODELS[key].label} refused the post's pictures; writing from the text alone`)
+        pictures = undefined
+        if (raw) onReset?.()
+        raw = ""
+        ttftMs = null
+        i -= 1
+        continue
+      }
+      if (last) throw err
       const e = err as { message?: string }
       console.warn(`[${label}] ${AI_MODELS[key].label} error, falling back to ${AI_MODELS[order[i + 1]].id}:`, e?.message ?? err)
     }

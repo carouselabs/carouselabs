@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
-import { Header } from "./components/Header";
+import { PRODUCT_NAME } from "@/lib/platform";
 import { IconBar } from "./components/IconBar";
 import { SignInScreen } from "./components/SignInScreen";
 import { HomeScreen } from "./components/screens/HomeScreen";
 import { MessagesScreen } from "./components/screens/MessagesScreen";
 import { ProfilesScreen } from "./components/screens/ProfilesScreen";
-import { HistoryScreen } from "./components/screens/HistoryScreen";
 import { SettingsScreen } from "./components/screens/SettingsScreen";
-import { AccountScreen } from "./components/screens/AccountScreen";
+import { ProfileScreen } from "./components/screens/ProfileScreen";
 import { Onboarding, ONBOARDING_DONE_STORAGE_KEY } from "./components/Onboarding";
 import { CaptureToast } from "./components/CaptureToast";
 import { ConversationHint } from "./components/ConversationHint";
@@ -38,12 +37,14 @@ function renderScreen(
       );
     case "profiles":
       return <ProfilesScreen startInBuilder={openProfileBuilder} onBuilderOpened={onBuilderOpened} />;
+    // History, Settings and Account are Profile's tabs now; these screens
+    // open Profile on the right one.
     case "history":
-      return <HistoryScreen />;
+      return <ProfileScreen initialTab="history" settings={<SettingsScreen />} />;
     case "settings":
-      return <SettingsScreen />;
+      return <ProfileScreen initialTab="settings" settings={<SettingsScreen />} />;
     case "account":
-      return <AccountScreen />;
+      return <ProfileScreen settings={<SettingsScreen />} />;
   }
 }
 
@@ -135,7 +136,7 @@ export default function App() {
   if (needsOnboarding) {
     return (
       <div className="flex h-screen w-screen flex-col bg-background">
-        <Header />
+        <h1 className="sr-only">{PRODUCT_NAME}</h1>
         <main className="min-h-0 flex-1 overflow-y-auto">
           <Onboarding
             onCreateProfile={() => goToProfileBuilder("comment")}
@@ -152,11 +153,12 @@ export default function App() {
   return (
     <div className="relative flex h-screen w-screen flex-col bg-background">
       <CaptureToast />
-      <Header />
-      <div className="flex min-h-0 flex-1">
-        {/* Keyed by screen: a switch starts the new screen at the top with a
-            short fade, instead of at the old screen's scroll position. */}
-        <main key={activeScreen} className="min-w-0 flex-1 animate-fade-in overflow-y-auto">
+      {/* Chrome's own bar above the panel already names it: the title is for
+          screen readers only, so the panel starts straight with what matters. */}
+      <h1 className="sr-only">{PRODUCT_NAME}</h1>
+      {/* Keyed by screen: a switch starts the new screen at the top with a
+          short fade, instead of at the old screen's scroll position. */}
+      <main key={activeScreen} className="min-h-0 flex-1 animate-fade-in overflow-y-auto">
           {siteBlocked.blocked && (
             <div className="px-4 pt-4">
               <SiteBlockedNotice checking={siteBlocked.checking} onCheck={siteBlocked.check} />
@@ -179,15 +181,14 @@ export default function App() {
             goToProfileBuilder,
             { readOnOpen, openConversation },
           )}
-        </main>
-        <IconBar
-          activeScreen={activeScreen}
-          onSelect={selectScreen}
-          attention={
-            openConversation ? { screen: "messages", description: "A LinkedIn conversation is open: get AI help replying." } : null
-          }
-        />
-      </div>
+      </main>
+      <IconBar
+        activeScreen={activeScreen}
+        onSelect={selectScreen}
+        attention={
+          openConversation ? { screen: "messages", description: "A LinkedIn conversation is open: get AI help replying." } : null
+        }
+      />
     </div>
   );
 }

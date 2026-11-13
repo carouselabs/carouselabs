@@ -99,6 +99,8 @@ export const test = base.extend<{ harness: Harness; blockedSites: string[] }>({
     const redditPages = new Map<string, string>();
     const apiResponses = new Map<string, { status: number; body: unknown }>([
       ["/api/ext/config", { status: 200, body: SERVER_CONFIG }],
+      // The Write screen's Saved comments list: none, unless a spec sets some.
+      ["/api/ext/saved-comments", { status: 200, body: { savedComments: [] } }],
     ]);
     const blocked: string[] = [];
 

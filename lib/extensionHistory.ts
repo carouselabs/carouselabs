@@ -28,6 +28,14 @@ export const PLATFORM_HISTORY_KINDS: Record<EngagePlatform, readonly string[]> =
   reddit: REDDIT_HISTORY_KINDS,
 }
 
+// Each extension's main kind, the one its "comments per day" grid counts:
+// LinkedIn's and Reddit's comments, X's replies (X has no comments).
+export const MAIN_HISTORY_KIND: Record<EngagePlatform, { kind: string; one: string; many: string }> = {
+  linkedin: { kind: "comment", one: "comment", many: "comments" },
+  x: { kind: "x_reply", one: "reply", many: "replies" },
+  reddit: { kind: "reddit_comment", one: "comment", many: "comments" },
+}
+
 // The kind a Messages-screen reply is saved as, per extension.
 export const MESSAGE_HISTORY_KINDS: Record<EngagePlatform, string> = {
   linkedin: "message",

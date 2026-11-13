@@ -1,4 +1,4 @@
-import { Geist, Instrument_Serif } from "next/font/google"
+import { Geist, Instrument_Sans, Instrument_Serif } from "next/font/google"
 
 // Redesign fonts. Apply `fontVariables` on a layout's wrapper to opt that
 // subtree in; app/globals.css maps them to `font-ui` and `font-display`.
@@ -21,3 +21,12 @@ export const instrumentSerif = Instrument_Serif({
 })
 
 export const fontVariables = `${geist.variable} ${instrumentSerif.variable}`
+
+// Engage's own face (app/(app)/extension/layout.tsx puts this on the section's
+// wrapper; .engage-root in app/globals.css applies it). Instrument Serif comes
+// from fontVariables above, which every signed-in page already has.
+export const instrumentSans = Instrument_Sans({
+  subsets: ["latin"],
+  variable: "--font-instrument-sans",
+  display: "swap",
+})

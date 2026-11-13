@@ -82,9 +82,9 @@ test("writes a reply to a captured X post", async ({ harness }) => {
   await panel.emulateMedia({ reducedMotion: "reduce", colorScheme: SCHEME });
   await panel.goto(`chrome-extension://${harness.extensionId}/src/x/sidepanel/index.html`);
 
-  await expect(panel.getByRole("heading", { name: "CarouseLabs Engage for X" })).toBeVisible();
+  await expect(panel.getByRole("heading", { level: 1, name: "CarouseLabs Engage for X" })).toHaveCount(1);
   await expect(panel.getByText("@priya")).toBeVisible();
-  await expect(panel.getByRole("combobox", { name: "X profile" })).toContainText("X Thoughtful Reply");
+  await expect(panel.getByRole("radio", { checked: true })).toContainText("X Thoughtful Reply");
   await shot(panel, "x-01-post");
 
   await panel.getByRole("button", { name: "Write reply" }).click();
@@ -135,7 +135,7 @@ test("Shorter, then the X Profiles, Settings and History screens", async ({ harn
   await expect(panel.getByText(`${SHORT.length}/280`)).toBeVisible();
   await shot(panel, "x-05-shorter");
 
-  await panel.getByRole("button", { name: "Profiles" }).click();
+  await panel.getByRole("button", { name: "Voices", exact: true }).click();
   await expect(panel.getByText("X reply profiles")).toBeVisible();
   await expect(panel.getByText("CarouseLabs — X Quick Reply")).toBeVisible();
   await shot(panel, "x-06-profiles");
@@ -144,7 +144,9 @@ test("Shorter, then the X Profiles, Settings and History screens", async ({ harn
   await expect(panel.getByLabel("Max characters", { exact: true })).toHaveAttribute("max", "280");
   await shot(panel, "x-07-builder");
 
-  await panel.getByRole("button", { name: "Settings" }).click();
+  // Settings and History are Profile's tabs.
+  await panel.getByRole("button", { name: "Profile", exact: true }).click();
+  await panel.getByRole("button", { name: "Settings", exact: true }).click();
   const premium = panel.getByRole("switch", { name: "I have X Premium" });
   await expect(premium).toHaveAttribute("aria-checked", "false");
   await premium.click();
@@ -152,7 +154,7 @@ test("Shorter, then the X Profiles, Settings and History screens", async ({ harn
   expect(patches).toEqual([{ maxReplyLength: 1000 }]);
   await shot(panel, "x-08-settings");
 
-  await panel.getByRole("button", { name: "History" }).click();
+  await panel.getByRole("button", { name: "History", exact: true }).click();
   await expect(panel.getByText(SHORT)).toBeVisible();
   await expect(panel.getByRole("button", { name: "Open chat" })).toBeVisible();
   await shot(panel, "x-09-history");

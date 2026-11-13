@@ -1,9 +1,10 @@
-// app/(app)/extension/profiles/page.tsx — Extension → Custom tones.
+// app/(app)/extension/profiles/page.tsx — Engage → Voices (was Custom tones).
 // Everything the page shows is loaded here, on the server, in one go: the
 // three kinds' profiles, the note settings and the remembered conversations.
 // It used to fetch them in the browser one after another once the page's
 // code had loaded, which made it slow to appear and slow to switch tabs.
 import { redirect } from "next/navigation"
+import { VoicesHead } from "@/components/extension/EngagePageHead"
 import { getCurrentUser } from "@/lib/auth"
 import { ProfilesManager, type ProfilesInitial } from "@/components/extension/ProfilesManager"
 import {
@@ -27,12 +28,15 @@ export default async function ExtensionProfilesPage() {
   ])
 
   return (
-    <ProfilesManager
-      initial={asJson<ProfilesInitial>({
-        settings: extensionSettingsOf(user),
-        lists: { comment: { profiles: comment }, connection: { profiles: connection }, message: { profiles: message } },
-        contacts,
-      })}
-    />
+    <>
+      <VoicesHead platform="linkedin" />
+      <ProfilesManager
+        initial={asJson<ProfilesInitial>({
+          settings: extensionSettingsOf(user),
+          lists: { comment: { profiles: comment }, connection: { profiles: connection }, message: { profiles: message } },
+          contacts,
+        })}
+      />
+    </>
   )
 }

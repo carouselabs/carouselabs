@@ -1,7 +1,8 @@
 "use client"
 
-// Extension → Settings: the account-level settings the side panel's
-// Settings screen edits, through the same route (app/api/ext/settings).
+// Engage → Plan & setup → Preferences (what used to be Extension →
+// Settings): the account-level settings the side panel edits, through the
+// same route (app/api/ext/settings).
 // Each change saves on its own, as in the panel.
 import { useEffect, useState } from "react"
 import { Check, Loader2 } from "lucide-react"
@@ -211,7 +212,7 @@ export function ExtensionSettingsForm() {
       <p className="text-caption text-muted-foreground">
         Connection note context, note length and each conversation&apos;s reason are under{" "}
         <a href="/extension/profiles" className="font-medium text-brand hover:underline">
-          Custom tones
+          Voices
         </a>
         .
       </p>

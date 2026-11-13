@@ -47,6 +47,16 @@ import { insertOnce, type InsertAnswer } from "@/lib/insertOnce";
 // the page console only in development builds.
 const DEV = import.meta.env.MODE !== "production";
 
+// Development builds only: Ctrl+Alt+Shift+S saves the page's layout with all
+// text scrubbed (src/content/devSnapshot.ts), for building against LinkedIn's
+// reply boxes, Sales Navigator and image/video posts. The MODE check is a
+// build-time constant, so store builds drop it entirely.
+if (DEV) {
+  void import("@/content/devSnapshot").then(({ listenForLayoutShortcut }) => {
+    listenForLayoutShortcut("linkedin");
+  });
+}
+
 // Must match MESSAGE_TYPE in src/sidepanel/components/screens/HomeScreen.tsx
 // exactly — no shared package between the content script and sidepanel
 // bundles' message contract beyond this literal (same reasoning as
@@ -64,7 +74,7 @@ const LAST_POST_STORAGE_KEY = "lastSelectedPost";
 // when the user clicks Insert.
 const INSERT_MESSAGE_TYPE = "carouselabs:insert-comment";
 
-type PostType = "text" | "image" | "article" | "poll" | "repost";
+type PostType = "text" | "image" | "video" | "article" | "poll" | "repost";
 
 interface ExtensionConfig {
   commentButtonSelector: string;
@@ -149,6 +159,21 @@ interface SelectedPost {
   // Comment and reply modes: where Insert must put the text. The panel sends
   // it back, untouched, with the Insert.
   target?: InsertTarget;
+  // The post's pictures (its images, a video's cover frame, a link's preview)
+  // on LinkedIn's image servers, for the model to look at; and whether it's a
+  // video.
+  images?: string[];
+  video?: boolean;
+  // A video's file on LinkedIn's servers, when one can be found: the panel
+  // has it watched (stills + what's said) before writing. Without it, the
+  // model gets the cover and the text.
+  videoUrl?: string;
+  // Comment mode: whether the post is the person's own (null when either
+  // name can't be read), and its permalink id when the card has one. The
+  // panel offers a saved comment the first time a post is opened, on the
+  // person's own posts or on any (src/lib/savedComments.ts).
+  isOwnPost?: boolean | null;
+  postUrn?: string | null;
 }
 
 // Which post (and, for a reply, which comment) a capture was for, so Insert
@@ -512,10 +537,121 @@ function extractHeadlineNear(authorLink: Element | null, authorName: string): st
   return "";
 }
 
+// A post's own media on LinkedIn's image server, told apart by the kind in
+// the address: post images (feedshare), a video's cover (videocover), a
+// link's preview (articleshare / article-cover), a document's cover. Profile
+// photos, logos and anything inside the comments are someone else's.
+const POST_MEDIA_PATH = /(feedshare|videocover|articleshare|article-cover|document-cover|document-shrink|image-shrink)/i;
+const NOT_POST_MEDIA = /(profile-displayphoto|profile-framedphoto|company-logo|ghost-person|emoji)/i;
+const MAX_POST_IMAGES = 4;
+
+// A video's whole MP4 on LinkedIn's servers, for the panel to have watched.
+// LinkedIn's player lists its files in data-sources (JSON), or plays one
+// straight from src / <source>; a blob: src (fed in pieces) has no address,
+// so the file the page already loaded for this video is looked for instead
+// (same media id as its cover). The smallest size is enough.
+const VIDEO_FILE_PATH = /\/(playlist\/vid|vid)\//i;
+const seenVideoFiles: string[] = [];
+
+function isVideoFileUrl(raw: string): string | null {
+  if (!raw) return null;
+  try {
+    const url = new URL(raw, location.href);
+    if (url.protocol !== "https:" || !(url.hostname === "licdn.com" || url.hostname.endsWith(".licdn.com"))) return null;
+    if (/\.(m3u8|mpd|ts|m4s)$/i.test(url.pathname) || !VIDEO_FILE_PATH.test(url.pathname)) return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+// Files the page loads are noted as they arrive (the page's own list of
+// loaded files is capped and fills up long before a scroll ends).
+try {
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      const url = isVideoFileUrl(entry.name);
+      if (url && !seenVideoFiles.includes(url)) {
+        seenVideoFiles.push(url);
+        if (seenVideoFiles.length > 200) seenVideoFiles.shift();
+      }
+    }
+  }).observe({ type: "resource", buffered: true });
+} catch {
+  // No resource timing here: only the player's own addresses are used.
+}
+
+// The id LinkedIn gives a video's media, shared by its cover and its files:
+// ".../dms/image/v2/<id>/videocover-high/..." and ".../playlist/vid/v2/<id>/mp4-...".
+function mediaIdOf(raw: string | null): string | null {
+  if (!raw) return null;
+  const match = /\/(?:image|vid)\/(?:v2\/)?([A-Za-z0-9_-]{10,})\//.exec(raw);
+  return match ? match[1] : null;
+}
+
+function postVideoUrl(videos: HTMLVideoElement[]): string | undefined {
+  const found: string[] = [];
+  const consider = (raw: string | null | undefined) => {
+    const url = isVideoFileUrl(raw ?? "");
+    if (url && !found.includes(url)) found.push(url);
+  };
+  for (const video of videos) {
+    const listed = video.getAttribute("data-sources") ?? video.closest("[data-sources]")?.getAttribute("data-sources");
+    if (listed) {
+      try {
+        const sources: unknown = JSON.parse(listed);
+        if (Array.isArray(sources)) for (const source of sources) consider((source as { src?: string } | null)?.src);
+      } catch {
+        // Not a list LinkedIn wrote: skip it.
+      }
+    }
+    consider(video.currentSrc);
+    consider(video.getAttribute("src"));
+    for (const source of Array.from(video.querySelectorAll("source"))) consider(source.getAttribute("src"));
+    if (!found.length) {
+      const id = mediaIdOf(video.getAttribute("poster"));
+      if (id) for (const url of seenVideoFiles) if (mediaIdOf(url) === id) consider(url);
+    }
+  }
+  const height = (url: string) => Number(/mp4-(\d+)p/i.exec(url)?.[1] ?? 100_000);
+  return found.sort((a, b) => height(a) - height(b))[0];
+}
+
+function extractPostMedia(
+  container: Element,
+  config: ExtensionConfig,
+): { images: string[]; video: boolean; videoUrl?: string } {
+  const commentItem = config.commentItemSelector || FALLBACK_CONFIG.commentItemSelector;
+  const images: string[] = [];
+  const add = (el: Element, src: string | null) => {
+    if (!src || images.length >= MAX_POST_IMAGES || el.closest(commentItem)) return;
+    try {
+      const url = new URL(src, location.href);
+      if (url.protocol !== "https:" || !(url.hostname === "licdn.com" || url.hostname.endsWith(".licdn.com"))) return;
+      if (NOT_POST_MEDIA.test(url.pathname) || !POST_MEDIA_PATH.test(url.pathname)) return;
+      if (!images.includes(url.href)) images.push(url.href);
+    } catch {
+      // Not an address: skip it.
+    }
+  };
+  const videos = Array.from(container.querySelectorAll("video")).filter((v) => !v.closest(commentItem));
+  for (const v of videos) add(v, v.getAttribute("poster"));
+  for (const img of Array.from(container.querySelectorAll("img"))) {
+    add(img, img.currentSrc || img.getAttribute("src") || img.getAttribute("data-delayed-url"));
+  }
+  const videoUrl = postVideoUrl(videos);
+  return {
+    images,
+    video: videos.length > 0 || images.some((url) => /videocover/i.test(url)),
+    ...(videoUrl ? { videoUrl } : {}),
+  };
+}
+
 // Order matters: a reposted post can also contain an image/poll/article, but
 // "repost" is the more useful classification, so it's checked first.
 function classifyPostType(container: Element, config: ExtensionConfig): PostType {
   if (config.repostIndicatorSelector && container.querySelector(config.repostIndicatorSelector)) return "repost";
+  if (extractPostMedia(container, config).video) return "video";
   if (config.pollIndicatorSelector && container.querySelector(config.pollIndicatorSelector)) return "poll";
   if (config.articleIndicatorSelector && container.querySelector(config.articleIndicatorSelector)) return "article";
   if (config.imageIndicatorSelector && container.querySelector(config.imageIndicatorSelector)) return "image";
@@ -712,11 +848,13 @@ async function handleClick(event: MouseEvent) {
   // Remembered so a later Insert targets this post's comment box rather than
   // whichever one happens to be first in the feed.
   lastPostContainer = postContainer;
-  const insertTarget = rememberCapture({ ...postIdentity(postContainer) });
+  const identity = postIdentity(postContainer);
+  const insertTarget = rememberCapture({ ...identity });
 
   // Text first: the author's last-resort tier is cross-checked against it.
   const text = extractPostText(postContainer, config.postTextSelector);
   const author = extractAuthor(postContainer, config, text);
+  const self = await getSelfName();
 
   const post: SelectedPost = {
     mode: "comment",
@@ -732,9 +870,12 @@ async function handleClick(event: MouseEvent) {
       window.location.href,
     capturedAt: Date.now(),
     target: insertTarget,
+    isOwnPost: sameName(author.name, self.name),
+    postUrn: identity.postUrn,
+    ...extractPostMedia(postContainer, config),
   };
 
-  if (!post.authorName || !post.text) {
+  if (!post.authorName || (!post.text && !post.images?.length)) {
     console.warn(
       `[content-script] incomplete extraction — author: "${post.authorName}" (strategy: ${author.strategy}), text length: ${post.text.length}. LinkedIn's DOM may have changed; see the selectors in app/api/ext/config.`,
     );
@@ -749,6 +890,9 @@ async function handleClick(event: MouseEvent) {
 // isOwnPost is null there. Deliberately unsupported for now: replying from
 // the feed is the real use case.
 async function handleReplyClick(replyButton: Element, config: ExtensionConfig) {
+  // Before anything waits: LinkedIn draws the reply box right after this
+  // click, and a box that wasn't here yet is the one to fill (findReplyBox).
+  const boxesBefore = new WeakSet(document.querySelectorAll(config.commentBoxSelector));
   const { container: postContainer, strategy: containerStrategy } = findPostContainer(replyButton, config);
   if (!postContainer) {
     console.warn(
@@ -813,6 +957,7 @@ async function handleReplyClick(replyButton: Element, config: ExtensionConfig) {
     itemUrn: commentUrn(thread.targetItem),
     rootUrn: thread.rootItem ? commentUrn(thread.rootItem) : null,
     postContainer,
+    boxesBefore,
   };
   const insertTarget = rememberCapture({
     ...postIdentity(postContainer),
@@ -831,6 +976,8 @@ async function handleReplyClick(replyButton: Element, config: ExtensionConfig) {
       postContainer?.querySelector<HTMLAnchorElement>('a[href*="/feed/update/"]')?.href ??
       window.location.href,
     capturedAt: Date.now(),
+    // The post's pictures, as context for the reply.
+    ...(postContainer ? extractPostMedia(postContainer, config) : {}),
     reply: {
       targetAuthor: target.authorName,
       targetText: target.text,
@@ -947,6 +1094,9 @@ let lastReplyTarget: {
   itemUrn: string | null;
   rootUrn: string | null;
   postContainer: Element | null;
+  // The typing boxes already on the page when Reply was clicked. LinkedIn
+  // opens a new one for the reply, so a box that wasn't there then is it.
+  boxesBefore?: WeakSet<Element>;
 } | null = null;
 
 // A remembered element if it is still on the page, else the current element
@@ -1005,6 +1155,25 @@ function findReplyBox(config: ExtensionConfig, reply: NonNullable<typeof lastRep
   if (reply.item && active instanceof HTMLElement && active.matches(config.commentBoxSelector) && usable(active)) {
     const scope = root ?? reply.postContainer;
     if (!scope || scope.contains(active)) return active;
+  }
+
+  // 4. LinkedIn sometimes draws the reply box outside the comment's own
+  //    wrapper. Clicking Reply opens a new box: one in the same post, after
+  //    the comment, that wasn't on the page when Reply was clicked. Every box
+  //    that was there already — the post's own comment box among them, which
+  //    would publish the reply as a new top-level comment — is never chosen.
+  //    Only for this copy's own capture, which knows what was there.
+  const anchor = item ?? root;
+  if (anchor && reply.boxesBefore) {
+    const postSelector = [config.postContainerSelector, config.postContainerFallbackSelector].filter(Boolean).join(", ");
+    const post = reply.postContainer?.isConnected ? reply.postContainer : postSelector ? anchor.closest(postSelector) : null;
+    const before = reply.boxesBefore;
+    if (post) {
+      const opened = Array.from(post.querySelectorAll<HTMLElement>(config.commentBoxSelector)).find(
+        (box) => usable(box) && !before.has(box) && !!(anchor.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING),
+      );
+      if (opened) return opened;
+    }
   }
 
   return null;

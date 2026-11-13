@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
-import { Header } from "@/sidepanel/components/Header";
+import { PRODUCT_NAME } from "@/lib/platform";
 import { IconBar } from "@/sidepanel/components/IconBar";
 import { SignInScreen } from "@/sidepanel/components/SignInScreen";
-import { AccountScreen } from "@/sidepanel/components/screens/AccountScreen";
+import { ProfileScreen } from "@/sidepanel/components/screens/ProfileScreen";
 import { MessagesScreen } from "@/sidepanel/components/screens/MessagesScreen";
-import { HistoryScreen } from "@/sidepanel/components/screens/HistoryScreen";
 import { ConversationHint } from "@/sidepanel/components/ConversationHint";
 import { SiteBlockedNotice, useSiteBlocked } from "@/sidepanel/components/SiteBlockedNotice";
 import { useOpenConversation } from "@/sidepanel/useOpenConversation";
@@ -39,12 +38,13 @@ function renderScreen(
       );
     case "profiles":
       return <XProfilesScreen startInBuilder={openProfileBuilder} onBuilderOpened={onBuilderOpened} />;
+    // History, Settings and Account are Profile's tabs.
     case "history":
-      return <HistoryScreen />;
+      return <ProfileScreen initialTab="history" settings={<XSettingsScreen />} />;
     case "settings":
-      return <XSettingsScreen />;
+      return <ProfileScreen initialTab="settings" settings={<XSettingsScreen />} />;
     case "account":
-      return <AccountScreen />;
+      return <ProfileScreen settings={<XSettingsScreen />} />;
   }
 }
 
@@ -112,9 +112,10 @@ export default function App() {
 
   return (
     <div className="relative flex h-screen w-screen flex-col bg-background">
-      <Header />
-      <div className="flex min-h-0 flex-1">
-        <main key={activeScreen} className="min-w-0 flex-1 animate-fade-in overflow-y-auto">
+      {/* Chrome's own bar above the panel already names it: the title is for
+          screen readers only, so the panel starts straight with what matters. */}
+      <h1 className="sr-only">{PRODUCT_NAME}</h1>
+      <main key={activeScreen} className="min-h-0 flex-1 animate-fade-in overflow-y-auto">
           {siteBlocked.blocked && (
             <div className="px-4 pt-4">
               <SiteBlockedNotice checking={siteBlocked.checking} onCheck={siteBlocked.check} />
@@ -134,15 +135,14 @@ export default function App() {
             </div>
           )}
           {renderScreen(activeScreen, openProfileBuilder, builderOpened, createProfile, { readOnOpen, openConversation })}
-        </main>
-        <IconBar
-          activeScreen={activeScreen}
-          onSelect={selectScreen}
-          attention={
-            openConversation ? { screen: "messages", description: "An X chat is open: get AI help replying." } : null
-          }
-        />
-      </div>
+      </main>
+      <IconBar
+        activeScreen={activeScreen}
+        onSelect={selectScreen}
+        attention={
+          openConversation ? { screen: "messages", description: "An X chat is open: get AI help replying." } : null
+        }
+      />
     </div>
   );
 }

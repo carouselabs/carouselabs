@@ -19,6 +19,9 @@ import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import { engagePreflight, reserveEngageGeneration } from "@/lib/engage/gate"
 import { recentComments } from "@/lib/engage/recentComments"
+import { loadPostImages, mediaNote, postImageUrls } from "@/lib/engage/postImages"
+import { cleanTranscript, videoFramesFrom, videoSpeechBlock } from "@/lib/engage/videoInput"
+import type { PostImage } from "@/lib/ai/commentModel"
 import {
   buildCommentSystemMessage,
   buildCommentUserMessage,
@@ -103,6 +106,14 @@ export async function POST(req: Request) {
   // Present when the user clicked Reply under a comment rather than Comment on
   // the post; routes to the reply prompt below.
   let reply: CommentReplyInput | null
+  // The post's pictures (images, a video's cover, an article's preview) and
+  // whether it's a video: the model is shown them with the text.
+  let imageUrls: string[]
+  let isVideo: boolean
+  // A video the panel had watched (app/api/ext/video): stills from all
+  // through it, used instead of its cover, and what's said in it.
+  let videoFrames: PostImage[]
+  let videoTranscript: string
 
   try {
     const body = await req.json()
@@ -122,10 +133,15 @@ export async function POST(req: Request) {
     }
 
     reply = parseReply(body.reply)
+    imageUrls = postImageUrls(raw.images)
+    isVideo = raw.video === true
+    videoFrames = isVideo ? videoFramesFrom(raw.videoFrames) : []
+    videoTranscript = isVideo ? cleanTranscript(raw.videoTranscript) : ""
 
     if (!profileId) throw new Error("Missing profileId")
-    // A reply can stand on the comment alone (image-only posts have no text).
-    if (!reply && !post.text.trim()) {
+    // A reply can stand on the comment alone (image-only posts have no text);
+    // a comment needs the post's text, its pictures or its watched video.
+    if (!reply && !post.text.trim() && imageUrls.length === 0 && videoFrames.length === 0 && !videoTranscript) {
       throw new Error(
         "No post text was captured. Click Comment on the post again, then retry.",
       )
@@ -142,15 +158,27 @@ export async function POST(req: Request) {
   // System profiles are shared; custom ones must belong to the caller. The
   // person's last few comments of this kind come alongside, so this one
   // doesn't open or run like them.
-  const [profile, recent] = await Promise.all([
+  const [profile, recent, images] = await Promise.all([
     db.commentProfile.findFirst({
       where: { id: profileId, OR: [{ isSystem: true }, { userId: user.id }] },
     }),
     recentComments(user.id, reply ? "reply" : "comment"),
+    // Downloaded alongside, not after: a slow picture never holds up the rest.
+    // A watched video's stills replace its cover, which isn't fetched.
+    videoFrames.length ? Promise.resolve(videoFrames) : loadPostImages(imageUrls),
   ])
   timer.mark("profile")
   if (!profile) {
     return NextResponse.json({ error: "Comment profile not found" }, { status: 404 })
+  }
+
+  // An image-only post whose pictures couldn't be fetched: nothing to write
+  // about. Checked before anything is used up.
+  if (!reply && !post.text.trim() && images.length === 0 && !videoTranscript) {
+    return NextResponse.json(
+      { error: "Couldn't read this post's pictures. Click Comment on the post again, then retry." },
+      { status: 400 },
+    )
   }
 
   // Last check before the model call, so a blocked account never burns one.
@@ -161,9 +189,12 @@ export async function POST(req: Request) {
   const systemMessage = reply
     ? buildReplySystemMessage(profile, reply.isOwnPost)
     : buildCommentSystemMessage(profile)
-  const userMessage = reply
+  const watched = videoFrames.length > 0 || !!videoTranscript
+  const note = mediaNote(images.length, isVideo, watched ? { speech: !!videoTranscript } : undefined)
+  const baseMessage = reply
     ? buildReplyUserMessage(post, reply, extraInstruction, recent)
     : buildCommentUserMessage(post, extraInstruction, recent)
+  const userMessage = [baseMessage, note, videoSpeechBlock(videoTranscript)].filter(Boolean).join("\n\n")
   const replyTarget = reply?.thread.find((entry) => entry.isTarget) ?? null
   const { min, max } = targetLengthRange(profile.length)
 
@@ -174,6 +205,8 @@ export async function POST(req: Request) {
     post.headline,
     post.author,
     extraInstruction ?? "",
+    // A figure said in the video was in what the model was given.
+    videoTranscript,
     ...(reply?.thread.map((entry) => entry.text) ?? []),
   ].join(" ")
 
@@ -188,6 +221,7 @@ export async function POST(req: Request) {
     numberSources,
     // What the comment answers, whose wording it must not repeat back.
     copySource: replyTarget ? replyTarget.text : post.text,
+    images,
     engage: { userId: user.id, kind: reply ? "replies" : "comments" },
   }
   const beforeModelMs = timer.elapsed()

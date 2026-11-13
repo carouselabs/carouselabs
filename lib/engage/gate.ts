@@ -130,7 +130,14 @@ export async function reserveEngageGeneration(
 export const VIDEO_DAILY_CAP = 60
 let videoLimiter: Ratelimit | null = null
 
-export async function engageVideoCheck(userId: string, req: Request): Promise<NextResponse | null> {
+// count false: a video this person already had watched (lib/engage/
+// videoCache.ts): the same blocks apply, but it costs nothing and isn't
+// counted toward the day's videos.
+export async function engageVideoCheck(
+  userId: string,
+  req: Request,
+  { count = true }: { count?: boolean } = {},
+): Promise<NextResponse | null> {
   const outdated = await outdatedExtensionResponse(req)
   if (outdated) return outdated
 
@@ -146,6 +153,7 @@ export async function engageVideoCheck(userId: string, req: Request): Promise<Ne
     }
   }
 
+  if (!count) return null
   videoLimiter ??= new Ratelimit({
     redis: Redis.fromEnv(),
     limiter: Ratelimit.slidingWindow(VIDEO_DAILY_CAP, "1 d"),

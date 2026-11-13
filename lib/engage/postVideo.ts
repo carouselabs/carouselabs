@@ -180,13 +180,12 @@ export const runFfmpeg: RunFfmpeg = async (args, { timeoutMs, maxBytes, signal }
   })
 }
 
-// OpenAI's more accurate speech model (names and figures matter in a
-// comment); whisper-1 only when the account can't use it (not on a timeout or
-// an outage, which a second model wouldn't fix).
+// OpenAI's fast speech model; whisper-1 only when the account can't use it
+// (not on a timeout or an outage, which a second model wouldn't fix).
 let openai: OpenAI | null = null
 export const transcribeWithOpenAI: Transcribe = async (audio, signal) => {
   openai ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: AUDIO_MS, maxRetries: 0 })
-  const models = [...new Set([process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-transcribe", "whisper-1"])]
+  const models = [...new Set([process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe", "whisper-1"])]
   let lastError: unknown = null
   for (const model of models) {
     try {

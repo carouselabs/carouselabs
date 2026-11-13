@@ -9,7 +9,7 @@
 // and the length measure, which differ for X.
 import { generationDeadline, GenerationTimeout, parseComment, sanitizeComment, streamCommentModel, type PostImage } from "@/lib/ai/commentModel"
 import type { AiCaller } from "@/lib/engage/aiUsage"
-import { extractPartialComment, visibleCommentText } from "@/lib/ai/commentText"
+import { declaredFigures, extractPartialComment, visibleCommentText } from "@/lib/ai/commentText"
 import { findUnsourcedNumbers } from "@/lib/ai/numberGuard"
 import {
   aiTellReminder,
@@ -161,6 +161,10 @@ export async function generateComment(
     if (attempt > 1) hooks.onRetry?.(attempt)
 
     const message = reminder ? `${input.userMessage}\n\n${reminder}` : input.userMessage
+    // With pictures, a figure the model read in one (and listed first, in
+    // "figures") is sourced too.
+    const sourcesIn = (sofar: string) =>
+      input.images?.length ? `${input.numberSources} ${declaredFigures(sofar)}` : input.numberSources
 
     // Mid-stream guard: the text shown so far is checked for invented figures
     // BEFORE it is shown, so a made-up statistic never reaches the screen.
@@ -193,7 +197,7 @@ export async function generateComment(
           const partial = extractPartialComment(sofar)
           if (!partial) return
           const visible = visibleCommentText(partial.text, partial.complete)
-          const unsourced = findUnsourcedNumbers(visible, input.numberSources)
+          const unsourced = findUnsourcedNumbers(visible, sourcesIn(sofar))
           if (unsourced.length > 0) {
             invented = unsourced
             controller.abort()
@@ -246,7 +250,7 @@ export async function generateComment(
     // text through: a comment carrying a made-up statistic is never returned,
     // and never kept as a fallback, even on the final attempt. Failing the
     // request is the safer outcome, since the user posts this under their name.
-    const unsourced = findUnsourcedNumbers(cleaned, input.numberSources)
+    const unsourced = findUnsourcedNumbers(cleaned, sourcesIn(raw))
     if (unsourced.length > 0) {
       console.warn(
         `[${label}] attempt ${attempt}: unsourced figures (${unsourced.join(", ")}) not in post or instruction, discarding`,

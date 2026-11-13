@@ -43,6 +43,9 @@ export const STREAM_IDLE_MS = 10_000
 // rather than waited for, and a whole non-streamed answer gets this long.
 // The last model left keeps the full limits: waiting beats failing.
 export const FIRST_TEXT_MS = 4_000
+// Pictures take a model longer to start: handing over to the backup at
+// FIRST_TEXT_MS would throw away a nearly ready answer and start again.
+export const FIRST_TEXT_WITH_PICTURES_MS = 9_000
 export const PRIMARY_COMPLETE_MS = 8_000
 
 // FIRST_TEXT_MS can be tuned from measurements (admin → Engage → AI shows
@@ -481,7 +484,7 @@ export async function streamCommentModel(
             onRaw?.(raw)
           }, usage, pictures),
         // A slow start hands over to the backup while one is left.
-        last ? undefined : firstTextMs(),
+        last ? undefined : pictures ? Math.max(firstTextMs(), FIRST_TEXT_WITH_PICTURES_MS) : firstTextMs(),
       )
       const outcome = answerOutcome(raw)
       note(outcome)

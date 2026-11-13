@@ -33,7 +33,7 @@ import {
   type RewriteResponse,
   userFacingError,
 } from "@/lib/api";
-import { needsWatching, watchPostVideo, type WatchedVideo } from "@/lib/postVideo";
+import { needsWatching, prefetchPostVideo, watchPostVideo, type WatchedVideo } from "@/lib/postVideo";
 import { markReminded, postKey as reminderKey, remindedPosts, remindersFor, type SavedComment } from "@/lib/savedComments";
 import { useSavedComments } from "../../useSavedComments";
 import { SavedCommentReminder, SavedCommentsSection } from "../SavedComments";
@@ -561,6 +561,14 @@ export function HomeScreen({ onCreateProfile }: Props) {
     }
     tick();
   }
+
+  // A video post: watching starts as soon as it's picked, so Generate rarely
+  // has to wait for it (src/lib/postVideo.ts).
+  useEffect(() => {
+    if (selectedPost?.video && selectedPost.videoUrl && selectedPost.mode !== "connect") {
+      prefetchPostVideo(selectedPost.videoUrl);
+    }
+  }, [selectedPost]);
 
   // The first time a post is opened (Comment, not Reply or Connect): offer
   // the saved comments set to remind there, on the person's own posts or on

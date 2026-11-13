@@ -868,3 +868,72 @@ describe("a watched video", () => {
     expect(content).not.toContain("video_speech");
   });
 });
+
+// Pictures: a number the model read in one counts as real once it lists it
+// first ({"figures": [...], "comment": "..."}), and a model reading pictures
+// gets longer to start before the backup takes over.
+describe("a post's pictures: their numbers, and time to start", () => {
+  const PIC = "https://media.licdn.com/dms/image/v2/X/feedshare-shrink_800/0/1?e=1&t=x";
+  const SLIDE = "73% on that second slide is the number that would make me rethink our own onboarding.";
+  const raw = (value: Record<string, unknown>, size = 6) => {
+    const json = JSON.stringify(value);
+    return Array.from({ length: Math.ceil(json.length / size) }, (_, i) => json.slice(i * size, (i + 1) * size));
+  };
+  const ask = (post: Record<string, unknown>, stream = false) =>
+    new Request("https://carouselabs.com/api/ext/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer cl_cmt_test",
+        ...(stream ? { Accept: "text/event-stream" } : {}),
+      },
+      body: JSON.stringify({ profileId: "p1", post: { author: "Priya", headline: "Growth", ...post } }),
+    });
+
+  beforeEach(() => {
+    pictures.fail.clear();
+    pictures.fetched = [];
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("a figure read in a picture and listed first is kept, first time", async () => {
+    script.luna = [{ chunks: raw({ figures: ["73%"], comment: SLIDE }) }];
+    const res = await POST(ask({ text: POST_TEXT, images: [PIC] }));
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { comment: string }).comment).toBe(SLIDE);
+    expect(script.lunaCalls).toHaveLength(1);
+    const message = (script.lunaCalls[0].body.messages as { role: string; content: { type: string; text?: string }[] }[])[1].content[0].text;
+    expect(message).toMatch(/list every such number first/);
+  });
+
+  it("a figure not listed is still turned down", async () => {
+    script.luna = [{ chunks: raw({ comment: SLIDE }) }, { chunks: tokens(GOOD) }];
+    const res = await POST(ask({ text: POST_TEXT, images: [PIC] }));
+    expect(((await res.json()) as { comment: string }).comment).toBe(GOOD);
+    expect(script.lunaCalls).toHaveLength(2);
+  });
+
+  it("without pictures, listing a figure counts for nothing", async () => {
+    script.luna = [{ chunks: raw({ figures: ["73%"], comment: SLIDE }) }, { chunks: tokens(GOOD) }];
+    const res = await POST(ask({ text: POST_TEXT }));
+    expect(((await res.json()) as { comment: string }).comment).toBe(GOOD);
+    expect(script.lunaCalls).toHaveLength(2);
+  });
+
+  it("with pictures, the main model gets 9s to start before the backup takes over", async () => {
+    vi.useFakeTimers();
+    script.luna = [{ stallAfter: 0 }];
+    script.haiku = [{ chunks: tokens(GOOD) }];
+    const res = await POST(ask({ text: POST_TEXT, images: [PIC] }, true));
+    let text: string | null = null;
+    const start = Date.now();
+    void res.text().then((t) => (text = t));
+    while (text === null && Date.now() - start < 120_000) await vi.advanceTimersByTimeAsync(1_000);
+    const ms = Date.now() - start;
+    expect(parseEvents(text ?? "").at(-1)).toMatchObject({ event: "final", data: { comment: GOOD } });
+    expect(ms).toBeGreaterThanOrEqual(9_000);
+    expect(ms).toBeLessThan(12_000);
+  });
+});

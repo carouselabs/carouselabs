@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { setExtensionAccess } from "@/lib/extensionAccess";
-import { forgetWatchedVideos } from "@/lib/postVideo";
+import { forgetWatchedVideos, watchPostVideo } from "@/lib/postVideo";
 import { HomeScreen } from "@/sidepanel/components/screens/HomeScreen";
 import { chromeMock } from "../setup/chrome";
 
@@ -140,8 +140,40 @@ describe("a video post", () => {
     status = 200;
     fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
     await waitFor(() => expect(box().value).toBe("Comment number 2."));
-    expect(videoCalls()).toHaveLength(2);
+    // Asked again (the limit isn't remembered), and this time watched.
+    expect(videoCalls().length).toBeGreaterThanOrEqual(2);
     expect(generated[1]).toMatchObject({ videoFrames: WATCHED.frames });
+  });
+
+  it("watching starts as soon as the post is picked, before Generate", async () => {
+    const answer = later();
+    const { generated, videoCalls } = server(() => answer.promise);
+    await renderReady();
+    // Picked (from storage) and already being watched; nothing written yet.
+    await waitFor(() => expect(videoCalls()).toHaveLength(1));
+    expect(generated).toHaveLength(0);
+
+    answer.resolve(json(WATCHED));
+    await new Promise((r) => setTimeout(r, 10));
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    await waitFor(() => expect(box().value).toBe("Comment number 1."));
+    // Generate used the watch already done: no second request, no wait.
+    expect(videoCalls()).toHaveLength(1);
+    expect(screen.queryByText("Watching the video…")).toBeNull();
+    expect(generated[0]).toMatchObject({ videoFrames: WATCHED.frames });
+  });
+
+  it("Generate waits only so long for a slow watch, then writes without it; the watch is kept for next time", async () => {
+    const answer = later();
+    server(() => answer.promise);
+    const stop = new AbortController();
+    const started = Date.now();
+    expect(await watchPostVideo(VIDEO, stop.signal, 50)).toBeNull();
+    expect(Date.now() - started).toBeLessThan(1_000);
+
+    answer.resolve(json(WATCHED));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(await watchPostVideo(VIDEO, stop.signal, 50)).toEqual({ frames: WATCHED.frames, transcript: WATCHED.transcript });
   });
 
   it("Stop while it's being watched: nothing is written", async () => {

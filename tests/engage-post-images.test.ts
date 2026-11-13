@@ -1,5 +1,5 @@
 // A post's pictures for the comment model (lib/engage/postImages.ts): only
-// LinkedIn's image servers, at most four, a picture that fails is left out
+// LinkedIn's image servers, at most two, a picture that fails is left out
 // rather than failing the comment, and the model is told what it's looking at.
 import { describe, expect, it, vi } from "vitest"
 import { isPostImageUrl, loadPostImages, mediaNote, MAX_IMAGES, postImageUrls } from "@/lib/engage/postImages"
@@ -25,11 +25,11 @@ describe("which addresses are used", () => {
     }
   })
 
-  it("in order, without repeats, at most four, ignoring anything else in the list", () => {
+  it("in order, without repeats, at most two, ignoring anything else in the list", () => {
     expect(postImageUrls(undefined)).toEqual([])
     expect(postImageUrls("not a list")).toEqual([])
-    const urls = postImageUrls([IMG(1), IMG(1), "https://evil.example/x.jpg", IMG(2), IMG(3), IMG(4), IMG(5), 7])
-    expect(urls).toEqual([IMG(1), IMG(2), IMG(3), IMG(4)])
+    const urls = postImageUrls([IMG(1), IMG(1), "https://evil.example/x.jpg", IMG(2), IMG(3), IMG(4), 7])
+    expect(urls).toEqual([IMG(1), IMG(2)])
     expect(urls).toHaveLength(MAX_IMAGES)
   })
 })
@@ -38,7 +38,7 @@ describe("downloading them", () => {
   it("keeps the ones that arrive, as base64, and leaves the rest out", async () => {
     const fetchImage = vi.fn(async (url: string, opts?: { maxBytes?: number; timeoutMs?: number }) => {
       expect(opts?.maxBytes).toBeLessThanOrEqual(4 * 1024 * 1024)
-      expect(opts?.timeoutMs).toBeLessThanOrEqual(3_000)
+      expect(opts?.timeoutMs).toBeLessThanOrEqual(1_500)
       if (url === IMG(2)) throw new Error("Timed out fetching that image")
       return { bytes: Buffer.from(`pic ${url.slice(-12)}`), mediaType: "image/jpeg" }
     })
@@ -56,10 +56,12 @@ describe("downloading them", () => {
 })
 
 describe("what the model is told", () => {
-  it("pictures: read them, respond to the post as a whole, no numbers only a picture has", () => {
+  it("pictures: read them, respond to the post as a whole; a picture's numbers listed first", () => {
     expect(mediaNote(1, false)).toMatch(/picture is attached/)
     expect(mediaNote(3, false)).toMatch(/3 pictures are attached/)
-    expect(mediaNote(2, false)).toMatch(/Don't quote numbers that only appear in a picture/)
+    expect(mediaNote(2, false)).toContain('{"figures": ["48%"], "comment": "..."}')
+    expect(mediaNote(2, false)).toMatch(/Never use a number that is in neither the post nor its pictures/)
+    expect(mediaNote(1, true, { speech: true })).toMatch(/list every such number first/)
   })
 
   it("a video: its cover, and it can't be watched", () => {

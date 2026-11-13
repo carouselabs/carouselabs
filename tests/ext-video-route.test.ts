@@ -13,9 +13,24 @@ const state = vi.hoisted(() => ({
   limitOk: true,
   limited: [] as string[],
   watch: null as null | ((url: string, signal: AbortSignal) => Promise<unknown>),
+  cache: new Map<string, unknown>(),
+  cacheBroken: false,
 }))
 
-vi.mock("@upstash/redis", () => ({ Redis: { fromEnv: () => ({}) } }))
+vi.mock("@upstash/redis", () => ({
+  Redis: {
+    fromEnv: () => ({
+      get: async (key: string) => {
+        if (state.cacheBroken) throw new Error("redis down")
+        return state.cache.get(key) ?? null
+      },
+      set: async (key: string, value: unknown) => {
+        state.cache.set(key, value)
+        return "OK"
+      },
+    }),
+  },
+}))
 vi.mock("@upstash/ratelimit", () => {
   class Ratelimit {
     static slidingWindow(limit: number, window: string) {
@@ -46,6 +61,7 @@ vi.mock("@/lib/engage/postVideo", () => ({
 
 import { POST } from "@/app/api/ext/video/route"
 import { watchVideo } from "@/lib/engage/postVideo"
+import { videoCacheKey, videoId } from "@/lib/engage/videoCache"
 
 const VIDEO = "https://dms.licdn.com/playlist/vid/v2/D4E05AQ/mp4-360p-30fp-crf28/0/1700000000000?e=1&v=beta&t=x"
 
@@ -71,6 +87,10 @@ beforeEach(() => {
   state.outdated = false
   state.limitOk = true
   state.limited = []
+  state.cache = new Map()
+  state.cacheBroken = false
+  vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://example.upstash.io")
+  vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "test")
   state.watch = async () => ({
     frames: [{ mediaType: "image/jpeg", data: "/9j/AAA" }, { mediaType: "image/jpeg", data: "/9j/BBB" }],
     transcript: "Here's what we learned.",
@@ -168,5 +188,61 @@ describe("POST /api/ext/video", () => {
     controller.abort()
     expect((await pending).status).toBe(422)
     expect(seen!.aborted).toBe(true)
+  })
+})
+
+describe("a video watched before", () => {
+  // The same video at another size, with a fresh signature.
+  const AGAIN = "https://dms.licdn.com/playlist/vid/v2/D4E05AQ/mp4-720p-30fp-crf28/0/1700000000000?e=2&v=beta&t=y"
+  const WATCHED = { frames: ["/9j/AAA", "/9j/BBB"], transcript: "Here's what we learned.", seconds: 41.2 }
+
+  it("one video, however it's addressed: its media id; without one, its address minus the signature", () => {
+    const real = "https://dms.licdn.com/playlist/vid/v2/D4E05AQHabcdefghij1234/mp4-720p-30fp-crf28/0/1700000000000?e=1&t=x"
+    expect(videoId(real)).toBe("D4E05AQHabcdefghij1234")
+    expect(videoCacheKey("u1", real)).toBe("ext-video:v1:u1:D4E05AQHabcdefghij1234")
+    expect(videoId(AGAIN)).toBe("dms.licdn.com/playlist/vid/v2/D4E05AQ/mp4-720p-30fp-crf28/0/1700000000000")
+  })
+
+  it("asked again: sent back at once, not watched, paid for or counted again", async () => {
+    const real = (size: number, sig: string) =>
+      `https://dms.licdn.com/playlist/vid/v2/D4E05AQHabcdefghij1234/mp4-${size}p-30fp-crf28/0/1700000000000?e=1&t=${sig}`
+    expect((await POST(ask({ url: real(360, "a") }))).status).toBe(200)
+    expect(watchVideo).toHaveBeenCalledTimes(1)
+    expect(state.limited).toHaveLength(1)
+
+    const again = await POST(ask({ url: real(720, "b") }))
+    expect(again.status).toBe(200)
+    expect(await again.json()).toEqual(WATCHED)
+    expect(watchVideo).toHaveBeenCalledTimes(1)
+    expect(state.limited).toHaveLength(1)
+  })
+
+  it("not shared with anyone else: their first watch is their own", async () => {
+    await POST(ask())
+    state.user = { id: "u2" }
+    expect((await POST(ask())).status).toBe(200)
+    expect(watchVideo).toHaveBeenCalledTimes(2)
+  })
+
+  it("still blocked if the account is now suspended", async () => {
+    await POST(ask())
+    state.access = accessWith({ status: "suspended" })
+    expect((await POST(ask())).status).toBe(403)
+    expect(watchVideo).toHaveBeenCalledTimes(1)
+  })
+
+  it("can't be looked up: watched as before", async () => {
+    await POST(ask())
+    state.cacheBroken = true
+    expect((await POST(ask())).status).toBe(200)
+    expect(watchVideo).toHaveBeenCalledTimes(2)
+  })
+
+  it("a video that couldn't be watched isn't kept", async () => {
+    state.watch = async () => {
+      throw new Error("broken file")
+    }
+    expect((await POST(ask())).status).toBe(422)
+    expect(state.cache.size).toBe(0)
   })
 })

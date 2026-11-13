@@ -32,6 +32,16 @@ export function sanitizeComment(raw: string): { comment: string; removedChars: n
 }
 
 const COMMENT_KEY = /"comment"\s*:\s*"/
+const FIGURES = /"figures"\s*:\s*\[([^\]]{0,600})\]/
+
+// The numbers a model says it read in the post's pictures, written before the
+// comment as {"figures": ["48%"], "comment": "..."} (lib/engage/postImages.ts
+// asks for them whenever pictures are attached). Counted as sourced by the
+// made-up-number check: a picture is part of the post, but its words aren't
+// in the post's text. Only a finished list counts. Empty when there is none.
+export function declaredFigures(raw: string): string {
+  return FIGURES.exec(raw)?.[1] ?? ""
+}
 
 const ESCAPES: Record<string, string> = { n: "\n", t: "\t", r: "\r", b: "\b", f: "\f", '"': '"', "\\": "\\", "/": "/" }
 

@@ -49,6 +49,13 @@ describe("production manifest", () => {
     expect(scripts.find((s) => s.js?.includes("src/content-script.ts"))?.matches).toEqual(["https://www.linkedin.com/*"]);
   });
 
+  it("runs the LinkedIn script in frames too (Sales Navigator's post frame), still only on linkedin.com", () => {
+    const linkedin = (prod.content_scripts ?? []).find((s) => s.js?.includes("src/content-script.ts"));
+    expect(linkedin?.all_frames).toBe(true);
+    expect(linkedin?.match_about_blank).toBeUndefined();
+    expect((prod.content_scripts ?? []).find((s) => s.js?.includes("src/content/authRelay.ts"))?.all_frames).toBeUndefined();
+  });
+
   it("does not weaken the default CSP or open itself to web pages", () => {
     expect(prod.content_security_policy).toBeUndefined();
     expect((prod as Record<string, unknown>).externally_connectable).toBeUndefined();

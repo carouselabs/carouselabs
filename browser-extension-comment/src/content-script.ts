@@ -42,16 +42,29 @@ import { READ_CONVERSATION_MESSAGE_TYPE } from "@/lib/messageThread";
 import { PING_MESSAGE_TYPE } from "@/lib/tabs";
 import { insertSwitch as readInsertSwitch, readInsertEnabled, rememberInsertSwitch } from "@/lib/insertSwitch";
 import { insertOnce, type InsertAnswer } from "@/lib/insertOnce";
+import { CLASSIC, classicCardUrn, classicHeadline, classicNameIn } from "@/content/classicPost";
 
 // Captured posts, threads and profiles are other people's content; they go to
 // the page console only in development builds.
 const DEV = import.meta.env.MODE !== "production";
 
+// Sales Navigator opens a post in a frame of LinkedIn's own post page
+// (www.linkedin.com/feed/sales-navigator/<urn>), so that post's Comment and
+// Reply buttons and its comment box are in the frame, where a copy of this
+// script in the page itself never hears the click. So the manifest runs it in
+// every LinkedIn frame (all_frames), and a copy stays idle except in the page
+// itself and in a frame showing a feed page like that one. Messaging's frame
+// (/preload/, read from the page itself: src/content/messageThread.ts) is
+// not one. A post frame handles its own post's Comment, Reply and Insert and
+// nothing else (see answersInsertHere).
+const IN_POST_FRAME = window !== window.top && location.pathname.startsWith("/feed/");
+const ACTIVE = window === window.top || IN_POST_FRAME;
+
 // Development builds only: Ctrl+Alt+Shift+S saves the page's layout with all
 // text scrubbed (src/content/devSnapshot.ts), for building against LinkedIn's
 // reply boxes, Sales Navigator and image/video posts. The MODE check is a
 // build-time constant, so store builds drop it entirely.
-if (DEV) {
+if (DEV && ACTIVE) {
   void import("@/content/devSnapshot").then(({ listenForLayoutShortcut }) => {
     listenForLayoutShortcut("linkedin");
   });
@@ -191,6 +204,10 @@ interface InsertTarget {
   // Reply mode: the comment replied to, and the top comment of its thread.
   commentUrn?: string | null;
   rootUrn?: string | null;
+  // Captured in a post frame (Sales Navigator): that frame's path. Insert is
+  // then answered there, not by the page (answersInsertHere). Absent for a
+  // capture made in the page itself.
+  frame?: string;
 }
 
 // Reading a conversation is on-demand (see src/content/messageThread.ts's
@@ -199,7 +216,7 @@ interface InsertTarget {
 // READ_CONVERSATION_MESSAGE_TYPE and gets the result back in the response,
 // rather than through the storage/broadcast hand-off every other mode uses.
 
-console.log("[content-script] loaded on", window.location.href);
+if (ACTIVE) console.log("[content-script] loaded on", window.location.href);
 
 // Fetched once and cached for the life of this content script instance (a
 // fresh LinkedIn page load re-injects the script and re-fetches).
@@ -235,14 +252,16 @@ function configNow(): ExtensionConfig {
   return serverConfig ?? storedConfig ?? FALLBACK_CONFIG;
 }
 
-chrome.storage.local
-  .get(CONFIG_STORAGE_KEY)
-  .then((stored) => {
-    if (stored[CONFIG_STORAGE_KEY]) storedConfig = completeConfig(stored[CONFIG_STORAGE_KEY] as Partial<ExtensionConfig>);
-  })
-  .catch(() => {
-    // No stored copy: the built-in one is used until the server answers.
-  });
+if (ACTIVE) {
+  chrome.storage.local
+    .get(CONFIG_STORAGE_KEY)
+    .then((stored) => {
+      if (stored[CONFIG_STORAGE_KEY]) storedConfig = completeConfig(stored[CONFIG_STORAGE_KEY] as Partial<ExtensionConfig>);
+    })
+    .catch(() => {
+      // No stored copy: the built-in one is used until the server answers.
+    });
+}
 
 async function loadConfig(): Promise<ExtensionConfig> {
   const baseUrl = await getApiBaseUrl();
@@ -275,7 +294,7 @@ function getConfig(): Promise<ExtensionConfig> {
 // Kick the fetch off immediately on script load rather than waiting for the
 // first click, so the common case (config already cached by the time a user
 // clicks Comment) doesn't pay fetch latency on the click path.
-void getConfig();
+if (ACTIVE) void getConfig();
 
 // LinkedIn's "…see more" is a CSS line-clamp toggle, not a lazy-load: the
 // full post text is already in the DOM at click time, alongside the
@@ -289,6 +308,9 @@ function extractPostText(container: Element, selector: string): string {
 
   const clone = el.cloneNode(true) as Element;
   clone.querySelectorAll("button").forEach((toggle) => toggle.remove());
+  // Line breaks hold no text, so paragraphs split by <br> (LinkedIn's older
+  // layout, in Sales Navigator) would run together: "…the only.On Monday".
+  clone.querySelectorAll("br").forEach((br) => br.replaceWith(" "));
   return clone.textContent?.replace(/\s+/g, " ").trim() ?? "";
 }
 
@@ -382,6 +404,11 @@ function cleanLinkName(raw: string): string {
 }
 
 function extractNameFromProfileLink(link: Element): string {
+  // LinkedIn's older layout (Sales Navigator) puts the headline in the same
+  // link, so its name is read from the title inside it.
+  const titled = classicNameIn(link);
+  if (isPlausibleName(titled)) return titled;
+
   const fromText = cleanLinkName(link.textContent ?? "");
   if (isPlausibleName(fromText)) return fromText;
 
@@ -537,6 +564,13 @@ function extractHeadlineNear(authorLink: Element | null, authorName: string): st
   return "";
 }
 
+// The author's headline: from its own slot in LinkedIn's older layout (Sales
+// Navigator), where the text after the name link is the post's age instead,
+// else found near the link as above.
+function authorHeadline(authorLink: Element | null, authorName: string): string {
+  return classicHeadline(authorLink) || extractHeadlineNear(authorLink, authorName);
+}
+
 // A post's own media on LinkedIn's image server, told apart by the kind in
 // the address: post images (feedshare), a video's cover (videocover), a
 // link's preview (articleshare / article-cover), a document's cover. Profile
@@ -567,18 +601,20 @@ function isVideoFileUrl(raw: string): string | null {
 
 // Files the page loads are noted as they arrive (the page's own list of
 // loaded files is capped and fills up long before a scroll ends).
-try {
-  new PerformanceObserver((list) => {
-    for (const entry of list.getEntries()) {
-      const url = isVideoFileUrl(entry.name);
-      if (url && !seenVideoFiles.includes(url)) {
-        seenVideoFiles.push(url);
-        if (seenVideoFiles.length > 200) seenVideoFiles.shift();
+if (ACTIVE) {
+  try {
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        const url = isVideoFileUrl(entry.name);
+        if (url && !seenVideoFiles.includes(url)) {
+          seenVideoFiles.push(url);
+          if (seenVideoFiles.length > 200) seenVideoFiles.shift();
+        }
       }
-    }
-  }).observe({ type: "resource", buffered: true });
-} catch {
-  // No resource timing here: only the player's own addresses are used.
+    }).observe({ type: "resource", buffered: true });
+  } catch {
+    // No resource timing here: only the player's own addresses are used.
+  }
 }
 
 // The id LinkedIn gives a video's media, shared by its cover and its files:
@@ -747,7 +783,54 @@ function sendPostToSidePanel(post: SelectedPost) {
   });
 }
 
-type ContainerStrategy = "primary" | "fallback" | "single-on-page" | "none";
+type ContainerStrategy = "primary" | "fallback" | "classic" | "single-on-page" | "none";
+
+// The outermost ancestor of el (el itself excluded) matching selector.
+function outermostAbove(el: Element, selector: string): Element | null {
+  let outermost: Element | null = null;
+  for (let p = el.parentElement; p; p = p.parentElement) if (p.matches(selector)) outermost = p;
+  return outermost;
+}
+
+// A post card of LinkedIn's older layout (Sales Navigator), not one the
+// configured selectors already know.
+function isClassicCard(card: Element | null, config: ExtensionConfig): boolean {
+  if (!card?.matches(CLASSIC.card)) return false;
+  const fallbackSelector = config.postContainerFallbackSelector || FALLBACK_CONFIG.postContainerFallbackSelector;
+  return !card.matches(config.postContainerSelector) && !card.matches(fallbackSelector);
+}
+
+// The selectors a post card is read with: the configured ones, or for a card
+// of LinkedIn's older layout (Sales Navigator) that layout's own.
+// commentTextSelector finds a comment's own text in a reply's thread.
+type Reading = ExtensionConfig & { commentTextSelector: string };
+
+function readingFor(card: Element | null, config: ExtensionConfig): Reading {
+  if (!isClassicCard(card, config)) {
+    return {
+      ...config,
+      // Older cached configs predate this key.
+      commentItemSelector: config.commentItemSelector || FALLBACK_CONFIG.commentItemSelector,
+      commentTextSelector: config.postTextSelector,
+    };
+  }
+  return {
+    ...config,
+    postTextSelector: CLASSIC.postText,
+    commentItemSelector: CLASSIC.commentItem,
+    commentTextSelector: CLASSIC.commentText,
+  };
+}
+
+// The post's own address: its permalink, else one built from the URN on its
+// card (LinkedIn's older layout links to neither), else the page's. Only the
+// history row's link uses it.
+function postUrlOf(card: Element | null): string {
+  const permalink = card?.querySelector<HTMLAnchorElement>('a[href*="/feed/update/"]')?.href;
+  if (permalink) return permalink;
+  const urn = classicCardUrn(card);
+  return urn ? `https://www.linkedin.com/feed/update/${urn}/` : window.location.href;
+}
 
 // The post a click belongs to, tried in descending order of trust:
 //   1. postContainerSelector: verified on the main feed, one match per post.
@@ -756,7 +839,10 @@ type ContainerStrategy = "primary" | "fallback" | "single-on-page" | "none";
 //      pages (componentkey "...FeedType_FEED_DETAIL") where the verified
 //      selector matches nothing. The OUTERMOST match is taken, since without
 //      the role anchor an inner wrapper could share the prefix.
-//   3. The page's only fallback match, when the card isn't an ancestor of
+//   3. A card of LinkedIn's older layout (Sales Navigator's post frame, see
+//      src/content/classicPost.ts), which carries the post's URN instead of
+//      a componentkey. The outermost, as above.
+//   4. The page's only fallback match, when the card isn't an ancestor of
 //      the click at all (comments rendered beside the post, not inside it).
 //      Only when exactly one exists, so a feed can never pick the wrong post.
 function findPostContainer(from: Element, config: ExtensionConfig): { container: Element | null; strategy: ContainerStrategy } {
@@ -766,11 +852,11 @@ function findPostContainer(from: Element, config: ExtensionConfig): { container:
   // Older cached configs predate this key.
   const fallbackSelector = config.postContainerFallbackSelector || FALLBACK_CONFIG.postContainerFallbackSelector;
 
-  let outermost: Element | null = null;
-  for (let el = from.parentElement; el; el = el.parentElement) {
-    if (el.matches(fallbackSelector)) outermost = el;
-  }
+  const outermost = outermostAbove(from, fallbackSelector);
   if (outermost) return { container: outermost, strategy: "fallback" };
+
+  const classic = outermostAbove(from, CLASSIC.card);
+  if (classic) return { container: classic, strategy: "classic" };
 
   const onPage = document.querySelectorAll(fallbackSelector);
   if (onPage.length === 1) return { container: onPage[0], strategy: "single-on-page" };
@@ -850,29 +936,28 @@ async function handleClick(event: MouseEvent) {
   lastPostContainer = postContainer;
   const identity = postIdentity(postContainer);
   const insertTarget = rememberCapture({ ...identity });
+  const reading = readingFor(postContainer, config);
 
   // Text first: the author's last-resort tier is cross-checked against it.
-  const text = extractPostText(postContainer, config.postTextSelector);
-  const author = extractAuthor(postContainer, config, text);
+  const text = extractPostText(postContainer, reading.postTextSelector);
+  const author = extractAuthor(postContainer, reading, text);
   const self = await getSelfName();
 
   const post: SelectedPost = {
     mode: "comment",
     authorName: author.name,
-    authorHeadline: extractHeadlineNear(author.link, author.name),
+    authorHeadline: authorHeadline(author.link, author.name),
     text,
-    type: classifyPostType(postContainer, config),
+    type: classifyPostType(postContainer, reading),
     // The post's own permalink when the container exposes one, else the page
     // URL. Only used for the history row's link, so degrading to the feed URL
     // costs nothing functionally.
-    url:
-      postContainer.querySelector<HTMLAnchorElement>('a[href*="/feed/update/"]')?.href ??
-      window.location.href,
+    url: postUrlOf(postContainer),
     capturedAt: Date.now(),
     target: insertTarget,
     isOwnPost: sameName(author.name, self.name),
     postUrn: identity.postUrn,
-    ...extractPostMedia(postContainer, config),
+    ...extractPostMedia(postContainer, reading),
   };
 
   if (!post.authorName || (!post.text && !post.images?.length)) {
@@ -904,21 +989,21 @@ async function handleReplyClick(replyButton: Element, config: ExtensionConfig) {
   const scope = postContainer?.contains(replyButton) ? postContainer : document.body;
 
   const self = await getSelfName();
+  const reading = readingFor(postContainer, config);
 
   // Post fields first, via the same extraction the Comment flow uses, so the
   // post author is known before thread entries are compared against it.
-  let text = postContainer ? extractPostText(postContainer, config.postTextSelector) : "";
-  const author = postContainer ? extractAuthor(postContainer, config, text) : null;
+  let text = postContainer ? extractPostText(postContainer, reading.postTextSelector) : "";
+  const author = postContainer ? extractAuthor(postContainer, reading, text) : null;
   const authorName = author?.name ?? "";
 
   const thread = extractThread(
     replyButton,
     scope,
     {
-      // Older cached configs predate this key; the fallback keeps them working.
-      commentItemSelector: config.commentItemSelector || FALLBACK_CONFIG.commentItemSelector,
-      profileHrefSelector: config.authorProfileHrefSelector,
-      postTextSelector: config.postTextSelector,
+      commentItemSelector: reading.commentItemSelector,
+      profileHrefSelector: reading.authorProfileHrefSelector,
+      postTextSelector: reading.commentTextSelector,
     },
     { postAuthor: authorName, self: self.name },
     { nameFromProfileLink: extractNameFromProfileLink, ownText },
@@ -926,7 +1011,7 @@ async function handleReplyClick(replyButton: Element, config: ExtensionConfig) {
 
   // Comments may share the post body's text anchor. On a post with no text of
   // its own, the first match would then be a comment — so it isn't post text.
-  const firstTextEl = postContainer?.querySelector(config.postTextSelector);
+  const firstTextEl = postContainer?.querySelector(reading.postTextSelector);
   if (firstTextEl && thread.allItems.some((item) => item.contains(firstTextEl))) text = "";
 
   const target = thread.entries.find((entry) => entry.isTarget);
@@ -969,15 +1054,13 @@ async function handleReplyClick(replyButton: Element, config: ExtensionConfig) {
     target: insertTarget,
     mode: "reply",
     authorName,
-    authorHeadline: extractHeadlineNear(author?.link ?? null, authorName),
+    authorHeadline: authorHeadline(author?.link ?? null, authorName),
     text,
-    type: postContainer ? classifyPostType(postContainer, config) : "text",
-    url:
-      postContainer?.querySelector<HTMLAnchorElement>('a[href*="/feed/update/"]')?.href ??
-      window.location.href,
+    type: postContainer ? classifyPostType(postContainer, reading) : "text",
+    url: postUrlOf(postContainer),
     capturedAt: Date.now(),
     // The post's pictures, as context for the reply.
-    ...(postContainer ? extractPostMedia(postContainer, config) : {}),
+    ...(postContainer ? extractPostMedia(postContainer, reading) : {}),
     reply: {
       targetAuthor: target.authorName,
       targetText: target.text,
@@ -1002,10 +1085,10 @@ let lastPostContainer: Element | null = null;
 // The target of this copy's last Comment or Reply capture (see InsertTarget).
 let lastCapture: InsertTarget | null = null;
 
-function rememberCapture(identity: Omit<InsertTarget, "captureId">): InsertTarget {
+function rememberCapture(identity: Omit<InsertTarget, "captureId" | "frame">): InsertTarget {
   const captureId =
     typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  lastCapture = { captureId, ...identity };
+  lastCapture = { captureId, ...identity, ...(IN_POST_FRAME ? { frame: location.pathname } : {}) };
   return lastCapture;
 }
 
@@ -1015,8 +1098,10 @@ function permalinkUrn(card: Element | null): string | null {
   return /\/feed\/update\/(urn:li:[A-Za-z]+:\d+)/.exec(href)?.[1] ?? null;
 }
 
+// LinkedIn's older layout (Sales Navigator) has no permalink, but its card
+// carries the URN itself.
 function postIdentity(card: Element | null): Pick<InsertTarget, "postKey" | "postUrn"> {
-  return { postKey: card?.getAttribute("componentkey") || null, postUrn: permalinkUrn(card) };
+  return { postKey: card?.getAttribute("componentkey") || null, postUrn: permalinkUrn(card) ?? classicCardUrn(card) };
 }
 
 // Whether an Insert's target is this copy's own last capture, so its
@@ -1027,19 +1112,20 @@ function isOwnCapture(target: InsertTarget | undefined): boolean {
 }
 
 // The post card an element sits in: the verified container, else the
-// outermost fallback match, as findPostContainer does — never a guess.
+// outermost fallback match, else the outermost card of LinkedIn's older
+// layout, as findPostContainer does — never a guess.
 function cardAround(el: Element, config: ExtensionConfig): Element | null {
   const primary = el.closest(config.postContainerSelector);
   if (primary) return primary;
   const fallbackSelector = config.postContainerFallbackSelector || FALLBACK_CONFIG.postContainerFallbackSelector;
-  let outermost: Element | null = null;
-  for (let p: Element | null = el; p; p = p.parentElement) if (p.matches(fallbackSelector)) outermost = p;
-  return outermost;
+  const outermost = (selector: string) => outermostAbove(el, selector) ?? (el.matches(selector) ? el : null);
+  return outermost(fallbackSelector) ?? outermost(CLASSIC.card);
 }
 
 // A post card found again on this page from a capture's identity: by its
-// componentkey, else by its permalink, else (on the post's own page, which
-// may not link to itself) the page's only card. Only a single match counts.
+// componentkey, else by its permalink or the URN on the card (LinkedIn's
+// older layout), else (on the post's own page, which may not link to itself)
+// the page's only card. Only a single match counts.
 function findPostCard(config: ExtensionConfig, identity: Pick<InsertTarget, "postKey" | "postUrn">): Element | null {
   const cards = new Set<Element>();
   if (identity.postKey) {
@@ -1051,6 +1137,11 @@ function findPostCard(config: ExtensionConfig, identity: Pick<InsertTarget, "pos
     for (const link of document.querySelectorAll(`a[href*=${JSON.stringify(`/feed/update/${identity.postUrn}`)}]`)) {
       const card = cardAround(link, config);
       if (card) cards.add(card);
+    }
+    if (cards.size === 0) {
+      for (const el of document.querySelectorAll(`[data-urn=${JSON.stringify(identity.postUrn)}]`)) {
+        cards.add(cardAround(el, config) ?? el);
+      }
     }
     if (cards.size === 0 && window.location.pathname.includes(identity.postUrn)) {
       const fallbackSelector = config.postContainerFallbackSelector || FALLBACK_CONFIG.postContainerFallbackSelector;
@@ -1106,7 +1197,12 @@ let lastReplyTarget: {
 function liveCommentElement(el: Element | null, urn: string | null): Element | null {
   if (el?.isConnected) return el;
   if (!urn) return null;
-  return document.querySelector(`[componentkey*=${JSON.stringify(`urn:li:comment:(${urn})`)}]`);
+  const full = `urn:li:comment:(${urn})`;
+  // LinkedIn's older layout (Sales Navigator) names it in data-id instead.
+  return (
+    document.querySelector(`[componentkey*=${JSON.stringify(full)}]`) ??
+    document.querySelector(`[data-id=${JSON.stringify(full)}]`)
+  );
 }
 
 // The comment an Insert in reply mode is for: this copy's remembered one, or,
@@ -1123,9 +1219,10 @@ function replyTargetFor(target: InsertTarget | undefined): typeof lastReplyTarge
 // certainty and never falls back to the post's main comment box: putting a
 // reply there would publish it as a top-level comment on the post.
 function findReplyBox(config: ExtensionConfig, reply: NonNullable<typeof lastReplyTarget>): HTMLElement | null {
-  const itemSelector = config.commentItemSelector || FALLBACK_CONFIG.commentItemSelector;
   const item = liveCommentElement(reply.item, reply.itemUrn);
   const root = liveCommentElement(reply.root, reply.rootUrn);
+  const card = reply.postContainer?.isConnected ? reply.postContainer : ((item ?? root)?.closest(CLASSIC.card) ?? null);
+  const itemSelector = readingFor(card, config).commentItemSelector;
   const usable = (box: HTMLElement) => usableEditor(box) && !isMessageComposeBox(box);
 
   // 1. Inside the target comment, and belonging to it rather than to one of
@@ -1194,7 +1291,7 @@ function isMessageComposeBox(el: Element): boolean {
 // typed into.
 function findPostCommentBox(config: ExtensionConfig, card: Element | null): HTMLElement | null {
   if (!card?.isConnected) return null;
-  const itemSelector = config.commentItemSelector || FALLBACK_CONFIG.commentItemSelector;
+  const itemSelector = readingFor(card, config).commentItemSelector;
   return (
     Array.from(card.querySelectorAll<HTMLElement>(config.commentBoxSelector)).find(
       (box) => !isMessageComposeBox(box) && !box.closest(itemSelector) && usableEditor(box),
@@ -1281,7 +1378,33 @@ function insertTargetOf(raw: unknown): InsertTarget | undefined {
     postUrn: text(t.postUrn),
     commentUrn: text(t.commentUrn),
     rootUrn: text(t.rootUrn),
+    ...(text(t.frame) ? { frame: text(t.frame)! } : {}),
   };
+}
+
+// Whether a frame on this page shows the given path (a post frame, by the
+// path its captures carry).
+function frameShowing(path: string): boolean {
+  for (const frame of Array.from(document.querySelectorAll("iframe"))) {
+    try {
+      if (frame.contentWindow?.location.pathname === path) return true;
+    } catch {
+      // Another site's frame: never a LinkedIn post.
+    }
+  }
+  return false;
+}
+
+// The panel sends an Insert to every frame of the tab, so with a post frame
+// on the page (Sales Navigator) exactly one copy must answer it: a comment or
+// reply in the frame it was captured in, anything else in the page itself.
+// The page still answers a frame's capture once no frame shows that post any
+// more, so the person hears it isn't open rather than nothing at all.
+function answersInsertHere(request: InsertRequest): boolean {
+  if (request.mode === "connect" || request.mode === "message") return !IN_POST_FRAME;
+  const frame = insertTargetOf(request.target)?.frame;
+  if (IN_POST_FRAME) return frame === location.pathname;
+  return !frame || !frameShowing(frame);
 }
 
 function handleInsert(message: InsertRequest): Promise<InsertAnswer> {
@@ -1338,6 +1461,10 @@ function onRuntimeMessage(
     return;
   }
 
+  // A post frame answers Inserts for its own post and nothing else: profiles
+  // and conversations are read in the page itself.
+  if (IN_POST_FRAME && message?.type !== INSERT_MESSAGE_TYPE) return;
+
   if (message?.type === READ_SELF_PROFILE_MESSAGE_TYPE) {
     readSelfProfile()
       .then(sendResponse)
@@ -1355,6 +1482,8 @@ function onRuntimeMessage(
   if (!message || message.type !== INSERT_MESSAGE_TYPE || typeof message.text !== "string") {
     return; // not our message — leave the channel alone for other listeners
   }
+  // Another frame of this page answers this one (see answersInsertHere).
+  if (!answersInsertHere(message as InsertRequest)) return;
 
   handleInsert(message as InsertRequest)
     .then(sendResponse)
@@ -1404,17 +1533,21 @@ const instance: Instance = {
   },
 };
 
-instances[INSTANCE_KEY]?.teardown();
-instances[INSTANCE_KEY] = instance;
+// Only in the page itself and in a post frame (see ACTIVE at the top): a copy
+// in any other LinkedIn frame listens to nothing.
+if (ACTIVE) {
+  instances[INSTANCE_KEY]?.teardown();
+  instances[INSTANCE_KEY] = instance;
 
-chrome.runtime.onMessage.addListener(onRuntimeMessage);
+  chrome.runtime.onMessage.addListener(onRuntimeMessage);
 
-// One delegated listener rather than one per Comment button — LinkedIn's
-// feed is virtualized/infinite-scroll, so buttons are constantly added and
-// removed; a delegated listener needs no re-attachment as that happens.
-//
-// Capture phase on `document`, not bubble phase on `document.body`: capture
-// runs top-down before the target's own handlers, and LinkedIn's own
-// comment-box handler calls stopPropagation(), so a bubble-phase listener
-// never sees the click at all.
-document.addEventListener("click", onDocumentClick, true);
+  // One delegated listener rather than one per Comment button — LinkedIn's
+  // feed is virtualized/infinite-scroll, so buttons are constantly added and
+  // removed; a delegated listener needs no re-attachment as that happens.
+  //
+  // Capture phase on `document`, not bubble phase on `document.body`: capture
+  // runs top-down before the target's own handlers, and LinkedIn's own
+  // comment-box handler calls stopPropagation(), so a bubble-phase listener
+  // never sees the click at all.
+  document.addEventListener("click", onDocumentClick, true);
+}

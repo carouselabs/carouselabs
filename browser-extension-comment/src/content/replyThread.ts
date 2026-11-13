@@ -75,8 +75,14 @@ export function findReplyButton(target: Element): Element | null {
 
 const COMMENT_URN_PATTERN = /urn:li:comment:\(([^)]*)\)?/;
 
+// LinkedIn's older layout (Sales Navigator, src/content/classicPost.ts) puts
+// the same URN in data-id instead.
 export function commentUrn(el: Element): string | null {
-  return el.getAttribute("componentkey")?.match(COMMENT_URN_PATTERN)?.[1] ?? null;
+  return (
+    el.getAttribute("componentkey")?.match(COMMENT_URN_PATTERN)?.[1] ??
+    el.getAttribute("data-id")?.match(COMMENT_URN_PATTERN)?.[1] ??
+    null
+  );
 }
 
 // The outermost wrapper of el's own comment, stopping at the first ancestor

@@ -219,3 +219,20 @@ describe("a video post of 40 words or more", () => {
     expect(screen.queryByText("Video · watched and listened to")).toBeNull();
   });
 });
+
+describe("a short post with pictures", () => {
+  it("says its pictures are read, without a count", async () => {
+    const store = chromeMock().__store;
+    store.lastSelectedPost = {
+      ...(store.lastSelectedPost as object),
+      type: "image",
+      video: false,
+      videoUrl: undefined,
+      images: [COVER, COVER.replace("videocover-high", "feedshare-shrink_800")],
+    };
+    server(async () => json(WATCHED));
+    await renderReady();
+    expect(screen.getByText("Pictures · read too")).toBeTruthy();
+    expect(screen.queryByText(/\d+ pictures?/)).toBeNull();
+  });
+});

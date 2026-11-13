@@ -11,7 +11,18 @@
 // Reddit's components name their parts in attributes of their own (thingid,
 // parent-id, bundlename, noun...).
 const KEEP =
-  /^(data-[\w-]+|role|aria-[\w-]+|class|contenteditable|tabindex|dir|type|href|src|placeholder|name|id|slot|part|mode|noun|bundlename|thingid|parentid|parent-id|post-id|depth|reply-mode)$/;
+  /^(data-[\w-]+|role|aria-[\w-]+|class|contenteditable|tabindex|dir|type|href|src|srcset|poster|placeholder|name|id|slot|part|mode|noun|bundlename|thingid|parentid|parent-id|post-id|depth|reply-mode)$/;
+
+// A LinkedIn media address keeps its kind ("feedshare-shrink_800",
+// "document-shrink", "videocover-high", "mp4-360p") so a layout shows which
+// pictures and slides a post has; its ids, timestamps and signature go.
+const LICDN_URL = /https:\/\/[a-z.-]*licdn\.com\/[^\s",]*/g;
+const scrubMediaUrls = (value: string) =>
+  value.replace(LICDN_URL, (url) => {
+    const [path] = url.split("?");
+    // Ids mix in capitals ("D4E22AQH…"); kinds are lowercase words.
+    return path.replace(/\/(?=[A-Za-z0-9_-]*[A-Z])[A-Za-z0-9_-]{10,}(?=\/|$)/g, "/<id>").replace(/\/\d{6,}(?=\/|$)/g, "/<n>");
+  });
 
 const scrub = (text: string) => text.replace(/\p{L}/gu, "x").replace(/\p{N}/gu, "0");
 // Attribute values keep their shape (a class name is no one's name, but an
@@ -21,7 +32,9 @@ const scrubAttr = (name: string, value: string) =>
     ? value
     : name === "data-testid"
       ? value.replace(/\d{5,}/g, "0")
-      : scrub(value);
+      : /licdn\.com/.test(value) && (name === "src" || name === "srcset" || name === "poster" || name.startsWith("data-"))
+        ? scrubMediaUrls(value)
+        : scrub(value);
 
 function shadowOf(el: Element): ShadowRoot | null {
   if (el.shadowRoot) return el.shadowRoot;

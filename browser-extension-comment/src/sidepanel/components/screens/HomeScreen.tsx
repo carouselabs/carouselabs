@@ -152,7 +152,8 @@ type LoadState = "loading" | "ready" | "error";
 // file couldn't be found): no note about what isn't read.
 function MediaNote({ images, video, watchable }: { images: number; video: boolean; watchable: boolean }) {
   if (video ? !watchable : !images) return null;
-  const text = video ? "Video · watched and listened to" : `${images} ${images === 1 ? "picture" : "pictures"} · read too`;
+  // No count: LinkedIn may put only some of a post's slides on the page.
+  const text = video ? "Video · watched and listened to" : "Pictures · read too";
   return (
     <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
       <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-primary-text" />

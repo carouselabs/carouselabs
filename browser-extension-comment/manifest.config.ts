@@ -57,10 +57,14 @@ export default defineManifest(({ mode }) => {
     },
     // Detects clicks on a post's Comment button and extracts post data for
     // the side panel. See src/content-script.ts.
+    // all_frames: Sales Navigator opens a post in a frame (LinkedIn's own
+    // post page), with its Comment button inside. The script stays idle in
+    // every other frame. Same sites, so no new permission or warning.
     {
       matches: ["https://www.linkedin.com/*"],
       js: ["src/content-script.ts"],
       run_at: "document_idle",
+      all_frames: true,
     },
   ],
   // A real global shortcut: chrome.commands fires in the service worker even

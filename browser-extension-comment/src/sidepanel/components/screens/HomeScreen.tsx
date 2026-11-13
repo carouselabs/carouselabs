@@ -147,17 +147,12 @@ const POST_TYPE_LABEL: Record<SelectedPost["type"], string | null> = {
 
 type LoadState = "loading" | "ready" | "error";
 
-// Under the post: that its pictures are read too, and a video watched (or,
-// when its file can't be found, its cover and text read).
+// Under the post: only what is read besides the words, a video watched or
+// its pictures. Nothing when there's neither (a long post, or a video whose
+// file couldn't be found): no note about what isn't read.
 function MediaNote({ images, video, watchable }: { images: number; video: boolean; watchable: boolean }) {
-  if (!images && !video) return null;
-  const text = video
-    ? watchable
-      ? "Video · watched and listened to"
-      : images
-        ? "Video · reads its cover and the text"
-        : "Video · reads the text (it can't watch the video)"
-    : `${images} ${images === 1 ? "picture" : "pictures"} · read too`;
+  if (video ? !watchable : !images) return null;
+  const text = video ? "Video · watched and listened to" : `${images} ${images === 1 ? "picture" : "pictures"} · read too`;
   return (
     <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
       <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-primary-text" />

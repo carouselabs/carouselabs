@@ -195,7 +195,8 @@ describe("a video post", () => {
     store.lastSelectedPost = { ...(store.lastSelectedPost as object), videoUrl: undefined };
     const { generated, videoCalls } = server(async () => json(WATCHED));
     fireEvent.click(await renderReady());
-    expect(screen.getByText("Video · reads its cover and the text")).toBeTruthy();
+    // Nothing said about a video it isn't watching.
+    expect(screen.queryByText(/^Video ·/)).toBeNull();
     await waitFor(() => expect(box().value).toBe("Comment number 1."));
     expect(videoCalls()).toHaveLength(0);
     expect(generated[0]).not.toHaveProperty("videoFrames");

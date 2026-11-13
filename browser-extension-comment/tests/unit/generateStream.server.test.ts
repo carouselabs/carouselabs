@@ -937,3 +937,132 @@ describe("a post's pictures: their numbers, and time to start", () => {
     expect(ms).toBeLessThan(12_000);
   });
 });
+
+// Pictures never cost the comment: a first try with them that goes wrong is
+// followed by one from the post's words alone (lib/engage/commentEngine.ts
+// PICTURE_ATTEMPT_MS), and a list of picture figures after the comment counts.
+describe("a post with several pictures always gets a comment", () => {
+  const PICS = [
+    "https://media.licdn.com/dms/image/v2/X/feedshare-shrink_800/0/1?e=1&t=x",
+    "https://media.licdn.com/dms/image/v2/X/feedshare-shrink_800/0/2?e=1&t=x",
+  ];
+  const SLIDE = "73% on that second slide is the number that would make me rethink our own onboarding.";
+  const raw = (value: Record<string, unknown>, size = 6) => {
+    const json = JSON.stringify(value);
+    return Array.from({ length: Math.ceil(json.length / size) }, (_, i) => json.slice(i * size, (i + 1) * size));
+  };
+  const ask = (post: Record<string, unknown>, stream = false) =>
+    new Request("https://carouselabs.com/api/ext/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer cl_cmt_test",
+        ...(stream ? { Accept: "text/event-stream" } : {}),
+      },
+      body: JSON.stringify({ profileId: "p1", post: { author: "Priya", headline: "Growth", ...post } }),
+    });
+  const userContent = (call: { body: Record<string, unknown> }) =>
+    (call.body.messages as { role: string; content: unknown }[]).find((m) => m.role === "user")!.content;
+
+  beforeEach(() => {
+    pictures.fail.clear();
+    pictures.fetched = [];
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("both pictures go to the model", async () => {
+    script.luna = [{ chunks: tokens(GOOD) }];
+    await POST(ask({ text: POST_TEXT, images: PICS }));
+    const content = userContent(script.lunaCalls[0]) as { type: string }[];
+    expect(content.filter((part) => part.type === "image_url")).toHaveLength(2);
+  });
+
+  it("figures listed after the comment still count: not stopped halfway", async () => {
+    script.luna = [{ chunks: raw({ comment: SLIDE, figures: ["73%"] }) }];
+    const res = await POST(ask({ text: POST_TEXT, images: PICS }));
+    expect(((await res.json()) as { comment: string }).comment).toBe(SLIDE);
+    expect(script.lunaCalls).toHaveLength(1);
+  });
+
+  it("a first try that goes wrong is followed by one from the words alone, with nothing about pictures", async () => {
+    script.luna = [{ chunks: raw({ comment: SLIDE }) }, { chunks: tokens(GOOD) }];
+    const res = await POST(ask({ text: POST_TEXT, images: PICS }));
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { comment: string }).comment).toBe(GOOD);
+    const second = userContent(script.lunaCalls[1]);
+    expect(typeof second).toBe("string");
+    expect(second as string).not.toMatch(/pictures? (is|are) attached|list every such number/);
+  });
+
+  it("a picture-only post keeps its pictures on the second try", async () => {
+    script.luna = [{ chunks: raw({ comment: SLIDE }) }, { chunks: tokens(GOOD_2) }];
+    const res = await POST(ask({ text: "", images: PICS }));
+    expect(((await res.json()) as { comment: string }).comment).toBe(GOOD_2);
+    expect(Array.isArray(userContent(script.lunaCalls[1]))).toBe(true);
+  });
+
+  it("models that stall on the pictures: the words-only try still finishes, well inside the limit", async () => {
+    vi.useFakeTimers();
+    script.luna = [{ stallAfter: 0 }, { chunks: tokens(GOOD) }];
+    script.haiku = [{ stallAfter: 0 }];
+    const res = await POST(ask({ text: POST_TEXT, images: PICS }, true));
+    let text: string | null = null;
+    const start = Date.now();
+    void res.text().then((t) => (text = t));
+    while (text === null && Date.now() - start < 120_000) await vi.advanceTimersByTimeAsync(1_000);
+    const ms = Date.now() - start;
+    expect(parseEvents(text ?? "").at(-1)).toMatchObject({ event: "final", data: { comment: GOOD } });
+    expect(typeof userContent(script.lunaCalls[1])).toBe("string");
+    expect(ms).toBeLessThan(30_000);
+  });
+});
+
+// Pictures and a watched video only for a post of fewer than 40 words
+// (lib/engage/postImages.ts readsPostMedia): a longer post is written from its
+// words alone, whatever the extension sends.
+describe("a post of 40 words or more", () => {
+  const PIC = "https://media.licdn.com/dms/image/v2/X/feedshare-shrink_800/0/1?e=1&t=x";
+  const LONG = `${POST_TEXT} ${"We kept the weekly demo and dropped the status meeting entirely. ".repeat(4)}`;
+  const still = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 1, 1, 1, 0xff, 0xd9]).toString("base64");
+  const ask = (post: Record<string, unknown>) =>
+    new Request("https://carouselabs.com/api/ext/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer cl_cmt_test" },
+      body: JSON.stringify({ profileId: "p1", post: { author: "Priya", headline: "Growth", ...post } }),
+    });
+  const userContent = (call: { body: Record<string, unknown> }) =>
+    (call.body.messages as { role: string; content: unknown }[]).find((m) => m.role === "user")!.content;
+
+  beforeEach(() => {
+    pictures.fail.clear();
+    pictures.fetched = [];
+  });
+
+  it("its pictures aren't fetched or shown: written from the words, as before", async () => {
+    expect(LONG.trim().split(/\s+/).length).toBeGreaterThanOrEqual(40);
+    script.luna = [{ chunks: tokens(GOOD) }];
+    const res = await POST(ask({ text: LONG, images: [PIC] }));
+    expect(res.status).toBe(200);
+    expect(pictures.fetched).toEqual([]);
+    expect(typeof userContent(script.lunaCalls[0])).toBe("string");
+    expect(userContent(script.lunaCalls[0]) as string).not.toMatch(/attached/);
+  });
+
+  it("a watched video's stills and speech are left out too", async () => {
+    script.luna = [{ chunks: tokens(GOOD) }];
+    await POST(ask({ text: LONG, video: true, videoFrames: [still], videoTranscript: "We hit 2,000 signups." }));
+    const content = userContent(script.lunaCalls[0]);
+    expect(typeof content).toBe("string");
+    expect(content as string).not.toContain("video_speech");
+  });
+
+  it("39 words: its pictures are read", async () => {
+    script.luna = [{ chunks: tokens(GOOD) }];
+    const short = "word ".repeat(30) + POST_TEXT.split(" ").slice(0, 9).join(" ");
+    expect(short.trim().split(/\s+/).length).toBe(39);
+    await POST(ask({ text: short, images: [PIC] }));
+    expect(pictures.fetched).toEqual([PIC]);
+  });
+});

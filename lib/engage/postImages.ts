@@ -10,9 +10,24 @@
 import { fetchPublicImage } from "@/lib/safeRemoteImage"
 import type { PostImage } from "@/lib/ai/commentModel"
 
-// Two pictures carry what a post shows (most have one); more only slows the
-// model down. Each must arrive quickly, or the comment goes without it.
-export const MAX_IMAGES = 2
+// Pictures and a video are read only when the post says little in words:
+// under MEDIA_MAX_WORDS words (a slide post, a caption under a video). A
+// longer post is written about from its words alone, as before pictures were
+// read: faster, and nothing in a picture can trip the comment up.
+export const MEDIA_MAX_WORDS = 40
+
+export function postWords(text: string): number {
+  const trimmed = text.trim()
+  return trimmed ? trimmed.split(/\s+/).length : 0
+}
+
+export function readsPostMedia(text: string): boolean {
+  return postWords(text) < MEDIA_MAX_WORDS
+}
+
+// Up to six pictures: every slide of a multi-picture post LinkedIn puts on
+// the page. Each must arrive quickly, or the comment goes without it.
+export const MAX_IMAGES = 6
 const MAX_BYTES = 4 * 1024 * 1024
 const TIMEOUT_MS = 1_500
 

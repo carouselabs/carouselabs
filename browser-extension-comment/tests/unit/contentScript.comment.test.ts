@@ -80,16 +80,16 @@ describe("a post's pictures and videos", () => {
     expect(await storedPost()).toMatchObject({ type: "video", images: [COVER], video: true });
   });
 
-  it("only LinkedIn's own image servers, and at most four", async () => {
+  it("only LinkedIn's own image servers, and at most six", async () => {
     await feed();
     const box = byFixture("post-3").querySelector(".update-components-image")!;
-    box.innerHTML = [1, 2, 3, 4, 5, 6]
+    box.innerHTML = [1, 2, 3, 4, 5, 6, 7, 8]
       .map((n) => `<img src="https://media.licdn.com/dms/image/v2/X/feedshare-shrink_800/0/${n}" alt="" />`)
       .concat(['<img src="https://evil.example/feedshare-shrink_800/0/9" alt="" />'])
       .join("");
     await click(commentButton("post-3"));
     const post = await storedPost();
-    expect(post!.images).toHaveLength(4);
+    expect(post!.images).toHaveLength(6);
     expect(post!.images.every((url: string) => url.startsWith("https://media.licdn.com/"))).toBe(true);
   });
 });

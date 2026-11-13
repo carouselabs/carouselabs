@@ -99,7 +99,16 @@ export interface GenerationInput {
   // The post's pictures (and a video's cover frame), shown to the model with
   // the text (lib/engage/postImages.ts).
   images?: PostImage[]
+  // The message without anything about pictures, for a second try written
+  // from the text alone (see PICTURE_ATTEMPT_MS). Default: userMessage.
+  textOnlyMessage?: string
 }
+
+// A first try with pictures stops here, so a second try from the text alone
+// always has time left. Pictures are a bonus: whatever goes wrong with them
+// (a figure the check can't place, a slow or refusing model), the comment is
+// still written, the way it was before pictures were read.
+export const PICTURE_ATTEMPT_MS = 24_000
 
 export interface GenerationHooks {
   // The current attempt's comment so far, each time more of it can be shown.
@@ -155,23 +164,35 @@ export async function generateComment(
   // invented figures, or wildly off the profile's length) is retried once
   // before giving up. Both share one time budget.
   const deadline = generationDeadline()
+  // A post with words can be commented on without its pictures: the second
+  // try leaves them out. A picture-only post keeps them.
+  const pictures = input.images?.length ? input.images : undefined
+  const canGoWithoutPictures = !!pictures && !!input.copySource?.trim()
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     if (signal?.aborted) break
     attempts = attempt
     if (attempt > 1) hooks.onRetry?.(attempt)
 
-    const message = reminder ? `${input.userMessage}\n\n${reminder}` : input.userMessage
-    // With pictures, a figure the model read in one (and listed first, in
+    const withPictures = !!pictures && (attempt === 1 || !canGoWithoutPictures)
+    if (pictures && !withPictures) console.warn(`[${label}] attempt ${attempt}: writing from the text alone`)
+    const base = withPictures ? input.userMessage : (input.textOnlyMessage ?? input.userMessage)
+    const message = reminder ? `${base}\n\n${reminder}` : base
+    // With pictures, a figure the model read in one (and listed, in
     // "figures") is sourced too.
     const sourcesIn = (sofar: string) =>
-      input.images?.length ? `${input.numberSources} ${declaredFigures(sofar)}` : input.numberSources
+      withPictures ? `${input.numberSources} ${declaredFigures(sofar)}` : input.numberSources
+    const attemptDeadline = withPictures && canGoWithoutPictures && attempt === 1
+      ? Math.min(deadline, Date.now() + PICTURE_ATTEMPT_MS)
+      : deadline
 
     // Mid-stream guard: the text shown so far is checked for invented figures
     // BEFORE it is shown, so a made-up statistic never reaches the screen.
     // Only whole words are ever checked (see visibleCommentText), so "8" is
     // never judged while "80%" is still arriving. Finding one stops the model
     // there — this attempt would be discarded anyway — rather than paying for
-    // the rest of it.
+    // the rest of it. With pictures it isn't stopped, only not shown: the list
+    // of figures read in them may come after the comment, and the finished
+    // answer is judged with it.
     const controller = new AbortController()
     const stop = () => controller.abort()
     signal?.addEventListener("abort", stop, { once: true })
@@ -189,9 +210,9 @@ export async function generateComment(
     try {
       const result = await streamCommentModel(input.systemMessage, message, label, {
         signal: controller.signal,
-        deadline,
+        deadline: attemptDeadline,
         engage: input.engage,
-        images: input.images,
+        images: withPictures ? pictures : undefined,
         onReset: () => show(""),
         onRaw: (sofar) => {
           const partial = extractPartialComment(sofar)
@@ -199,6 +220,7 @@ export async function generateComment(
           const visible = visibleCommentText(partial.text, partial.complete)
           const unsourced = findUnsourcedNumbers(visible, sourcesIn(sofar))
           if (unsourced.length > 0) {
+            if (withPictures) return
             invented = unsourced
             controller.abort()
             return
@@ -215,6 +237,11 @@ export async function generateComment(
         break
       }
       if (err instanceof GenerationTimeout) {
+        // The try with pictures used its share: the text-only try has the rest.
+        if (attemptDeadline < deadline && attempt === 1) {
+          console.warn(`[${label}] attempt ${attempt}: out of time with the pictures`)
+          continue
+        }
         console.error(`[${label}] attempt ${attempt}: out of time, giving up`)
         break
       }

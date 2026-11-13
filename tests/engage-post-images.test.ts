@@ -1,8 +1,8 @@
 // A post's pictures for the comment model (lib/engage/postImages.ts): only
-// LinkedIn's image servers, at most two, a picture that fails is left out
+// LinkedIn's image servers, at most six, only for a post of few words, a picture that fails is left out
 // rather than failing the comment, and the model is told what it's looking at.
 import { describe, expect, it, vi } from "vitest"
-import { isPostImageUrl, loadPostImages, mediaNote, MAX_IMAGES, postImageUrls } from "@/lib/engage/postImages"
+import { isPostImageUrl, loadPostImages, mediaNote, MAX_IMAGES, MEDIA_MAX_WORDS, postImageUrls, postWords, readsPostMedia } from "@/lib/engage/postImages"
 
 const IMG = (n: number) => `https://media.licdn.com/dms/image/v2/X/feedshare-shrink_800/0/${n}?e=1&t=x`
 
@@ -25,12 +25,20 @@ describe("which addresses are used", () => {
     }
   })
 
-  it("in order, without repeats, at most two, ignoring anything else in the list", () => {
+  it("in order, without repeats, at most six, ignoring anything else in the list", () => {
     expect(postImageUrls(undefined)).toEqual([])
     expect(postImageUrls("not a list")).toEqual([])
-    const urls = postImageUrls([IMG(1), IMG(1), "https://evil.example/x.jpg", IMG(2), IMG(3), IMG(4), 7])
-    expect(urls).toEqual([IMG(1), IMG(2)])
+    const urls = postImageUrls([IMG(1), IMG(1), "https://evil.example/x.jpg", IMG(2), IMG(3), IMG(4), IMG(5), IMG(6), IMG(7), 7])
+    expect(urls).toEqual([IMG(1), IMG(2), IMG(3), IMG(4), IMG(5), IMG(6)])
     expect(urls).toHaveLength(MAX_IMAGES)
+  })
+
+  it("only for a post of fewer than 40 words", () => {
+    expect(MEDIA_MAX_WORDS).toBe(40)
+    expect(postWords("  one\ntwo   three ")).toBe(3)
+    expect(readsPostMedia("")).toBe(true)
+    expect(readsPostMedia("word ".repeat(39))).toBe(true)
+    expect(readsPostMedia("word ".repeat(40))).toBe(false)
   })
 })
 

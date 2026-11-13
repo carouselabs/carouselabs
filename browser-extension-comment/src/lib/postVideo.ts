@@ -114,6 +114,16 @@ export function watchPostVideo(url: string, signal: AbortSignal, maxWaitMs: numb
   });
 }
 
+// Pictures and a video are read only for a post with few words (the server
+// applies the same rule: lib/engage/postImages.ts readsPostMedia). A longer
+// post is written from its text alone.
+export const MEDIA_MAX_WORDS = 40;
+
+export function readsPostMedia(text: string): boolean {
+  const trimmed = text.trim();
+  return (trimmed ? trimmed.split(/\s+/).length : 0) < MEDIA_MAX_WORDS;
+}
+
 // For tests: forget every video.
 export function forgetWatchedVideos() {
   watched.clear();

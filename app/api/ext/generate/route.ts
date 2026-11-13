@@ -19,7 +19,7 @@ import { db } from "@/lib/db"
 import { getUserFromCommentExtensionToken } from "@/lib/extensionCommentAuth"
 import { engagePreflight, reserveEngageGeneration } from "@/lib/engage/gate"
 import { recentComments } from "@/lib/engage/recentComments"
-import { loadPostImages, mediaNote, postImageUrls } from "@/lib/engage/postImages"
+import { loadPostImages, mediaNote, postImageUrls, readsPostMedia } from "@/lib/engage/postImages"
 import { cleanTranscript, videoFramesFrom, videoSpeechBlock } from "@/lib/engage/videoInput"
 import type { PostImage } from "@/lib/ai/commentModel"
 import {
@@ -133,10 +133,14 @@ export async function POST(req: Request) {
     }
 
     reply = parseReply(body.reply)
-    imageUrls = postImageUrls(raw.images)
     isVideo = raw.video === true
-    videoFrames = isVideo ? videoFramesFrom(raw.videoFrames) : []
-    videoTranscript = isVideo ? cleanTranscript(raw.videoTranscript) : ""
+    // Pictures and a watched video only for a post with few words
+    // (readsPostMedia); a longer one is written from its text, whatever an
+    // extension sends.
+    const media = readsPostMedia(post.text)
+    imageUrls = media ? postImageUrls(raw.images) : []
+    videoFrames = media && isVideo ? videoFramesFrom(raw.videoFrames) : []
+    videoTranscript = media && isVideo ? cleanTranscript(raw.videoTranscript) : ""
 
     if (!profileId) throw new Error("Missing profileId")
     // A reply can stand on the comment alone (image-only posts have no text);
@@ -195,6 +199,10 @@ export async function POST(req: Request) {
     ? buildReplyUserMessage(post, reply, extraInstruction, recent)
     : buildCommentUserMessage(post, extraInstruction, recent)
   const userMessage = [baseMessage, note, videoSpeechBlock(videoTranscript)].filter(Boolean).join("\n\n")
+  // The same without the pictures, for a second try from the text alone
+  // (lib/engage/commentEngine.ts); a watched video's speech stays.
+  const textNote = mediaNote(0, isVideo, videoTranscript ? { speech: true } : undefined)
+  const textOnlyMessage = [baseMessage, textNote, videoSpeechBlock(videoTranscript)].filter(Boolean).join("\n\n")
   const replyTarget = reply?.thread.find((entry) => entry.isTarget) ?? null
   const { min, max } = targetLengthRange(profile.length)
 
@@ -222,6 +230,7 @@ export async function POST(req: Request) {
     // What the comment answers, whose wording it must not repeat back.
     copySource: replyTarget ? replyTarget.text : post.text,
     images,
+    textOnlyMessage,
     engage: { userId: user.id, kind: reply ? "replies" : "comments" },
   }
   const beforeModelMs = timer.elapsed()

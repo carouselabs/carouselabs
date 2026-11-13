@@ -201,3 +201,20 @@ describe("a video post", () => {
     expect(generated[0]).not.toHaveProperty("videoFrames");
   });
 });
+
+describe("a video post of 40 words or more", () => {
+  it("isn't watched, and its pictures aren't sent: written from the words", async () => {
+    const store = chromeMock().__store;
+    store.lastSelectedPost = {
+      ...(store.lastSelectedPost as object),
+      text: "We shipped every Friday for three years and this is what changed for the team. ".repeat(4),
+    };
+    const { generated, videoCalls } = server(async () => json(WATCHED));
+    fireEvent.click(await renderReady());
+    await waitFor(() => expect(box().value).toBe("Comment number 1."));
+    expect(videoCalls()).toHaveLength(0);
+    expect(generated[0]).not.toHaveProperty("videoFrames");
+    expect(generated[0].images).toBeUndefined();
+    expect(screen.queryByText("Video · watched and listened to")).toBeNull();
+  });
+});

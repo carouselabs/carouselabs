@@ -543,7 +543,7 @@ function extractHeadlineNear(authorLink: Element | null, authorName: string): st
 // photos, logos and anything inside the comments are someone else's.
 const POST_MEDIA_PATH = /(feedshare|videocover|articleshare|article-cover|document-cover|document-shrink|image-shrink)/i;
 const NOT_POST_MEDIA = /(profile-displayphoto|profile-framedphoto|company-logo|ghost-person|emoji)/i;
-const MAX_POST_IMAGES = 4;
+const MAX_POST_IMAGES = 6;
 
 // A video's whole MP4 on LinkedIn's servers, for the panel to have watched.
 // LinkedIn's player lists its files in data-sources (JSON), or plays one

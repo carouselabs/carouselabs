@@ -33,7 +33,7 @@ import {
   type RewriteResponse,
   userFacingError,
 } from "@/lib/api";
-import { needsWatching, prefetchPostVideo, watchPostVideo, type WatchedVideo } from "@/lib/postVideo";
+import { needsWatching, prefetchPostVideo, readsPostMedia, watchPostVideo, type WatchedVideo } from "@/lib/postVideo";
 import { markReminded, postKey as reminderKey, remindedPosts, remindersFor, type SavedComment } from "@/lib/savedComments";
 import { useSavedComments } from "../../useSavedComments";
 import { SavedCommentReminder, SavedCommentsSection } from "../SavedComments";
@@ -565,7 +565,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
   // A video post: watching starts as soon as it's picked, so Generate rarely
   // has to wait for it (src/lib/postVideo.ts).
   useEffect(() => {
-    if (selectedPost?.video && selectedPost.videoUrl && selectedPost.mode !== "connect") {
+    if (selectedPost?.video && selectedPost.videoUrl && selectedPost.mode !== "connect" && readsPostMedia(selectedPost.text)) {
       prefetchPostVideo(selectedPost.videoUrl);
     }
   }, [selectedPost]);
@@ -659,7 +659,10 @@ export function HomeScreen({ onCreateProfile }: Props) {
     beforeGenerateRef.current = hasResult ? { comment, historyId } : null;
     const current = () => generationRef.current === controller;
     const usedProfileId = selectedId;
-    const videoUrl = selectedPost.video ? selectedPost.videoUrl : undefined;
+    // Pictures and a video only for a post with few words; a longer one is
+    // written from its text alone.
+    const media = readsPostMedia(selectedPost.text);
+    const videoUrl = selectedPost.video && media ? selectedPost.videoUrl : undefined;
     setGenerating(true);
     setWatchingVideo(needsWatching(videoUrl));
     setGenerateError(null);
@@ -711,7 +714,7 @@ export function HomeScreen({ onCreateProfile }: Props) {
             text: selectedPost.text,
             type: selectedPost.type,
             url: selectedPost.url,
-            images: selectedPost.images,
+            images: media ? selectedPost.images : undefined,
             video: selectedPost.video,
             ...(watched ? { videoFrames: watched.frames, videoTranscript: watched.transcript } : {}),
           },
@@ -1106,9 +1109,9 @@ export function HomeScreen({ onCreateProfile }: Props) {
                 <p className="line-clamp-3 text-sm leading-relaxed text-foreground/85">{selectedPost.text}</p>
               )}
               <MediaNote
-                images={selectedPost.images?.length ?? 0}
+                images={readsPostMedia(selectedPost.text) ? (selectedPost.images?.length ?? 0) : 0}
                 video={!!selectedPost.video}
-                watchable={!!selectedPost.videoUrl}
+                watchable={readsPostMedia(selectedPost.text) && !!selectedPost.videoUrl}
               />
             </div>
           )}

@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { setExtensionAccess } from "@/lib/extensionAccess";
-import { heatLevel, monthCells, monthSummary } from "@/lib/heatmap";
+import { heatLevel, heatRanges, monthCells, monthSummary } from "@/lib/heatmap";
 import { IconBar } from "@/sidepanel/components/IconBar";
 import { VoiceChips } from "@/sidepanel/components/VoiceChips";
 import { MonthActivity } from "@/sidepanel/components/MonthActivity";
@@ -75,7 +75,11 @@ describe("voices as buttons", () => {
 
 describe("comments per day", () => {
   it("shades, calendar and totals", () => {
-    expect([0, 1, 3, 4, 7, 8, 11, 12, 30].map(heatLevel)).toEqual([0, 1, 1, 2, 2, 3, 3, 4, 4]);
+    // Against the month's busiest day (20): a quarter of it per shade.
+    expect([0, 1, 5, 6, 10, 11, 15, 16, 20].map((n) => heatLevel(n, 20))).toEqual([0, 1, 1, 2, 2, 3, 3, 4, 4]);
+    expect(heatRanges(20)).toEqual(["0", "1–5", "6–10", "11–15", "16–20"]);
+    expect(heatRanges(2)).toEqual(["0", "", "1", "", "2"]);
+    expect(heatLevel(3, 0)).toBe(0);
     const today = new Date(2026, 10, 12);
     const cells = monthCells(today);
     expect(cells[0]?.key).toBe("2026-11-01");
@@ -139,6 +143,40 @@ describe("comments per day", () => {
     expect(busiest.getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText("Friday 6 Nov")).toBeTruthy();
     expect(screen.getByText("14 comments")).toBeTruthy();
+  });
+
+  it("a quiet month: its busiest day is the darkest, and the legend shows this month's numbers", async () => {
+    chromeMock().__store.extensionToken = "cl_cmt_live";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            one: "comment",
+            many: "comments",
+            days: [
+              { day: "2026-11-02", count: 1 },
+              { day: "2026-11-04", count: 2 },
+              { day: "2026-11-09", count: 4 },
+            ],
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    render(<MonthActivity today={new Date(2026, 10, 12, 15)} />);
+    await waitFor(() => expect(screen.getByText("7")).toBeTruthy());
+
+    const shade = (name: string) => screen.getByRole("button", { name }).style.backgroundColor;
+    // 4 is the most this month, so it's the darkest (not the pale shade of 1–3 or 4–7).
+    expect(shade("Monday 9 Nov: 4 comments")).toBe("var(--heat-4)");
+    expect(shade("Wednesday 4 Nov: 2 comments")).toBe("var(--heat-2)");
+    expect(shade("Monday 2 Nov: 1 comment")).toBe("var(--heat-1)");
+    expect(shade("Tuesday 3 Nov: 0 comments")).toBe("var(--heat-0)");
+
+    const legend = within(screen.getByRole("group", { name: "Shades, from none to this month's busiest day" }));
+    for (const range of ["0", "1", "2", "3", "4"]) expect(legend.getByText(range)).toBeTruthy();
+    expect(legend.queryByText("12+")).toBeNull();
   });
 
   it("says so when the month can't be loaded", async () => {

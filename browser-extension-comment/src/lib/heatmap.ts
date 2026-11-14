@@ -3,15 +3,28 @@
 // Engage → Activity grid uses the same rules (lib/engage/heatmap.ts there);
 // both read app/api/ext/activity. Days are local calendar days, "2026-11-12".
 
-// Five shades, none → most, and the counts each one covers.
-export const HEAT_RANGES = ["0", "1–3", "4–7", "8–11", "12+"] as const;
+// Five shades, none → most, measured against the month's busiest day: that
+// day is always the darkest, and every other day is spread by how close it
+// comes to it (a quarter of it or less is the lightest, then half, then three
+// quarters). So a quiet month and a busy one both use all five shades.
+export type HeatLevel = 0 | 1 | 2 | 3 | 4;
 
-export function heatLevel(count: number): 0 | 1 | 2 | 3 | 4 {
-  if (count <= 0) return 0;
-  if (count <= 3) return 1;
-  if (count <= 7) return 2;
-  if (count <= 11) return 3;
-  return 4;
+export function heatLevel(count: number, busiest: number): HeatLevel {
+  if (count <= 0 || busiest <= 0) return 0;
+  return Math.min(4, Math.max(1, Math.ceil((4 * count) / busiest))) as HeatLevel;
+}
+
+// The counts each shade covers in a month whose busiest day had `busiest`
+// ("0", "1–5", "6–10", "11–15", "16–20" for 20). "" for a shade no count can
+// get, as in a month whose busiest day had fewer than four.
+export function heatRanges(busiest: number): [string, string, string, string, string] {
+  const ranges: [string, string, string, string, string] = ["0", "", "", "", ""];
+  for (let level = 1; level <= 4; level++) {
+    const low = Math.floor((busiest * (level - 1)) / 4) + 1;
+    const high = Math.floor((busiest * level) / 4);
+    if (high >= low) ranges[level] = low === high ? String(low) : `${low}–${high}`;
+  }
+  return ranges;
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");

@@ -2,17 +2,27 @@
 
 // components/extension/ActivityHeatmap.tsx — Engage → Activity's "comments
 // per day" grid, like GitHub's: one box a day for the last 13 weeks (history
-// is kept for 90 days), darker for more, in five shades. Beside it, this
+// is kept for 90 days), darker for more, in five shades measured against the
+// busiest day of each day's own month, which is always the darkest
+// (lib/engage/heatmap.ts). Beside it, this
 // month's total, busiest day and days active. Counts come from
 // app/api/ext/activity in the browser's own time zone, so a day is the
 // person's day. X counts replies (it has no comments).
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import type { EngagePlatform } from "@/lib/engage/features"
-import { HEAT_RANGES, HEAT_SHADES, heatLevel, heatWeeks, localDayKey, monthSummary } from "@/lib/engage/heatmap"
+import { HEAT_SHADES, busiestByMonth, heatLevel, heatWeeks, localDayKey, monthSummary } from "@/lib/engage/heatmap"
 import { extApi, errorMessage } from "./api"
 
 const WEEKS = 13
 const DAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""]
+// What each shade means, measured against the month's busiest day.
+const LEGEND_TITLES = [
+  "None",
+  "Up to a quarter of the month's busiest day",
+  "Up to half of it",
+  "Up to three quarters of it",
+  "The month's busiest days",
+]
 
 interface ActivityResponse {
   timeZone: string
@@ -59,6 +69,7 @@ export function ActivityHeatmap({
   }, [platform, initial])
 
   const counts = useMemo(() => new Map((data?.days ?? []).map((d) => [d.day, d.count])), [data])
+  const busiest = useMemo(() => busiestByMonth(counts), [counts])
 
   if (!today) {
     return <section aria-busy className="h-[17rem] animate-pulse rounded-card bg-surface-raised shadow-card" />
@@ -116,7 +127,7 @@ export function ActivityHeatmap({
             role="img"
             aria-label={
               data
-                ? `${plural(summary.total)} in ${monthName}${summary.best ? `, busiest day ${shortDay(summary.best.key)} with ${summary.best.count}` : ""}. Each box is a day over the last ${WEEKS} weeks, darker for more.`
+                ? `${plural(summary.total)} in ${monthName}${summary.best ? `, busiest day ${shortDay(summary.best.key)} with ${summary.best.count}` : ""}. Each box is a day over the last ${WEEKS} weeks, darker for more, the darkest being each month's busiest day.`
                 : `${many} per day, loading`
             }
             className="inline-flex flex-col gap-1.5"
@@ -149,7 +160,7 @@ export function ActivityHeatmap({
                         className={`block size-5 rounded-[6px] lg:size-6 ${data ? "" : "animate-pulse"} ${
                           cell.key === todayKey ? "ring-2 ring-foreground ring-offset-2 ring-offset-surface-raised" : ""
                         }`}
-                        style={{ backgroundColor: HEAT_SHADES[data ? heatLevel(count) : 0] }}
+                        style={{ backgroundColor: HEAT_SHADES[data ? heatLevel(count, busiest.get(cell.key.slice(0, 7)) ?? 0) : 0] }}
                       />
                     )
                   })}
@@ -167,13 +178,13 @@ export function ActivityHeatmap({
             {HEAT_SHADES.map((shade, i) => (
               <span
                 key={shade}
-                title={`${HEAT_RANGES[i]} ${many}`}
+                title={LEGEND_TITLES[i]}
                 className="block size-4.5 rounded-[5px]"
                 style={{ backgroundColor: shade }}
               />
             ))}
             More
-            <span className="ml-1.5">0 · 1–3 · 4–7 · 8–11 · 12+</span>
+            <span className="ml-1.5">Darkest: each month&apos;s busiest day</span>
           </span>
         </div>
       </div>

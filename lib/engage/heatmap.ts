@@ -3,16 +3,42 @@
 // weeks to draw, and this month's totals. Dates are local calendar days
 // ("2026-11-12"), the same keys app/api/ext/activity returns.
 
-// Five shades, lightest to darkest, and the counts each one covers.
+// Five shades, lightest to darkest, measured against the busiest day of the
+// day's own month: that day is always the darkest, and every other day is
+// spread by how close it comes to it (a quarter of it or less is the
+// lightest, then half, then three quarters). So a quiet month and a busy one
+// both use all five shades. The side panel's Profile grid uses the same rule
+// (browser-extension-comment/src/lib/heatmap.ts).
 export const HEAT_SHADES = ["#EBE8F7", "#CFC6FB", "#A28FF6", "#6D4CF0", "#3A1EC2"] as const
-export const HEAT_RANGES = ["0", "1–3", "4–7", "8–11", "12+"] as const
 
-export function heatLevel(count: number): 0 | 1 | 2 | 3 | 4 {
-  if (count <= 0) return 0
-  if (count <= 3) return 1
-  if (count <= 7) return 2
-  if (count <= 11) return 3
-  return 4
+export type HeatLevel = 0 | 1 | 2 | 3 | 4
+
+export function heatLevel(count: number, busiest: number): HeatLevel {
+  if (count <= 0 || busiest <= 0) return 0
+  return Math.min(4, Math.max(1, Math.ceil((4 * count) / busiest))) as HeatLevel
+}
+
+// The counts each shade covers in a month whose busiest day had `busiest`
+// ("0", "1–5", "6–10", "11–15", "16–20" for 20). "" for a shade no count can
+// get, as in a month whose busiest day had fewer than four.
+export function heatRanges(busiest: number): [string, string, string, string, string] {
+  const ranges: [string, string, string, string, string] = ["0", "", "", "", ""]
+  for (let level = 1; level <= 4; level++) {
+    const low = Math.floor((busiest * (level - 1)) / 4) + 1
+    const high = Math.floor((busiest * level) / 4)
+    if (high >= low) ranges[level] = low === high ? String(low) : `${low}–${high}`
+  }
+  return ranges
+}
+
+// The busiest day's count in each month the counts cover, by "2026-11".
+export function busiestByMonth(counts: ReadonlyMap<string, number>): Map<string, number> {
+  const busiest = new Map<string, number>()
+  for (const [key, count] of counts) {
+    const month = key.slice(0, 7)
+    if (count > (busiest.get(month) ?? 0)) busiest.set(month, count)
+  }
+  return busiest
 }
 
 const pad = (n: number) => String(n).padStart(2, "0")

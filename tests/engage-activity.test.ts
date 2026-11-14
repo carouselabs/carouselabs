@@ -3,7 +3,7 @@
 // route that counts days in the person's own time zone.
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { Prisma } from "@prisma/client"
-import { HEAT_RANGES, HEAT_SHADES, heatLevel, heatWeeks, localDayKey, monthCells, monthSummary } from "@/lib/engage/heatmap"
+import { HEAT_SHADES, busiestByMonth, heatLevel, heatRanges, heatWeeks, localDayKey, monthCells, monthSummary } from "@/lib/engage/heatmap"
 import { clampActivityDays, dayKey, safeTimeZone } from "@/lib/engage/activityDays"
 
 const state = vi.hoisted(() => ({
@@ -31,12 +31,50 @@ const get = async (query: string) => {
 }
 
 describe("shades", () => {
-  it("five shades, lightest for none, darkest from 12", () => {
+  it("five shades, measured against the month's busiest day, which is always the darkest", () => {
     expect(HEAT_SHADES).toHaveLength(5)
-    expect(HEAT_RANGES).toEqual(["0", "1–3", "4–7", "8–11", "12+"])
-    const levels = [0, 1, 3, 4, 7, 8, 11, 12, 40].map(heatLevel)
-    expect(levels).toEqual([0, 1, 1, 2, 2, 3, 3, 4, 4])
-    expect(heatLevel(-2)).toBe(0)
+    // A busy month: busiest day 20, every shade a quarter of it.
+    expect([0, 1, 5, 6, 10, 11, 15, 16, 20].map((n) => heatLevel(n, 20))).toEqual([0, 1, 1, 2, 2, 3, 3, 4, 4])
+    expect(heatRanges(20)).toEqual(["0", "1–5", "6–10", "11–15", "16–20"])
+    // A quiet month: 4 is its busiest day, so it's the darkest, not a pale 4.
+    expect([0, 1, 2, 3, 4].map((n) => heatLevel(n, 4))).toEqual([0, 1, 2, 3, 4])
+    expect(heatRanges(4)).toEqual(["0", "1", "2", "3", "4"])
+    // A busiest day under four leaves some shades unused: they get no numbers.
+    expect([1, 2].map((n) => heatLevel(n, 2))).toEqual([2, 4])
+    expect(heatRanges(2)).toEqual(["0", "", "1", "", "2"])
+    expect(heatLevel(1, 1)).toBe(4)
+    // Nothing yet, or nonsense: no shade.
+    expect(heatLevel(0, 0)).toBe(0)
+    expect(heatLevel(-2, 5)).toBe(0)
+    expect(heatRanges(0)).toEqual(["0", "", "", "", ""])
+  })
+
+  it("each shade's numbers match the shade its days actually get", () => {
+    for (const busiest of [1, 2, 3, 5, 7, 12, 13, 40]) {
+      const ranges = heatRanges(busiest)
+      for (let count = 1; count <= busiest; count++) {
+        const shown = ranges[heatLevel(count, busiest)]
+        const [low, high = low] = shown.split("–").map(Number)
+        expect(count >= low && count <= high, `${count} of ${busiest} in "${shown}"`).toBe(true)
+      }
+    }
+  })
+
+  it("each month measured on its own: the busiest day of each", () => {
+    const counts = new Map([
+      ["2026-10-03", 30],
+      ["2026-10-20", 6],
+      ["2026-11-01", 2],
+      ["2026-11-09", 4],
+    ])
+    const busiest = busiestByMonth(counts)
+    expect([...busiest]).toEqual([
+      ["2026-10", 30],
+      ["2026-11", 4],
+    ])
+    // 4 is November's darkest even though October had a day of 30.
+    expect(heatLevel(4, busiest.get("2026-11")!)).toBe(4)
+    expect(heatLevel(6, busiest.get("2026-10")!)).toBe(1)
   })
 })
 

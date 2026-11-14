@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { PLATFORM } from "@/lib/platform";
-import { HEAT_RANGES, heatLevel, localDayKey, monthCells, monthSummary } from "@/lib/heatmap";
+import { heatLevel, heatRanges, localDayKey, monthCells, monthSummary } from "@/lib/heatmap";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -21,8 +21,9 @@ const fromKey = (key: string) => {
 
 // Profile's "comments per day" for this month (X: replies), like GitHub's
 // contribution boxes: one box a day, darker for more, in five shades
-// (--heat-0…4 in the theme). Tap a day to see its count. Counts come from
-// app/api/ext/activity, in this browser's time zone.
+// (--heat-0…4 in the theme) measured against the month's busiest day, which
+// is always the darkest (src/lib/heatmap.ts). Tap a day to see its count.
+// Counts come from app/api/ext/activity, in this browser's time zone.
 export function MonthActivity({ today: todayOverride }: { today?: Date } = {}) {
   const [today] = useState(() => todayOverride ?? new Date());
   const [data, setData] = useState<ActivityResponse | null>(null);
@@ -43,6 +44,7 @@ export function MonthActivity({ today: todayOverride }: { today?: Date } = {}) {
   const counts = useMemo(() => new Map((data?.days ?? []).map((d) => [d.day, d.count])), [data]);
   const cells = useMemo(() => monthCells(today), [today]);
   const summary = monthSummary(counts, today);
+  const busiest = summary.best?.count ?? 0;
   const one = data?.one ?? (PLATFORM === "x" ? "reply" : "comment");
   const many = data?.many ?? (PLATFORM === "x" ? "replies" : "comments");
   const plural = (n: number) => `${n} ${n === 1 ? one : many}`;
@@ -91,7 +93,7 @@ export function MonthActivity({ today: todayOverride }: { today?: Date } = {}) {
         {cells.map((cell, i) => {
           if (!cell) return <span key={`blank-${i}`} aria-hidden />;
           const count = counts.get(cell.key) ?? 0;
-          const level = data ? heatLevel(count) : 0;
+          const level = data ? heatLevel(count, busiest) : 0;
           const name = `${WEEKDAY_NAMES[cell.date.getDay()]} ${shortDay(cell.date)}`;
           return (
             <button
@@ -133,12 +135,13 @@ export function MonthActivity({ today: todayOverride }: { today?: Date } = {}) {
       </p>
 
       <div className="flex items-end justify-between gap-2">
-        <div role="group" className="flex items-end gap-1.5" aria-label="Shades, from none to the most">
+        <div role="group" className="flex items-end gap-1.5" aria-label="Shades, from none to this month's busiest day">
           <span className="pb-3.5 text-[11px] text-muted-foreground">Less</span>
-          {HEAT_RANGES.map((range, level) => (
-            <span key={range} className="flex flex-col items-center gap-0.5">
+          {heatRanges(data ? busiest : 0).map((range, level) => (
+            <span key={level} className="flex flex-col items-center gap-0.5">
               <span aria-hidden className="h-4 w-4 rounded-[5px]" style={{ backgroundColor: `var(--heat-${level})` }} />
-              <span className="text-[10px] text-muted-foreground">{range}</span>
+              {/* A shade no day can get this month keeps its place, unnumbered. */}
+              <span className="min-h-[15px] text-[10px] text-muted-foreground">{range}</span>
             </span>
           ))}
           <span className="pb-3.5 text-[11px] text-muted-foreground">More</span>

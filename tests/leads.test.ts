@@ -1717,6 +1717,7 @@ describe("ready-made emails", () => {
       ["dharma-1", "App registrations in your Entra tenant", "Dharma Ramasamy"],
       ["dharma-2", "Quick question about your Entra tenant", "Dharma Ramasamy"],
       ["anant-cold-1", "Still sending plain-text emails?", "Anant Goyal"],
+      ["engage-saved-comments", "New in Engage: your usual comment, one click away", "CarouseLabs"],
     ])
     const html = readyEmailHtml(one)
     for (const words of [

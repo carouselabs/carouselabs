@@ -7,14 +7,22 @@
 // so changing one here never changes what a campaign already sends.
 // Two kinds: a letter in the template below (Dharma's), or a whole designed
 // email made elsewhere (Anant Goyal's, built in his email-studio and turned
-// into lib/readyEmailsAnant.ts by scripts/ready-email-from-html.mjs). Each is
-// one lead account's (lib/leadAccounts.ts): it goes to that account's leads,
-// from its sender.
+// into lib/readyEmailsAnant.ts by scripts/ready-email-from-html.mjs; the Saved
+// comments announcement, emails/SavedCommentsLaunchEmail.tsx rendered into
+// lib/readyEmailsSavedComments.ts). Each is one lead account's
+// (lib/leadAccounts.ts): it starts on that account's leads, from its sender,
+// and any people can be picked (the announcement is for users).
 // No server-only imports: the admin's page shows them with this too.
 import { z } from "zod"
 import { EMAIL_IMAGES } from "@/emails/theme"
 import { DEFAULT_ACCOUNT, type LeadAccount } from "@/lib/leadAccounts"
 import { ANANT_COLD_HTML, ANANT_COLD_REPLY, ANANT_COLD_TEXT } from "@/lib/readyEmailsAnant"
+import {
+  SAVED_COMMENTS_HTML,
+  SAVED_COMMENTS_PREVIEW,
+  SAVED_COMMENTS_SUBJECT,
+  SAVED_COMMENTS_TEXT,
+} from "@/lib/readyEmailsSavedComments"
 
 /** Where the button's reply link goes: filled in when sent, with the address replies go to. */
 export const REPLY_LINK = "__REPLY_LINK__"
@@ -111,6 +119,21 @@ READY_EMAILS.push({
   html: ANANT_COLD_HTML,
   text: ANANT_COLD_TEXT,
   replyBody: ANANT_COLD_REPLY,
+})
+
+// ── CarouseLabs: Saved comments in Engage for LinkedIn ──────────────────
+// For users: in the send dialog, pick "CarouseLabs Engage for LinkedIn users"
+// or "All Users". Subject and preview come from the email itself
+// (emails/SavedCommentsLaunchEmail.tsx), rendered with it.
+
+READY_EMAILS.push({
+  id: "engage-saved-comments",
+  name: "CarouseLabs · New in Engage: Saved comments",
+  subject: SAVED_COMMENTS_SUBJECT,
+  preview: SAVED_COMMENTS_PREVIEW,
+  fromName: "CarouseLabs",
+  html: SAVED_COMMENTS_HTML,
+  text: SAVED_COMMENTS_TEXT,
 })
 
 export const readyEmailById = (id: string): ReadyEmail | null => READY_EMAILS.find((e) => e.id === id) ?? null

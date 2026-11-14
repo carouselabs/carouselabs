@@ -432,6 +432,7 @@ describe("Ready-made emails", () => {
       "Dharma Ramasamy · Email 1",
       "Dharma Ramasamy · Email 2",
       "Anant Goyal · Cold outreach",
+      "CarouseLabs · New in Engage: Saved comments",
     ])
     expect(screen.getByText("App registrations in your Entra tenant")).toBeTruthy()
     expect(screen.getByText("Quick question about your Entra tenant")).toBeTruthy()
@@ -450,6 +451,12 @@ describe("Ready-made emails", () => {
     expect(his).toContain("Connect &rarr;")
     expect(his).toContain('href="mailto:hello@anantgoyal.in?subject=Re%3A%20Still%20sending%20plain-text%20emails%3F&amp;body=Hey%20Anant%2C%0D%0A%0D%0A')
     expect(screen.getByText(/Its button opens a reply to the sender with a short message already written/)).toBeTruthy()
+    // The Saved comments announcement: from CarouseLabs, for users, the person's name in it.
+    expect(screen.getByText("CarouseLabs <support@carouselabs.com>")).toBeTruthy()
+    const announcement = screen.getByTitle("CarouseLabs · New in Engage: Saved comments preview").getAttribute("srcdoc")!
+    expect(announcement).toContain("Priya")
+    expect(announcement).not.toContain("{{firstName}}")
+    expect(announcement).toContain('href="https://carouselabs.com/extension/saved"')
   })
 
   it("Use this email makes a campaign of it as it is: it can't be edited or sent to one person", async () => {

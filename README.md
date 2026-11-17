@@ -1,8 +1,39 @@
-# Carousel Labs
+# Anant Goyal
+
+I build AI products end to end: the idea, the design, the code, the tests and the launch. This account holds my main product, **CarouseLabs**, and my other work.
+
+[carouselabs.com](https://carouselabs.com) · [anantgoyal.in](https://anantgoyal.in) · [LinkedIn](https://www.linkedin.com/in/anantgoyal45/) · hello@anantgoyal.in
+
+## Projects
+
+| Project | What it is | Live | Code |
+| --- | --- | --- | --- |
+| **CarouseLabs** | AI social media studio: captions, images and carousels, scheduling and LinkedIn publishing | [carouselabs.com](https://carouselabs.com) | this repository |
+| **CarouseLabs Engage for LinkedIn** | Chrome extension that writes comments, replies, connection notes and messages in your own voice, and puts them into LinkedIn for you to post | [Chrome Web Store](https://chromewebstore.google.com/detail/carouselabs-engage/jgbmpekpdlckkeeffbamcbcnfodamnia) | [`browser-extension-comment/`](browser-extension-comment) |
+| **CarouseLabs Engage for X** | The same for X: replies and direct messages | [Chrome Web Store](https://chromewebstore.google.com/detail/carouselabs-engage-for-x/ehijoiaapdlimkmkoejijammmiahcfbo) | [`browser-extension-comment/`](browser-extension-comment) |
+| **Mini AI** | A voice-first Key Account Manager for marketplace sellers: talks with a seller, finds why their sales dropped and recommends what to do (Snapdeal *AI First Intern* assignment) | [miniai.anantgoyal.in](https://miniai.anantgoyal.in) | [mini-ai-voice-kam](https://github.com/carouselabs/mini-ai-voice-kam) |
+| **anantgoyal.in** | My email design and outreach portfolio, with hand-built, table-based HTML emails | [anantgoyal.in](https://anantgoyal.in) | [anantgoyal.in](https://github.com/carouselabs/anantgoyal.in) |
+
+## Inside CarouseLabs
+
+- **Content studio.** AI captions, images and carousels, with 48 visual looks to pick from and the creator's own call to action drawn into the image. Posts are scheduled and published to LinkedIn.
+- **Engage, three Chrome extensions from one codebase** (LinkedIn, X, and Reddit in progress). Comments stream in as they are written, in voices people set up themselves. Engage reads the pictures in a post and watches its video (stills plus a transcript of the speech), keeps the comments people reuse, and works inside Sales Navigator and LinkedIn's newer page design. Custom AI agents handle direct messages. People review and post every comment themselves.
+- **Growth and email.** Email campaigns with an AI email writer, open and click tracking, lead lists (CSV import, Brevo sync), ready-made emails, and a check of where an email lands: Primary, Promotions or Spam.
+- **Admin.** A control center for Engage: switch features off for everyone or one person, set per-person prices and offers, and follow AI cost and the errors the extensions report.
+- **Intern portal** at employee.carouselabs.com: onboarding, attendance and reports.
+- **Quality.** Over 2,000 automated tests (Vitest), plus Playwright tests that load the real extension in Chromium against copies of LinkedIn's pages.
+
+## Built with
+
+Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4 · Prisma and PostgreSQL (Supabase) · Clerk · Upstash Redis · Cloudflare R2 · Lemon Squeezy · Resend and Brevo · OpenAI and Anthropic models · Vite and CRXJS for the Chrome extensions (Manifest V3) · Vitest and Playwright · Vercel
+
+---
+
+## Developer guide
 
 Next.js App Router application for generating, editing, saving and scheduling social content, with Clerk authentication, PostgreSQL/Prisma persistence, Cloudflare R2 media, and Lemon Squeezy billing. The Engage browser extension has its own package and tests in `browser-extension-comment/`.
 
-## Local setup
+### Local setup
 
 Validated with Node 24.16.0 and npm 11.13.0 on Windows. Use the committed npm lockfiles.
 
@@ -14,7 +45,7 @@ Validated with Node 24.16.0 and npm 11.13.0 on Windows. Use the committed npm lo
 
 Authentication and protected journeys require working development Clerk and database configuration. AI, storage, billing, email, Redis limits, and LinkedIn publishing need their respective service configuration. A local environment file can contain live credentials: use test services before exercising those operations. The automated unit tests mock these boundaries; public browser tests block third-party requests.
 
-## Verification
+### Verification
 
 `npm run check` runs lint, TypeScript and root Vitest tests. `npm audit --audit-level=high` checks current registry advisories. Lint warnings remain documented in the audit; errors are not suppressed.
 
@@ -48,7 +79,7 @@ The LinkedIn and X production outputs are `browser-extension-comment/dist` and `
 
 The extension's browser tests require its separate Playwright/Chromium setup; see its README. The root CI workflow runs lint, types, both unit suites, dependency audit, production build and the public browser regressions with placeholder integration credentials. Passing CI is not verification of live auth, payments or storage.
 
-## Deployment and audit
+### Deployment and audit
 
 See [the main integration note](docs/MAIN-INTEGRATION-2026-10-04.md) for combined-branch checks and extension update instructions.
 

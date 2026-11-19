@@ -1,7 +1,7 @@
 import Link from "next/link"
 
 // Same links as before, grouped. Group names are new layout labels
-// (docs/redesign/copy-ledger.md).
+// (docs/redesign/copy-ledger.md). On the night ground, after anantgoyal.in.
 const GROUPS = [
   {
     label: "Product",
@@ -30,26 +30,28 @@ const GROUPS = [
 
 export function Footer() {
   return (
-    <footer className="border-t border-border font-ui">
-      <div className="mx-auto grid max-w-showcase gap-10 gutter-x py-12 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))] lg:py-16">
-        <div className="flex flex-col gap-4">
-          <Link href="/" className="flex items-center gap-2 self-start text-body font-semibold tracking-[-0.02em]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icon.png" alt="CarouseLabs" className="size-7" />
+    <footer className="ground-night font-ui text-white">
+      <div className="wrap-site grid gap-12 py-16 md:grid-cols-12 md:gap-6 lg:py-20">
+        <div className="flex flex-col gap-4 md:col-span-6">
+          <Link href="/" className="flex items-center gap-2.5 self-start text-xl font-semibold tracking-[-0.02em]">
+            <span className="grid size-9 place-items-center rounded-full bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/icon.png" alt="" className="size-8" />
+            </span>
             <span>CarouseLabs</span>
           </Link>
-          <a href="mailto:support@carouselabs.com" className="self-start text-label text-muted-foreground hover:text-foreground">
-            support@carouselabs.com
+          <a href="mailto:support@carouselabs.com" className="inline-flex min-h-11 items-center self-start text-[15px] text-white/80 hover:text-white">
+            <span className="link-draw">support@carouselabs.com</span>
           </a>
         </div>
         {GROUPS.map((group) => (
-          <nav key={group.label} aria-label={group.label} className="flex flex-col gap-3">
-            <h2 className="text-caption font-medium text-muted-foreground">{group.label}</h2>
-            <ul className="flex flex-col gap-1">
+          <nav key={group.label} aria-label={group.label} className="flex flex-col gap-3 md:col-span-2">
+            <h2 className="text-[13px] font-medium text-white/60">{group.label}</h2>
+            <ul className="flex flex-col">
               {group.links.map((link) => (
                 <li key={link.label}>
-                  <Link href={link.href} className="inline-flex min-h-9 items-center text-label text-foreground hover:underline hover:underline-offset-4">
-                    {link.label}
+                  <Link href={link.href} className="inline-flex min-h-11 items-center text-[15px] text-white/90 hover:text-white">
+                    <span className="link-draw">{link.label}</span>
                   </Link>
                 </li>
               ))}
@@ -57,8 +59,8 @@ export function Footer() {
           </nav>
         ))}
       </div>
-      <div className="mx-auto max-w-showcase gutter-x pb-10">
-        <p className="border-t border-border pt-6 text-caption text-muted-foreground">© 2026 CarouseLabs. All rights reserved.</p>
+      <div className="wrap-site pb-10">
+        <p className="border-t border-white/15 pt-6 text-[13px] text-white/65">© 2026 CarouseLabs. All rights reserved.</p>
       </div>
     </footer>
   )

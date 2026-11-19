@@ -2,7 +2,7 @@ import { Suspense, type ReactNode } from "react"
 import { auth } from "@clerk/nextjs/server"
 import { notFound } from "next/navigation"
 
-import { fontVariables, geist } from "@/lib/fonts"
+import { fontVariables, uiFontFamily } from "@/lib/fonts"
 import { ToastProvider } from "@/components/admin/Toast"
 import { AdminShell } from "@/components/admin/AdminShell"
 import { Spinner } from "@/components/admin/ui"
@@ -167,7 +167,7 @@ export default async function AdminPreview({ params }: { params: Promise<{ path?
   const { userId } = await auth()
   if (userId) {
     return (
-      <p className="p-8 font-sans text-[#211F1C]">
+      <p className="p-8 font-sans text-[#100C33]">
         Preview disabled while signed in: it would read and change real admin data. Open it in a private window.
       </p>
     )
@@ -182,7 +182,7 @@ export default async function AdminPreview({ params }: { params: Promise<{ path?
     <div data-theme="dark" className={`${fontVariables} bg-background font-ui text-foreground`}>
       <style
         dangerouslySetInnerHTML={{
-          __html: `body{background-color:#171614;color:#F5F0E7;font-family:${geist.style.fontFamily},system-ui,sans-serif}`,
+          __html: `body{background-color:#0B0920;color:#F1EFFF;font-family:${uiFontFamily}}`,
         }}
       />
       <ToastProvider>

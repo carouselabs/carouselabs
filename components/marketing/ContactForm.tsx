@@ -41,9 +41,10 @@ export function ContactForm() {
     }
   }
 
-  // Visible copy is unchanged; the sr-only labels give each field an
-  // accessible name (placeholders alone aren't one).
+  // Visible copy is unchanged. Every field shows its label above it (they
+  // were screen-reader-only before the redesign); placeholders stay.
   const fieldClass = `${controlClasses} px-4 py-3`
+  const labelClass = "text-label font-medium text-foreground"
 
   if (status === "sent") {
     return (
@@ -69,52 +70,62 @@ export function ContactForm() {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <label htmlFor="contact-name" className="sr-only">Your name</label>
-        <input
-          id="contact-name"
-          type="text"
-          required
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Your name"
-          className={fieldClass}
-        />
-        <label htmlFor="contact-email" className="sr-only">Your email</label>
-        <input
-          id="contact-email"
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          className={fieldClass}
-        />
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="contact-name" className={labelClass}>Your name</label>
+          <input
+            id="contact-name"
+            type="text"
+            required
+            autoComplete="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your name"
+            className={fieldClass}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="contact-email" className={labelClass}>Your email</label>
+          <input
+            id="contact-email"
+            type="email"
+            required
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            className={fieldClass}
+          />
+        </div>
       </div>
 
-      <label htmlFor="contact-subject" className="sr-only">Subject</label>
-      <select
-        id="contact-subject"
-        value={subject}
-        onChange={(e) => setSubject(e.target.value as (typeof SUBJECTS)[number])}
-        className={`${fieldClass} appearance-none cursor-pointer`}
-      >
-        {SUBJECTS.map((s) => (
-          <option key={s} value={s}>
-            {s}
-          </option>
-        ))}
-      </select>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="contact-subject" className={labelClass}>Subject</label>
+        <select
+          id="contact-subject"
+          value={subject}
+          onChange={(e) => setSubject(e.target.value as (typeof SUBJECTS)[number])}
+          className={`${fieldClass} appearance-none cursor-pointer`}
+        >
+          {SUBJECTS.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      <label htmlFor="contact-message" className="sr-only">How can we help?</label>
-      <textarea
-        id="contact-message"
-        required
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        placeholder="How can we help?"
-        rows={6}
-        className={`${fieldClass} resize-y`}
-      />
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="contact-message" className={labelClass}>How can we help?</label>
+        <textarea
+          id="contact-message"
+          required
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="How can we help?"
+          rows={6}
+          className={`${fieldClass} resize-y`}
+        />
+      </div>
 
       <button
         type="submit"

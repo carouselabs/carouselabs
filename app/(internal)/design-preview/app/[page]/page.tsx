@@ -36,7 +36,7 @@ export default async function AppPreview({
   const { userId } = await auth()
   if (userId) {
     return (
-      <p className="p-8 font-sans text-[#211F1C]">
+      <p className="p-8 font-sans text-[#100C33]">
         Preview disabled while signed in: it would generate, pin and delete for real. Open it in a private window.
       </p>
     )

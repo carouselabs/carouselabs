@@ -18,6 +18,7 @@ type Mode = "light" | "dark" | "system"
 
 const NAV = [
   ["brand", "Brand"],
+  ["signature", "Signature"],
   ["color", "Color"],
   ["type", "Type"],
   ["layout", "Layout & motion"],
@@ -92,7 +93,7 @@ export function DesignPreview({ initialTheme }: { initialTheme: "light" | "dark"
             <div className="mx-auto flex max-w-showcase items-center justify-between gap-4 gutter-x py-3">
               <div className="flex items-center gap-3">
                 <BrandLockup className="text-body-lg" markClassName="size-6" />
-                <span className="hidden text-label text-muted-foreground md:inline">Design system · Phase 0</span>
+                <span className="hidden text-label text-muted-foreground md:inline">Design system · anantgoyal.in theme</span>
               </div>
               <ThemeSwitch mode={mode} onModeChange={setMode} />
             </div>
@@ -116,11 +117,11 @@ export function DesignPreview({ initialTheme }: { initialTheme: "light" | "dark"
             <div className="flex flex-col gap-4 py-14">
               <PendingTag>Internal · development only</PendingTag>
               <h1 className="max-w-[48rem] text-display font-semibold text-balance">
-                CarouseLabs, <span className="font-display font-normal italic">warm editorial</span>.
+                CarouseLabs, in the <span className="serif-accent gradient-word">anantgoyal.in</span> look.
               </h1>
               <p className="max-w-[40rem] text-lead text-muted-foreground">
-                The Phase 0 design system: tokens, the shared kit in every state, two layout directions to compare,
-                and the proposed mark. Live pages are unchanged until each later phase migrates them.
+                Step 0 of the re-theme: the shared colours, fonts, shapes and signature pieces, and the kit in every
+                state. Every page reads these, so they already change the whole site; later steps rework layouts.
               </p>
             </div>
             <Foundations />

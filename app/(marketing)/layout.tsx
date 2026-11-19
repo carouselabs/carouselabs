@@ -20,10 +20,11 @@ export default function MarketingLayout({
           Override them to the marketing canvas so overscroll and scrollbars
           stay on-theme. Server-rendered (no flash); reverts on navigation
           into the app. */}
-      <style>{`body{background-color:#F9F7F2;color:#211F1C}`}</style>
+      <style>{`body{background-color:#F4F3FC;color:#100C33}`}</style>
       <MaintenanceBanner />
       <Navbar />
-      <main className="flex-1 pt-14">{children}</main>
+      {/* The nav floats over the page; the home hero (data-hero) runs under it. */}
+      <main id="main" className="flex-1 pt-24 has-[>[data-hero]]:pt-0">{children}</main>
       <Footer />
     </div>
   )

@@ -31,7 +31,7 @@ export default async function OnboardingPreview({ params }: { params: Promise<{ 
   const { userId } = await auth()
   if (userId) {
     return (
-      <p className="p-8 font-sans text-[#211F1C]">
+      <p className="p-8 font-sans text-[#100C33]">
         Preview disabled while signed in: finishing would overwrite your real profile. Open it in a private window.
       </p>
     )

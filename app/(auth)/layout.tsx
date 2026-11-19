@@ -10,7 +10,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div data-theme="light" className={`${fontVariables} min-h-screen bg-background font-ui text-foreground`}>
       {/* The root layout's body styles are for the authenticated app. */}
-      <style>{`body{background-color:#F9F7F2;color:#211F1C}`}</style>
+      <style>{`body{background-color:#F4F3FC;color:#100C33}`}</style>
 
       <div className="mx-auto grid min-h-screen max-w-showcase lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
         <div className="flex flex-col gutter-x py-6 lg:py-10">

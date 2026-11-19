@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { fontVariables, geist } from "@/lib/fonts"
+import { fontVariables, uiFontFamily } from "@/lib/fonts"
 import { requireAdminPage } from "@/lib/adminAuth"
 import { AdminShell } from "@/components/admin/AdminShell"
 import { ToastProvider } from "@/components/admin/Toast"
@@ -29,7 +29,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       <style
         // Raw so the font name's quotes aren't HTML-escaped inside the CSS.
         dangerouslySetInnerHTML={{
-          __html: `body{background-color:#171614;color:#F5F0E7;font-family:${geist.style.fontFamily},system-ui,sans-serif}`,
+          __html: `body{background-color:#0B0920;color:#F1EFFF;font-family:${uiFontFamily}}`,
         }}
       />
       <ToastProvider>

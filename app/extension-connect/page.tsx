@@ -12,7 +12,7 @@ import { ExtensionConnectClient } from "@/components/extension/ExtensionConnectC
 export default function ExtensionConnectPage() {
   return (
     <div data-theme="light" className={`${fontVariables} flex min-h-svh items-center justify-center bg-background px-4 font-ui text-foreground`}>
-      <style>{`body{background-color:#F9F7F2;color:#211F1C}`}</style>
+      <style>{`body{background-color:#F4F3FC;color:#100C33}`}</style>
       <ExtensionConnectClient />
     </div>
   )

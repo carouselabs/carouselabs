@@ -1,18 +1,18 @@
 // Shared Clerk appearance for the sign-in / sign-up pages, matching the
 // redesign tokens (app/globals.css, light theme). Clerk's `variables` need
 // literal colors, so the token values are repeated here — keep them in step.
-// fontFamily is "inherit" so the card picks up Geist from the auth layout.
+// fontFamily is "inherit" so the card picks up Instrument Sans from the layout.
 export const authAppearance = {
   variables: {
-    colorPrimary: "#211F1C",
-    colorText: "#211F1C",
-    colorTextSecondary: "#67625B",
-    colorBackground: "#FFFDF9",
+    colorPrimary: "#100C33",
+    colorText: "#100C33",
+    colorTextSecondary: "#5C5884",
+    colorBackground: "#FFFFFF",
     colorInputBackground: "#FFFFFF",
-    colorInputText: "#211F1C",
-    colorNeutral: "#211F1C",
+    colorInputText: "#100C33",
+    colorNeutral: "#100C33",
     colorDanger: "#B91C1C",
-    borderRadius: "12px",
+    borderRadius: "14px",
     fontFamily: "inherit",
   },
   elements: {
@@ -22,7 +22,7 @@ export const authAppearance = {
     headerTitle: "text-foreground font-semibold",
     headerSubtitle: "text-muted-foreground",
     socialButtonsBlockButton:
-      "min-h-11 border border-control-border bg-surface-raised hover:bg-surface-muted text-foreground transition-colors",
+      "min-h-11 rounded-full border border-control-border bg-surface-raised hover:bg-surface-muted text-foreground transition-colors",
     socialButtonsBlockButtonText: "text-foreground font-medium",
     dividerLine: "bg-border",
     dividerText: "text-muted-foreground",
@@ -30,7 +30,7 @@ export const authAppearance = {
     formFieldInput:
       "min-h-11 bg-surface-raised border-control-border text-foreground focus-within:border-brand rounded-control",
     formButtonPrimary:
-      "min-h-11 bg-primary hover:bg-primary-hover text-primary-foreground rounded-control transition-colors shadow-none normal-case",
+      "min-h-11 bg-primary hover:bg-primary-hover text-primary-foreground rounded-full transition-colors shadow-none normal-case",
     footerActionText: "text-muted-foreground",
     footerActionLink: "text-foreground hover:text-brand font-semibold",
     identityPreviewText: "text-foreground",

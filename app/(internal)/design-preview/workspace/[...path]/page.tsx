@@ -401,7 +401,7 @@ export default async function WorkspacePreview({
   const { userId } = await auth()
   if (userId) {
     return (
-      <p className="p-8 font-sans text-[#211F1C]">
+      <p className="p-8 font-sans text-[#100C33]">
         Preview disabled while signed in: it would read and change your real account. Open it in a private window.
       </p>
     )

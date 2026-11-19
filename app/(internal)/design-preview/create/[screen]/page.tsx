@@ -46,7 +46,7 @@ export default async function CreatePreview({
   const { userId } = await auth()
   if (userId) {
     return (
-      <p className="p-8 font-sans text-[#211F1C]">
+      <p className="p-8 font-sans text-[#100C33]">
         Preview disabled while signed in: it would spend real credits and save real posts. Open it in a private window.
       </p>
     )

@@ -3,10 +3,9 @@
 import { useEffect, useId, useRef, useState } from "react"
 import Link from "next/link"
 import dynamic from "next/dynamic"
-import { ChevronDown, Menu } from "lucide-react"
+import { ChevronDown, Menu, Pause, Play } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { Button, buttonVariants } from "@/components/ui/button"
 
 // The mobile menu only matters after a tap, so its code loads on demand.
 const MobileMenu = dynamic(() => import("./MobileMenu").then((m) => m.MobileMenu), { ssr: false })
@@ -40,8 +39,9 @@ export const MENUS = [
   { label: "Contact", href: "/#contact" },
 ] as const
 
+// The floating pill's links (anantgoyal.in): 15px, ink-2, a soft ink wash on hover.
 const navLink =
-  "inline-flex h-9 items-center gap-1 rounded-control-sm px-3 text-label font-medium text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground aria-expanded:bg-surface-muted aria-expanded:text-foreground"
+  "inline-flex h-11 items-center gap-1 rounded-full px-4 text-[15px] font-medium text-[#46426B] transition-colors hover:bg-[#100C33]/5 hover:text-foreground aria-expanded:bg-[#100C33]/5 aria-expanded:text-foreground"
 
 /**
  * Site navigation uses the disclosure pattern (a button that shows a list of
@@ -86,14 +86,14 @@ function NavDisclosure({ label, items }: { label: string; items: readonly { labe
       <ul
         id={id}
         hidden={!open}
-        className="absolute top-full left-0 z-(--z-popover) mt-2 w-64 rounded-control border border-border bg-popover p-1 shadow-popover"
+        className="absolute top-full left-0 z-(--z-popover) mt-3 w-72 rounded-[22px] border border-border bg-surface p-2 shadow-float"
       >
         {items.map((item) => (
           <li key={item.href}>
             <a
               href={item.href}
               onClick={() => setOpen(false)}
-              className="flex min-h-10 items-center rounded-control-sm px-2.5 py-2 text-label text-foreground hover:bg-surface-muted"
+              className="flex min-h-11 items-center rounded-[14px] px-3 py-2 text-[15px] text-foreground transition-colors hover:bg-surface-muted"
             >
               {item.label}
             </a>
@@ -104,36 +104,57 @@ function NavDisclosure({ label, items }: { label: string; items: readonly { labe
   )
 }
 
+/** The pause switch for the page's ambient motion (floating pieces, the marquee). */
+function useMotionPause() {
+  const [paused, setPaused] = useState(false)
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("site-motion") === "paused") {
+        document.documentElement.setAttribute("data-motion", "paused")
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors a saved choice once on mount
+        setPaused(true)
+      }
+    } catch {}
+  }, [])
+  const toggle = () => {
+    const next = !paused
+    setPaused(next)
+    if (next) document.documentElement.setAttribute("data-motion", "paused")
+    else document.documentElement.removeAttribute("data-motion")
+    try {
+      localStorage.setItem("site-motion", next ? "paused" : "on")
+    } catch {}
+  }
+  return { paused, toggle }
+}
+
 export function Navbar() {
-  const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   // Mount the lazily loaded menu on first use, then keep it so closing
   // animates and focus returns to the button.
   const [menuLoaded, setMenuLoaded] = useState(false)
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8)
-    onScroll()
-    window.addEventListener("scroll", onScroll, { passive: true })
-    return () => window.removeEventListener("scroll", onScroll)
-  }, [])
+  const { paused, toggle } = useMotionPause()
+  const MotionIcon = paused ? Play : Pause
 
   return (
-    <nav
-      aria-label="Main"
-      className={cn(
-        "fixed inset-x-0 top-0 z-(--z-header) font-ui transition-[background-color,border-color] duration-(--motion-normal)",
-        scrolled ? "border-b border-border bg-background/90 backdrop-blur-md" : "border-b border-transparent bg-transparent"
-      )}
-    >
-      <div className="mx-auto flex h-14 max-w-showcase items-center gap-6 gutter-x">
-        <Link href="/" className="flex shrink-0 items-center gap-2 text-body font-semibold tracking-[-0.02em] text-foreground">
+    <header className="fixed inset-x-0 top-0 z-(--z-header) px-3 pt-3 font-ui sm:px-4 md:px-6">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-(--z-toast) focus:rounded-full focus:bg-surface focus:px-5 focus:py-3 focus:text-foreground focus:shadow-float"
+      >
+        Skip to content
+      </a>
+      <nav
+        aria-label="Main"
+        className="mx-auto flex h-16 max-w-[1400px] items-center gap-3 rounded-full border border-white/60 bg-white/80 pr-2 pl-4 shadow-[0_10px_40px_-18px_rgb(20_10_90/0.45)] backdrop-blur-xl sm:pl-5"
+      >
+        <Link href="/" className="flex shrink-0 items-center gap-2 rounded-full text-[17px] font-semibold tracking-[-0.02em] text-foreground">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/icon.png" alt="CarouseLabs" className="size-7" />
+          <img src="/icon.png" alt="" className="size-8" />
           <span>CarouseLabs</span>
         </Link>
 
-        <ul className="hidden items-center gap-0.5 lg:flex">
+        <ul className="mx-auto hidden items-center gap-0.5 lg:flex">
           {MENUS.map((menu) => (
             <li key={menu.label} className="relative">
               {"items" in menu ? (
@@ -147,23 +168,42 @@ export function Navbar() {
           ))}
         </ul>
 
-        <div className="ml-auto flex items-center gap-2">
-          <Link href="/sign-in" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "hidden sm:inline-flex")}>
+        <div className="ml-auto flex items-center gap-1.5 lg:ml-0">
+          <button
+            type="button"
+            onClick={toggle}
+            aria-pressed={paused}
+            aria-label={paused ? "Play background animations" : "Pause background animations"}
+            title={paused ? "Play animations" : "Pause animations"}
+            className="hidden size-11 place-items-center rounded-full text-[#46426B] transition-colors hover:bg-[#100C33]/5 hover:text-foreground sm:grid"
+          >
+            <MotionIcon aria-hidden className="size-4" strokeWidth={2.2} />
+          </button>
+          <Link href="/sign-in" className={cn(navLink, "hidden sm:inline-flex")}>
             Sign in
           </Link>
-          <Link href="/sign-up" className={buttonVariants({ size: "sm" })}>
+          <Link
+            href="/sign-up"
+            className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-5 text-[15px] font-medium text-primary-foreground shadow-[0_10px_24px_-10px_rgb(16_12_51/0.6)] transition-[translate,background-color,box-shadow] duration-200 hover:-translate-y-px hover:bg-primary-hover active:translate-y-0 active:scale-[0.97] motion-reduce:hover:translate-y-0"
+          >
             Get Started
           </Link>
-          <Button variant="ghost" size="icon-sm" aria-label="Open menu" className="lg:hidden" onClick={() => {
+          <button
+            type="button"
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
+            className="grid size-11 place-items-center rounded-full bg-primary text-primary-foreground lg:hidden"
+            onClick={() => {
               setMenuLoaded(true)
               setMenuOpen(true)
-            }}>
-            <Menu />
-          </Button>
+            }}
+          >
+            <Menu aria-hidden className="size-5" />
+          </button>
         </div>
-      </div>
+      </nav>
 
       {menuLoaded && <MobileMenu open={menuOpen} onOpenChange={setMenuOpen} menus={MENUS} />}
-    </nav>
+    </header>
   )
 }

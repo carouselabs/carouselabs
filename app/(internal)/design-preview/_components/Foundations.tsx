@@ -8,17 +8,17 @@ import { Button } from "@/components/ui/button"
 import { PendingTag, Section, Specimen } from "./Section"
 
 const COLORS: { token: string; light: string; dark: string; use: string }[] = [
-  { token: "background", light: "#F9F7F2", dark: "#171614", use: "Page canvas" },
-  { token: "surface", light: "#FFFDF9", dark: "#201E1B", use: "Standard panels" },
-  { token: "surface-raised", light: "#FFFFFF", dark: "#282521", use: "Menus, dialogs" },
-  { token: "surface-muted", light: "#F0ECE5", dark: "#24211D", use: "Quiet regions, hover" },
-  { token: "foreground", light: "#211F1C", dark: "#F5F0E7", use: "Primary text" },
-  { token: "muted-foreground", light: "#67625B", dark: "#B5AFA4", use: "Secondary text" },
-  { token: "border", light: "#DED8CD", dark: "#3A352F", use: "Decorative separators" },
-  { token: "control-border", light: "#8C857B", dark: "#847B70", use: "Input and control edges (3:1)" },
-  { token: "primary", light: "#211F1C", dark: "#F5F0E7", use: "Main action" },
-  { token: "brand", light: "#6D28D9", dark: "#C4A7FF", use: "Links, selection, focus" },
-  { token: "brand-soft", light: "#EEE8FA", dark: "#332343", use: "Selected backgrounds" },
+  { token: "background", light: "#F4F3FC", dark: "#0B0920", use: "Page canvas (lavender mist / night)" },
+  { token: "surface", light: "#FFFFFF", dark: "#15122F", use: "Standard panels" },
+  { token: "surface-raised", light: "#FFFFFF", dark: "#1C1840", use: "Menus, dialogs" },
+  { token: "surface-muted", light: "#F1EFFA", dark: "#1A1638", use: "Quiet regions, hover" },
+  { token: "foreground", light: "#100C33", dark: "#F1EFFF", use: "Primary text (ink navy)" },
+  { token: "muted-foreground", light: "#5C5884", dark: "#A9A4CF", use: "Secondary text" },
+  { token: "border", light: "#E5E2F4", dark: "#2B2754", use: "Decorative separators" },
+  { token: "control-border", light: "#8D89A8", dark: "#7A75A8", use: "Input and control edges (3:1)" },
+  { token: "primary", light: "#100C33", dark: "#F1EFFF", use: "Main action (ink pill)" },
+  { token: "brand", light: "#4B30EE", dark: "#A99BFF", use: "Links, selection, focus" },
+  { token: "brand-soft", light: "#EFEAFF", dark: "#2A2260", use: "Selected backgrounds" },
   { token: "success", light: "#166534", dark: "#86EFAC", use: "Real success only" },
   { token: "warning", light: "#854D0E", dark: "#FACC15", use: "Real warnings only" },
   { token: "danger", light: "#B91C1C", dark: "#FCA5A5", use: "Errors, destructive" },
@@ -38,10 +38,11 @@ const TYPE: { cls: string; name: string; spec: string; sample: string }[] = [
 
 const RADII = [
   ["rounded-detail", "4px · details"],
-  ["rounded-control-sm", "8px · small controls"],
-  ["rounded-control", "12px · controls"],
-  ["rounded-card", "16px · cards"],
-  ["rounded-showcase", "24px · showcases"],
+  ["rounded-control-sm", "10px · small controls"],
+  ["rounded-control", "14px · fields, menus"],
+  ["rounded-card", "24px · cards, panels"],
+  ["rounded-showcase", "28px · showcases"],
+  ["rounded-full", "pill · buttons, tabs, chips"],
 ] as const
 
 const SHADOWS = [
@@ -127,9 +128,81 @@ export function Foundations() {
       </Section>
 
       <Section
+        id="signature"
+        title="Signature pieces"
+        description="Taken from anantgoyal.in and shared in app/globals.css: the gradient ground, night cards, glossy orbs, the italic gradient word and the dotted stage. Orbs are decoration for the website, sign-in and empty screens only."
+      >
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <Specimen label="ground-canvas + white panel">
+            <div className="ground-canvas relative h-44 overflow-hidden rounded-showcase p-2.5">
+              <span aria-hidden className="orb orb-violet -top-6 -right-6 size-20" />
+              <div className="flex h-full flex-col justify-center gap-1 rounded-card bg-surface px-5 text-foreground">
+                <p className="text-title-sm font-semibold">
+                  Create for <span className="serif-accent gradient-word">every platform</span>
+                </p>
+                <p className="text-caption text-muted-foreground">Website hero, sign-in, final call to action</p>
+              </div>
+            </div>
+          </Specimen>
+          <Specimen label="ground-night + lime-mark">
+            <div className="ground-night flex h-44 flex-col justify-between rounded-showcase p-5">
+              <p className="text-label text-white/80">Posts this week</p>
+              <div aria-hidden className="flex h-20 items-end gap-1.5">
+                {[22, 30, 36, 48, 58, 72].map((h) => (
+                  <span key={h} className="flex-1 rounded-t-[4px] bg-linear-to-b from-[#7B6BFF] to-[#4B30EE]" style={{ height: `${h}%` }} />
+                ))}
+                <span className="lime-mark h-full flex-1 rounded-t-[4px]" />
+              </div>
+            </div>
+          </Specimen>
+          <Specimen label="orb · orb-violet / blue / pearl / lime">
+            <div className="relative h-44 overflow-hidden rounded-showcase border border-border bg-background">
+              <span aria-hidden className="orb orb-violet top-8 left-[18%] size-20" />
+              <span aria-hidden className="orb orb-blue top-16 left-[50%] size-12" />
+              <span aria-hidden className="orb orb-lime top-7 left-[72%] size-6" />
+              <span aria-hidden className="orb orb-pearl bottom-6 left-[10%] size-9" />
+            </div>
+          </Specimen>
+          <Specimen label="ground-dots stage">
+            <div className="ground-dots relative h-44 overflow-hidden rounded-card">
+              {[-6, 0, 6].map((r, i) => (
+                <div
+                  key={r}
+                  className={cn(
+                    "absolute top-1/2 w-24 -translate-y-1/2 rounded-control border border-border p-2 text-caption shadow-dialog",
+                    i === 1 ? "z-10 h-32 bg-[#0B0920] text-white" : "h-28 bg-surface text-muted-foreground"
+                  )}
+                  style={{ left: `calc(50% + ${(i - 1) * 84}px - 48px)`, rotate: `${r}deg` }}
+                >
+                  Slide {i + 1}
+                </div>
+              ))}
+            </div>
+          </Specimen>
+          <Specimen label="Buttons are pills">
+            <div className="flex h-44 flex-wrap items-center justify-center gap-3 rounded-showcase border border-border bg-surface">
+              <Button>Start for free</Button>
+              <Button variant="outline">See how it works</Button>
+            </div>
+          </Specimen>
+          <Specimen label="On night (admin)">
+            <div data-theme="dark" className="flex h-44 flex-col justify-center gap-3 rounded-showcase bg-background px-5 text-foreground">
+              <p className="text-title-sm font-semibold">
+                Admin, <span className="serif-accent gradient-word">at night</span>
+              </p>
+              <div className="flex gap-2">
+                <Button size="sm">Save</Button>
+                <Button size="sm" variant="outline">Cancel</Button>
+              </div>
+            </div>
+          </Specimen>
+        </div>
+      </Section>
+
+      <Section
         id="color"
         title="Color"
-        description="Warm neutrals from paper to ink, one violet brand accent, and status colors reserved for real status. Every text pair checked at 4.5:1 or better and control edges at 3:1, in both themes."
+        description="The anantgoyal.in palette: ink navy on lavender mist, white panels, an indigo accent from the blue → violet → purple gradient, and night for the admin console. Every text pair checked at 4.5:1 or better and control edges at 3:1, in both themes."
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {COLORS.map((color) => (
@@ -153,7 +226,7 @@ export function Foundations() {
       <Section
         id="type"
         title="Typography"
-        description="Geist for everything functional; Instrument Serif only for a few large marketing phrases. Sentence case, tabular numbers for credits, prices and metrics."
+        description="Instrument Sans for everything; Instrument Serif italic, often in the gradient, for one phrase in a big heading. Sentence case, tabular numbers for credits, prices and metrics."
       >
         <div className="flex flex-col divide-y divide-border rounded-card border border-border bg-surface">
           {TYPE.map((t) => (
@@ -171,7 +244,7 @@ export function Foundations() {
               <p className="text-caption text-muted-foreground">Marketing only, sparingly</p>
             </div>
             <p className="text-display font-semibold">
-              Your ideas. Your voice. <span className="font-display font-normal italic">Ready to publish.</span>
+              Your ideas. Your voice. <span className="serif-accent gradient-word">Ready to publish.</span>
             </p>
           </div>
         </div>

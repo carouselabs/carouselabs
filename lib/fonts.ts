@@ -1,17 +1,18 @@
-import { Geist, Instrument_Sans, Instrument_Serif } from "next/font/google"
+import { Instrument_Sans, Instrument_Serif } from "next/font/google"
 
-// Redesign fonts. Apply `fontVariables` on a layout's wrapper to opt that
-// subtree in; app/globals.css maps them to `font-ui` and `font-display`.
-// Pages that haven't migrated don't render these classes, so the fonts are
-// neither preloaded nor downloaded there.
-export const geist = Geist({
+// The anantgoyal.in pair, used on every page: Instrument Sans for everything,
+// Instrument Serif italics for one phrase in a big heading (font-display /
+// .serif-accent). app/layout.tsx puts both variables on <html>, so menus and
+// dialogs rendered outside a page's wrapper get them too; `fontVariables` is
+// still exported for wrappers that set them explicitly.
+export const instrumentSans = Instrument_Sans({
   subsets: ["latin"],
-  variable: "--font-geist",
+  variable: "--font-instrument-sans",
   display: "swap",
 })
 
-// Display face for a few large marketing phrases only — never for labels,
-// buttons, tables, app headings or body text.
+// Display face for a few large phrases only — never for labels, buttons,
+// tables, app headings or body text.
 export const instrumentSerif = Instrument_Serif({
   subsets: ["latin"],
   weight: "400",
@@ -20,13 +21,7 @@ export const instrumentSerif = Instrument_Serif({
   display: "swap",
 })
 
-export const fontVariables = `${geist.variable} ${instrumentSerif.variable}`
+export const fontVariables = `${instrumentSans.variable} ${instrumentSerif.variable}`
 
-// Engage's own face (app/(app)/extension/layout.tsx puts this on the section's
-// wrapper; .engage-root in app/globals.css applies it). Instrument Serif comes
-// from fontVariables above, which every signed-in page already has.
-export const instrumentSans = Instrument_Sans({
-  subsets: ["latin"],
-  variable: "--font-instrument-sans",
-  display: "swap",
-})
+/** The UI face's real family name, for raw CSS (body styles in layouts). */
+export const uiFontFamily = `${instrumentSans.style.fontFamily},system-ui,sans-serif`

@@ -233,3 +233,21 @@ No sentence was reworded. Emoji that sat in front of labels were removed (the wo
 | 🥇 🥈 🥉 | "1", "2", "3" on gold / silver / bronze discs (screen readers: "Rank 1") | Intern leaderboard, admin interns |
 
 Moved, same words: "Tailored to your profile" now labels the suggestion list on the dashboard (it named the topic field before); the platform card shows "3,000" and "chars" on two lines.
+
+## anantgoyal.in re-theme, website (2026-11-19)
+
+Branch `theme/anantgoyal`. All existing copy is kept word for word; these are the only new or moved words on the home page. The taste skill's copy check flagged two existing lines, which were left unchanged (row R11).
+
+| # | Words | Where | What changed | Status |
+| --- | --- | --- | --- | --- |
+| R1 | "More tools" | home, tools section heading | was the section's hidden label; now its visible heading | pending |
+| R2 | "Built for Every Platform" + LinkedIn, Instagram, Twitter/X, Facebook, Pinterest, Threads | hero, under the buttons | the existing feature title reused as the label of the platform row (real logos) | pending |
+| R3 | "LinkedIn posts", "Instagram carousels", "Twitter/X threads", "Facebook posts", "Threads", "Pinterest pins", "Captions", "Single images", "PDF carousels", "YouTube thumbnails" | home, the moving row under How it works | new: the platforms and formats CarouseLabs makes | pending |
+| R4 | "Ready for", "Swipe →", "Content Hub · Tue 14" | hero picture (example pieces) | new labels inside the example picture | pending |
+| R5 | "recurring commission, every month" / "bonus credits on the free plan" | referral figures 8% and 50 | new labels that restate the referral paragraph | pending |
+| R6 | "Your name", "Your email", "Subject", "How can we help?" | contact form | were screen-reader-only labels; now shown above each field | pending |
+| R7 | "Same composition, hierarchy, and mood — new subject, new text." | Thumbnail card | moved from a caption under the pictures into the card text | no change (moved) |
+| R8 | "Reference", "Result", "Example week" | Thumbnail and Content Hub pictures | moved from captions onto the pictures as small tags | no change (moved) |
+| R9 | "app.carouselabs.com" | How it works window bar | the address pill, as on the sign-in page's picture | pending |
+| R10 | "Pause background animations" / "Play background animations" | nav pause button (screen readers and tooltip) | new control | pending |
+| R11 | "unlock" (pricing FAQ) and five "not just / , not" lines | lib/plans.ts, hero demo, Engage, Thumbnail, Content Hub | flagged by the taste skill's copy check; kept as written, waived in .taste-skill/waivers.json | owner to decide |

@@ -23,7 +23,8 @@ import { buttonVariants } from "@/components/ui/button"
 import { EXTENSION_CHECKOUT_PATH, EXTENSION_PLAN, X_EXTENSION_CHECKOUT_PATH, X_EXTENSION_PLAN } from "@/lib/plans"
 
 // Copy moved verbatim from the former ExtensionFeature and XExtensionFeature
-// sections; the switch between them is the approved Phase 1 layout.
+// sections; the switch between them is the approved Phase 1 layout. The
+// section is the page's night band (anantgoyal.in), the panel floating on it.
 
 const LINKEDIN_FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
   { icon: MessageSquare, title: "Comments in your voice", text: "Click Comment on any LinkedIn post and get a specific, human comment that sounds like you — not like AI." },
@@ -56,7 +57,7 @@ function DraftActions() {
 /** A static illustration of the LinkedIn side panel in a real conversation. */
 function LinkedInMock() {
   return (
-    <div aria-hidden className="flex flex-col gap-4 rounded-showcase border border-border bg-surface-raised p-5 shadow-dialog sm:p-6">
+    <div aria-hidden className="flex flex-col gap-4 rounded-[28px] bg-surface-raised p-5 text-foreground shadow-[0_40px_80px_-30px_rgb(0_0_0/0.7)] sm:p-6">
       <div className="flex items-center justify-between">
         <span className="text-label font-semibold">Conversation Assistant</span>
         <span className="rounded-full bg-brand-soft px-2.5 py-0.5 text-caption font-medium text-brand">Unlimited</span>
@@ -85,7 +86,7 @@ function LinkedInMock() {
 /** A static illustration of the X side panel, in X's black and white. */
 function XMock() {
   return (
-    <div aria-hidden className="flex flex-col gap-4 rounded-showcase border border-border bg-surface-raised p-5 shadow-dialog sm:p-6">
+    <div aria-hidden className="flex flex-col gap-4 rounded-[28px] bg-surface-raised p-5 text-foreground shadow-[0_40px_80px_-30px_rgb(0_0_0/0.7)] sm:p-6">
       <div className="flex items-center justify-between">
         <span className="text-label font-semibold">Reply on X</span>
         <span className="rounded-full bg-primary px-2.5 py-0.5 text-caption font-medium text-primary-foreground">Natural (Slang)</span>
@@ -107,17 +108,30 @@ function XMock() {
 
 function FeatureList({ items }: { items: typeof LINKEDIN_FEATURES }) {
   return (
-    <ul className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
+    <ul className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
       {items.map((f) => (
-        <li key={f.title} className="flex gap-3">
-          <f.icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" strokeWidth={1.8} aria-hidden />
+        <li key={f.title} className="flex gap-3.5">
+          <span className="grid size-9 shrink-0 place-items-center rounded-[12px] bg-white/[0.08] ring-1 ring-white/10">
+            <f.icon className="size-4 text-[#C1B6FF]" strokeWidth={1.9} aria-hidden />
+          </span>
           <div className="flex flex-col gap-1">
-            <p className="text-label font-semibold">{f.title}</p>
-            <p className="text-label text-muted-foreground">{f.text}</p>
+            <p className="text-[15px] font-semibold text-white">{f.title}</p>
+            <p className="text-[15px] leading-[1.5] text-white/70">{f.text}</p>
           </div>
         </li>
       ))}
     </ul>
+  )
+}
+
+/** The panel mock floats on the night ground with orbs around it (website only). */
+function MockStage({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative lg:sticky lg:top-28">
+      <span aria-hidden className="orb orb-violet -top-8 -right-6 hidden size-28 sm:block" />
+      <span aria-hidden className="orb orb-blue -bottom-6 -left-8 hidden size-20 sm:block" />
+      <div className="relative">{children}</div>
+    </div>
   )
 }
 
@@ -138,14 +152,14 @@ export function EngageSection() {
   }, [])
 
   return (
-    <section id="extension" aria-label="CarouseLabs Engage" className="scroll-mt-20 border-t border-border bg-surface-muted/40 font-ui">
-      <span id="x-extension" aria-hidden className="block scroll-mt-20" />
+    <section id="extension" aria-label="CarouseLabs Engage" className="ground-night scroll-mt-24 font-ui text-white">
+      <span id="x-extension" aria-hidden className="block scroll-mt-24" />
       {/* Without JavaScript both panels show, one after the other. Panels hide
           with a class, not the `hidden` attribute: Tailwind's base styles make
           [hidden] display:none !important, which this fallback can't override. */}
       <noscript dangerouslySetInnerHTML={{ __html: "<style>[data-engage-panel]{display:grid!important}[data-engage-switch]{display:none!important}</style>" }} />
-      <div className="mx-auto flex max-w-showcase flex-col gap-10 gutter-x section-y">
-        <div data-engage-switch role="group" aria-label="Choose an extension" className="inline-flex self-start rounded-full border border-border bg-surface p-1">
+      <div className="wrap-site flex flex-col gap-12 py-24 lg:py-[120px]">
+        <div data-engage-switch role="group" aria-label="Choose an extension" className="grid grid-cols-2 self-stretch rounded-full bg-white/[0.08] p-1 ring-1 ring-white/15 sm:inline-flex sm:self-start">
           {([
             ["linkedin", "Engage for LinkedIn"],
             ["x", "Engage for X"],
@@ -156,7 +170,7 @@ export function EngageSection() {
               aria-pressed={active === value}
               aria-controls={`engage-${value}`}
               onClick={() => setActive(value)}
-              className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-label whitespace-nowrap sm:px-5 font-medium text-muted-foreground transition-colors hover:text-foreground aria-pressed:bg-foreground aria-pressed:text-background"
+              className="inline-flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-full px-2 text-[13px] font-medium whitespace-nowrap text-white/75 transition-colors hover:text-white aria-pressed:bg-white aria-pressed:text-[#100C33] sm:gap-2 sm:px-5 sm:text-[15px]"
             >
               <PlatformLogo platform={value} size={16} />
               {label}
@@ -167,67 +181,77 @@ export function EngageSection() {
         <div
           id="engage-linkedin"
           data-engage-panel
-          className={cn("grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-16", active !== "linkedin" && "hidden")}
+          className={cn("grid gap-12 lg:grid-cols-12 lg:gap-6", active !== "linkedin" && "hidden")}
         >
-          <div className="flex flex-col gap-8">
-            <div className="flex flex-col gap-4">
-              <p className="inline-flex items-center gap-1.5 text-label font-medium text-brand">
+          <div className="flex flex-col gap-10 lg:col-span-6">
+            <div className="flex flex-col gap-5">
+              <p className="inline-flex items-center gap-1.5 self-start rounded-full bg-white/[0.08] px-3 py-1.5 text-[13px] font-medium text-[#C1B6FF] ring-1 ring-white/10">
                 <Puzzle className="size-3.5" strokeWidth={2.2} aria-hidden />
                 New — Chrome Extension
               </p>
-              <h2 className="text-title font-semibold text-balance lg:text-[2.625rem] lg:leading-[1.1]">Comments, Replies and Conversations on LinkedIn — Written in Your Voice</h2>
-              <p className="text-body-lg text-muted-foreground">
+              <h2 className="text-[clamp(2rem,1.1rem+2.5vw,3.25rem)] leading-[1.02] font-semibold tracking-[-0.04em] text-balance text-white">
+                Comments, Replies and Conversations on LinkedIn — <span className="serif-accent gradient-word pr-[0.04em] text-[1.08em]">Written in Your Voice</span>
+              </h2>
+              <p className="text-lg leading-[1.6] text-white/75">
                 The CarouseLabs extension sits next to LinkedIn and writes as many comments, replies, connection notes and messages as you
                 want. It follows the conversation, so every message moves it forward — and turns more of your chats into leads.
               </p>
             </div>
             <div className="flex flex-col gap-2">
-              <Link href={EXTENSION_CHECKOUT_PATH} className={cn(buttonVariants({ size: "lg" }), "self-start")}>
+              <Link href={EXTENSION_CHECKOUT_PATH} className={cn(buttonVariants({ size: "lg" }), "btn-nudge h-14 self-start bg-white px-7 text-base text-[#100C33] shadow-[0_10px_30px_-12px_rgb(0_0_0/0.5)] hover:bg-white")}>
                 Get the extension — ${EXTENSION_PLAN.price}/month
-                <ArrowRight aria-hidden />
+                <ArrowRight aria-hidden className="nudge" />
               </Link>
-              <p className="text-label text-muted-foreground">
+              <p className="text-[15px] text-white/65">
                 Unlimited generations. Try {EXTENSION_PLAN.freeGenerations} free first — sold separately from the web plans.
               </p>
             </div>
             <FeatureList items={LINKEDIN_FEATURES} />
           </div>
-          <div className="lg:sticky lg:top-24 lg:self-start">
-            <LinkedInMock />
+          <div className="lg:col-span-6 lg:self-start">
+            <MockStage>
+              <LinkedInMock />
+            </MockStage>
           </div>
         </div>
 
         <div
           id="engage-x"
           data-engage-panel
-          className={cn("grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-16", active !== "x" && "hidden")}
+          className={cn("grid gap-12 lg:grid-cols-12 lg:gap-6", active !== "x" && "hidden")}
         >
-          <div className="flex flex-col gap-8">
-            <div className="flex flex-col gap-4">
-              <p className="inline-flex items-center gap-1.5 text-label font-medium text-foreground">
-                <PlatformLogo platform="x" size={14} />
+          <div className="flex flex-col gap-10 lg:col-span-6">
+            <div className="flex flex-col gap-5">
+              <p className="inline-flex items-center gap-1.5 self-start rounded-full bg-white/[0.08] px-3 py-1.5 text-[13px] font-medium text-white ring-1 ring-white/10">
+                <span className="grid size-4 place-items-center rounded-[4px] bg-white text-[#100C33]">
+                  <PlatformLogo platform="x" size={10} />
+                </span>
                 New — CarouseLabs Engage for X
               </p>
-              <h2 className="text-title font-semibold text-balance lg:text-[2.625rem] lg:leading-[1.1]">Replies and Messages on X — Written in Your Voice</h2>
-              <p className="text-body-lg text-muted-foreground">
+              <h2 className="text-[clamp(2rem,1.1rem+2.5vw,3.25rem)] leading-[1.02] font-semibold tracking-[-0.04em] text-balance text-white">
+                Replies and Messages on X — <span className="serif-accent gradient-word pr-[0.04em] text-[1.08em]">Written in Your Voice</span>
+              </h2>
+              <p className="text-lg leading-[1.6] text-white/75">
                 A separate Chrome extension for x.com. It writes as many replies and messages as you want, in plain, natural English that
                 sounds like you — so you can show up in more conversations without spending your whole day on X.
               </p>
             </div>
             <div className="flex flex-col gap-2">
-              <Link href={X_EXTENSION_CHECKOUT_PATH} className={cn(buttonVariants({ size: "lg" }), "self-start")}>
+              <Link href={X_EXTENSION_CHECKOUT_PATH} className={cn(buttonVariants({ size: "lg" }), "btn-nudge h-14 self-start bg-white px-7 text-base text-[#100C33] shadow-[0_10px_30px_-12px_rgb(0_0_0/0.5)] hover:bg-white")}>
                 Get Engage for X — ${X_EXTENSION_PLAN.price}/month
-                <ArrowRight aria-hidden />
+                <ArrowRight aria-hidden className="nudge" />
               </Link>
-              <p className="text-label text-muted-foreground">
+              <p className="text-[15px] text-white/65">
                 Unlimited replies and messages. Try {X_EXTENSION_PLAN.freeGenerations} free first — sold separately from the LinkedIn extension
                 and the web plans.
               </p>
             </div>
             <FeatureList items={X_FEATURES} />
           </div>
-          <div className="lg:sticky lg:top-24 lg:self-start">
-            <XMock />
+          <div className="lg:col-span-6 lg:self-start">
+            <MockStage>
+              <XMock />
+            </MockStage>
           </div>
         </div>
       </div>

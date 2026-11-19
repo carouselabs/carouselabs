@@ -4,11 +4,12 @@ import { Loader2 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
+// Pill-shaped, as on anantgoyal.in.
 // Focus styling comes from the global :focus-visible rule in app/globals.css.
 // Compact sizes (xs, sm, icon-xs, icon-sm) keep a 44px hit area with an
 // invisible ::after so dense admin screens stay touch-friendly.
 const buttonStyles = cva(
-  "group/button relative inline-flex shrink-0 items-center justify-center gap-2 rounded-control border border-transparent font-medium whitespace-nowrap select-none transition-[background-color,border-color,color,box-shadow,opacity] duration-(--motion-fast) ease-standard disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[pending=true]:cursor-progress data-[pending=true]:opacity-100 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button relative inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-transparent font-medium whitespace-nowrap select-none transition-[background-color,border-color,color,box-shadow,opacity,translate,scale] duration-(--motion-fast) ease-standard hover:-translate-y-px active:translate-y-0 active:scale-[0.97] motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[pending=true]:cursor-progress data-[pending=true]:opacity-100 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {

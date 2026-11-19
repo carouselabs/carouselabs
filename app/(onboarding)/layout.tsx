@@ -8,7 +8,7 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
   return (
     <div data-theme="light" className={`${fontVariables} flex min-h-screen flex-col bg-background font-ui text-foreground`}>
       {/* The root layout's body styles are for the authenticated app. */}
-      <style>{`body{background-color:#F9F7F2;color:#211F1C}`}</style>
+      <style>{`body{background-color:#F4F3FC;color:#100C33}`}</style>
 
       <header className="mx-auto flex w-full max-w-form flex-col gap-5 px-4 pt-6 sm:px-0 sm:pt-10">
         <span className="flex items-center gap-2 text-body font-semibold tracking-[-0.02em]">

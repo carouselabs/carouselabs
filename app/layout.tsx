@@ -1,14 +1,8 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { fontVariables } from "@/lib/fonts";
 import { ClerkProvider } from "@clerk/nextjs";
 import Script from "next/script";
 import "./globals.css";
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: {
@@ -32,7 +26,7 @@ export default function RootLayout({
     >
       <html
         lang="en"
-        className={`${inter.variable} dark`}
+        className={`${fontVariables} dark`}
         suppressHydrationWarning
       >
         <body className="min-h-svh">{children}</body>

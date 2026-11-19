@@ -18,7 +18,7 @@ const RADIUS = 120
 const PUSH = 22
 // The dots sit back a little so the words on top stay first.
 const DOT_ALPHA = 0.55
-const FALLBACK_DOT = "#6D28D9"
+const FALLBACK_DOT = "#4B30EE"
 
 export function RepelField({ className }: { className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null)

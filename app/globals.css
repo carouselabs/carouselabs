@@ -69,11 +69,11 @@
   --shadow-popover:             var(--elevation-2);
   --shadow-dialog:              var(--elevation-3);
 
-  --font-sans:                  var(--font-inter), system-ui, sans-serif;
+  /* One face everywhere, as on anantgoyal.in: Instrument Sans (loaded on
+     <html> by app/layout.tsx), with Instrument Serif italics for display. */
+  --font-sans:                  var(--font-instrument-sans), system-ui, sans-serif;
   --font-mono:                  var(--font-geist-mono), monospace;
-  /* Redesign fonts: loaded by lib/fonts.ts only where a migrated layout
-     applies them, so these fall back cleanly elsewhere. */
-  --font-ui:                    var(--font-geist, var(--font-inter, system-ui)), system-ui, sans-serif;
+  --font-ui:                    var(--font-instrument-sans), system-ui, sans-serif;
   --font-display:               var(--font-instrument-serif, Georgia), Georgia, "Times New Roman", serif;
 
   /* Legacy radius scale used by today's hand-styled pages — unchanged. */
@@ -111,11 +111,21 @@
   --text-display--letter-spacing: -0.035em;
 
   /* Shape: semantic names so the legacy rounded-* scale stays untouched */
+  /* Softer, larger corners after anantgoyal.in. Buttons are pills (rounded-full
+     in components/ui/button.tsx), not one of these. */
   --radius-detail: 4px;
-  --radius-control-sm: 8px;
-  --radius-control: 12px;
-  --radius-card: 16px;
-  --radius-showcase: 24px;
+  --radius-control-sm: 10px;
+  --radius-control: 14px;
+  --radius-card: 24px;
+  --radius-showcase: 28px;
+
+  /* Running text on the website: anantgoyal.in's ink-2 (8:1 on the mist,
+     9:1 on white); muted-foreground stays for labels and meta. */
+  --color-ink-2: #46426B;
+
+  /* anantgoyal.in's floating-card shadows (shadow-float, shadow-lift). */
+  --shadow-float: 0 1px 0 rgb(255 255 255 / 0.6) inset, 0 30px 60px -24px rgb(32 16 110 / 0.45), 0 12px 24px -12px rgb(32 16 110 / 0.25);
+  --shadow-lift: 0 1px 2px rgb(16 12 51 / 0.05), 0 28px 50px -24px rgb(32 16 110 / 0.4);
 
   /* Layout widths (max-w-*) */
   --container-form: 35rem;
@@ -139,22 +149,24 @@
 }
 
 /* ── Light theme (default; also re-applies inside a dark subtree) ─── */
+/* The anantgoyal.in palette: ink navy on a lavender mist, white panels,
+   an indigo accent from the blue → violet → purple gradient. */
 :root, [data-theme="light"] {
-  --background:          #F9F7F2;
-  --foreground:          #211F1C;
-  --surface:             #FFFDF9;
+  --background:          #F4F3FC;
+  --foreground:          #100C33;
+  --surface:             #FFFFFF;
   --surface-raised:      #FFFFFF;
-  --surface-muted:       #F0ECE5;
-  --muted-foreground:    #67625B;
-  --border:              #DED8CD;
-  --control-border:      #8C857B;
+  --surface-muted:       #F1EFFA;
+  --muted-foreground:    #5C5884;
+  --border:              #E5E2F4;
+  --control-border:      #8D89A8;
 
-  --primary:             #211F1C;
-  --primary-foreground:  #FFFDF9;
-  --primary-hover:       #39352F;
-  --brand:               #6D28D9;
-  --brand-hover:         #5B21B6;
-  --brand-soft:          #EEE8FA;
+  --primary:             #100C33;
+  --primary-foreground:  #FFFFFF;
+  --primary-hover:       #231D55;
+  --brand:               #4B30EE;
+  --brand-hover:         #3A22D6;
+  --brand-soft:          #EFEAFF;
   --brand-foreground:    #FFFFFF;
 
   --success:             #166534;
@@ -165,19 +177,20 @@
   --danger-soft:         #FEF0EF;
   --danger-foreground:   #FFFFFF;
 
-  --focus-ring:          #6D28D9;
-  --overlay:             rgb(33 31 28 / 0.32);
-  --skeleton:            #ECE7DF;
-  --selection:           #E4D9F8;
-  --chart-1:             #6D28D9;
+  --focus-ring:          #4B30EE;
+  --overlay:             rgb(16 12 51 / 0.36);
+  --skeleton:            #EBE8F7;
+  --selection:           #D9D2FF;
+  --chart-1:             #4B30EE;
   --chart-2:             #0F766E;
   --chart-3:             #B45309;
-  --chart-4:             #1D4ED8;
-  --chart-5:             #67625B;
+  --chart-4:             #C026D3;
+  --chart-5:             #5C5884;
 
-  --elevation-1: 0 1px 2px rgb(33 31 28 / 0.04);
-  --elevation-2: 0 4px 16px rgb(33 31 28 / 0.06), 0 1px 2px rgb(33 31 28 / 0.04);
-  --elevation-3: 0 16px 48px rgb(33 31 28 / 0.10), 0 2px 6px rgb(33 31 28 / 0.04);
+  /* Soft violet-tinted shadows, as on anantgoyal.in's floating cards. */
+  --elevation-1: 0 1px 2px rgb(16 12 51 / 0.04), 0 18px 40px -26px rgb(16 12 51 / 0.28);
+  --elevation-2: 0 4px 16px rgb(16 12 51 / 0.08), 0 1px 2px rgb(16 12 51 / 0.04);
+  --elevation-3: 0 28px 50px -24px rgb(32 16 110 / 0.4), 0 2px 6px rgb(16 12 51 / 0.05);
 
   /* shadcn-compatible aliases */
   --card:                var(--surface);
@@ -218,42 +231,44 @@
 }
 
 /* ── Dark theme: opt-in per subtree, never via the legacy .dark class ── */
+/* Night, from anantgoyal.in: deep navy, cards a shade lighter, a lilac
+   accent. Used by the admin console. */
 [data-theme="dark"] {
   color-scheme: dark;
-  --background:          #171614;
-  --foreground:          #F5F0E7;
-  --surface:             #201E1B;
-  --surface-raised:      #282521;
-  --surface-muted:       #24211D;
-  --muted-foreground:    #B5AFA4;
-  --border:              #3A352F;
-  --control-border:      #847B70;
+  --background:          #0B0920;
+  --foreground:          #F1EFFF;
+  --surface:             #15122F;
+  --surface-raised:      #1C1840;
+  --surface-muted:       #1A1638;
+  --muted-foreground:    #A9A4CF;
+  --border:              #2B2754;
+  --control-border:      #7A75A8;
 
-  --primary:             #F5F0E7;
-  --primary-foreground:  #211F1C;
-  --primary-hover:       #E3DBCE;
-  --brand:               #C4A7FF;
-  --brand-hover:         #D6C2FF;
-  --brand-soft:          #332343;
-  --brand-foreground:    #211431;
+  --primary:             #F1EFFF;
+  --primary-foreground:  #100C33;
+  --primary-hover:       #DCD8FA;
+  --brand:               #A99BFF;
+  --brand-hover:         #C1B6FF;
+  --brand-soft:          #2A2260;
+  --brand-foreground:    #100C33;
 
   --success:             #86EFAC;
-  --success-soft:        #123421;
+  --success-soft:        #10301F;
   --warning:             #FACC15;
-  --warning-soft:        #3A2B13;
+  --warning-soft:        #33280F;
   --danger:              #FCA5A5;
-  --danger-soft:         #3E2020;
-  --danger-foreground:   #211F1C;
+  --danger-soft:         #3A1830;
+  --danger-foreground:   #100C33;
 
-  --focus-ring:          #C4A7FF;
-  --overlay:             rgb(0 0 0 / 0.56);
-  --skeleton:            #2C2924;
-  --selection:           #4A3566;
-  --chart-1:             #C4A7FF;
+  --focus-ring:          #A99BFF;
+  --overlay:             rgb(4 3 16 / 0.6);
+  --skeleton:            #221E45;
+  --selection:           #3A2F7A;
+  --chart-1:             #A99BFF;
   --chart-2:             #5EEAD4;
   --chart-3:             #FBBF24;
-  --chart-4:             #93C5FD;
-  --chart-5:             #B5AFA4;
+  --chart-4:             #F0ABFC;
+  --chart-5:             #A9A4CF;
 
   --elevation-1: 0 1px 2px rgb(0 0 0 / 0.24);
   --elevation-2: 0 4px 16px rgb(0 0 0 / 0.32), 0 0 0 1px rgb(255 255 255 / 0.03);
@@ -275,16 +290,16 @@
   }
 
   body {
-    background-color: #F9F7F2;
-    color: #0A0A0A;
+    background-color: #F4F3FC;
+    color: #100C33;
     min-height: 100svh;
   }
 
   /* Light scrollbar */
   ::-webkit-scrollbar        { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track  { background: #F9F7F2; }
-  ::-webkit-scrollbar-thumb  { background: rgba(0,0,0,0.18); border-radius: 9999px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.3); }
+  ::-webkit-scrollbar-track  { background: #F4F3FC; }
+  ::-webkit-scrollbar-thumb  { background: rgb(16 12 51 / 0.18); border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgb(16 12 51 / 0.3); }
 
   /* Redesigned subtrees */
   [data-theme] ::selection { background-color: var(--selection); color: var(--foreground); }
@@ -294,11 +309,11 @@
   .text-balance   { text-wrap: balance; }
 
   .gradient-brand {
-    background: linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%);
+    background: linear-gradient(100deg, #2F4BFF 0%, #7B3AEE 55%, #A445F0 100%);
   }
 
   .gradient-text {
-    background: linear-gradient(135deg, #A78BFA 0%, #7C3AED 100%);
+    background: linear-gradient(100deg, #2F4BFF 0%, #7B3AEE 55%, #A445F0 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -324,6 +339,16 @@
   padding-inline: 1.25rem;
   @media (width >= 48rem) { padding-inline: 2rem; }
   @media (width >= 64rem) { padding-inline: 3rem; }
+}
+
+/* The website's content column: one set of left and right edges for the
+   header, every section and the footer. 1280 wide; side gutters 24 on a
+   phone, 48 on a tablet, 80 from 1024. */
+@utility wrap-site {
+  width: min(100% - 48px, 1280px);
+  margin-inline: auto;
+  @media (width >= 40rem) { width: min(100% - 96px, 1280px); }
+  @media (width >= 64rem) { width: min(100% - 160px, 1280px); }
 }
 
 /* Marketing section rhythm: ~56px on phones up to 128px on wide screens */
@@ -417,7 +442,13 @@
 }
 #main:has(.engage-root) { background-color: #F4F3FC; }
 
+/* ── anantgoyal.in signature pieces, shared by every page ──────────────
+   Names avoid Tailwind prefixes (bg-, text-) so cn()/tailwind-merge never
+   drops them. The engage-* names are the same rules, kept until Engage's
+   own copy of the theme is folded in (redesign step 4). */
+
 /* The blue → violet ground (hero, plan). White text on it. */
+.ground-canvas,
 .engage-canvas {
   color: #FFFFFF;
   background:
@@ -427,6 +458,7 @@
     linear-gradient(160deg, #2C3CF0 0%, #4A2EE6 50%, #6E2FE6 100%);
 }
 /* Night: the dark card for live things (latest activity). */
+.ground-night,
 .engage-night {
   color: #FFFFFF;
   background:
@@ -434,7 +466,9 @@
     radial-gradient(45% 40% at 100% 100%, rgb(164 69 240 / 0.35) 0%, rgb(164 69 240 / 0) 70%),
     #0B0920;
 }
-/* A glossy sphere, drawn in CSS: highlight, bounce light, body. */
+/* A glossy sphere, drawn in CSS: highlight, bounce light, body. Give it a
+   size (size-16 etc.) and a colour class. Decoration only: aria-hidden. */
+.orb,
 .engage-orb {
   position: absolute;
   border-radius: 9999px;
@@ -442,24 +476,175 @@
   background:
     radial-gradient(circle at 30% 25%, rgb(255 255 255 / 0.98) 0, rgb(255 255 255 / 0.6) 4%, rgb(255 255 255 / 0) 20%),
     radial-gradient(circle at 74% 84%, rgb(255 255 255 / 0.32) 0, rgb(255 255 255 / 0) 30%),
+    radial-gradient(circle at 34% 30%, rgb(12 2 60 / 0) 52%, rgb(12 2 60 / 0.32) 100%),
     radial-gradient(circle at 38% 34%, var(--o1) 0%, var(--o2) 40%, var(--o3) 76%, var(--o4) 100%);
-  box-shadow: inset -10px -14px 28px rgb(12 2 60 / 0.38), 0 26px 48px -18px rgb(28 8 110 / 0.5);
+  /* The shading is a gradient (not an inset shadow) so it scales with the
+     orb: small orbs stay bright instead of turning muddy. */
+  box-shadow: 0 26px 48px -18px rgb(28 8 110 / 0.5);
 }
-.engage-orb-violet { --o1: #EAD6FF; --o2: #A752F6; --o3: #6721D6; --o4: #2C0A77; }
-.engage-orb-pearl  { --o1: #FFFFFF; --o2: #EEEAFF; --o3: #BFB3F7; --o4: #6F60D2; }
-.engage-orb-blue   { --o1: #B4C4FF; --o2: #4766FF; --o3: #2328CC; --o4: #110D6B; }
-.engage-orb-lime   { --o1: #F6FFD6; --o2: #D4FF5C; --o3: #93C21D; --o4: #4B6A05; }
+.orb-violet, .engage-orb-violet { --o1: #EAD6FF; --o2: #A752F6; --o3: #6721D6; --o4: #2C0A77; }
+.orb-pearl,  .engage-orb-pearl  { --o1: #FFFFFF; --o2: #EEEAFF; --o3: #BFB3F7; --o4: #6F60D2; }
+.orb-blue,   .engage-orb-blue   { --o1: #B4C4FF; --o2: #4766FF; --o3: #2328CC; --o4: #110D6B; }
+.orb-lime,   .engage-orb-lime   { --o1: #F6FFD6; --o2: #D4FF5C; --o3: #93C21D; --o4: #4B6A05; }
+/* The one italic serif phrase in a big heading. */
+.serif-accent,
 .engage-serif {
   font-family: var(--font-instrument-serif), Georgia, "Times New Roman", serif;
   font-style: italic;
   font-weight: 400;
   letter-spacing: -0.01em;
 }
+/* Blue → violet → purple text (pair with serif-accent on headings). */
+.gradient-word,
 .engage-gradient-text {
   background: linear-gradient(100deg, #2F4BFF 0%, #7B3AEE 55%, #A445F0 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+/* On night grounds the same gradient, lifted so it stays readable. */
+[data-theme="dark"] .gradient-word,
+.ground-night .gradient-word {
+  background-image: linear-gradient(100deg, #8DA0FF 0%, #B08CFF 55%, #D99BFF 100%);
+}
+
+/* The dotted lavender stage that results float on (creation canvases),
+   after the anantgoyal.in hero stage. */
+.ground-dots {
+  background-color: #F1EFFC;
+  background-image: radial-gradient(rgb(91 70 220 / 0.16) 1px, transparent 1.2px);
+  background-size: 14px 14px;
+}
+/* Lime marks "now / live / newest" on night grounds only (ink text on it). */
+.lime-mark { background-color: #D4FF5C; color: #100C33; }
+
+/* ── Website motion (after anantgoyal.in) ─────────────────────────────
+   The hero enters once on load (CSS only, so it plays without JavaScript
+   and settles on the written words); ambient pieces float; buttons, cards
+   and links answer the pointer. The nav's pause button sets
+   html[data-motion="paused"]; reduced motion stills everything. */
+@keyframes site-rise { from { transform: translate3d(0, 105%, 0); } to { transform: none; } }
+@keyframes site-fade-up { from { opacity: 0; transform: translate3d(0, 16px, 0); } to { opacity: 1; transform: none; } }
+@keyframes site-stage-in { from { opacity: 0; transform: translate3d(0, 40px, 0) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes site-float { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(0, var(--float, -10px), 0); } }
+@keyframes site-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50% { transform: translate3d(var(--drift-x, 8px), var(--drift-y, -14px), 0) rotate(var(--drift-r, 6deg)); }
+}
+@keyframes site-pulse-dot {
+  0% { box-shadow: 0 0 0 0 rgb(34 197 94 / 0.55); }
+  80%, 100% { box-shadow: 0 0 0 10px rgb(34 197 94 / 0); }
+}
+.hero-mask {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+  padding: 0.16em 0.08em 0.1em 0;
+  margin: -0.16em -0.08em -0.1em 0;
+}
+.hero-word { display: inline-block; animation: site-rise 1s cubic-bezier(0.16, 1, 0.3, 1) var(--d, 0ms) both; }
+[data-enter-fade] { animation: site-fade-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0ms) both; }
+[data-enter-stage] { animation: site-stage-in 1s cubic-bezier(0.16, 1, 0.3, 1) var(--d, 0ms) both; }
+.float { animation: site-float var(--dur, 7s) ease-in-out var(--delay, 0s) infinite; }
+.drift { animation: site-drift var(--dur, 11s) ease-in-out var(--delay, 0s) infinite; }
+.live-dot { animation: site-pulse-dot 2.4s ease-out infinite; }
+html[data-motion="paused"] .float,
+html[data-motion="paused"] .drift,
+html[data-motion="paused"] .live-dot,
+html[data-motion="paused"] .pulse-run { animation-play-state: paused; }
+
+/* Pointer depth: the hero stage sets --px / --py (-0.5 to 0.5); each piece
+   moves by its own --depth in px. */
+.depth {
+  translate: calc(var(--px, 0) * var(--depth, 0) * 1px) calc(var(--py, 0) * var(--depth, 0) * 1px);
+  transition: translate 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* A ring laid back in perspective (anantgoyal.in's torus). */
+.torus {
+  position: absolute;
+  pointer-events: none;
+  transform: rotateX(64deg) rotateZ(-18deg);
+}
+.torus::before,
+.torus::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  -webkit-mask: radial-gradient(circle, transparent 47%, #000 48%, #000 69%, transparent 70%);
+  mask: radial-gradient(circle, transparent 47%, #000 48%, #000 69%, transparent 70%);
+}
+.torus::before { background: conic-gradient(from 160deg, #6F86FF, #C79BFF, #FFFFFF 18%, #9A7BFF 32%, #3C45DD 58%, #2A1FA8 72%, #6F86FF); }
+.torus::after { background: radial-gradient(circle, rgb(10 0 60 / 0.45) 46%, rgb(10 0 60 / 0) 56%, rgb(255 255 255 / 0.3) 64%, rgb(10 0 60 / 0.35) 70%); }
+
+/* Hover layer: a linked card lifts 2px and its picture zooms inside its
+   frame; underlines draw; arrows move 3px. */
+.lift { transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
+.lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); }
+.lift .zoom { transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+.lift:hover .zoom { transform: scale(1.03); }
+.lift .nudge, .btn-nudge:hover .nudge { transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
+.lift:hover .nudge, .btn-nudge:hover .nudge { transform: translateX(3px); }
+.link-draw {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1.5px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition: background-size 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+a:hover .link-draw, .link-draw:hover { background-size: 100% 1.5px; }
+
+/* The taste skill's moments (public/assets/moments, copied unchanged from
+   the kit) read these tokens; mapped to the theme here. */
+[data-moment] {
+  --s-3: 12px;
+  --s-4: 16px;
+  --t-lead: clamp(22px, 1rem + 1vw, 30px);
+  --ink: var(--foreground);
+  --muted: var(--muted-foreground);
+  --bg: var(--background);
+  --accent: var(--brand);
+  --line: var(--border);
+}
+.loop-pause {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: 0 0 0 1px var(--border), var(--elevation-1);
+  cursor: pointer;
+}
+.loop-pause svg { width: 14px; height: 14px; fill: currentColor; }
+.loop-pause:hover { background: var(--surface-muted); }
+html[data-motion="paused"] .mo-mq__track { animation-play-state: paused !important; }
+/* Before the loader runs (and without script) the marquee's words stand in
+   one wrapped row, as the moment's own at-rest state does. */
+[data-moment="marquee-row"]:not(.mo-mq) > .mo-mq__track {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 56px;
+  margin: 0;
+  padding: 16px 0;
+  list-style: none;
+  font: 400 var(--t-lead)/1 var(--font-instrument-serif), Georgia, serif;
+  color: var(--muted);
+}
+
+/* Pulses run along a diagram's lines (the platforms hub). */
+@keyframes site-pulse-run { from { offset-distance: 0%; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } to { offset-distance: 100%; opacity: 0; } }
+.pulse-run { animation: site-pulse-run var(--dur, 3s) cubic-bezier(0.45, 0, 0.25, 1) var(--delay, 0s) infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-word, [data-enter-fade], [data-enter-stage] { animation: none; }
+  .float, .drift, .live-dot, .pulse-run { animation: none; }
+  .pulse-run { opacity: 0; }
+  .depth { translate: none; }
+  .lift:hover, .lift:hover .zoom, .lift:hover .nudge, .btn-nudge:hover .nudge { transform: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

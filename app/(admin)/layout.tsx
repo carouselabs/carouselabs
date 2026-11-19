@@ -25,7 +25,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   // AdminShell also marks <html> dark while it's open, so dialogs and menus —
   // rendered outside this wrapper — match.
   return (
-    <div data-theme="dark" className={`${fontVariables} bg-background font-ui text-foreground`}>
+    <div data-theme="dark" className={`${fontVariables} ground-night min-h-screen font-ui text-foreground`}>
       <style
         // Raw so the font name's quotes aren't HTML-escaped inside the CSS.
         dangerouslySetInnerHTML={{

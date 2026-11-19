@@ -179,7 +179,7 @@ export default async function AdminPreview({ params }: { params: Promise<{ path?
 
   // Same wrapper as app/(admin)/layout.tsx
   return (
-    <div data-theme="dark" className={`${fontVariables} bg-background font-ui text-foreground`}>
+    <div data-theme="dark" className={`${fontVariables} ground-night min-h-screen font-ui text-foreground`}>
       <style
         dangerouslySetInnerHTML={{
           __html: `body{background-color:#0B0920;color:#F1EFFF;font-family:${uiFontFamily}}`,

@@ -491,13 +491,15 @@ export function Workspace({
   panelOpen?: boolean
 }) {
   return (
-    <div className={cn("grid gap-8", panelOpen && "lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-10 xl:grid-cols-[minmax(0,1fr)_24rem]")}>
-      <div className="flex min-w-0 flex-col gap-6">{canvas}</div>
+    <div className={cn("grid gap-5", panelOpen && "lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]")}>
+      {/* The post sits on anantgoyal.in's dotted lavender stage; its
+          settings on a white panel beside it. */}
+      <div className="ground-dots flex min-w-0 flex-col gap-6 rounded-[28px] p-4 ring-1 ring-[#100C33]/5 sm:p-8">{canvas}</div>
       <aside
         id={panelId}
         aria-label={panelLabel}
         className={cn(
-          "flex min-w-0 flex-col gap-6 border-t border-border pt-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10",
+          "flex min-w-0 flex-col gap-6 self-start rounded-[28px] bg-surface p-5 shadow-card ring-1 ring-[#100C33]/5 sm:p-6",
           !panelOpen && "lg:hidden"
         )}
       >

@@ -14,7 +14,7 @@ export default async function OpengraphImage() {
 
   return new ImageResponse(
     (
-      <div style={{ width: "100%", height: "100%", display: "flex", background: "#F9F7F2", color: "#211F1C", padding: 72 }}>
+      <div style={{ width: "100%", height: "100%", display: "flex", background: "#F4F3FC", color: "#100C33", padding: 72 }}>
         <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", width: 640 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -23,14 +23,14 @@ export default async function OpengraphImage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             <span style={{ fontSize: 76, fontWeight: 700, lineHeight: 1.02, letterSpacing: -3 }}>Create viral content for every platform</span>
-            <span style={{ fontSize: 28, color: "#67625B", lineHeight: 1.35 }}>AI-native social media content studio. Create carousels, captions, and posts for LinkedIn, Instagram, and Twitter/X in seconds.</span>
+            <span style={{ fontSize: 28, color: "#5C5884", lineHeight: 1.35 }}>AI-native social media content studio. Create carousels, captions, and posts for LinkedIn, Instagram, and Twitter/X in seconds.</span>
           </div>
         </div>
         <div style={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "flex-end" }}>
           <div style={{ display: "flex", position: "relative", width: 330, height: 412 }}>
-            <div style={{ position: "absolute", left: 34, top: 18, width: 300, height: 375, borderRadius: 20, background: "#F0ECE5", border: "2px solid #DED8CD", transform: "rotate(6deg)" }} />
-            <div style={{ position: "absolute", left: 16, top: 8, width: 300, height: 375, borderRadius: 20, background: "#FFFFFF", border: "2px solid #DED8CD", transform: "rotate(3deg)" }} />
-            <div style={{ position: "absolute", left: 0, top: 0, width: 300, height: 375, borderRadius: 20, background: "#211F1C", color: "#FFFDF9", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: 28 }}>
+            <div style={{ position: "absolute", left: 34, top: 18, width: 300, height: 375, borderRadius: 20, background: "#F1EFFA", border: "2px solid #E5E2F4", transform: "rotate(6deg)" }} />
+            <div style={{ position: "absolute", left: 16, top: 8, width: 300, height: 375, borderRadius: 20, background: "#FFFFFF", border: "2px solid #E5E2F4", transform: "rotate(3deg)" }} />
+            <div style={{ position: "absolute", left: 0, top: 0, width: 300, height: 375, borderRadius: 20, background: "#100C33", color: "#FFFFFF", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: 28 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 18, opacity: 0.7 }}>
                 <span>Carousel</span>
                 <span>1/8</span>

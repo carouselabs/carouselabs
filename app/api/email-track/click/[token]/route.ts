@@ -22,8 +22,8 @@ function clickPage(to: string, confirm: string | null): string {
 <html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Opening…</title>
 <noscript><meta http-equiv="refresh" content="0;url=${href}"></noscript></head>
-<body style="margin:0;padding:48px 16px;font:15px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#57524B;background:#F0ECE5">
-<p>Opening <a href="${href}" style="color:#211F1C">the link</a>…</p>
+<body style="margin:0;padding:48px 16px;font:15px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#46426B;background:#F1EFFA">
+<p>Opening <a href="${href}" style="color:#100C33">the link</a>…</p>
 <script>${report}location.replace(${inScript(to)})</script>
 </body></html>`
 }

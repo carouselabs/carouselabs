@@ -10,7 +10,7 @@ import { PLATFORM_LABELS, type EngageFeature, type EngagePlatform } from "@/lib/
 
 // Series colours for the four LinkedIn features, validated as a set (all
 // pairs: lightness, chroma, colour-blind separation, contrast) on the dark
-// card surface (#201E1B): violet, teal, amber, rose — the same set as the
+// card surface (#15122F): violet, teal, amber, rose — the same set as the
 // admin charts (components/admin/charts.tsx). Fixed by feature, never by rank.
 // X's and Reddit's two features are only ever charted on their own, so they
 // reuse the set's first two slots.

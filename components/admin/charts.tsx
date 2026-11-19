@@ -3,7 +3,7 @@
 // Dark-themed recharts wrappers for the admin panel.
 // Categorical palette validated (lightness band, chroma, colour-blind
 // separation across all pairs, 3:1 contrast) on the dark card surface
-// #201E1B (the design system's dark --surface). Fixed assignment order —
+// #15122F (the night theme's --surface). Fixed assignment order —
 // never cycled: violet #8B5CF6 → teal #0D9488 → amber #D97706 → rose #E11D48.
 // Anything past four folds into a neutral "Other". Chart chrome (axes, grid,
 // tooltip) uses the dark theme's text and border values.
@@ -29,20 +29,20 @@ export const CHART_COLORS = {
   amber: "#D97706",
   rose: "#E11D48",
   /** The folded "Other" slice only — never a series of its own. */
-  other: "#8A847A",
+  other: "#7A75A8",
 } as const
 
 // Dark theme values (app/globals.css [data-theme="dark"]).
-const SURFACE = "#201E1B"
-const AXIS = { fill: "#B5AFA4", fontSize: 11 }
-const GRID = "#3A352F"
+const SURFACE = "#15122F"
+const AXIS = { fill: "#A9A4CF", fontSize: 11 }
+const GRID = "#2B2754"
 
 const tooltipStyle = {
-  backgroundColor: "#282521",
-  border: "1px solid #3A352F",
+  backgroundColor: "#1C1840",
+  border: "1px solid #2B2754",
   borderRadius: 10,
   fontSize: 12,
-  color: "#F5F0E7",
+  color: "#F1EFFF",
 }
 
 // Accepts unknown because recharts types tooltip labels as ReactNode.

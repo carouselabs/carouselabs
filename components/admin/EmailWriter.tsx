@@ -732,12 +732,12 @@ export function EmailWriter({ recipient, reuse }: { recipient?: EmailRecipient; 
                 <dt className="text-muted-foreground">Preview</dt>
                 <dd className="text-muted-foreground">{design.preview}</dd>
               </dl>
-              <div className="flex justify-center rounded-control bg-[#F0ECE5] p-2">
+              <div className="flex justify-center rounded-control bg-[#F1EFFA] p-2">
                 <iframe
                   title="Email preview"
                   srcDoc={previewHtml}
                   sandbox=""
-                  className={`h-[72vh] max-w-full rounded-control-sm border-0 bg-[#F0ECE5] transition-[width] duration-200 ${device === "phone" ? "w-[390px]" : "w-full"}`}
+                  className={`h-[72vh] max-w-full rounded-control-sm border-0 bg-[#F1EFFA] transition-[width] duration-200 ${device === "phone" ? "w-[390px]" : "w-full"}`}
                 />
               </div>
             </div>

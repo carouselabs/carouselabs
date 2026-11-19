@@ -167,7 +167,7 @@ function NewPostMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button size="sm" variant="brand" className="max-lg:w-9 max-lg:px-0" aria-label="New post" />}
+        render={<Button size="sm" className="h-10 px-4 max-lg:w-10 max-lg:px-0" aria-label="New post" />}
       >
         <Plus aria-hidden />
         <span className="hidden lg:inline">New post</span>
@@ -200,12 +200,12 @@ function GoToButton({ onOpen }: { onOpen: () => void }) {
       type="button"
       onClick={onOpen}
       aria-keyshortcuts={isApple ? "Meta+K" : "Control+K"}
-      className="relative inline-flex h-9 shrink-0 items-center gap-2 rounded-control-sm border border-border bg-surface px-2.5 text-label text-muted-foreground transition-colors duration-(--motion-fast) after:absolute after:-inset-1 after:content-[''] hover:border-control-border hover:text-foreground"
+      className="relative inline-flex h-10 shrink-0 items-center gap-2 rounded-full border border-border bg-surface px-3.5 text-label text-muted-foreground transition-colors duration-(--motion-fast) after:absolute after:-inset-1 after:content-[''] hover:border-control-border hover:text-foreground"
     >
       <Search className="size-4" aria-hidden />
       <span className="hidden xl:inline">Go to…</span>
       <span className="sr-only xl:hidden">Go to…</span>
-      <kbd className="hidden rounded-detail border border-border px-1 font-ui text-[11px] leading-4 xl:inline">
+      <kbd className="hidden rounded-full border border-border px-1.5 font-ui text-[11px] leading-4 xl:inline">
         {isApple ? "⌘K" : "Ctrl K"}
       </kbd>
     </button>
@@ -214,13 +214,13 @@ function GoToButton({ onOpen }: { onOpen: () => void }) {
 
 function SubNav({ items, pathname }: { items: NavItem[]; pathname: string }) {
   return (
-    <nav aria-label="Section" className="no-scrollbar -mb-px flex min-w-0 gap-5 overflow-x-auto">
+    <nav aria-label="Section" className="no-scrollbar flex min-w-0 gap-1 overflow-x-auto">
       {items.map((item) => (
         <NavLink
           key={item.href}
           href={item.href}
           aria-current={isActiveItem(item.href, pathname) ? "page" : undefined}
-          className="relative flex h-11 shrink-0 items-center text-label whitespace-nowrap text-muted-foreground transition-colors duration-(--motion-fast) hover:text-foreground aria-[current=page]:font-medium aria-[current=page]:text-foreground aria-[current=page]:after:absolute aria-[current=page]:after:inset-x-0 aria-[current=page]:after:bottom-0 aria-[current=page]:after:h-0.5 aria-[current=page]:after:rounded-full aria-[current=page]:after:bg-foreground"
+          className="relative flex h-9 shrink-0 items-center rounded-full px-4 text-label whitespace-nowrap text-muted-foreground transition-colors duration-(--motion-fast) hover:bg-surface/70 hover:text-foreground aria-[current=page]:bg-surface aria-[current=page]:font-medium aria-[current=page]:text-foreground aria-[current=page]:shadow-card aria-[current=page]:ring-1 aria-[current=page]:ring-border"
         >
           {item.label}
         </NavLink>
@@ -257,7 +257,7 @@ function MobileTabBar({
     <>
       <nav
         aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-(--z-header) grid border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm md:hidden"
+        className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-(--z-header) grid overflow-hidden rounded-full border border-white/70 bg-white/90 shadow-[0_10px_40px_-18px_rgb(20_10_90/0.45)] backdrop-blur-xl md:hidden"
         style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
       >
         {tabs.map((t) => {
@@ -413,11 +413,11 @@ export function AppChrome({
       >
         Skip to content
       </a>
-      <header className="relative z-(--z-header) shrink-0 border-b border-border bg-background/90 backdrop-blur-sm">
-        <div className="flex h-14 items-center gap-3 px-6 md:gap-4 md:px-10 lg:gap-6">
+      <header className="relative z-(--z-header) shrink-0 px-3 pt-3 md:px-6">
+        <div className="flex h-16 items-center gap-3 rounded-full border border-white/70 bg-white/85 pr-2 pl-4 shadow-[0_10px_40px_-18px_rgb(20_10_90/0.35)] backdrop-blur-xl md:gap-4 md:pl-5 lg:gap-6">
           <NavLink href={isEmployeeSubdomain ? "/intern" : "/dashboard"} className="flex shrink-0 items-center gap-2 rounded-control-sm">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icon.png" alt="CarouseLabs" className="size-7 rounded-lg object-cover" />
+            <img src="/icon.png" alt="CarouseLabs" className="size-8 rounded-full object-cover" />
             <span className="hidden text-body font-semibold tracking-[-0.02em] lg:inline" aria-hidden>
               CarouseLabs
             </span>
@@ -429,7 +429,7 @@ export function AppChrome({
                 key={g.id}
                 href={g.href}
                 aria-current={g.id === activeGroupId ? "true" : undefined}
-                className="inline-flex h-9 items-center rounded-control-sm px-3 text-label font-medium text-muted-foreground transition-colors duration-(--motion-fast) hover:bg-surface-muted hover:text-foreground aria-[current=true]:bg-surface-muted aria-[current=true]:text-foreground"
+                className="inline-flex h-10 items-center rounded-full px-4 text-[15px] font-medium text-muted-foreground transition-colors duration-(--motion-fast) hover:bg-[#100C33]/5 hover:text-foreground aria-[current=true]:bg-brand-soft aria-[current=true]:text-foreground"
               >
                 {g.label}
               </NavLink>
@@ -444,7 +444,7 @@ export function AppChrome({
             {isAdmin && (
               <NavLink
                 href="/admin"
-                className="hidden h-7 items-center gap-1.5 rounded-control-sm bg-foreground px-2.5 text-caption font-semibold text-background transition-opacity duration-(--motion-fast) hover:opacity-85 md:inline-flex"
+                className="hidden h-8 items-center gap-1.5 rounded-full bg-foreground px-3 text-caption font-semibold text-background transition-opacity duration-(--motion-fast) hover:opacity-85 md:inline-flex"
               >
                 <ConsoleMark />
                 Admin
@@ -452,7 +452,7 @@ export function AppChrome({
             )}
             {!isEmployeeSubdomain && user && <Credits user={user} className="min-w-0 truncate md:hidden lg:inline" />}
             {isDashboard && (
-              <Button variant="outline" size="xs" onClick={reset} className="border-border">
+              <Button variant="outline" size="sm" onClick={reset} className="h-10 border-border px-4">
                 New session
               </Button>
             )}
@@ -470,7 +470,7 @@ export function AppChrome({
           </div>
         </div>
         {subItems && (
-          <div className="flex min-h-11 items-center border-t border-border/70 px-6 md:px-10">
+          <div className="flex min-h-12 items-center px-1 pt-2 md:px-2">
             <SubNav items={subItems} pathname={pathname} />
           </div>
         )}
@@ -481,7 +481,7 @@ export function AppChrome({
       <main
         id="main"
         tabIndex={-1}
-        className="relative min-h-0 flex-1 scroll-pb-[calc(5rem+env(safe-area-inset-bottom))] overflow-y-auto px-6 py-8 pb-[calc(6rem+env(safe-area-inset-bottom))] outline-none md:scroll-pb-0 md:px-10 md:pb-10"
+        className="relative min-h-0 flex-1 scroll-pb-[calc(6rem+env(safe-area-inset-bottom))] overflow-y-auto px-6 py-8 pb-[calc(7rem+env(safe-area-inset-bottom))] outline-none md:scroll-pb-0 md:px-10 md:pb-10"
       >
         {/* min-h, not h: a fixed-height wrapper lets long pages overflow it, which drops main's bottom padding */}
         <div className="relative min-h-full">{children}</div>

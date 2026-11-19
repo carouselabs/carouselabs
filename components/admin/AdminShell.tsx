@@ -151,7 +151,7 @@ export function AdminShell({
   const narrow = collapsed && !mobileOpen
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-background text-foreground print:h-auto print:overflow-visible print:bg-white">
+    <div className="flex h-dvh overflow-hidden bg-transparent text-foreground print:h-auto print:overflow-visible print:bg-white">
       {/* Phones: the sidebar is a drawer over the page */}
       {mobileOpen && (
         <div aria-hidden className="fixed inset-0 z-(--z-dialog) bg-overlay md:hidden print:hidden" onClick={() => setMobileOpen(false)} />

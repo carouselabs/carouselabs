@@ -1,5 +1,5 @@
 // components/settings/SettingsSection.tsx
-// One section of a Settings page laid out as a sheet: the title and its
+// One section of a Settings page on its own white panel (anantgoyal.in): the title and its
 // explanation in the left column (staying in view while a long section
 // scrolls), the controls on the right. Stacks on phones.
 import type { ReactNode } from "react"
@@ -22,7 +22,7 @@ export function SettingsSection({
   return (
     <section
       className={cn(
-        "grid gap-4 border-t border-border pt-8 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] md:gap-x-12",
+        "grid gap-4 rounded-[24px] bg-surface p-5 shadow-card ring-1 ring-[#100C33]/5 sm:p-8 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] md:gap-x-12",
         className
       )}
     >
